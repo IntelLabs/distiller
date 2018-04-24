@@ -45,12 +45,12 @@ In [Dense-Sparse-Dense (DSD)](#han-et-al-2017), Song Han et al. use pruning as a
 
 Regularization can also be used to induce sparsity.  To induce element-wise sparsity we can use the \\(l_1\\)-norm, \\(\lVert W \rVert_1\\).
 \\[
-l_1(W) = \sum_{i=1}^{|W|} |w_i|
+\lVert W \rVert_1 = l_1(W) = \sum_{i=1}^{|W|} |w_i|
 \\]
 
 \\(l_2\\)-norm regularization reduces overfitting and improves a model's accuracy by shrinking large parameters, but it does not force these parameters to absolute zero.  \\(l_1\\)-norm regularization sets some of the parameter elements to zero, therefore limiting the model's capacity while making the model simpler.  This is sometimes referred to as *feature selection* and gives us another interpretation of pruning.
 
-[One](http://localhost:8888/notebooks/L1-regularization.ipynb) of Distiller's Jupiter notebooks explains how the \\(l_1\\)-norm regularizer induces sparsity, and how it interacts with \\(l_2\\)-norm regularization.
+[One](https://github.com/NervanaSystems/distiller/blob/master/jupyter/L1-regularization.ipynb) of Distiller's Jupiter notebooks explains how the \\(l_1\\)-norm regularizer induces sparsity, and how it interacts with \\(l_2\\)-norm regularization.
 
 
 If we configure ```weight_decay``` to zero and use \\(l_1\\)-norm regularization, then we have:
@@ -71,7 +71,7 @@ loss = criterion(output, target) + lambda * l1_regularizer()
 
 ## Group Regularization
 
-In Group Regularization, we penalize entire groups of parameter elements, instead of individual elements.  Therefore, entire groups are either sparsified (i.e. all of the group elements have a value of zero) or not.  The groups structures have to be pre-defined.
+In Group Regularization, we penalize entire groups of parameter elements, instead of individual elements.  Therefore, entire groups are either sparsified (i.e. all of the group elements have a value of zero) or not.  The group structures have to be pre-defined.
 
 To the data loss, and the element-wise regularization (if any), we can add group-wise regularization penalty.  We represent all of the parameter groups in layer \\(l\\) as \\( W_l^{(G)} \\), and we add the penalty of all groups for all layers.  It gets a bit messy, but not overly complicated:
 \\[
@@ -91,7 +91,7 @@ where \\(w^{(g)} \in w^{(l)} \\) and \\( |w^{(g)}| \\) is the number of elements
 Group Regularization is also called Block Regularization, Structured Regularization, or coarse-grained sparsity (remember that element-wise sparsity is sometimes referred to as fine-grained sparsity).  Group sparsity exhibits regularity (i.e. its shape is regular), and therefore
 it can be beneficial to improve inference speed.
 
-[Huizi-et-al-2017](#huizi-et-al-2017) provides an overview of some of the different groups: kernel, channel, filter, layers.  Fiber structures such as matrix columns and rows, as well as various shaped structures (block sparsity), and even [intra kernel strided sparsity](#anwar-et-al-2015).
+[Huizi-et-al-2017](#huizi-et-al-2017) provides an overview of some of the different groups: kernel, channel, filter, layers.  Fiber structures such as matrix columns and rows, as well as various shaped structures (block sparsity), and even [intra kernel strided sparsity](#anwar-et-al-2015) can also be used.
 
 ```distiller.GroupLassoRegularizer``` currently implements most of these groups, and you can easily add new groups.
 
