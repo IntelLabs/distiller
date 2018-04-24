@@ -1,8 +1,7 @@
 site_name: Neural Network Distiller
 theme: readthedocs
-site_description: 'Distiller Documentation by Intel Nervana.'
+site_description: 'Distiller Documentation by Intel AI'
 use_directory_urls: False
-repo_url: https://github.com/NervanaSystems/distiller
 site_dir: ../docs
 markdown_extensions:
 - mdx_math:
