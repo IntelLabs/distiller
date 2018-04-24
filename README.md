@@ -68,10 +68,10 @@ Highlighted features:
 * 8-bit quantization is implemented and lower-precision quantization methods will be added soon.
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
-  + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
-  + [This notebook](https://github.com/NervanaSystems/distiller/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
+  + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
+  + [This notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
 * Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html).
-* Element-wise and filter-wise pruning sensitivity analysis (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/NervanaSystems/distiller/jupyter/sensitivity_analysis.ipynb).
+* Element-wise and filter-wise pruning sensitivity analysis (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb).
 * Logging to the console, text file and TensorBoard-formatted file.
 
 
@@ -179,7 +179,7 @@ You should see a text table detailing the various sparsities of the parameter te
 <br>
 Wrapping it up are the standard-deviation, mean, and mean of absolute values of the elements.
 
-In the [Compression Insights notebook](https://github.com/NervanaSystems/distiller/jupyter/compression_insights.ipynb) we use matplotlib to plot a bar chart of this summary, that indeed show non-impressive footprint compression.
+In the [Compression Insights notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/compression_insights.ipynb) we use matplotlib to plot a bar chart of this summary, that indeed show non-impressive footprint compression.
 
 <center> <img src="imgs/ch_sparsity_stats_barchart.png"></center>
 
@@ -199,7 +199,7 @@ $ python3 compress_classifier.py -a resnet20-cifar ../../../data.cifar10 --resum
 
 ### Explore the sample Jupiter notebooks
 The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter/index.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
-After installing and running the server, take a look at the notebook covering pruning sensitivity analysis: ```http://localhost:8888/notebooks/sensitivity_analysis.ipynb```.<br>
+After installing and running the server, take a look at the [notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
 <center> <img src="imgs/resnet18-sensitivity.png"></center>
