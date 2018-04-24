@@ -1,11 +1,11 @@
 # Distiller Installation
 
-For dataset installation instructions, see Distiller's [README](https://github.com/NervanaSystems/distiller#set-up-the-classification-datasets) file.
-
 These instructions will help get Distiller up and running on your local machine.
-1. [Clone Distiller](#clone-distiller)
-2. [Create a Python virtual environment](#create-a-python-virtual-environment)
-3. [Install dependencies](#install-dependencies)
+
+You may also want to refer to these resources:
+
+* [Dataset installation](https://github.com/NervanaSystems/distiller#set-up-the-classification-datasets) instructions.
+* [Jupiter installation](https://nervanasystems.github.io/distiller/jupyter/index.html#installation) instructions.
 
 Notes:
 - Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
