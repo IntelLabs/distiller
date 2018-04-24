@@ -62,15 +62,11 @@
     
         <ul>
         
-            <li><a class="toctree-l3" href="#cloning-distiller">Cloning Distiller</a></li>
+            <li><a class="toctree-l3" href="#clone-distiller">Clone Distiller</a></li>
         
-            <li><a class="toctree-l3" href="#using-a-virtualenv">Using a virtualenv</a></li>
+            <li><a class="toctree-l3" href="#create-a-python-virtual-environment">Create a Python virtual environment</a></li>
         
-            <li><a class="toctree-l3" href="#using-venv">Using venv</a></li>
-        
-            <li><a class="toctree-l3" href="#distiller-setup">Distiller setup</a></li>
-        
-            <li><a class="toctree-l3" href="#setting-up-the-example-code">Setting up the example code</a></li>
+            <li><a class="toctree-l3" href="#install-dependencies">Install dependencies</a></li>
         
         </ul>
     
@@ -160,62 +156,54 @@
             <div class="section">
               
                 <h1 id="distiller-installation">Distiller Installation</h1>
-<h2 id="cloning-distiller">Cloning Distiller</h2>
-<p>The installation of distiller starts with cloning the Distiller code repository from github.<br>
-The rest of the documentation that follows, assumes that you have cloned your repository to a directory called <code>distiller</code>. <br></p>
-<h2 id="using-a-virtualenv">Using a virtualenv</h2>
+<p>For dataset installation instructions, see Distiller's <a href="https://github.com/NervanaSystems/distiller#set-up-the-classification-datasets">README</a> file.</p>
+<p>These instructions will help get Distiller up and running on your local machine.
+1. <a href="#clone-distiller">Clone Distiller</a>
+2. <a href="#create-a-python-virtual-environment">Create a Python virtual environment</a>
+3. <a href="#install-dependencies">Install dependencies</a></p>
+<p>Notes:
+- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
+- If you are not using a GPU, you might need to make small adjustments to the code.</p>
+<h2 id="clone-distiller">Clone Distiller</h2>
+<p>Clone the Distiller code repository from github:</p>
+<pre><code>$ git clone https://github.com/NervanaSystems/distiller.git
+</code></pre>
+
+<p>The rest of the documentation that follows, assumes that you have cloned your repository to a directory called <code>distiller</code>. <br></p>
+<h2 id="create-a-python-virtual-environment">Create a Python virtual environment</h2>
 <p>We recommend using a <a href="https://docs.python.org/3/library/venv.html#venv-def">Python virtual environment</a>, but that of course, is up to you.
-There's nothing special about using Distiller in a virtualenv, but we provide some instructions, for completeness.<br>
-Start by making sure you have virtualenv installed.  Python pip and virtualenv installation instructions can be found <a href="https://packaging.python.org/guides/installing-using-pip-and-virtualenv/">here</a>.
-<br>
-Before creating the environment, make sure you are located in directory <code>distiller</code>.  After creating the environment, you should see a directory called <code>distiller/env</code>.
-<br>
-Creating the environment:</p>
+There's nothing special about using Distiller in a virtual environment, but we provide some instructions, for completeness.<br>
+Before creating the virtual environment, make sure you are located in directory <code>distiller</code>.  After creating the environment, you should see a directory called <code>distiller/env</code>.
+<br></p>
+<h3 id="using-virtualenv">Using virtualenv</h3>
+<p>If you don't have virtualenv installed, you can find the installation instructions <a href="https://packaging.python.org/guides/installing-using-pip-and-virtualenv/">here</a>.</p>
+<p>To create the environment, execute:</p>
 <pre><code>$ python3 -m virtualenv env
 </code></pre>
 
 <p>This creates a subdirectory named <code>env</code> where the python virtual environment is stored, and configures the current shell to use it as the default python environment.</p>
-<h2 id="using-venv">Using venv</h2>
-<p>If you prefer to use <code>venv</code> , then begin by installing it:</p>
+<h3 id="using-venv">Using venv</h3>
+<p>If you prefer to use <code>venv</code>, then begin by installing it:</p>
 <pre><code>$ sudo apt-get install python3-venv
 </code></pre>
 
-<p>Creating the environment:</p>
+<p>Then create the environment:</p>
 <pre><code>$ python3 -m venv env
 </code></pre>
 
-<p>As with virtualenv, this creates a directory called <code>distiller/env</code>.<br>
-<br><br>
-The environment activation and deactivation commands for <code>venv</code> and <code>virtualenv</code> are the same.<br>
+<p>As with virtualenv, this creates a directory called <code>distiller/env</code>.<br></p>
+<h3 id="activate-the-environment">Activate the environment</h3>
+<p>The environment activation and deactivation commands for <code>venv</code> and <code>virtualenv</code> are the same.<br>
 <strong>!NOTE: Make sure to activate the environment, before proceeding with the installation of the dependency packages:<br></strong></p>
 <pre><code>$ source env/bin/activate
 </code></pre>
 
-<h2 id="distiller-setup">Distiller setup</h2>
-<p>Install the Python packages Distiller is dependent on using <code>pip3 install</code>.  PyTorch is included in this list and will currently download PyTorch version 3.1 for CUDA 8.0.</p>
+<h2 id="install-dependencies">Install dependencies</h2>
+<p>Finally, install Distiller's dependency packages using <code>pip3</code>:</p>
 <pre><code>$ pip3 install -r requirements.txt
 </code></pre>
 
-<h2 id="setting-up-the-example-code">Setting up the example code</h2>
-<p>Distiller comes with a sample application for compressing image classification DNNs, <code>compress_classifier.py</code> located at <code>distiller/examples/classifier_compression</code>, which uses both <a href="https://www.cs.toronto.edu/~kriz/cifar.html">CIFAR10</a> and <a href="http://www.image-net.org/">ImageNet</a> image datasets.<br></p>
-<p>The <code>compress_classifier.py</code> application will download the CIFAR10 automatically the first time you try to use it (thanks to TorchVision).  The example invocation used  throughout Distiller's documentation assume that you have downloaded the images to directory <code>distiller/../data.cifar10</code>, but you can place the images anywhere you want (you tell <code>compress_classifier.py</code> where the dataset is located, using a command-line parameter).</p>
-<p>ImageNet needs to be <a href="http://image-net.org/download-images">downloaded</a> manually, due to copyright issues and such.  Download the Imagenet-12 dataset (~1.2 images from 1000 classes).  After downloading the dataset you want to move the validation images to labeled subfolders which you can do with PyTorch's <a href="https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh">Soumith's script</a>.  You can find some more information <a href="https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset">here</a>.</p>
-<p>Again, the Distiller documentation assumes the following directory structure for the datasets, but this is just a suggestion:</p>
-<pre><code>distiller
-data.imagenet/
-    train/
-    val/
-data.cifar10/
-    cifar-10-batches-py/
-        batches.meta
-        data_batch_1
-        data_batch_2
-        data_batch_3
-        data_batch_4
-        data_batch_5
-        readme.html
-        test_batch
-</code></pre>
+<p>PyTorch is included in the <code>requirements.txt</code> file, and will currently download PyTorch version 3.1 for CUDA 8.0.  This is the setup we've used for testing Distiller.</p>
               
             </div>
           </div>
