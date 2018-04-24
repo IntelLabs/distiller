@@ -226,7 +226,7 @@ is based on the values learned from performing sensitivity analysis.  Using a pa
 <p>Note that Distiller's implementation deviates slightly from the algorithm Song Han describes in his PhD dissertation, in that the threshold value is set only once.  In his PhD dissertation, Song Han describes a growing threshold, at each iteration.  This requires n+1 hyper-parameters (n being the number of pruning iterations we use): the threshold and the threshold increase (delta) at each pruning iteration.  Distiller's implementation takes advantage of the fact that as pruning progresses, more weights are pulled toward zero, and therefore the threshold "traps" more weights.  Thus, we can use less hyper-parameters and achieve the same results.</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/sensitivity-pruning/alexnet.schedule_sensitivity.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/sensitivity-pruning/alexnet.checkpoint.89.pth.tar">https://s3-us-west-1.amazonaws.com/nndistiller/sensitivity-pruning/alexnet.checkpoint.89.pth.tar</a></li>
+<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/sensitivity-pruning/alexnet.checkpoint.89.pth.tar">alexnet.checkpoint.89.pth.tar</a></li>
 </ul>
 <h3 id="results">Results</h3>
 <p>Our reference is TorchVision's pretrained Alexnet model which has a Top1 accuracy of 56.55 and Top5=79.09.  We prune away 88.44% of the parameters and achieve  Top1=56.61 and Top5=79.45.
@@ -265,12 +265,12 @@ minimal tuning."</p>
 <p>ImageNet files:</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/agp-pruning/mobilenet.imagenet.schedule_agp.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/mobilenet/checkpoint.pth.tar">https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/mobilenet/checkpoint.pth.tar</a></li>
+<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/mobilenet/checkpoint.pth.tar">checkpoint.pth.tar</a></li>
 </ul>
 <p>ResNet18 files:</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/agp-pruning/resnet18.schedule_agp.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/resnet18/checkpoint.pth.tar">https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/resnet18/checkpoint.pth.tar</a></li>
+<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/resnet18/checkpoint.pth.tar">checkpoint.pth.tar</a></li>
 </ul>
 <h3 id="results_1">Results</h3>
 <p>As our baseline we used a <a href="https://github.com/marvis/pytorch-mobilenet">pretrained PyTorch MobileNet model</a> (width=1) which has Top1=68.848 and Top5=88.740.<br />
@@ -390,7 +390,7 @@ In contrast to pruning weights, this approach does not result in sparse connecti
 <p>After performing filter-pruning sensitivity analysis to assess which layers are more sensitive to the pruning of filters, we execute distiller.L1RankedStructureParameterPruner once in order to rank the filters of each layer by their L1-norm values, and then we prune the schedule-prescribed sparsity level.  </p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml</code></li>
-<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint_finetuned.pth.tar">https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint_finetuned.pth.tar</a></li>
+<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint_finetuned.pth.tar">checkpoint_finetuned.pth.tar</a></li>
 </ul>
 <p>The excerpt from the schedule, displayed below, shows how we declare the L1RankedStructureParameterPruner.  This class currently ranks filters only, but because in the future this class may support ranking of various structures, you need to specify for each parameter both the target sparsity level, and the structure type ('3D' is filter-wise pruning).</p>
 <pre><code>pruners:
@@ -430,7 +430,7 @@ Our current implementation is specific to certain layers in ResNet and is a bit 
 <p>We started by training the baseline ResNet56-Cifar dense network (180 epochs) since we didn't have a pre-trained model.</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_baseline_training.yaml</code></li>
-<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar">https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar</a></li>
+<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar">checkpoint.resnet56_cifar_baseline.pth.tar</a></li>
 </ul>
 <h3 id="results_3">Results</h3>
 <p>We trained a ResNet56-Cifar10 network and achieve accuracy results which are on-par with published results:

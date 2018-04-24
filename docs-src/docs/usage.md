@@ -1,8 +1,15 @@
-# Using the sample application (compress_classifier.py)
+# Using the sample application
 
-The sample application, ```compress_classifier.py```, supports various features for compression image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.
+The Distiller repository contains a sample application, ```distiller/examples/classifier_compression/compress_classifier.py```, and a set of scheduling files which demonstrate Distiller's features.  This page discusses how to use this application and schedules.
 
-This diagram shows how where ```compress_classifier.py``` fits in the compression workflow, and how we integrate the jupyter notebooks as part of our research work.
+You might also want to refer to the following resources:
+
+* An [explanation](https://nervanasystems.github.io/distiller/schedule/index.html) of the scheduler file format.
+* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo/index.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
+
+The sample application supports various features for compression of image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.
+
+This diagram shows how where ```compress_classifier.py``` fits in the compression workflow, and how we integrate the Jupyter notebooks as part of our research work.
 <center>![Using Distiller](imgs/use-flow.png)</center><br>
 
 ## Command line arguments
