@@ -1,6 +1,6 @@
 # Using the sample application
 
-The Distiller repository contains a sample application, ```distiller/examples/classifier_compression/compress_classifier.py```, and a set of scheduling files which demonstrate Distiller's features.  This page discusses how to use this application and schedules.
+The Distiller repository contains a sample application, ```distiller/examples/classifier_compression/compress_classifier.py```, and a set of scheduling files which demonstrate Distiller's features.  Following is a brief discussion of how to use this application and the accompanying schedules.
 
 You might also want to refer to the following resources:
 
