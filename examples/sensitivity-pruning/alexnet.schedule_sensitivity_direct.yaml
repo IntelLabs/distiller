@@ -1,0 +1,30 @@
+#
+# This schedule is an example of "Direct Pruning" for Alexnet/Imagent, as
+# described in chapter 3 of Song Han's PhD dissertation: "EFFICIENT METHODS AND
+# HARDWARE FOR DEEP LEARNING"
+#
+# The pruning policy describes a single pruning phase.
+# The sensitivity values are the sensitivities from examples/sensitivity-pruning/alexnet.schedule_sensitivity.yaml
+# multiplied by 1.9.  The multiplication raises the threshold to its final value.
+# The overall model sparsity is 90.36%
+#
+version: 1
+pruners:
+  pruner1:
+    class: 'SensitivityPruner'
+    sensitivities:
+      'features.module.0.weight': 0.475
+      'features.module.3.weight': 0.665
+      'features.module.6.weight': 0.76
+      'features.module.8.weight': 0.855
+      'features.module.10.weight': 1.045
+      'classifier.1.weight': 1.663
+      'classifier.4.weight': 1.663
+      'classifier.6.weight': 1.188
+
+policies:
+  - pruner:
+      instance_name : 'pruner1'
+    starting_epoch: 0
+    ending_epoch: 1
+    frequency: 1

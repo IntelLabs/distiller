@@ -1,0 +1,40 @@
+# Schedule based on:
+#   Learning Efficient Convolutional Networks through Network Slimming
+#   Zhuang Liu, Jianguo Li, Zhiqiang Shen, Gao Huang, Shoumeng Yan, Changshui Zhang
+#   arXiv:1708.06519v1
+#   Aug 2017
+#
+# time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../network_slimming/resnet20_slimming.yaml -j=1 --deterministic
+
+lr_schedulers:
+  training_lr:
+    class: StepLR
+    step_size: 45
+    gamma: 0.10
+
+regularizers:
+  Channels_groups_regularizer:
+    class: L1Regularizer
+    reg_regims:
+      module.layer1.0.bn2.weight: 0.007
+      module.layer1.1.bn2.weight: 0.007
+      module.layer1.2.bn2.weight: 0.007
+      module.layer2.0.bn2.weight: 0.007
+      module.layer2.1.bn2.weight: 0.007
+      module.layer2.2.bn2.weight: 0.007
+      module.layer3.0.bn2.weight: 0.007
+      module.layer3.1.bn2.weight: 0.007
+      module.layer3.2.bn2.weight: 0.007
+
+policies:
+  - lr_scheduler:
+      instance_name: training_lr
+    starting_epoch: 45
+    ending_epoch: 300
+    frequency: 1
+
+  # - regularizer:
+  #     instance_name: Channels_groups_regularizer
+  #   starting_epoch: 0
+  #   ending_epoch: 180
+  #   frequency: 1

@@ -1,0 +1,27 @@
+site_name: Neural Network Distiller
+theme: readthedocs
+site_description: 'Distiller Documentation by Intel Nervana.'
+use_directory_urls: False
+repo_url: https://github.com/NervanaSystems/distiller
+site_dir: ../docs
+markdown_extensions:
+- mdx_math:
+    enable_dollar_delimiter: True #for use of inline $..$
+
+extra_javascript: ['https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML']
+extra_css: [extra.css]
+
+
+pages:
+  - Home: index.md
+  - Installation: install.md
+  - Usage: usage.md
+  - Compression scheduling: schedule.md
+  - Compressing models:
+    - 'Pruning': 'pruning.md'
+    - 'Regularization': 'regularization.md'
+    - 'Quantization': 'quantization.md'
+  - Algorithms: algorithms.md
+  - Model Zoo: model_zoo.md
+  - Jupyter notebooks: jupyter.md
+  - Design: design.md

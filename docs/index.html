@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Distiller Documentation by Intel Nervana.">
+  
+  <link rel="shortcut icon" href="./img/favicon.ico">
+  <title>Home - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="./css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="./css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="./css/highlight.css">
+  <link href="./extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Home";
+    var mkdocs_page_input_path = "index.md";
+    var mkdocs_page_url = "/index.html";
+  </script>
+  
+  <script src="./js/jquery-2.1.1.min.js"></script>
+  <script src="./js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="./js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1 current">
+		
+    <a class="current" href="index.html">Home</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#distiller-documentation">Distiller Documentation</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#what-is-distiller">What is Distiller</a></li>
+        
+            <li><a class="toctree-l3" href="#motivation">Motivation</a></li>
+        
+        </ul>
+    
+
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install/index.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage/index.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule/index.html">Compression scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization/index.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization/index.html">Quantization</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="algorithms/index.html">Algorithms</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo/index.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter/index.html">Jupyter notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design/index.html">Design</a>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Home</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/NervanaSystems/distiller/edit/master/docs/index.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="distiller-documentation">Distiller Documentation</h1>
+<h2 id="what-is-distiller">What is Distiller</h2>
+<p><strong><a href="https://github.com/NervanaSystems/distiller/">Distiller</a></strong> is an open-source Python package for neural network compression research.</p>
+<p>Network compression can reduce the footprint of a neural network, increase its inference speed and save energy. Distiller provides a <a href="http://pytorch.org/">PyTorch</a> environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low precision arithmetic.</p>
+<p>Distiller contains:</p>
+<ul>
+<li>A framework for integrating pruning, regularization and quantization algorithms.</li>
+<li>A set of tools for analyzing and evaluating compression performance.</li>
+<li>Example implementations of state-of-the-art compression algorithms.</li>
+</ul>
+<h2 id="motivation">Motivation</h2>
+<p>A sparse tensor is any tensor that contains some zeros, but sparse tensors are usually only interesting if they contain a significant number of zeros.  A sparse neural network performs computations using some sparse tensors (preferably many).  These tensors can be parameters (weights and biases) or activations (feature maps).</p>
+<p>Why do we care about sparsity?<br>
+Present day neural networks tend to be deep, with millions of weights and activations.  Refer to GoogLeNet or ResNet50, for a couple of examples.
+These large models are compute-intensive which means that even with dedicated acceleration hardware, the inference pass (network evaluation) will take time.  You might think that latency is an issue only in certain cases, such as autonomous driving systems, but in fact, whenever we humans interact with our phones and computers, we are sensitive to the latency of the interaction.  We don't like to wait for search results or for an application or web-page to load, and we are especially sensitive in realtime interactions such as speech recognition.  So inference latency is often something we want to minimize.
+<br><br>
+Large models are also memory-intensive with millions of parameters.  Moving around all of the data required to compute inference results consumes energy, which is a problem on a mobile device as well as in a server environment.  Data center server-racks are limited by their power-envelope and their ToC (total cost of ownership) is correlated to their power consumption and thermal characteristics.  In the mobile device environment, we are obviously always aware of the implications of power consumption on the device battery.
+Inference performance in the data center is often measured using a KPI (key performance indicator) which folds latency and power considerations: inferences per second, per Watt (inferences/sec/watt).
+<br><br>
+The storage and transfer of large neural networks is also a challenge in mobile device environments, because of limitations on application sizes and long application download times.
+<br><br>
+For these reasons, we wish to compress the network as much as possible, to reduce the amount of bandwidth and compute required.  Inducing sparseness, through regularization or pruning, in neural-network models, is one way to compress the network (quantization is another method).
+Sparse neural networks hold the promise of speed, small size, and energy efficiency.  </p>
+<h3 id="smaller">Smaller</h3>
+<p>Sparse NN model representations can be compressed by taking advantage of the fact that the tensor elements are dominated by zeros.  The compression format, if any, is very HW and SW specific, and the optimal format may be different per tensor (an obvious example: largely dense tensors should not be compressed).  The compute hardware needs to support the compressions formats, for representation compression to be meaningful.  Compression representation decisions might interact with algorithms such as the use of tiles for memory accesses.  Data such as a parameter tensor is read/written from/to main system memory compressed, but the computation can be dense or sparse.  In dense compute we use dense operators, so the compressed data eventually needs to be decompressed into its full, dense size.  The best we can do is bring the compressed representation as close as possible to the compute engine.<br>
+Sparse compute, on the other hand, operates on the sparse representation which never requires decompression (we therefore distinguish between sparse representation and compressed representation).  This is not a simple matter to implement in HW, and often means lower utilization of the vectorized compute engines.  Therefore, there is a third class of representations, which take advantage of specific hardware characteristics.  For example, for a vectorized compute engine we can remove an entire zero-weights vector and skip its computation (this uses structured pruning or regularization).</p>
+<h3 id="faster">Faster</h3>
+<p>Many of the layers in modern neural-networks are bandwidth-bound, which means that the execution latency is dominated by the available bandwidth. In essence, the hardware spends more time bringing data close to the compute engines, than actually performing the computations.  Fully-connected layers, RNNs and LSTMs are some examples of bandwidth-dominated operations.<br>
+Reducing the bandwidth required by these layers, will immediately speed them up.<br>
+Some pruning algorithms prune entire kernels, filters and even layers from the network without adversely impacting the final accuracy.  Depending on the hardware implementation, these methods can be leveraged to skip computations, thus reducing latency and power.</p>
+<h3 id="more-energy-efficient">More energy efficient</h3>
+<p>Because we pay two orders-of-magnitude more energy to access off-chip memory (e.g. DDR) compared to on-chip memory (e.g. SRAM or cache), many hardware designs employ a multi-layered cache hierarchy.  Fitting the parameters and activations of a network in these on-chip caches can make a big difference on the required bandwidth, the total inference latency, and off course reduce power consumption.<br>
+And of course, if we used a sparse or compressed representation, then we are reducing the data throughput and therefore the energy consumption.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="install/index.html" class="btn btn-neutral float-right" title="Installation">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/NervanaSystems/distiller/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+      
+        <span style="margin-left: 15px"><a href="install/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="./js/theme.js"></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+      <script src="./search/require.js"></script>
+      <script src="./search/search.js"></script>
+
+</body>
+</html>
+
+<!--
+MkDocs version : 0.17.2
+Build Date UTC : 2018-04-24 14:33:20
+-->

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+    
+    <url>
+     <loc>/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/install/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/usage/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/schedule/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+        
+    <url>
+     <loc>/pruning/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+        
+    <url>
+     <loc>/regularization/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+        
+    <url>
+     <loc>/quantization/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+        
+    
+
+    
+    <url>
+     <loc>/algorithms/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/model_zoo/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/jupyter/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+    
+    <url>
+     <loc>/design/index.html</loc>
+     <lastmod>2018-04-24</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    
+
+</urlset>
