@@ -46,7 +46,6 @@ Network compression can reduce the memory footprint of a neural network, increas
 * [Versioning](#versioning)
 * [License](#license)
 * [Acknowledgments](#acknowledgments)
-* [Citation](#citation)
 * [Disclaimer](#disclaimer)
 
 ## Feature set
