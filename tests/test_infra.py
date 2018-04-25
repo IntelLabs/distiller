@@ -14,11 +14,17 @@
 # limitations under the License.
 #
 
-def test_load():
-    from models import create_model
-    from apputils import load_checkpoint
-    import logging
+import logging 
+import os
+import sys
+module_path = os.path.abspath(os.path.join('..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
 
+from models import create_model
+from apputils import load_checkpoint
+
+def test_load():
     logger = logging.getLogger('simple_example')
     logger.setLevel(logging.INFO)
 
