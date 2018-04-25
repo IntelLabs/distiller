@@ -257,17 +257,27 @@ def draw_model_to_file(sgraph, png_fname):
         fid.write(png)
 
 def draw_img_classifier_to_file(model, png_fname, dataset):
-    if dataset == 'imagenet':
-        dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
-    elif dataset == 'cifar10':
-        dummy_input = Variable(torch.randn(1, 3, 32, 32))
-    else:
-        print("Unsupported dataset (%s) - aborting draw operation" % dataset)
-        return
+    try:
+        if dataset == 'imagenet':
+            dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
+        elif dataset == 'cifar10':
+            dummy_input = Variable(torch.randn(1, 3, 32, 32))
+        else:
+            print("Unsupported dataset (%s) - aborting draw operation" % dataset)
+            return
 
-    g = SummaryGraph(model, dummy_input)
-    draw_model_to_file(g, png_fname)
-
+        g = SummaryGraph(model, dummy_input)
+        draw_model_to_file(g, png_fname)
+        print("Network PNG image generation completed")
+    except TypeError as e:
+        print("An error has occured while generating the network PNG image.")
+        print("This feature is not supported on official PyTorch releases.")
+        print("Please check that you are using a valid PyTorch version.")
+        print("You are using pytorch version %s" %torch.__version__)
+    except FileNotFoundError:
+        print("An error has occured while generating the network PNG image.")
+        print("Please check that you have graphviz installed.")
+        print("\t$ sudo apt-get install graphviz")
 
 def create_png(sgraph):
     """Create a PNG object containing a graphiz-dot graph of the netowrk represented
