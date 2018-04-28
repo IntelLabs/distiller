@@ -39,7 +39,7 @@ Network compression can reduce the memory footprint of a neural network, increas
   + [Install dependencies](#install-dependencies)
 * [Getting Started](#getting-started)
   + [Example invocations of the sample application](#example-invocations-of-the-sample-application)
-  + [Explore the sample Jupiter notebooks](#explore-the-sample-jupiter-notebooks)
+  + [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
 * [Set up the classification datasets](#set-up-the-classification-datasets)
 * [Running the tests](#running-the-tests)
 * [Generating the HTML documentation site](#generating-the-html-documentation-site)
@@ -137,7 +137,7 @@ You can jump head-first into some limited examples of network compression, to ge
 
 Distiller comes with a sample application for compressing image classification DNNs, ```compress_classifier.py``` located at ```distiller/examples/classifier_compression```.
 
-We'll show you how to use it for some simple use-cases, and will point you to some ready-to-go Jupiter notebooks.
+We'll show you how to use it for some simple use-cases, and will point you to some ready-to-go Jupyter notebooks.
 
 For more details, there are some other resources you can refer to:
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
@@ -196,7 +196,7 @@ This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've include
 $ python3 compress_classifier.py -a resnet20-cifar ../../../data.cifar10 --resume ../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize --evaluate
 ```
 
-### Explore the sample Jupiter notebooks
+### Explore the sample Jupyter notebooks
 The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter/index.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
 After installing and running the server, take a look at the [notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
 
