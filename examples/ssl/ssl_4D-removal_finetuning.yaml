@@ -1,6 +1,6 @@
 # We used this schedule to fine-tune a CIFAR0-ResNet20 model which had soem of its layers regularized-away with SSL (see ssl_4D-removal_training.yaml).
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --lr=0.1 --epochs=250 --resume=../ssl/checkpoints/checkpoint_trained_4D_regularized_5Lremoved.pth.tar --compress=../ssl/ssl_4D-removal_finetuning.yaml  -j=1 --deterministic
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.1 --epochs=70 --resume=../ssl/checkpoints/checkpoint_trained_4D_regularized_5Lremoved.pth.tar --compress=../ssl/ssl_4D-removal_finetuning.yaml  -j=1 --deterministic
 #
 # Parameters:
 #
