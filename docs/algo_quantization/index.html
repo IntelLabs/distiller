@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title>Installation - Neural Network Distiller</title>
+  <title>Quantization - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -18,9 +18,9 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = "Installation";
-    var mkdocs_page_input_path = "install.md";
-    var mkdocs_page_url = "/install/index.html";
+    var mkdocs_page_name = "Quantization";
+    var mkdocs_page_input_path = "algo_quantization.md";
+    var mkdocs_page_url = "/algo_quantization/index.html";
   </script>
   
   <script src="../js/jquery-2.1.1.min.js"></script>
@@ -53,25 +53,9 @@
     <a class="" href="../index.html">Home</a>
 	    </li>
           
-            <li class="toctree-l1 current">
+            <li class="toctree-l1">
 		
-    <a class="current" href="index.html">Installation</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l2"><a href="#distiller-installation">Distiller Installation</a></li>
-    
-        <ul>
-        
-            <li><a class="toctree-l3" href="#clone-distiller">Clone Distiller</a></li>
-        
-            <li><a class="toctree-l3" href="#create-a-python-virtual-environment">Create a Python virtual environment</a></li>
-        
-            <li><a class="toctree-l3" href="#install-dependencies">Install dependencies</a></li>
-        
-        </ul>
-    
-
-    </ul>
+    <a class="" href="../install/index.html">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -111,9 +95,21 @@
                     
     <a class="" href="../algo_pruning/index.html">Pruning</a>
                 </li>
-                <li class="">
+                <li class=" current">
                     
-    <a class="" href="../algo_quantization/index.html">Quantization</a>
+    <a class="current" href="index.html">Quantization</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#quantization-algorithms">Quantization Algorithms</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#symmetric-linear-quantization">Symmetric Linear Quantization</a></li>
+        
+        </ul>
+    
+
+    </ul>
                 </li>
     </ul>
 	    </li>
@@ -154,8 +150,12 @@
     <li><a href="../index.html">Docs</a> &raquo;</li>
     
       
+        
+          <li>Algorithms &raquo;</li>
+        
+      
     
-    <li>Installation</li>
+    <li>Quantization</li>
     <li class="wy-breadcrumbs-aside">
       
     </li>
@@ -165,56 +165,23 @@
           <div role="main">
             <div class="section">
               
-                <h1 id="distiller-installation">Distiller Installation</h1>
-<p>These instructions will help get Distiller up and running on your local machine.</p>
-<p>You may also want to refer to these resources:</p>
-<ul>
-<li><a href="https://github.com/NervanaSystems/distiller#set-up-the-classification-datasets">Dataset installation</a> instructions.</li>
-<li><a href="https://nervanasystems.github.io/distiller/jupyter/index.html#installation">Jupyter installation</a> instructions.</li>
-</ul>
-<p>Notes:
-- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
-- If you are not using a GPU, you might need to make small adjustments to the code.</p>
-<h2 id="clone-distiller">Clone Distiller</h2>
-<p>Clone the Distiller code repository from github:</p>
-<pre><code>$ git clone https://github.com/NervanaSystems/distiller.git
-</code></pre>
-
-<p>The rest of the documentation that follows, assumes that you have cloned your repository to a directory called <code>distiller</code>. <br></p>
-<h2 id="create-a-python-virtual-environment">Create a Python virtual environment</h2>
-<p>We recommend using a <a href="https://docs.python.org/3/library/venv.html#venv-def">Python virtual environment</a>, but that of course, is up to you.
-There's nothing special about using Distiller in a virtual environment, but we provide some instructions, for completeness.<br>
-Before creating the virtual environment, make sure you are located in directory <code>distiller</code>.  After creating the environment, you should see a directory called <code>distiller/env</code>.
-<br></p>
-<h3 id="using-virtualenv">Using virtualenv</h3>
-<p>If you don't have virtualenv installed, you can find the installation instructions <a href="https://packaging.python.org/guides/installing-using-pip-and-virtualenv/">here</a>.</p>
-<p>To create the environment, execute:</p>
-<pre><code>$ python3 -m virtualenv env
-</code></pre>
-
-<p>This creates a subdirectory named <code>env</code> where the python virtual environment is stored, and configures the current shell to use it as the default python environment.</p>
-<h3 id="using-venv">Using venv</h3>
-<p>If you prefer to use <code>venv</code>, then begin by installing it:</p>
-<pre><code>$ sudo apt-get install python3-venv
-</code></pre>
-
-<p>Then create the environment:</p>
-<pre><code>$ python3 -m venv env
-</code></pre>
-
-<p>As with virtualenv, this creates a directory called <code>distiller/env</code>.<br></p>
-<h3 id="activate-the-environment">Activate the environment</h3>
-<p>The environment activation and deactivation commands for <code>venv</code> and <code>virtualenv</code> are the same.<br>
-<strong>!NOTE: Make sure to activate the environment, before proceeding with the installation of the dependency packages:<br></strong></p>
-<pre><code>$ source env/bin/activate
-</code></pre>
-
-<h2 id="install-dependencies">Install dependencies</h2>
-<p>Finally, install Distiller's dependency packages using <code>pip3</code>:</p>
-<pre><code>$ pip3 install -r requirements.txt
-</code></pre>
-
-<p>PyTorch is included in the <code>requirements.txt</code> file, and will currently download PyTorch version 3.1 for CUDA 8.0.  This is the setup we've used for testing Distiller.</p>
+                <h1 id="quantization-algorithms">Quantization Algorithms</h1>
+<h2 id="symmetric-linear-quantization">Symmetric Linear Quantization</h2>
+<p><strong>Linear</strong> - float value quantized by multiplying with scale factor. <strong>Symmetric</strong> - no quantization bias (or "offset") used, so zero in the float domain is mapped to zero in the integer domain.<br />
+In the current implementation the scale factor is chosen so that the entire range of the tensor is quantized. So, we get: (Using <script type="math/tex">q</script> to denote the scale factor and <script type="math/tex">x</script> to denote the tensor being quantized)
+<script type="math/tex; mode=display">q_x = \frac{2^n-1}{\max|x|}</script>
+<script type="math/tex; mode=display">x_q = round(q_x\cdot x_f)</script>
+Where <script type="math/tex">n</script> is the number of bits used for quantization.<br />
+For weights and bias the scale factor is determined once at quantization setup ("offline"), and for activations it is determined dynamically at runtime ("online").<br />
+Currently, quantized implementations are provided for <strong>convolution</strong> and <strong>fully-connected</strong> layers. These layers are quantized as follows (using <script type="math/tex">x, y, w, b</script> for input, output, weights, bias respectively):
+<script type="math/tex; mode=display">y_f = \sum{x_f\cdot w_f} + b_f = \sum{x_f\cdot w_f} + b_f = \sum{\frac{x_q}{q_x}\cdot \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \sum{(x_q w_q + \frac{q_b}{q_x q_w}b_q)}</script>
+<script type="math/tex; mode=display">y_q = round(q_y\cdot y_f) = round(\frac{q_y}{q_x q_w} \sum{(x_q w_q + \frac{q_b}{q_x q_w}b_q)})</script>
+Note how the bias has to be re-scaled to match the scale of the summation.<br />
+All other layers are executed in FP32. This is done by adding quantize and de-quantize operations at the beginning and end of the quantized layers.  </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+</div>
+<p>This method is implemented as <strong>inference only</strong>, with no back-propagation functionality. Hence, it can only be used to quantize a pre-trained FP32 model, and as such, using it with <script type="math/tex">n < 8</script> is likely to lead to severe accuracy degradation for any non-trivial workload.</p>
               
             </div>
           </div>
@@ -222,10 +189,10 @@ Before creating the virtual environment, make sure you are located in directory 
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../usage/index.html" class="btn btn-neutral float-right" title="Usage">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../model_zoo/index.html" class="btn btn-neutral float-right" title="Model Zoo">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../index.html" class="btn btn-neutral" title="Home"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../algo_pruning/index.html" class="btn btn-neutral" title="Pruning"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -251,10 +218,10 @@ Before creating the virtual environment, make sure you are located in directory 
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../algo_pruning/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../usage/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="../model_zoo/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

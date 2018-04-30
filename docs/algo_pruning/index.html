@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title>Algorithms - Neural Network Distiller</title>
+  <title>Pruning - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -18,9 +18,9 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = "Algorithms";
-    var mkdocs_page_input_path = "algorithms.md";
-    var mkdocs_page_url = "/algorithms/index.html";
+    var mkdocs_page_name = "Pruning";
+    var mkdocs_page_input_path = "algo_pruning.md";
+    var mkdocs_page_url = "/algo_pruning/index.html";
   </script>
   
   <script src="../js/jquery-2.1.1.min.js"></script>
@@ -87,39 +87,49 @@
     </ul>
 	    </li>
           
-            <li class="toctree-l1 current">
+            <li class="toctree-l1">
 		
-    <a class="current" href="index.html">Algorithms</a>
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class=" current">
+                    
+    <a class="current" href="index.html">Pruning</a>
     <ul class="subnav">
             
-    <li class="toctree-l2"><a href="#weights-pruning-algorithms">Weights pruning algorithms</a></li>
+    <li class="toctree-l3"><a href="#weights-pruning-algorithms">Weights pruning algorithms</a></li>
     
         <ul>
         
-            <li><a class="toctree-l3" href="#magnitude-pruner">Magnitude pruner</a></li>
+            <li><a class="toctree-l4" href="#magnitude-pruner">Magnitude pruner</a></li>
         
-            <li><a class="toctree-l3" href="#sensitivity-pruner">Sensitivity pruner</a></li>
+            <li><a class="toctree-l4" href="#sensitivity-pruner">Sensitivity pruner</a></li>
         
-            <li><a class="toctree-l3" href="#level-pruner">Level pruner</a></li>
+            <li><a class="toctree-l4" href="#level-pruner">Level pruner</a></li>
         
-            <li><a class="toctree-l3" href="#automated-gradual-pruner-agp">Automated gradual pruner (AGP)</a></li>
+            <li><a class="toctree-l4" href="#automated-gradual-pruner-agp">Automated gradual pruner (AGP)</a></li>
         
-            <li><a class="toctree-l3" href="#rnn-pruner">RNN pruner</a></li>
+            <li><a class="toctree-l4" href="#rnn-pruner">RNN pruner</a></li>
         
         </ul>
     
 
-    <li class="toctree-l2"><a href="#structure-pruners">Structure pruners</a></li>
+    <li class="toctree-l3"><a href="#structure-pruners">Structure pruners</a></li>
     
         <ul>
         
-            <li><a class="toctree-l3" href="#ranked-structure-pruner">Ranked structure pruner</a></li>
+            <li><a class="toctree-l4" href="#ranked-structure-pruner">Ranked structure pruner</a></li>
         
-            <li><a class="toctree-l3" href="#activation-influenced-pruner">Activation-influenced pruner</a></li>
+            <li><a class="toctree-l4" href="#activation-influenced-pruner">Activation-influenced pruner</a></li>
         
         </ul>
     
 
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_quantization/index.html">Quantization</a>
+                </li>
     </ul>
 	    </li>
           
@@ -159,8 +169,12 @@
     <li><a href="../index.html">Docs</a> &raquo;</li>
     
       
+        
+          <li>Algorithms &raquo;</li>
+        
+      
     
-    <li>Algorithms</li>
+    <li>Pruning</li>
     <li class="wy-breadcrumbs-aside">
       
     </li>
@@ -281,7 +295,7 @@ abundant and gradually reduce the number of weights being pruned each time as th
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../model_zoo/index.html" class="btn btn-neutral float-right" title="Model Zoo">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../algo_quantization/index.html" class="btn btn-neutral float-right" title="Quantization">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
         <a href="../quantization/index.html" class="btn btn-neutral" title="Quantization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
@@ -313,7 +327,7 @@ abundant and gradually reduce the number of weights being pruned each time as th
         <span><a href="../quantization/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../model_zoo/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="../algo_quantization/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
