@@ -6,6 +6,7 @@ site_dir: ../docs
 markdown_extensions:
 - mdx_math:
     enable_dollar_delimiter: True #for use of inline $..$
+- admonition
 
 extra_javascript: ['https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML']
 extra_css: [extra.css]
@@ -20,7 +21,9 @@ pages:
     - 'Pruning': 'pruning.md'
     - 'Regularization': 'regularization.md'
     - 'Quantization': 'quantization.md'
-  - Algorithms: algorithms.md
+  - Algorithms:
+    - Pruning: algo_pruning.md
+    - Quantization: algo_quantization.md
   - Model Zoo: model_zoo.md
   - Jupyter notebooks: jupyter.md
   - Design: design.md

@@ -109,7 +109,17 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../algorithms/index.html">Algorithms</a>
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../algo_pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_quantization/index.html">Quantization</a>
+                </li>
+    </ul>
 	    </li>
           
             <li class="toctree-l1">
@@ -191,25 +201,26 @@ Additionally integer compute is <strong>faster</strong> than floating point comp
 </tbody>
 </table>
 <p>(<a href="#dally-2015">Dally, 2015</a>)</p>
-<p>Note that very aggressive quantization can yield even more efficiency. If weights are binary (-1, 1) or ternary (-1, 0, 1 using 2-bits), then convolution and fully-connected layers can be computed with additions and subtractions only, without removing multiplications completely. If activations are binary as well, then additions can also be removed, in favor of bitwise operations (<a href="#rastegari-et-al-2016">Rastegari et al., 2016</a>).</p>
+<p>Note that very aggressive quantization can yield even more efficiency. If weights are binary (-1, 1) or ternary (-1, 0, 1 using 2-bits), then convolution and fully-connected layers can be computed with additions and subtractions only, removing multiplications completely. If activations are binary as well, then additions can also be removed, in favor of bitwise operations (<a href="#rastegari-et-al-2016">Rastegari et al., 2016</a>).</p>
 <h2 id="integer-vs-fp32">Integer vs. FP32</h2>
 <p>There are two main attributes when discussing a numerical format. The first is <strong>dynamic range</strong>, which refers to the range of representable numbers. The second one is how many values can be represented within the dynamic range, which in turn determines the <strong>precision / resolution</strong> of the format (the distance between two numbers).<br />
 For all integer formats, the dynamic range is <script type="math/tex">[-2^{n-1} .. 2^{n-1}-1]</script>, where <script type="math/tex">n</script> is the number of bits. So for INT8 the range is <script type="math/tex">[-128 .. 127]</script>, and for INT4 it is <script type="math/tex">[-16 .. 15]</script> (we're limiting ourselves to signed integers for now). The number of representable values is <script type="math/tex">2^n</script>.
-Contrast that with FP32, where the dynamic range is <script type="math/tex">\pm 3.4\ x\ 10^{38}</script>, and the precision is approximately <script type="math/tex">4.2\ x\ 10^9</script> (note that the resolution in floating point formats the precision worsens as we get further from 0, but this makes no difference in the context of this discussion).<br />
+Contrast that with FP32, where the dynamic range is <script type="math/tex">\pm 3.4\ x\ 10^{38}</script>, and approximately <script type="math/tex">4.2\ x\ 10^9</script> values can be represented.<br />
 We can immediately see that FP32 is much more <strong>versatile</strong>, in that it is able to represent a wide range of distributions accurately. This is a nice property for deep learning models, where the distributions of weights and activations are usually very different (at least in dynamic range). In addition the dynamic range can differ between layers in the model.<br />
-To give a bit more flexibility to the integer formats, a <strong>scale factor</strong> is used to map the dynamic range of the tensor to the integer format range. But still we remain with the issue of having a significantly lower number of representable values, that is - much lower resolution.<br />
+In order to be able to represent these different distributions with an integer format, a <strong>scale factor</strong> is used to map the dynamic range of the tensor to the integer format range. But still we remain with the issue of having a significantly lower number of representable values, that is - much lower resolution.<br />
 Note that this scale factor is, in most cases, a floating-point number. Hence, even when using integer numerics, some floating-point computations remain. <a href="#courbariaux-et-al-2014">Courbariaux et al., 2014</a> scale using only shifts, eliminating the floating point operation. In <a href="https://github.com/google/gemmlowp/blob/master/doc/quantization.md">GEMMLWOP</a>, the FP32 scale factor is approximated using an integer or fixed-point multiplication followed by a shift operation. In many cases the effect of this approximation on accuracy is negligible.</p>
 <h3 id="avoiding-overflows">Avoiding Overflows</h3>
 <p>Convolution and fully connected layers involve the storing of intermediate results in accumulators. Due to the limited dynamic range of integer formats, if we would use the same bit-width for the weights and activation, <em>and</em> for the accumulators, we would likely overflow very quickly. Therefore, accumulators are usually implemented with higher bit-widths.<br />
-The result of multiplying two <script type="math/tex">n</script>-bit integers is, at most, a <script type="math/tex">2n</script>-bit number. In convolution layers, such multiplications are accumulated <script type="math/tex">c\cdot k^2</script> times, where <script type="math/tex">c</script> is the number of input channels and <script type="math/tex">k</script> is the kernel width. Hence, to avoid overflowing, the accumulator must be at least <script type="math/tex">2n + c\cdot k^2</script>-bits wide. In many cases 32-bit accumulators are used, however for INT4 and lower it might be possible to use less than 32 -bits, depending on the expected use cases and layer widths.</p>
+The result of multiplying two <script type="math/tex">n</script>-bit integers is, at most, a <script type="math/tex">2n</script>-bit number. In convolution layers, such multiplications are accumulated <script type="math/tex">c\cdot k^2</script> times, where <script type="math/tex">c</script> is the number of input channels and <script type="math/tex">k</script> is the kernel width (assuming a square kernel). Hence, to avoid overflowing, the accumulator should be <script type="math/tex">2n + M</script>-bits wide, where M is at least <script type="math/tex">log_2(c\cdot k^2)</script>. In many cases 32-bit accumulators are used, however for INT4 and lower it might be possible to use less than 32 -bits, depending on the expected use cases and layer widths.</p>
 <h2 id="conservative-quantization-int8">"Conservative" Quantization: INT8</h2>
 <p>In many cases, taking a model trained for FP32 and directly quantizing it to INT8, without any re-training, can result in a relatively low loss of accuracy (which may or may not be acceptable, depending on the use case). Some fine-tuning can further improve the accuracy (<a href="#gysel-et-al-2018">Gysel at al., 2018</a>).<br />
-As mentioned above, a scale factor is used to adapt the dynamic range of the tensor at hand to that of the integer format. This scale factor needs to be calculated per-layer per-tensor. The simplest way is to map the min/max values of the float tensor to the min/max of the integer format. For weights and biases this is easy, as they are set once training is complete. For activations, the min/max float values can be obtained "online" during inference, or "offline".</p>
+As mentioned above, a scale factor is used to adapt the dynamic range of the tensor at hand to that of the integer format. This scale factor needs to be calculated per-layer per-tensor (. The simplest way is to map the min/max values of the float tensor to the min/max of the integer format. For weights and biases this is easy, as they are set once training is complete. For activations, the min/max float values can be obtained "online" during inference, or "offline".</p>
 <ul>
 <li><strong>Offline</strong> means gathering activations statistics before deploying the model, either during training or by running a few "calibration" batches on the trained FP32 model. Based on these gathered statistics, the scaled factors are calculated and are fixed once the model is deployed. This method has the risk of encountering values outside the previously observed ranges at runtime. These values will be clipped, which might lead to accuracy degradation.</li>
 <li><strong>Online</strong> means calculating the min/max values for each tensor dynamically during runtime. In this method clipping cannot occur, however the added computation resources required to calculate the min/max values at runtime might be prohibitive.</li>
 </ul>
-<p>It is important to note, however, that the full float range of an activations tensor usually includes elements which are statistically outliers. These values can be discarded by using a narrower min/max range, effectively allowing some clipping to occur in favor of increasing the resolution provided to the part of the distribution containing most of the information. Statistical measures can be used to intelligently select where to clip the original range in order to preserve as much information as possible (<a href="#migacz-2017">Migacz, 2017</a>)</p>
+<p>It is important to note, however, that the full float range of an activations tensor usually includes elements which are statistically outliers. These values can be discarded by using a narrower min/max range, effectively allowing some clipping to occur in favor of increasing the resolution provided to the part of the distribution containing most of the information. Statistical measures can be used to intelligently select where to clip the original range in order to preserve as much information as possible (<a href="#migacz-2017">Migacz, 2017</a>)  </p>
+<p>Another possible optimization point is <strong>scale-factor scope</strong>. The most common way is use a single scale-factor per-layer</p>
 <h2 id="aggressive-quantization-int4-and-lower">"Aggressive" Quantization: INT4 and Lower</h2>
 <p>Naively quantizing a FP32 model to INT4 and lower usually incurs significant accuracy degradation. Many works have tried to mitigate this effect. They usually employ one or more of the following concepts in order to improve model accuracy:</p>
 <ul>
@@ -273,7 +284,7 @@ As mentioned above, a scale factor is used to adapt the dynamic range of the ten
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../algorithms/index.html" class="btn btn-neutral float-right" title="Algorithms">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../algo_pruning/index.html" class="btn btn-neutral float-right" title="Pruning">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
         <a href="../regularization/index.html" class="btn btn-neutral" title="Regularization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
@@ -305,7 +316,7 @@ As mentioned above, a scale factor is used to adapt the dynamic range of the ten
         <span><a href="../regularization/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../algorithms/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="../algo_pruning/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
