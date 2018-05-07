@@ -1,0 +1,10 @@
+*.log
+*.pyc
+__pycache__/
+.pytest_cache
+*.tar
+site/
+env/
+.env/
+.idea/
+logs/
