@@ -103,7 +103,7 @@ class CompressionScheduler(object):
 
     def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss):
         # Last chance to compute the regularization loss, and optionally add it to the data loss
-        regularizer_loss = torch.autograd.Variable(torch.zeros(1), requires_grad=True).cuda()
+        regularizer_loss = torch.tensor(0, dtype=torch.float, device='cuda')
 
         if epoch in self.policies:
             for policy in self.policies[epoch]:
