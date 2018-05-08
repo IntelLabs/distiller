@@ -15,8 +15,7 @@
 # snapshot: 5000
 # snapshot_prefix: "mobilenet"
 
-# python compress_classifier.py -a mobilenet_050 --compress ../mobilenet/mobilenet_imagenet_baseline_training.yaml -j 22 ~/datasets/imagenet -p 50 -b 256 --epochs 120 --lr 0.1 --wd 0.0001 --momentum 0.9
-
+#  python compress_classifier.py -a mobilenet_050 --compress ../mobilenet/mobilenet_imagenet_baseline_training.yaml -j 22 ../../../data.imagenet -p 50 -b 256 --epochs 120 --lr 0.1 --wd 0.0001 --momentum 0.9
 lr_schedulers:
   training_lr:
     class: PolynomialLR
