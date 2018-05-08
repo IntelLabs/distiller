@@ -362,13 +362,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         # Measure accuracy and record loss
         classerr.add(output.data, target)
-        losses['objective_loss'].add(loss.data[0])
+        losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
             regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss)
             loss += regularizer_loss
-            losses['regularizer_loss'].add(regularizer_loss.data[0])
+            losses['regularizer_loss'].add(regularizer_loss.item())
 
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
@@ -446,7 +446,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
             loss = criterion(output, target_var)
 
             # measure accuracy and record loss
-            losses['objective_loss'].add(loss.data[0])
+            losses['objective_loss'].add(loss.item())
             classerr.add(output.data, target)
             # if confusion:
             #     confusion.add(output.data, target)
