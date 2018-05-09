@@ -174,7 +174,11 @@ However, to use the ipywidgets extension, you will need to enable it:</p>
 <pre><code>$ jupyter nbextension enable --py widgetsnbextension --sys-prefix
 </code></pre>
 
-<p>You might want to refer to the <a href="http://ipywidgets.readthedocs.io/en/latest/user_install.html">ipywidgets extension installation documentation</a>.</p>
+<p>You may want to refer to the <a href="http://ipywidgets.readthedocs.io/en/latest/user_install.html">ipywidgets extension installation documentation</a>.</p>
+<p>Another extension which requires special installation handling is <a href="https://github.com/quantopian/qgrid">Qgrid</a>.  Qgrid is a Jupyter notebook widget that adds interactive features, such as sorting, to Panadas DataFrames rendering.  To enable Qgrid:</p>
+<pre><code>$ jupyter nbextension enable --py --sys-prefix qgrid
+</code></pre>
+
 <h2 id="launching-the-jupyter-server">Launching the Jupyter server</h2>
 <p>There are all kinds of options to use when launching Jupyter which you can use.  The example below tells the server to listen to connections from any IP address, and not to launch the browser window, but of course, you are free to launch Jupyter any way you want.<br>
 Consult the <a href="http://jupyter.readthedocs.io/en/latest/running.html">user's guide</a> for more details.</p>
