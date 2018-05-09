@@ -60,7 +60,7 @@ class SummaryGraph(object):
     """
     def __init__(self, model, dummy_input):
         with torch.onnx.set_training(model, False):
-            trace, _ = jit.trace(model, dummy_input)
+            trace, _ = jit.get_trace_graph(model, dummy_input)
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
@@ -79,7 +79,7 @@ class SummaryGraph(object):
                 op = {}
                 op['name'] = node.scopeName()
                 op['orig-name'] = node.scopeName()
-                op['type'] = node.kind()
+                op['type'] = node.kind().lstrip('::onnx')
                 op['inputs'] = []
                 op['outputs'] = []
                 op['params'] = []
