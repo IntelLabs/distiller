@@ -48,7 +48,7 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
 
         bottomk, _ = torch.topk(filter_mags, topk_filters, largest=False, sorted=True)
         threshold = bottomk[-1]
-        binary_map = filter_mags.gt(threshold).type(type(param.data))
+        binary_map = filter_mags.gt(threshold).type(param.data.type())
         expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
         zeros_mask_dict[param_name].mask = expanded.view(param.size(0), param.size(1), param.size(2), param.size(3))
         msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,

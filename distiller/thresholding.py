@@ -106,7 +106,7 @@ class GroupThresholdMixin(object):
             kernel_means = view_2d.abs().mean(dim=1)
             k_means_mat = kernel_means.view(num_filters, num_kernels_per_filter).t()
             thresholds = torch.Tensor([threshold] * num_kernels_per_filter).cuda()
-            binary_map = k_means_mat.data.mean(dim=1).gt(thresholds).type(type(param.data))
+            binary_map = k_means_mat.data.mean(dim=1).gt(thresholds).type(param.type())
 
             # Now let's expand back up to a 4D mask
             a = binary_map.expand(num_filters, num_kernels_per_filter)
