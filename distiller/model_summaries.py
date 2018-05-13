@@ -134,6 +134,7 @@ def conv_visitor(self, input, output, df, model, memo):
     assert isinstance(self, torch.nn.Conv2d)
     if self in memo:
         return
+
     weights_vol = self.out_channels * self.in_channels * self.kernel_size[0] * self.kernel_size[1]
 
     # Multiply-accumulate operations: MACs = volume(OFM) * (#IFM * K^2) / #Groups
@@ -158,10 +159,7 @@ def module_visitor(self, input, output, df, model, weights_vol, macs, attrs=None
     in_features_shape = input[0].size()
     out_features_shape = output.size()
 
-    param_name = distiller.model_find_param_name(model, self.weight)
-    if param_name is None:
-        return
-    mod_name = param_name[:param_name.find(".weight")]
+    mod_name = distiller.model_find_module_name(model, self)
     df.loc[len(df.index)] = ([mod_name, self.__class__.__name__,
                               attrs if attrs is not None else ,
                               distiller.size_to_str(in_features_shape), distiller.volume(input[0]),

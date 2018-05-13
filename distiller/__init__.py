@@ -52,6 +52,22 @@ def model_find_param_name(model, param_to_find):
             return name
     return None
 
+
+def model_find_module_name(model, module_to_find):
+    """Look up the name of a module in a model.
+
+    Arguments:
+        model: the model to search
+        module_to_find: the module whose name we want to look up
+
+    Returns:
+        The module name (string) or None, if the module was not found.
+    """
+    for name, m in model.named_modules():
+        if m == module_to_find:
+            return name
+    return None
+
 def model_find_param(model, param_to_find_name):
     """Look a model parameter by its name
 
