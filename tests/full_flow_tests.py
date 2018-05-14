@@ -24,6 +24,10 @@ import time
 
 DS_CIFAR = 'cifar10'
 
+distiller_root = os.path.realpath('..')
+examples_root = os.path.join(distiller_root, 'examples')
+script_path = os.path.realpath(os.path.join(examples_root, 'classifier_compression',
+                                            'compress_classifier.py'))
 
 ###########
 # Some Basic Logging Mechanisms
@@ -98,6 +102,9 @@ TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker
 
 test_configs = [
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [48.340, 92.630]),
+    TestConfig('-a resnet20_cifar --resume {0} --quantize --evaluate'.
+               format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
+               DS_CIFAR, accuracy_checker, [91.620, 99.630]),
 ]
 
 
@@ -143,7 +150,6 @@ def run_tests():
     cifar10_path = validate_dataset_path(args.cifar10_path, default='data.cifar10', name='CIFAR-10')
 
     datasets = {DS_CIFAR: cifar10_path}
-    script_path = os.path.realpath(os.path.join('..', 'examples', 'classifier_compression', 'compress_classifier.py'))
     total_configs = len(test_configs)
     failed_tests = []
     for idx, tc in enumerate(test_configs):

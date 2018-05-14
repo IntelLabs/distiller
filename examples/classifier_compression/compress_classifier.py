@@ -274,7 +274,11 @@ def main():
             quantizer = quantization.SymmetricLinearQuantizer(model, 8, 8)
             quantizer.prepare_model()
             model.cuda()
-        test(test_loader, model, criterion, [pylogger], args.print_freq)
+        top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
+        if args.quantize:
+            checkpoint_name = 'quantized'
+            apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
+                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name)
         exit()
 
     if args.compress:
