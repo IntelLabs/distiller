@@ -58,8 +58,19 @@ def model_summary(model, optimizer, what, dataset=None):
     elif what == 'optimizer':
         optimizer_summary(optimizer)
     elif what == 'model':
-        print(model)  # print the simple form of the model
-
+        # print the simple form of the model
+        print(model)
+    elif what == 'modules':
+        # Print the names of non-leaf modules
+        # Remember that in PyTorch not every node is a module (e.g. F.relu).
+        # Also remember that parameterless modules, like nn.MaxPool2d, can be used multiple
+        # times in the same model, but they will only appear once in the modules list. 
+        nodes = []
+        for name, module in model.named_modules():
+            # Only print leaf modules
+            if len(module._modules) == 0:
+                nodes.append([name, module.__class__.__name__])
+        print(tabulate(nodes, headers=['Name', 'Type']))
 
 def optimizer_summary(optimizer):
     assert isinstance(optimizer, torch.optim.SGD)
