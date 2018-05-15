@@ -4,7 +4,7 @@
 #   arXiv:1708.06519v1
 #   Aug 2017
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../network_slimming/resnet20_slimming.yaml -j=1 --deterministic
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../network_slimming/resnet20_slimming.yaml -j=1 --deterministic
 
 lr_schedulers:
   training_lr:
