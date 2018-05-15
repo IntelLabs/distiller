@@ -21,12 +21,34 @@ of PyTorch with stable support for the JIT tracer functionality we employ in thi
 code (it was built with a 4.x master branch).
 """
 
+import re
+import numpy as np
 import torch
 import torchvision
 from torch.autograd import Variable
 import torch.jit as jit
 import pandas as pd
 from tabulate import tabulate
+
+def onnx_name_2_pytorch_name(name):
+    # Convert a layer's name from an ONNX name, to a PyTorch name
+    # For example:
+    #   ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1 ==> layer3.0.relu.1
+
+    # First see if there's an instance identifier
+    instance = ''
+    if name.find('.')>0:
+        instance = name[name.find('.')+1 :]
+
+    # Next, split by square brackets
+    name_parts = re.findall('\[.*?\]', name)
+    name_parts = [part[1:-1] for part in name_parts]
+
+    #print(op['name'] , '.'.join(name_parts), op['type'])
+    name = '.'.join(name_parts) + instance
+    #if name == '':
+    #    name += 'stam'
+    return name
 
 
 class SummaryGraph(object):
@@ -89,6 +111,12 @@ class SummaryGraph(object):
                 same = [layer for layer in self.ops if layer['orig-name'] == op['orig-name']]
                 if len(same) > 0:
                     op['name'] += "." + str(len(same))
+
+                op['name'] = onnx_name_2_pytorch_name(op['name'])
+                #op['name'] = '\n'.join(op['name'], op['type'])
+                op['name'] += ("\n" + op['type'])
+
+                # print(op['name'])
                 self.ops.append(op)
 
                 for input_ in node.inputs():
@@ -100,6 +128,10 @@ class SummaryGraph(object):
                     self.edges.append((op['name'], output.uniqueName()))
 
                 op['attrs'] = {attr_name: node[attr_name] for attr_name in node.attributeNames()}
+
+        self.add_macs_attr()
+        self.add_footprint_attr()
+        self.add_arithmetic_intensity_attr()
 
 
     def __add_input(self, op, n):
@@ -134,6 +166,66 @@ class SummaryGraph(object):
         except:
             return None
         return tensor
+
+    def param_shape(self, param_id):
+        return self.params[param_id]['shape']
+
+    @staticmethod
+    def volume(dims):
+        return np.prod(dims)
+
+    def param_volume(self, param_id):
+        return SummaryGraph.volume(self.param_shape(param_id))
+
+    def add_macs_attr(self):
+        for op in self.ops:
+            op['attrs']['MACs'] = 0
+            if op['type'] == 'Conv':
+                conv_out = op['outputs'][0]
+                conv_in =  op['inputs'][0]
+                conv_w = op['attrs']['kernel_shape']
+                ofm_vol = self.param_volume(conv_out)
+                # MACs = volume(OFM) * (#IFM * K^2)
+                op['attrs']['MACs'] = ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1]
+            elif op['type'] == 'Gemm':
+                conv_out =  op['outputs'][0]
+                conv_in =  op['inputs'][0]
+                n_ifm = self.param_shape(conv_in)[1]
+                n_ofm = self.param_shape(conv_out)[1]
+                # MACs = #IFM * #OFM
+                op['attrs']['MACs'] = n_ofm * n_ifm
+
+    def add_footprint_attr(self):
+        for op in self.ops:
+            op['attrs']['footprint'] = 0
+            if op['type'] in ['Conv', 'Gemm', 'MaxPool']:
+                conv_out = op['outputs'][0]
+                conv_in =  op['inputs'][0]
+                ofm_vol = self.param_volume(conv_out)
+                ifm_vol = self.param_volume(conv_in)
+                if op['type'] == 'Conv' or op['type'] == 'Gemm':
+                    conv_w = op['inputs'][1]
+                    weights_vol = self.param_volume(conv_w)
+                    #print(ofm_vol , ifm_vol , weights_vol)
+                    op['attrs']['footprint'] = ofm_vol + ifm_vol + weights_vol
+                    op['attrs']['fm_vol'] = ofm_vol + ifm_vol
+                    op['attrs']['weights_vol'] = weights_vol
+                elif op['type'] == 'MaxPool':
+                    op['attrs']['footprint'] = ofm_vol + ifm_vol
+
+    def add_arithmetic_intensity_attr(self):
+        for op in self.ops:
+            if op['attrs']['footprint'] == 0:
+                op['attrs']['ai'] = 0
+            else:
+                # integers are enough, and note that we also round up
+                op['attrs']['ai'] = ((op['attrs']['MACs']+0.5*op['attrs']['footprint']) // op['attrs']['footprint'])
+
+    def get_attr(self, attr, f = lambda op: True):
+        return [op['attrs'][attr] for op in self.ops if attr in op['attrs'] and f(op)]
+
+    def get_ops(self, attr, f = lambda op: True):
+        return [op for op in self.ops if attr in op['attrs'] and f(op)]
 
 
 def attributes_summary(sgraph, ignore_attrs):
