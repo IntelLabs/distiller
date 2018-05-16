@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-"""Log information regarfing the execution environment.
+"""Log information regarding the execution environment.
 
 This is helpful if you want to recreate an experiment at a later time, or if
 you want to understand the environment in which you execute the training.
@@ -22,8 +22,10 @@ you want to understand the environment in which you execute the training.
 
 import sys
 import os
+import time
 import platform
 import logging
+import logging.config
 import numpy as np
 import torch
 from git import Repo
@@ -76,3 +78,26 @@ def log_execution_env_state(app_args, gitroot='.'):
     logger.debug("Numpy: %s", np.__version__)
     log_git_state()
     logger.debug("App args: %s", app_args)
+
+
+def config_pylogger(log_cfg_file, experiment_name):
+    """Configure the Python logger.
+
+    For each execution of the application, we'd like to create a unique log directory.
+    By default this library is named using the date and time of day, to that directories
+    can be sorted by recency.  You can also name yor experiments and prefix the log
+    directory with this name.  This can be useful when accessing experiment data from
+    TensorBoard, for example.
+    """
+    timestr = time.strftime("%Y.%m.%d-%H%M%S")
+    filename = timestr if experiment_name is None else experiment_name + '___' + timestr
+    logdir = './logs' + '/' + filename
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+    log_filename = os.path.join(logdir, filename + '.log')
+    logging.config.fileConfig(os.path.join(os.getcwd(), log_cfg_file), defaults={'logfilename': log_filename})
+    msglogger = logging.getLogger()
+    msglogger.logdir = logdir
+    msglogger.log_filename = log_filename
+    msglogger.info('Log file for this run: ' + os.path.realpath(log_filename))
+    return msglogger

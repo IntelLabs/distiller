@@ -130,21 +130,6 @@ parser.add_argument('--gpus', metavar='DEV_ID', default=None,
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
 
 
-def config_logger(experiment_name):
-    # The Distiller library writes logs to the Python logger, so we configure it.
-    timestr = time.strftime("%Y.%m.%d-%H%M%S")
-    filename = timestr if experiment_name is None else experiment_name + '___' + timestr
-    logdir = './logs' + '/' + filename
-    if not os.path.exists(logdir):
-        os.makedirs(logdir)
-    log_filename = os.path.join(logdir, filename + '.log')
-    logging.config.fileConfig(os.path.join(script_dir, 'logging.conf'), defaults={'logfilename': log_filename})
-    msglogger = logging.getLogger()
-    msglogger.logdir = logdir
-    msglogger.log_filename = log_filename
-    msglogger.info('Log file for this run: ' + os.path.realpath(log_filename))
-    return msglogger
-
 def check_pytorch_version():
     if torch.__version__ < '0.4.0':
         print("\nNOTICE:")
@@ -161,7 +146,7 @@ def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = config_logger(args.name)
+    msglogger = apputils.config_pylogger('logging.conf', args.name)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -514,7 +499,7 @@ if __name__ == '__main__':
     except Exception as e:
         if msglogger is not None:
             msglogger.error(traceback.format_exc())
-        exit(1)
+        raise e
     finally:
         if msglogger is not None:
             msglogger.info()
