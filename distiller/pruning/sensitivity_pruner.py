@@ -45,7 +45,7 @@ class SensitivityPruner(_ParameterPruner):
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if not hasattr(param, 'stddev'):
-            param.stddev = torch.std(param).data[0]
+            param.stddev = torch.std(param).item()
 
         if param_name not in self.sensitivities:
             if '*' not in self.sensitivities:

@@ -55,7 +55,7 @@ def linear_dequantize(input, scale_factor, inplace=False):
 
 
 def get_tensor_max_abs(tensor):
-    return max(abs(tensor.max().data[0]), abs(tensor.min().data[0]))
+    return max(abs(tensor.max().item()), abs(tensor.min().item()))
 
 
 def get_quantized_range(num_bits, signed=True):
