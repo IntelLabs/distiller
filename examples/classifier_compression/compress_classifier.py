@@ -146,7 +146,7 @@ def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger('logging.conf', args.name)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
