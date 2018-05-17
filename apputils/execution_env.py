@@ -91,11 +91,12 @@ def config_pylogger(log_cfg_file, experiment_name):
     """
     timestr = time.strftime("%Y.%m.%d-%H%M%S")
     filename = timestr if experiment_name is None else experiment_name + '___' + timestr
-    logdir = './logs' + '/' + filename
+    logdir =  os.path.join('./logs', filename)
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     log_filename = os.path.join(logdir, filename + '.log')
-    logging.config.fileConfig(os.path.join(os.getcwd(), log_cfg_file), defaults={'logfilename': log_filename})
+    if os.path.isfile(log_cfg_file):
+        logging.config.fileConfig(log_cfg_file, defaults={'logfilename': log_filename})
     msglogger = logging.getLogger()
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
