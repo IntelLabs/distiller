@@ -197,7 +197,7 @@
 </code></pre>
 
 <p>For example:</p>
-<pre><code>$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../imagenet/alexnet/pruning/alexnet.schedule_sensitivity.yaml
+<pre><code>$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../sensitivity-pruning/alexnet.schedule_sensitivity.yaml
 
 Parameters:
  +----+---------------------------+------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -239,16 +239,18 @@ Parameters:
 </code></pre>
 
 <p>Let's look at the command line again:</p>
-<pre><code>$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../imagenet/alexnet/pruning/alexnet.schedule_sensitivity.yaml
+<pre><code>$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../sensitivity-pruning/alexnet.schedule_sensitivity.yaml
 </code></pre>
 
-<p>In this example, we prune a TorchVision pre-trained AlexNet network, using the following configuration:
-  - Learning-rate of 0.005
-  - Print progress every 50 mini-batches
-  - Use 44 worker threads to load data
-  - Run for 90 epochs.  Torchvision's pre-trained models did not store the epoch metadata, so pruning starts at epoch 0.  When you train and prune your own networks, the last training epoch is saved as a metadata with the model.  Therefore, when you load such models, the first epoch is not 0, but the last training epoch.
-  - The pruning schedule is provided in <code>alexnet.schedule_sensitivity.yaml</code>
-<br> Log files are written to directory <code>logs</code>.</p>
+<p>In this example, we prune a TorchVision pre-trained AlexNet network, using the following configuration:</p>
+<ul>
+<li>Learning-rate of 0.005</li>
+<li>Print progress every 50 mini-batches.</li>
+<li>Use 44 worker threads to load data (make sure to use something suitable for your machine).</li>
+<li>Run for 90 epochs.  Torchvision's pre-trained models did not store the epoch metadata, so pruning starts at epoch 0.  When you train and prune your own networks, the last training epoch is saved as a metadata with the model.  Therefore, when you load such models, the first epoch is not 0, but it is the last training epoch.</li>
+<li>The pruning schedule is provided in <code>alexnet.schedule_sensitivity.yaml</code></li>
+<li>Log files are written to directory <code>logs</code>.</li>
+</ul>
 <h2 id="examples">Examples</h2>
 <p>Distiller comes with several example schedules which can be used together with <code>compress_classifier.py</code>.
 These example schedules (YAML) files, contain the command line that is used in order to invoke the schedule (so that you can easily recreate the results in your environment), together with the results of the pruning or regularization.  The results usually contain a table showing the sparsity of  each of the model parameters, together with the validation and test top1, top5 and loss scores.</p>
