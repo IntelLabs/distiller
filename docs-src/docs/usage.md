@@ -22,7 +22,7 @@ $ python3 compress_classifier.py --help
 For example:
 
 ```
-$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../imagenet/alexnet/pruning/alexnet.schedule_sensitivity.yaml
+$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../sensitivity-pruning/alexnet.schedule_sensitivity.yaml
 
 Parameters:
  +----+---------------------------+------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -65,16 +65,17 @@ Parameters:
 
 Let's look at the command line again:
 ```
-$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../imagenet/alexnet/pruning/alexnet.schedule_sensitivity.yaml
+$ time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 44 --epochs 90 --pretrained --compress=../sensitivity-pruning/alexnet.schedule_sensitivity.yaml
 ```
 
 In this example, we prune a TorchVision pre-trained AlexNet network, using the following configuration:
+
   - Learning-rate of 0.005
-  - Print progress every 50 mini-batches
-  - Use 44 worker threads to load data
-  - Run for 90 epochs.  Torchvision's pre-trained models did not store the epoch metadata, so pruning starts at epoch 0.  When you train and prune your own networks, the last training epoch is saved as a metadata with the model.  Therefore, when you load such models, the first epoch is not 0, but the last training epoch.
+  - Print progress every 50 mini-batches.
+  - Use 44 worker threads to load data (make sure to use something suitable for your machine).
+  - Run for 90 epochs.  Torchvision's pre-trained models did not store the epoch metadata, so pruning starts at epoch 0.  When you train and prune your own networks, the last training epoch is saved as a metadata with the model.  Therefore, when you load such models, the first epoch is not 0, but it is the last training epoch.
   - The pruning schedule is provided in ```alexnet.schedule_sensitivity.yaml```
-<br> Log files are written to directory ```logs```.
+  - Log files are written to directory ```logs```.
 
 ## Examples
 Distiller comes with several example schedules which can be used together with ```compress_classifier.py```.
