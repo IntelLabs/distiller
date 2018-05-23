@@ -2,16 +2,13 @@ from agents.ddpg_agent import DDPGAgentParameters
 from graph_managers.basic_rl_graph_manager import BasicRLGraphManager
 from graph_managers.graph_manager import ScheduleParameters
 from base_parameters import VisualizationParameters
-from core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps, RunPhase
-from environments.environment import MaxDumpMethod, SelectedPhaseOnlyDumpMethod, SingleLevelSelection
-from environments.gym_environment import Atari, atari_deterministic_v4, MujocoInputFilter, GymEnvironmentParameters, MujocoOutputFilter
+from core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps
+from environments.gym_environment import MujocoInputFilter, GymEnvironmentParameters, MujocoOutputFilter
 
 
 ####################
 # Block Scheduling #
 ####################
-from memories.memory import MemoryGranularity
-
 schedule_params = ScheduleParameters()
 schedule_params.improve_steps = TrainingSteps(10000000000)
 schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(20)
@@ -31,7 +28,11 @@ agent_params.output_filter = MujocoOutputFilter()
 ##############################
 env_params = GymEnvironmentParameters()
 #env_params.level = '/home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
-env_params.level = '../distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
+# This path works when training from Coach
+#env_params.level = '../distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
+# This path works when training from Distiller
+#env_params.level = '../automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
+env_params.level = '../classifier_compression/ADC.py:CNNEnvironment'
 
 
 vis_params = VisualizationParameters()
