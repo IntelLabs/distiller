@@ -113,6 +113,12 @@ class CompressionScheduler(object):
                                             loss, regularizer_loss, self.zeros_mask_dict)
         return regularizer_loss
 
+    def before_update(self, epoch, minibatch_id, minibatches_per_epoch):
+        if epoch in self.policies:
+            for policy in self.policies[epoch]:
+                policy.before_update(self.model, epoch, minibatch_id, minibatches_per_epoch,
+                                          self.zeros_mask_dict)
+
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch):
         # When we get to this point, the weights are no longer maksed.  This is because during the backward
         # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
@@ -135,11 +141,9 @@ class CompressionScheduler(object):
                 meta['current_epoch'] = epoch
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
-
     def apply_mask(self):
         for name, param in self.model.named_parameters():
             self.zeros_mask_dict[name].apply_mask(param)
-
 
     def state_dict(self):
         """Returns the state of the scheduler as a :class:`dict`.
@@ -151,7 +155,6 @@ class CompressionScheduler(object):
             masks[name] = masker.mask
         state = { 'masks_dict' : masks }
         return state
-
 
     def load_state_dict(self, state):
         """Loads the scheduler state.

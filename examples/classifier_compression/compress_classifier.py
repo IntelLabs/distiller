@@ -372,6 +372,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
+        if compression_scheduler:
+            compression_scheduler.before_update(epoch, train_step, steps_per_epoch)
         optimizer.step()
         if compression_scheduler:
             compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch)

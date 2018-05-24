@@ -36,13 +36,13 @@ import logging
 import yaml
 import json
 import inspect
-import distiller
 from torch.optim.lr_scheduler import *
 import distiller
 from distiller.thinning import *
 from distiller.pruning import *
 from distiller.regularization import L1Regularizer, GroupLassoRegularizer
 from distiller.learning_rate import *
+from distiller.quantization import *
 logger = logging.getLogger("app_cfg")
 
 def dictConfig(model, optimizer, schedule, sched_dict, logger):
@@ -51,6 +51,7 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
     lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
+    quantizers = __factory('quantizers', model, sched_dict)
     extensions = __factory('extensions', model, sched_dict)
 
     try:
@@ -75,6 +76,12 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
                    policy = distiller.RegularizationPolicy(regularizer)
                 else:
                     policy = distiller.RegularizationPolicy(regularizer, **args)
+
+            elif 'quantizer' in policy_def:
+                instance_name, args = __policy_params(policy_def, 'quantizer')
+                assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
+                quantizer = quantizers[instance_name]
+                policy = distiller.QuantizationPolicy(quantizer)
 
             elif 'lr_scheduler' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'lr_scheduler')
