@@ -60,9 +60,10 @@ class BasicBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(planes)
         # This change is required for layer removal
         #self.relu = nn.ReLU(inplace=True)
-        self.relu = nn.ReLU(inplace=False)
+        self.relu1 = nn.ReLU(inplace=False)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = nn.BatchNorm2d(planes)
+        self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
 
@@ -72,7 +73,7 @@ class BasicBlock(nn.Module):
         if self.block_gates[0]:
             out = self.conv1(x)
             out = self.bn1(out)
-            out = self.relu(out)
+            out = self.relu1(out)
 
         if self.block_gates[1]:
             out = self.conv2(out)
@@ -82,7 +83,7 @@ class BasicBlock(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        out = self.relu(out)
+        out = self.relu2(out)
 
         return out
 
