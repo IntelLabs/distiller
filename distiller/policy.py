@@ -20,6 +20,9 @@
 - RegularizationPolicy: regulization scheduling
 - LRPolicy: learning-rate decay scheduling
 """
+import torch
+from collections import namedtuple
+
 import logging
 msglogger = logging.getLogger()
 
@@ -141,34 +144,32 @@ class QuantizationPolicy(ScheduledTrainingPolicy):
         super(QuantizationPolicy, self).__init__()
         self.quantizer = quantizer
         self.initialized = False
-        self.params_fp_copies = {}
+        self.params_to_quantize = {}
 
     def initialize(self, model):
         self.quantizer.prepare_model()
+        self.params_to_quantize = {name: (param, torch.zeros_like(param, requires_grad=False))
+                                   for name, param in model.named_parameters()
+                                   if name in self.quantizer.quantizable_params}
         self.initialized = True
-        self.params_fp_copies = {name: param.clone() for name, param in model.named_parameters() if
-                                 name in self.quantizer.quantizable_params}
 
-    def quantize_parameters(self, model):
-        for param_name, param in model.named_parameters():
-            if param_name in self.params_fp_copies:
-                param.data = self.quantizer.quantize_param(param_name, param)
+    def backup_and_quantize_parameters(self, model):
+        for param_name, (model_param, fp_copy) in self.params_to_quantize.items():
+            fp_copy.copy_(model_param.data)
+            model_param.data = self.quantizer.quantize_param(param_name, fp_copy)
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
         # First epoch with quantization: Prepare model and perform initial quantization of parameters
         if not self.initialized:
             self.initialize(model)
-            self.quantize_parameters(model)
+            self.backup_and_quantize_parameters(model)
 
     def before_update(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
         # Parameters update is done based on the floating-point copy
-        for param_name, param in model.named_parameters():
-            if param_name in self.params_fp_copies:
-                param.data = self.params_fp_copies[param_name]
+        for param_name, (model_param, fp_copy) in self.params_to_quantize.items():
+            model_param.data.copy_(fp_copy)
 
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
         # After parameters update, quantize the parameters again
         # (Doing this here ensures the model parameters are quantized at training completion (and at validation time)
-        if self.initialized:
-            self.quantize_parameters(model)
-
+        self.backup_and_quantize_parameters(model)

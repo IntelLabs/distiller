@@ -2,6 +2,8 @@ import torch.nn as nn
 
 from .quantizer import Quantizer
 from .q_utils import *
+import logging
+msglogger = logging.getLogger()
 
 ###
 # Clipping-based linear quantization (e.g. DoReFa, WRPN)
@@ -49,8 +51,8 @@ class WRPNQuantizer(Quantizer):
 
         def wrpn_quantize_param(param_fp, num_bits):
             scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
-            param_q = param_fp.clamp(-1, 1)
-            linear_quantize(param_q, scale_factor, inplace=True)
+            param_fp.clamp_(-1, 1)
+            param_q = linear_quantize(param_fp, scale_factor, inplace=False)
             linear_dequantize(param_q, scale_factor, inplace=True)
             return param_q
 
