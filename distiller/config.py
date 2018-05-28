@@ -43,6 +43,7 @@ from distiller.pruning import *
 from distiller.regularization import L1Regularizer, GroupLassoRegularizer
 from distiller.learning_rate import *
 from distiller.quantization import *
+from distiller.utils import yaml_ordered_load
 logger = logging.getLogger("app_cfg")
 
 def dictConfig(model, optimizer, schedule, sched_dict, logger):
@@ -119,7 +120,7 @@ def fileConfig(model, optimizer, schedule, filename, logger):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
         try:
-            sched_dict = yaml.load(stream)
+            sched_dict = yaml_ordered_load(stream)
             dictConfig(model, optimizer, schedule, sched_dict, logger)
         except yaml.YAMLError as exc:
             print("\nFATAL Parsing error while parsing the pruning schedule configuration file %s" % filename)

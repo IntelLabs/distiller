@@ -21,6 +21,8 @@ with some random helper functions.
 """
 from functools import reduce
 import numpy as np
+from collections import OrderedDict
+import yaml
 import torch
 from torch.autograd import Variable
 
@@ -259,3 +261,23 @@ def log_weights_sparsity(model, epoch, loggers):
     """Log information about the weights sparsity"""
     for logger in loggers:
         logger.log_weights_sparsity(model, epoch)
+
+
+def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
+    """
+    Function to load YAML file using an OrderedDict
+    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
+        """
+    class OrderedLoader(Loader):
+        pass
+
+    def construct_mapping(loader, node):
+        loader.flatten_mapping(node)
+        return object_pairs_hook(loader.construct_pairs(node))
+
+    OrderedLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_mapping)
+
+    return yaml.load(stream, OrderedLoader)
+
