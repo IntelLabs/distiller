@@ -1,0 +1,50 @@
+#
+# This schedule performs 3D (filter-wise) regularization of some of the convolution layers, together with
+# element-wise pruning using sensitivity-pruning.
+#
+# time python3 compress_classifier.py -a=vgg19 -p=50 ../../../data.imagenet --epochs=10 --lr=0.00001 --compress=../pruning_filters_for_efficient_convnets/vgg19.schedule_filter_rank.yaml --pretrained
+#
+
+version: 1
+pruners:
+  vgg_manual:
+    class: 'L1RankedStructureParameterPruner'
+    reg_regims:
+      # 'features.module.0.weight': [0.1, '3D']
+      # 'features.module.2.weight': [0.1, '3D']
+      # 'features.module.5.weight': [0.1, '3D']
+      'features.module.7.weight': [0.1, '3D']
+      'features.module.10.weight': [0.1, '3D']
+      'features.module.12.weight': [0.1, '3D']
+      'features.module.14.weight': [0.1, '3D']
+      'features.module.16.weight': [0.1, '3D']
+      'features.module.19.weight': [0.1, '3D']
+      'features.module.21.weight': [0.1, '3D']
+      'features.module.23.weight': [0.1, '3D']
+      'features.module.25.weight': [0.1, '3D']
+      'features.module.28.weight': [0.1, '3D']
+      'features.module.30.weight': [0.1, '3D']
+      'features.module.32.weight': [0.1, '3D']
+      'features.module.34.weight': [0.1, '3D']
+
+extensions:
+  net_thinner:
+      class: 'FilterRemover'
+      thinning_func_str: vgg_remove_filters
+
+lr_schedulers:
+  # Learning rate decay scheduler
+  pruning_lr:
+    class: StepLR
+    step_size: 50
+    gamma: 0.10
+
+
+policies:
+  - pruner:
+      instance_name: vgg_manual
+    epochs: [0]
+
+  - extension:
+      instance_name: net_thinner
+    epochs: [0]
