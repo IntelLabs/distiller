@@ -2,7 +2,7 @@
 # This schedule performs 3D (filter-wise) regularization of some of the convolution layers, together with
 # element-wise pruning using sensitivity-pruning.
 #
-# time python3 compress_classifier.py -a=vgg19 -p=50 ../../../data.imagenet --epochs=10 --lr=0.00001 --compress=../pruning_filters_for_efficient_convnets/vgg19.schedule_filter_rank.yaml --pretrained
+# time python3 prune_net.py -a=resnet18  -p=50 ../data.imagenet/ -j=22  --ds=imagenet --epochs=200 --lr=0.05 --compress=examples/imagenet/resnet18/pruning/resnet18.schedule_filter_rank.yaml --pretrained
 #
 
 version: 1
@@ -10,9 +10,9 @@ pruners:
   vgg_manual:
     class: 'L1RankedStructureParameterPruner'
     reg_regims:
-      # 'features.module.0.weight': [0.1, '3D']
-      # 'features.module.2.weight': [0.1, '3D']
-      # 'features.module.5.weight': [0.1, '3D']
+      'features.module.0.weight': [0.1, '3D']
+      'features.module.2.weight': [0.1, '3D']
+      'features.module.5.weight': [0.1, '3D']
       'features.module.7.weight': [0.1, '3D']
       'features.module.10.weight': [0.1, '3D']
       'features.module.12.weight': [0.1, '3D']
@@ -30,7 +30,9 @@ pruners:
 extensions:
   net_thinner:
       class: 'FilterRemover'
-      thinning_func_str: vgg_remove_filters
+      thinning_func_str: remove_filters
+      arch: 'vgg19'
+      dataset: 'imagenet'
 
 lr_schedulers:
   # Learning rate decay scheduler

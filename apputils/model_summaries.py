@@ -23,6 +23,7 @@ code (it was built with a 4.x master branch).
 
 import re
 import numpy as np
+import collections
 import torch
 import torchvision
 from torch.autograd import Variable
@@ -45,11 +46,11 @@ def onnx_name_2_pytorch_name(name):
     name_parts = [part[1:-1] for part in name_parts]
 
     #print(op['name'] , '.'.join(name_parts), op['type'])
-    name = '.'.join(name_parts) + instance
-    #if name == '':
-    #    name += 'stam'
-    return name
+    new_name = '.'.join(name_parts) + instance
+    if new_name == '':
+        new_name = name
 
+    return new_name
 
 class SummaryGraph(object):
     """We use Pytorch's JIT tracer to run a forward pass and generate a trace graph, which
@@ -80,6 +81,8 @@ class SummaryGraph(object):
         out = self.bn2(out)
         out = self.relu(out)    <=== Second use of self.relu
     """
+    Edge = collections.namedtuple('Edge', 'src dst')
+
     def __init__(self, model, dummy_input):
         with torch.onnx.set_training(model, False):
             trace, _ = jit.get_trace_graph(model, dummy_input)
@@ -88,7 +91,7 @@ class SummaryGraph(object):
             # composing a GEMM operation; etc.
             torch.onnx._optimize_trace(trace, False)
             graph = trace.graph()
-            self.ops = []
+            self.ops = {}
             self.params = {}
             self.edges = []
             self.temp = {}
@@ -98,40 +101,43 @@ class SummaryGraph(object):
                 self.__add_param(param)
 
             for node in graph.nodes():
-                op = {}
-                op['name'] = node.scopeName()
-                op['orig-name'] = node.scopeName()
-                op['type'] = node.kind().lstrip('::onnx')
-                op['inputs'] = []
-                op['outputs'] = []
-                op['params'] = []
+                new_op = self.__create_op(node)
 
                 # in-place operators create very confusing graphs (Resnet, for example),
                 # so we "unroll" them
-                same = [layer for layer in self.ops if layer['orig-name'] == op['orig-name']]
+                same = [op for op in self.ops.values() if op['orig-name'] == new_op['orig-name']]
                 if len(same) > 0:
-                    op['name'] += "." + str(len(same))
+                    new_op['name'] += "." + str(len(same))
 
-                op['name'] = onnx_name_2_pytorch_name(op['name'])
-                #op['name'] = '\n'.join(op['name'], op['type'])
-                op['name'] += ("\n" + op['type'])
+                new_op['name'] = onnx_name_2_pytorch_name(new_op['name'])
+                assert len(new_op['name']) > 0
 
-                # print(op['name'])
-                self.ops.append(op)
+                #self.ops.append(op)
+                self.ops[new_op['name']] = new_op
 
                 for input_ in node.inputs():
-                    self.__add_input(op, input_)
-                    self.edges.append((input_.uniqueName(), op['name']))
+                    self.__add_input(new_op, input_)
+                    self.edges.append(SummaryGraph.Edge(input_.uniqueName(), new_op['name']))
 
                 for output in node.outputs():
-                    self.__add_output(op, output)
-                    self.edges.append((op['name'], output.uniqueName()))
+                    self.__add_output(new_op, output)
+                    self.edges.append(SummaryGraph.Edge(new_op['name'], output.uniqueName()))
 
-                op['attrs'] = {attr_name: node[attr_name] for attr_name in node.attributeNames()}
+                new_op['attrs'] = {attr_name: node[attr_name] for attr_name in node.attributeNames()}
 
         self.add_macs_attr()
         self.add_footprint_attr()
         self.add_arithmetic_intensity_attr()
+
+    def __create_op(self, onnx_node):
+        op = {}
+        op['name'] = onnx_node.scopeName()
+        op['orig-name'] = onnx_node.scopeName()
+        op['type'] = onnx_node.kind().lstrip('::onnx')
+        op['inputs'] = []
+        op['outputs'] = []
+        op['params'] = []
+        return op
 
 
     def __add_input(self, op, n):
@@ -159,8 +165,9 @@ class SummaryGraph(object):
         tensor = {}
         tensor['id'] = n.uniqueName()
         try:
+            # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
             s = str(n.type())
-            tensor['type'] = s[:s.find('(')]
+#           tensor['type'] = s[:s.find('(')]
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
         except:
@@ -178,7 +185,7 @@ class SummaryGraph(object):
         return SummaryGraph.volume(self.param_shape(param_id))
 
     def add_macs_attr(self):
-        for op in self.ops:
+        for op in self.ops.values():
             op['attrs']['MACs'] = 0
             if op['type'] == 'Conv':
                 conv_out = op['outputs'][0]
@@ -196,7 +203,7 @@ class SummaryGraph(object):
                 op['attrs']['MACs'] = n_ofm * n_ifm
 
     def add_footprint_attr(self):
-        for op in self.ops:
+        for op in self.ops.values():
             op['attrs']['footprint'] = 0
             if op['type'] in ['Conv', 'Gemm', 'MaxPool']:
                 conv_out = op['outputs'][0]
@@ -214,7 +221,7 @@ class SummaryGraph(object):
                     op['attrs']['footprint'] = ofm_vol + ifm_vol
 
     def add_arithmetic_intensity_attr(self):
-        for op in self.ops:
+        for op in self.ops.values():
             if op['attrs']['footprint'] == 0:
                 op['attrs']['ai'] = 0
             else:
@@ -222,11 +229,151 @@ class SummaryGraph(object):
                 op['attrs']['ai'] = ((op['attrs']['MACs']+0.5*op['attrs']['footprint']) // op['attrs']['footprint'])
 
     def get_attr(self, attr, f = lambda op: True):
-        return [op['attrs'][attr] for op in self.ops if attr in op['attrs'] and f(op)]
+        return [op['attrs'][attr] for op in self.ops.values() if attr in op['attrs'] and f(op)]
 
     def get_ops(self, attr, f = lambda op: True):
-        return [op for op in self.ops if attr in op['attrs'] and f(op)]
+        return [op for op in self.ops.values() if attr in op['attrs'] and f(op)]
 
+    def find_op(self, lost_op_name):
+        assert isinstance(lost_op_name, str)
+        return self.ops.get(lost_op_name, None)
+
+    def find_param(self, data_name):
+        return self.params.get(data_name, None)
+
+    def predecessors(self, op, depth, done_list=None):
+        """Returns a list of <op>'s predecessors"""
+
+        if done_list is None:
+            done_list = []
+
+        if isinstance(op, dict):
+            preds = [edge.src for edge in self.edges if (edge.dst == op['name'] and
+                                                         edge.src not in done_list)]
+            done_list += preds
+        else:
+            preds = [edge.src  for edge in self.edges if (edge.dst == op and
+                                                          edge.src not in done_list)]
+            done_list += preds
+
+        if depth == 1:
+            return preds
+        else:
+            ret = []
+            for predecessor in preds:
+                ret += self.predecessors(predecessor, depth-1, done_list) #, logging)
+            return ret
+
+
+    def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None):
+        """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
+        """
+        node = self.find_op(node_name)
+#        logging.debug("length ={}".format(len(done_list)))
+        node_is_an_op = True
+        if node is None:
+            node_is_an_op = False
+            node = self.find_param(node_name)
+            if node is None:
+                #raise ValueError("something went wrong")
+                return []
+
+        if done_list is None:
+            done_list = []
+
+        done_list.append(node_name)
+
+        if not isinstance(predecessors_types, list):
+            predecessors_types = [predecessors_types]
+
+        if node_is_an_op:
+            # We check if we found the type of node we're looking for,
+            # and that this is not the first node in our search.
+            if node['type'] in predecessors_types and len(done_list) > 1:
+                return [node_name]
+
+            # This is an operation node
+            preds = [edge.src for edge in self.edges if (edge.dst == node_name and
+                                                         edge.src not in done_list)]
+        else:
+            # This is a data node
+            preds = [edge.src for edge in self.edges if (edge.dst == node_name and
+                                                         edge.src not in done_list)]
+        ret = []
+        for predecessor in preds:
+            ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging)
+        return ret
+
+
+    def successors(self, node, depth, done_list=None):
+        """Returns a list of <op>'s successors"""
+
+        if done_list is None:
+            done_list = []
+
+        if isinstance(node, dict):
+            # This is an operation node
+            succs = [edge.dst for edge in self.edges if (edge.src == node['name'] and
+                                                         edge.dst not in done_list)]
+            done_list += succs
+        else:
+            # This is a data node
+            succs = [edge.dst for edge in self.edges if (edge.src == node and
+                                                         edge.dst not in done_list)]
+            done_list += succs
+
+        if depth == 1:
+            return succs
+        else:
+            ret = []
+            for successor in succs:
+                ret += self.successors(successor, depth-1, done_list)
+            return ret
+
+    def successors_f(self, node_name, successors_types, done_list=None, logging=None):
+        """Returns a list of <op>'s successors, if they match the <successors_types> criteria.
+
+        Traverse the graph, starting at node <node_name>, and search for successor
+        nodes, that have one of the node types listed in <successors_types>.
+        If none is found, then return an empty list.
+
+        <node_name> and the returned list of successors are strings, because
+        """
+
+        node = self.find_op(node_name)
+        node_is_an_op = True
+        if node is None:
+            node_is_an_op = False
+            node = self.find_param(node_name)
+            if node is None:
+                #raise ValueError("something went wrong")
+                return []
+
+        if done_list is None:
+            done_list = []
+
+        done_list.append(node_name)
+
+        if not isinstance(successors_types, list):
+            successors_types = [successors_types]
+
+        if node_is_an_op:
+            # We check if we found the type of node we're looking for,
+            # and that this is not the first node in our search.
+            if node['type'] in successors_types and len(done_list) > 1:
+                return [node_name]
+
+            # This is an operation node
+            succs = [edge.dst for edge in self.edges if (edge.src == node_name and
+                                                         edge.dst not in done_list)]
+        else:
+            # This is a data node
+            succs = [edge.dst for edge in self.edges if (edge.src == node_name and
+                                                         edge.dst not in done_list)]
+        ret = []
+        for successor in succs:
+            ret += self.successors_f(successor, successors_types, done_list, logging)
+        return ret
 
 def attributes_summary(sgraph, ignore_attrs):
     """Generate a summary of a graph's attributes.
@@ -321,8 +468,11 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
                   'fillcolor': '#6495ED',
                   'style': 'rounded, filled'}
 
+    #for op_node in op_nodes:
+    #    pydot_graph.add_node(pydot.Node(op_node[0], **node_style, label=op_node[1]))
     for op_node in op_nodes:
-        pydot_graph.add_node(pydot.Node(op_node, **node_style))
+        pydot_graph.add_node(pydot.Node(op_node[0], **node_style,
+                             label="\n".join(op_node)))
 
     for data_node in data_nodes:
         pydot_graph.add_node(pydot.Node(data_node))
@@ -371,28 +521,31 @@ def draw_img_classifier_to_file(model, png_fname, dataset):
         print("Please check that you have graphviz installed.")
         print("\t$ sudo apt-get install graphviz")
 
-def create_png(sgraph):
-    """Create a PNG object containing a graphiz-dot graph of the netowrk represented
-    by SummaryGraph 'sgraph'
+def create_png(sgraph, display_param_nodes=False):
+    """Create a PNG object containing a graphiz-dot graph of the network,
+    as represented by SummaryGraph 'sgraph'
     """
+
+    #op_nodes = [(op['name'], op['type']) for op in sgraph.ops]
     op_nodes = [op['name'] for op in sgraph.ops]
     data_nodes = [id for id in sgraph.params.keys() if data_node_has_parent(sgraph, id)]
     param_nodes = [id for id in sgraph.params.keys() if not data_node_has_parent(sgraph, id)]
     edges = sgraph.edges
 
-    display_param_node = False
-    if not display_param_node:
-        edges = [edge for edge in sgraph.edges if edge[0] in (data_nodes+op_nodes)]
+    if not display_param_nodes:
+        # Use only the edges that don't have a parameter source
+        edges = [edge for edge in sgraph.edges if edge.src in (data_nodes+op_nodes)]
         param_nodes = None
 
     if False:
         data_nodes = None
 
+    op_nodes = [(op['name'], op['type']) for op in sgraph.ops]
     pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges)
     png = pydot_graph.create_png()
     return png
 
 def data_node_has_parent(g, id):
     for edge in g.edges:
-        if edge[1] == id: return True
+        if edge.dst == id: return True
     return False

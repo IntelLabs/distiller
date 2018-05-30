@@ -1,7 +1,7 @@
 # Fine-tuning after channel regularization training (SSL) of ResNet20-CIFAR10.
 # This model saves 26.6% of the original MACs, without any degradation of accuracy performance.
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --lr=0.3 --epochs=98 --compress=../ssl/ssl_channels-removal_finetuning.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20.pth.tar
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=98 --compress=../ssl/ssl_channels-removal_finetuning.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20.pth.tar
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
