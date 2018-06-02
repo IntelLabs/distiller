@@ -2,15 +2,16 @@
 # This schedule performs 3D (filter-wise) regularization of some of the convolution layers, together with
 # element-wise pruning using sensitivity-pruning.
 #
-# time python3 prune_net.py -a=resnet18  -p=50 ../data.imagenet/ -j=22  --ds=imagenet --epochs=200 --lr=0.05 --compress=examples/imagenet/resnet18/pruning/resnet18.schedule_filter_rank.yaml --pretrained
+# time python3 compress_classifier.py -a=vgg19 -p=50 ../../../data.imagenet --epochs=10 --lr=0.00001 --compress=../pruning_filters_for_efficient_convnets/vgg19.schedule_filter_rank.yaml --pretrained
 #
+
 
 version: 1
 pruners:
   vgg_manual:
     class: 'L1RankedStructureParameterPruner'
     reg_regims:
-      'features.module.0.weight': [0.1, '3D']
+#     'features.module.0.weight': [0.1, '3D']
       'features.module.2.weight': [0.1, '3D']
       'features.module.5.weight': [0.1, '3D']
       'features.module.7.weight': [0.1, '3D']
@@ -19,6 +20,10 @@ pruners:
       'features.module.14.weight': [0.1, '3D']
       'features.module.16.weight': [0.1, '3D']
       'features.module.19.weight': [0.1, '3D']
+
+  vgg_manual2:
+    class: 'L1RankedStructureParameterPruner'
+    reg_regims:
       'features.module.21.weight': [0.1, '3D']
       'features.module.23.weight': [0.1, '3D']
       'features.module.25.weight': [0.1, '3D']
@@ -50,3 +55,27 @@ policies:
   - extension:
       instance_name: net_thinner
     epochs: [0]
+
+  - pruner:
+      instance_name: vgg_manual2
+    epochs: [1]
+
+  - extension:
+      instance_name: net_thinner
+    epochs: [1]
+
+  - pruner:
+      instance_name: vgg_manual
+    epochs: [4]
+
+  - extension:
+      instance_name: net_thinner
+    epochs: [4]
+
+  - pruner:
+      instance_name: vgg_manual2
+    epochs: [5]
+
+  - extension:
+      instance_name: net_thinner
+    epochs: [5]

@@ -475,7 +475,9 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
                              label="\n".join(op_node)))
 
     for data_node in data_nodes:
-        pydot_graph.add_node(pydot.Node(data_node))
+        #pydot_graph.add_node(pydot.Node(data_node))
+        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node)))
+
 
     node_style = {'shape': 'oval',
                   'fillcolor': 'gray',
@@ -528,7 +530,8 @@ def create_png(sgraph, display_param_nodes=False):
 
     #op_nodes = [(op['name'], op['type']) for op in sgraph.ops]
     op_nodes = [op['name'] for op in sgraph.ops]
-    data_nodes = [id for id in sgraph.params.keys() if data_node_has_parent(sgraph, id)]
+    #data_nodes = [id for id in sgraph.params.keys() if data_node_has_parent(sgraph, id)]
+    data_nodes = [(id,param.shape) for (id, param) in sgraph.params.items() if data_node_has_parent(sgraph, id)]
     param_nodes = [id for id in sgraph.params.keys() if not data_node_has_parent(sgraph, id)]
     edges = sgraph.edges
 

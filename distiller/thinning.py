@@ -17,8 +17,10 @@
 """Model thinning support.
 
 Thinning a model is the process of taking a dense network architecture with a parameter model that
-has structure-sparsity (filters or channels) in the weights tensors of convolution layers, and making changes in the network architecture and parameters, in order to completely remove the structures.
-The new architecture is smaller (condensed), with less channels and filters in some of the convolution layers.  Linear and BatchNormalization layers are also adjusted as required.
+has structure-sparsity (filters or channels) in the weights tensors of convolution layers, and making changes
+ in the network architecture and parameters, in order to completely remove the structures.
+The new architecture is smaller (condensed), with less channels and filters in some of the convolution layers.
+Linear and BatchNormalization layers are also adjusted as required.
 
 To perform thinning, we create a SummaryGraph (‘sgraph’) of our model.  We use the ‘sgraph’ to infer the
 data-dependency between the modules in the PyTorch network.  This entire process is not trivial and will be
@@ -38,11 +40,33 @@ from models import ALL_MODEL_NAMES, create_model
 msglogger = logging.getLogger()
 
 ThinningRecipe = namedtuple('ThinningRecipe', ['modules', 'parameters'])
+"""A ThinningRecipe is composed of two sets of instructions.
+1. Instructions for setting module attributes (e.g. Conv2d.out_channels).  This set
+is called 'ThinningRecipe.modules'.
+
+2. Information on how to select specific dimensions from parameter tensors.  This
+set is called 'ThinningRecipe.parameters'.
+
+
+ThinningRecipe.modules is a dictionary keyed by the module names (strings).  Values
+are called 'module-directives', and are grouped in another dictionary, whose keys are
+the module attributes.  For example:
+    features.module.19:
+        in_channels: 231
+        out_channels: 512
+    classifier.0:
+        in_channels: 22589
+
+ThinningRecipe.parameters is a dictionary keyed by the parameter names (strings).
+Values are called 'parameter directives', and each directive is a list of tuples.
+These tuples can have 2 values, or 4 values.
+2-value tuples have the format: (dimension-to-change, indices-to-select)
+"""
 
 __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
            'ChannelRemover', 'remove_channels',
            'FilterRemover',  'remove_filters',
-           'execute_thinning_recipe']
+           'execute_thinning_recipes_list']
 
 def create_graph(dataset, arch):
     if dataset == 'imagenet':
@@ -88,6 +112,29 @@ def append_module_directive(thinning_recipe, module_name, key, val):
     mod_directive[key] = val
     thinning_recipe.modules[module_name] = mod_directive
 
+
+# def merge_module_directives(dict1, dict2):
+#     merged = dict1
+#     for k,v2 in dict2.items():
+#         v1 = dict1.get(k, {})
+#         #dict2[k] = v1 + v2
+#         dict2[k] = {**v1, **v2}
+#     return dict2
+# def merge_module_directives(dict1, dict2):
+#     merged = dict1
+#     for k,v2 in dict2.items():
+#         v1 = dict1.get(k, {})
+#         # Merge the dictionaries of attributes
+#         merged[k] = {**v1, **v2}
+#     return merged
+#
+# def merge_parameter_directives(dict1, dict2):
+#     merged = dict1
+#     for k,v2 in dict2.items():
+#         v1 = dict1.get(k, [])
+#         # Merge the lists of parameter directives
+#         merged[k] = v1 + v2
+#     return merged
 
 def bn_thinning(thinning_recipe, layers, bn_name, len_thin_features, thin_features):
     """Adjust the sizes of the parameters of a BatchNormalization layer
@@ -144,13 +191,7 @@ def resnet_cifar_remove_layers(model):
 def remove_channels(model, zeros_mask_dict, arch, dataset):
     sgraph = create_graph(dataset, arch)
     thinning_recipe = create_thinning_recipe_channels(sgraph, model, zeros_mask_dict)
-
-    if len(thinning_recipe.modules) > 0 or len(thinning_recipe.parameters)>0:
-        # Stash the recipe, so that it will be serialized together with the model
-        model.thinning_recipe = thinning_recipe
-        # Now actually remove the filters, chaneels and make the weight tensors smaller
-        execute_thinning_recipe(model, zeros_mask_dict, thinning_recipe)
-        msglogger.info("Created, applied and saved a channel-thinning recipe")
+    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe)
     return model
 
 
@@ -180,18 +221,32 @@ def find_nonzero_channels(param, param_name):
     return nonzero_channels
 
 
+def apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe):
+    if len(thinning_recipe.modules)>0 or len(thinning_recipe.parameters)>0:
+        # Now actually remove the filters, chaneels and make the weight tensors smaller
+        execute_thinning_recipe(model, zeros_mask_dict, thinning_recipe)
+
+        # Stash the recipe, so that it will be serialized together with the model
+        if hasattr(model, 'thinning_recipes'):
+            # Merge the new recipe with the exiting recipe.  Modules and Parameter
+            # dictionaries are merge separately.
+            # merged_recipes = ThinningRecipe(
+            #                   modules = merge_module_directives(model.thinning_recipe.modules,
+            #                                                     thinning_recipe.modules),
+            #                   parameters = merge_parameter_directives(model.thinning_recipe.parameters,
+            #                                                           thinning_recipe.parameters))
+            model.thinning_recipes.append(thinning_recipe)
+        else:
+            model.thinning_recipes = [thinning_recipe]
+        msglogger.info("Created, applied and saved a filter-thinning recipe")
+    else:
+        msglogger.error("Failed to create a thinning recipe")
+
+
 def remove_filters(model, zeros_mask_dict, arch, dataset):
     sgraph = create_graph(dataset, arch)
     thinning_recipe = create_thinning_recipe_filters(sgraph, model, zeros_mask_dict)
-
-    #thinning_recipe = vgg_create_thinning_recipe_filters(model, zeros_mask_dict)
-
-    if len(thinning_recipe.modules)>0 or len(thinning_recipe.parameters)>0:
-        # Stash the recipe, so that it will be serialized together with the model
-        model.thinning_recipe = thinning_recipe
-        # Now actually remove the filters, chaneels and make the weight tensors smaller
-        execute_thinning_recipe(model, zeros_mask_dict, thinning_recipe)
-        msglogger.info("Created, applied and saved a filter-thinning recipe")
+    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe)
     return model
 
 
@@ -283,6 +338,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
 
         # If there are non-zero filters in this tensor then continue to next tensor
         if num_filters <= len(nonzero_filters):
+            msglogger.debug("SKipping {} shape={}".format(param_name_2_layer_name(param_name), param.shape))
             continue
 
         msglogger.info("In tensor %s found %d/%d zero filters", param_name,
@@ -311,17 +367,18 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             if isinstance(layers[successor], torch.nn.modules.Conv2d):
                 # For each of the convolutional layers that follow, we have to reduce the number of input channels.
                 append_module_directive(thinning_recipe, successor, key='in_channels', val=len(nonzero_filters))
-                msglogger.info("{}: setting in_channels = {}".format(successor, len(nonzero_filters)))
+                msglogger.info("[recipe] {}: setting in_channels = {}".format(successor, len(nonzero_filters)))
 
                 # Now remove channels from the weights tensor of the successor conv
                 append_param_directive(thinning_recipe, successor+'.weight', (1, indices))
 
             elif isinstance(layers[successor], torch.nn.modules.Linear):
-                # If a Linear (Fully-Connected) layer follow, we need to update it's in_features member
-                fm_size = layers[successor].in_features / layers[layer_name].out_channels
+                # If a Linear (Fully-Connected) layer follows, we need to update it's in_features member
+                fm_size = layers[successor].in_features // layers[layer_name].out_channels
                 in_features = fm_size * len(nonzero_filters)
-                append_module_directive(thinning_recipe, layer_name, key='in_features', val=in_features)
-                msglogger.info("{}: setting in_features = {}".format(successor, in_features))
+                #append_module_directive(thinning_recipe, layer_name, key='in_features', val=in_features)
+                append_module_directive(thinning_recipe, successor, key='in_features', val=in_features)
+                msglogger.info("[recipe] {}: setting in_features = {}".format(successor, in_features))
 
                 # Now remove channels from the weights tensor of the successor FC layer:
                 # This is a bit tricky:
@@ -359,7 +416,8 @@ class FilterRemover(ScheduledTrainingPolicy):
         self.dataset = dataset
         self.done = False
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    #def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
         # We hook onto the on_minibatch_begin because we want to run after the pruner which sparsified
         # the tensors.  Pruners configure their pruning mask in on_epoch_begin, but apply the mask
         # only in on_minibatch_begin
@@ -368,8 +426,18 @@ class FilterRemover(ScheduledTrainingPolicy):
             self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset)
             self.done = True
 
+    def on_epoch_end(self, model, zeros_mask_dict, meta):
+        # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
+        self.done = False
 
-def execute_thinning_recipe(model, zeros_mask_dict, recipe):
+def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
+    # Invoke this function when you want to use a list of thinning recipes to convert a programmed model
+    # to a thinned model. For example, this is invoked when loading a model from a checkpoint.
+    for i, recipe in enumerate(recipe_list):
+        msglogger.info("recipe %d" % i)
+        execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=True)
+
+def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=False):
     """Apply a thinning recipe to a model.
 
     This will remove filters and channels, as well as handle batch-normalization parameter
@@ -382,12 +450,12 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe):
     for layer_name, directives in recipe.modules.items():
         for attr, val in directives.items():
             if attr in ['running_mean', 'running_var']:
-                msglogger.info("{} thinning: setting {} to {}".format(layer_name, attr, len(val[1])))
+                msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, len(val[1])))
                 setattr(layers[layer_name], attr,
                         torch.index_select(getattr(layers[layer_name], attr),
                                            dim=val[0], index=val[1]))
             else:
-                msglogger.info("{} thinning: setting {} to {}".format(layer_name, attr, val))
+                msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
                 setattr(layers[layer_name], attr, val)
 
     assert len(recipe.parameters) > 0
@@ -398,16 +466,29 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe):
             dim = directive[0]
             indices = directive[1]
             if len(directive) == 4:  # TODO: this code is hard to follow
-                layer_name = param_name[:-len('weights')]
-
                 selection_view = param.view(*directive[2])
                 param.data = torch.index_select(selection_view, dim, indices)
-                #param.data = param.view(4096, 22589)
+
+                if param.grad is not None:
+                    # We also need to change the dimensions of the gradient tensor.
+                    grad_selection_view = param.grad.resize_(*directive[2])
+                    param.grad = torch.index_select(grad_selection_view, dim, indices)
+
                 param.data = param.view(*directive[3])
+                if param.grad is not None:
+                    param.grad = param.grad.resize_(*directive[3])
             else:
                 param.data = torch.index_select(param.data, dim, indices)
-                msglogger.info("thinning: changing param {} shape: {}".format(param_name, len(indices)))
+                # We also need to change the dimensions of the gradient tensor.
+                # If have not done a backward-pass thus far, then the gradient will
+                # not exist, and therefore won't need to be re-dimensioned.
+                if param.grad is not None:
+                    param.grad = torch.index_select(param.grad, dim, indices)
+                msglogger.info("[thinning] changing param {} shape: {}".format(param_name, len(indices)))
 
-            mask = zeros_mask_dict[param_name].mask
-            if (mask is not None) and (zeros_mask_dict[param_name].mask.size(dim) != len(indices)):
-                zeros_mask_dict[param_name].mask = torch.index_select(mask, dim, indices)
+            if not loaded_from_file:
+                # If the masks are loaded from a checkpoint file, then we don't need to change
+                # their shape, because they are already correctly shaped
+                mask = zeros_mask_dict[param_name].mask
+                if mask is not None: # and (mask.size(dim) != len(indices)):
+                    zeros_mask_dict[param_name].mask = torch.index_select(mask, dim, indices)
