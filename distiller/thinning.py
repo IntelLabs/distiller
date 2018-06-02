@@ -427,12 +427,12 @@ class FilterRemover(ScheduledTrainingPolicy):
         # We hook onto the on_minibatch_begin because we want to run after the pruner which sparsified
         # the tensors.  Pruners configure their pruning mask in on_epoch_begin, but apply the mask
         # only in on_minibatch_begin
-        if self.active_cb != "on_minibatch_begin"
+        if self.active_cb != "on_minibatch_begin":
             return
         self.__apply(model, zeros_mask_dict)
 
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
-        if self.active_cb != "on_minibatch_end"
+        if self.active_cb != "on_minibatch_end":
             return
         self.__apply(model, zeros_mask_dict)
 
