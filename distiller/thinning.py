@@ -415,16 +415,26 @@ class FilterRemover(ScheduledTrainingPolicy):
         self.arch = arch
         self.dataset = dataset
         self.done = False
+        self.active_cb = "on_minibatch_begin"
 
-    #def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
-        # We hook onto the on_minibatch_begin because we want to run after the pruner which sparsified
-        # the tensors.  Pruners configure their pruning mask in on_epoch_begin, but apply the mask
-        # only in on_minibatch_begin
+    def __apply(self, model, zeros_mask_dict):
         if not self.done:
             # We want to execute the thinning function only once, not every invocation of on_minibatch_begin
             self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset)
             self.done = True
+
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+        # We hook onto the on_minibatch_begin because we want to run after the pruner which sparsified
+        # the tensors.  Pruners configure their pruning mask in on_epoch_begin, but apply the mask
+        # only in on_minibatch_begin
+        if self.active_cb != "on_minibatch_begin"
+            return
+        self.__apply(model, zeros_mask_dict)
+
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+        if self.active_cb != "on_minibatch_end"
+            return
+        self.__apply(model, zeros_mask_dict)
 
     def on_epoch_end(self, model, zeros_mask_dict, meta):
         # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
