@@ -16,6 +16,7 @@
 
 from collections import namedtuple
 import re
+import copy
 import logging
 import torch.nn as nn
 
@@ -39,6 +40,11 @@ class Quantizer(object):
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights)
 
         self.model = model
+
+        # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
+        self.model.quantizer_metadata = {'type': type(self), 'params': {'bits_activations': bits_activations,
+                                                                        'bits_weights': bits_weights,
+                                                                        'bits_overrides': copy.deepcopy(bits_overrides)}}
 
         for k, v in bits_overrides.items():
             qbits = QBits(acts=v.get('acts', self.default_qbits.acts), wts=v.get('wts', self.default_qbits.wts))
@@ -99,6 +105,10 @@ class Quantizer(object):
             if qbits.wts is not None:
                 for param_name, _ in module.named_parameters():
                     self.quantizable_params['.'.join([module_name, param_name])] = qbits.wts
+        msglogger.info('Quantized model:')
+        msglogger.info('')
+        msglogger.info(self.model)
+        msglogger.info('')
 
     def _pre_process_container(self, container, prefix=''):
         # Iterate through model, insert quantization functions as appropriate

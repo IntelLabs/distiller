@@ -277,7 +277,8 @@ def main():
         if args.quantize:
             checkpoint_name = 'quantized'
             apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
-                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name)
+                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                     dir=msglogger.logdir)
         exit()
 
     if args.compress:
@@ -317,7 +318,8 @@ def main():
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best, args.name)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
+                                 args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], args.print_freq)
