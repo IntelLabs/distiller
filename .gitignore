@@ -2,6 +2,7 @@
 *.pyc
 __pycache__/
 .pytest_cache
+.cache
 *.tar
 site/
 env/
