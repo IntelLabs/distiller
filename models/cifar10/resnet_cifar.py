@@ -53,14 +53,10 @@ class BasicBlock(nn.Module):
 
     def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
-        #self.layer_id = layer_id
-        #self.block_id = block_id
         self.block_gates = block_gates
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
-        # This change is required for layer removal
-        #self.relu = nn.ReLU(inplace=True)
-        self.relu1 = nn.ReLU(inplace=False)
+        self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = nn.BatchNorm2d(planes)
         self.relu2 = nn.ReLU(inplace=False)
@@ -96,27 +92,19 @@ class ResNetCifar(nn.Module):
         self.layer_gates = []
         for layer in range(3):
             # For each of the 3 layers, create block gates: each block has two layers
-            self.layer_gates.append([]) # [True, True] * layers[layer])
+            self.layer_gates.append([])  # [True, True] * layers[layer])
             for blk in range(layers[layer]):
                 self.layer_gates[layer].append([True, True])
 
-        self.inplanes = 16 # 64
+        self.inplanes = 16  # 64
         super(ResNetCifar, self).__init__()
-        #self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
-        #self.bn1 = nn.BatchNorm2d(64)
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        #self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(self.layer_gates[0], block, 16, layers[0])
         self.layer2 = self._make_layer(self.layer_gates[1], block, 32, layers[1], stride=2)
         self.layer3 = self._make_layer(self.layer_gates[2], block, 64, layers[2], stride=2)
-        # self.layer1 = self._make_layer(block, 64, layers[0])
-        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        #self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(8, stride=1)
-        #self.fc = nn.Linear(512 * block.expansion, num_classes)
         self.fc = nn.Linear(64 * block.expansion, num_classes)
 
         for m in self.modules():
@@ -148,12 +136,10 @@ class ResNetCifar(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        #x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        #x = self.layer4(x)
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
