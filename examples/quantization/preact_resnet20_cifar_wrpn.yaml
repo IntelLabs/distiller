@@ -1,0 +1,37 @@
+quantizers:
+  wrpn_quantizer:
+    class: WRPNQuantizer
+    bits_activations: 8
+    bits_weights: 4
+    bits_overrides:
+      conv1:
+        wts:
+        acts:
+      layer1.0.pre_relu:
+        wts:
+        acts:
+      final_relu:
+        wts:
+        acts:
+      fc:
+        wts:
+        acts:
+
+lr_schedulers:
+  training_lr:
+    class: MultiStepMultiGammaLR
+    milestones: [80, 120, 160]
+    gammas: [0.1, 0.1, 0.2]
+
+policies:
+    - quantizer:
+        instance_name: wrpn_quantizer
+      starting_epoch: 0
+      ending_epoch: 200
+      frequency: 1
+
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 161
+      frequency: 1
