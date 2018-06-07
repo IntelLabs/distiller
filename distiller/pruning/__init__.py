@@ -24,6 +24,7 @@ from .level_pruner import SparsityLevelParameterPruner
 from .sensitivity_pruner import SensitivityPruner
 from .structure_pruner import StructureParameterPruner
 from .ranked_structures_pruner import L1RankedStructureParameterPruner
+from .baidu_rnn_pruner import BaiduRNNPruner
 
 del magnitude_pruner
 del automated_gradual_pruner
