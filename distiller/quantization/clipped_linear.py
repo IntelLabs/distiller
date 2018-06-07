@@ -51,10 +51,10 @@ class WRPNQuantizer(Quantizer):
 
         def wrpn_quantize_param(param_fp, num_bits):
             scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
-            param_fp.clamp_(-1, 1)
-            param_q = linear_quantize(param_fp, scale_factor, inplace=False)
-            linear_dequantize(param_q, scale_factor, inplace=True)
-            return param_q
+            out = param_fp.clamp(-1, 1)
+            out = linear_quantize(out, scale_factor, inplace=True)
+            linear_dequantize(out, scale_factor, inplace=True)
+            return out
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -63,5 +63,30 @@ class WRPNQuantizer(Quantizer):
             return ClippedLinearQuantization(bits_acts, 1, dequantize=True, inplace=module.inplace)
 
         self.param_quantization_fn = wrpn_quantize_param
+
+        self.replacement_factory[nn.ReLU] = relu_replace_fn
+
+
+class DorefaQuantizer(Quantizer):
+    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
+        super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
+                                              bits_overrides=bits_overrides)
+
+        def dorefa_quantize_param(param_fp, num_bits):
+            scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
+            out = param_fp.tanh()
+            out.div_(2 * out.abs().max()).add_(0.5)
+            out = linear_quantize(out, scale_factor, inplace=True)
+            linear_dequantize(out, scale_factor, inplace=True)
+            out.mul_(2).add_(-1)
+            return out
+
+        def relu_replace_fn(module, name, qbits_map):
+            bits_acts = qbits_map[name].acts
+            if bits_acts is None:
+                return module
+            return ClippedLinearQuantization(bits_acts, 1, dequantize=True, inplace=module.inplace)
+
+        self.param_quantization_fn = dorefa_quantize_param
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
