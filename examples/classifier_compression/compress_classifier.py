@@ -128,6 +128,7 @@ parser.add_argument('--quantize', action='store_true',
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 
 
 def check_pytorch_version():
@@ -146,7 +147,9 @@ def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
