@@ -45,7 +45,6 @@ def onnx_name_2_pytorch_name(name):
     name_parts = re.findall('\[.*?\]', name)
     name_parts = [part[1:-1] for part in name_parts]
 
-    #print(op['name'] , '.'.join(name_parts), op['type'])
     new_name = '.'.join(name_parts) + instance
     if new_name == '':
         new_name = name
@@ -112,8 +111,7 @@ class SummaryGraph(object):
                 new_op['name'] = onnx_name_2_pytorch_name(new_op['name'])
                 assert len(new_op['name']) > 0
 
-                #self.ops.append(op)
-                self.ops[new_op['name']] = new_op
+                 self.ops[new_op['name']] = new_op
 
                 for input_ in node.inputs():
                     self.__add_input(new_op, input_)
@@ -167,7 +165,6 @@ class SummaryGraph(object):
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
             s = str(n.type())
-#           tensor['type'] = s[:s.find('(')]
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
         except:
@@ -269,13 +266,11 @@ class SummaryGraph(object):
         """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
         """
         node = self.find_op(node_name)
-#        logging.debug("length ={}".format(len(done_list)))
         node_is_an_op = True
         if node is None:
             node_is_an_op = False
             node = self.find_param(node_name)
             if node is None:
-                #raise ValueError("something went wrong")
                 return []
 
         if done_list is None:
@@ -445,7 +440,6 @@ def connectivity_summary_verbose(sgraph):
                 inputs.append(blob + ": " + str(sgraph.params[blob]['shape']))
         inputs = format_list(inputs)
         outputs = format_list(outputs)
-        #t.add_row([op['name'], op['type'], inputs, outputs])
         df.loc[i] = [op['name'], op['type'], inputs, outputs]
 
     return df
@@ -468,8 +462,6 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
                   'fillcolor': '#6495ED',
                   'style': 'rounded, filled'}
 
-    #for op_node in op_nodes:
-    #    pydot_graph.add_node(pydot.Node(op_node[0], **node_style, label=op_node[1]))
     for op_node in op_nodes:
         pydot_graph.add_node(pydot.Node(op_node[0], **node_style,
                              label="\n".join(op_node)))
@@ -528,9 +520,7 @@ def create_png(sgraph, display_param_nodes=False):
     as represented by SummaryGraph 'sgraph'
     """
 
-    #op_nodes = [(op['name'], op['type']) for op in sgraph.ops]
     op_nodes = [op['name'] for op in sgraph.ops]
-    #data_nodes = [id for id in sgraph.params.keys() if data_node_has_parent(sgraph, id)]
     data_nodes = [(id,param.shape) for (id, param) in sgraph.params.items() if data_node_has_parent(sgraph, id)]
     param_nodes = [id for id in sgraph.params.keys() if not data_node_has_parent(sgraph, id)]
     edges = sgraph.edges

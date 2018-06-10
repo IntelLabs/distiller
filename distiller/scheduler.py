@@ -118,7 +118,7 @@ class CompressionScheduler(object):
         # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
         # component is being called-back.
         weights_are_masked = False
-        #self.apply_mask()
+ 
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 if not weights_are_masked:
@@ -127,8 +127,7 @@ class CompressionScheduler(object):
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict)
 
-        #self.apply_mask()
-
+ 
     def on_epoch_end(self, epoch):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
