@@ -47,7 +47,7 @@ def model_summary(model, optimizer, what, dataset=None):
         elif dataset == 'cifar10':
             dummy_input = Variable(torch.randn(1, 3, 32, 32))
         else:
-            print("Unsupported dataset (%s) - aborting draw operation" % dataset)
+            print("Unsupported dataset (%s) - aborting compute operation" % dataset)
             return
         df = model_performance_summary(model, dummy_input, 1)
         t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
@@ -64,7 +64,7 @@ def model_summary(model, optimizer, what, dataset=None):
         # Print the names of non-leaf modules
         # Remember that in PyTorch not every node is a module (e.g. F.relu).
         # Also remember that parameterless modules, like nn.MaxPool2d, can be used multiple
-        # times in the same model, but they will only appear once in the modules list. 
+        # times in the same model, but they will only appear once in the modules list.
         nodes = []
         for name, module in model.named_modules():
             # Only print leaf modules
@@ -175,7 +175,7 @@ def module_visitor(self, input, output, df, model, weights_vol, macs, attrs=None
                               attrs if attrs is not None else ,
                               distiller.size_to_str(in_features_shape), distiller.volume(input[0]),
                               distiller.size_to_str(out_features_shape), distiller.volume(output),
-                              weights_vol, int(macs)])
+                              int(weights_vol), int(macs)])
 
 
 def model_performance_summary(model, dummy_input, batch_size=1):
