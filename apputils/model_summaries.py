@@ -111,7 +111,7 @@ class SummaryGraph(object):
                 new_op['name'] = onnx_name_2_pytorch_name(new_op['name'])
                 assert len(new_op['name']) > 0
 
-                 self.ops[new_op['name']] = new_op
+                self.ops[new_op['name']] = new_op
 
                 for input_ in node.inputs():
                     self.__add_input(new_op, input_)
