@@ -113,29 +113,6 @@ def append_module_directive(thinning_recipe, module_name, key, val):
     thinning_recipe.modules[module_name] = mod_directive
 
 
-# def merge_module_directives(dict1, dict2):
-#     merged = dict1
-#     for k,v2 in dict2.items():
-#         v1 = dict1.get(k, {})
-#         #dict2[k] = v1 + v2
-#         dict2[k] = {**v1, **v2}
-#     return dict2
-# def merge_module_directives(dict1, dict2):
-#     merged = dict1
-#     for k,v2 in dict2.items():
-#         v1 = dict1.get(k, {})
-#         # Merge the dictionaries of attributes
-#         merged[k] = {**v1, **v2}
-#     return merged
-#
-# def merge_parameter_directives(dict1, dict2):
-#     merged = dict1
-#     for k,v2 in dict2.items():
-#         v1 = dict1.get(k, [])
-#         # Merge the lists of parameter directives
-#         merged[k] = v1 + v2
-#     return merged
-
 def bn_thinning(thinning_recipe, layers, bn_name, len_thin_features, thin_features):
     """Adjust the sizes of the parameters of a BatchNormalization layer
 
@@ -228,13 +205,7 @@ def apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe):
 
         # Stash the recipe, so that it will be serialized together with the model
         if hasattr(model, 'thinning_recipes'):
-            # Merge the new recipe with the exiting recipe.  Modules and Parameter
-            # dictionaries are merge separately.
-            # merged_recipes = ThinningRecipe(
-            #                   modules = merge_module_directives(model.thinning_recipe.modules,
-            #                                                     thinning_recipe.modules),
-            #                   parameters = merge_parameter_directives(model.thinning_recipe.parameters,
-            #                                                           thinning_recipe.parameters))
+            # Add the new recipe to the existing recipes.  They will be applied by order.
             model.thinning_recipes.append(thinning_recipe)
         else:
             model.thinning_recipes = [thinning_recipe]
