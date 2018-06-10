@@ -10,6 +10,10 @@
 # The authors write that: "Since there is no projection mapping for choosing the identity featuremaps, we only
 # consider pruning the first layer of the residual block."
 #
+# Note that to use the command-line below, you will need the baseline ResNet56 model (checkpoint.resnet56_cifar_baseline.pth.tar).
+# You may either train this model from scratch, or download it from the link below.
+# https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar
+#
 # time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic
 #
 # Results: 62.7% of the original convolution MACs (when calculated using direct convolution)
@@ -164,8 +168,10 @@ pruners:
 
 extensions:
   net_thinner:
-      class: 'ResnetCifarFilterRemover'
-      thinning_func_str: resnet_cifar_remove_filters
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'resnet56_cifar'
+      dataset: 'cifar10'
 
 lr_schedulers:
    exp_finetuning_lr:

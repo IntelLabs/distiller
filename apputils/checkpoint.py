@@ -53,8 +53,8 @@ def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=Non
     checkpoint['optimizer'] = optimizer.state_dict()
     if scheduler is not None:
         checkpoint['compression_sched'] = scheduler.state_dict()
-    if hasattr(model, 'thinning_recipe'):
-        checkpoint['thinning_recipe'] = model.thinning_recipe
+    if hasattr(model, 'thinning_recipes'):
+        checkpoint['thinning_recipes'] = model.thinning_recipes
 
     torch.save(checkpoint, filename)
     if is_best:
@@ -86,11 +86,11 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
                            checkpoint['epoch'])
 
-            if 'thinning_recipe' in checkpoint:
+            if 'thinning_recipes' in checkpoint:
                 msglogger.info("Loaded a thinning recipe from the checkpoint")
-                distiller.execute_thinning_recipe(model,
+                distiller.execute_thinning_recipes_list(model,
                                                   compression_scheduler.zeros_mask_dict,
-                                                  checkpoint['thinning_recipe'])
+                                                  checkpoint['thinning_recipes'])
         else:
             msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
             msglogger.info("=> loaded checkpoint '%s' (epoch %d)",
