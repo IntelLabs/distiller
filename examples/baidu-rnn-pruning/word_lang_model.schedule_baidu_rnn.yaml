@@ -37,46 +37,36 @@ version: 1
 pruners:
   ih_l0_rnn_pruner:
     class: BaiduRNNPruner
-    initial_sparsity : 0.05
-    final_sparsity: 0.50
     q: 0.17
-    ramp_epoch: 2
+    ramp_epoch_offset: 3
     ramp_slope_mult: 2
     weights: [rnn.weight_ih_l0]
 
   hh_l0_rnn_pruner:
     class: BaiduRNNPruner
-    initial_sparsity : 0.05
-    final_sparsity: 0.50
     q: 0.11
-    ramp_epoch: 2
+    ramp_epoch_offset: 3
     ramp_slope_mult: 2
     weights: [rnn.weight_hh_l0]
 
   ih_l1_rnn_pruner:
     class: BaiduRNNPruner
-    initial_sparsity : 0.05
-    final_sparsity: 0.60
     q: 0.18
-    ramp_epoch: 2
+    ramp_epoch_offset: 3
     ramp_slope_mult: 2
     weights: [rnn.weight_ih_l1]
 
   hh_l1_rnn_pruner:
     class: BaiduRNNPruner
-    initial_sparsity : 0.05
-    final_sparsity: 0.60
     q: 0.15
-    ramp_epoch: 2
+    ramp_epoch_offset: 3
     ramp_slope_mult: 2
     weights: [rnn.weight_hh_l1]
 
   embedding_pruner:
     class: BaiduRNNPruner
-    initial_sparsity : 0.05
-    final_sparsity: 0.80
     q: 0.16
-    ramp_epoch: 2
+    ramp_epoch_offset: 3
     ramp_slope_mult: 2
     weights: [encoder.weight]
 
@@ -84,29 +74,29 @@ policies:
   - pruner:
       instance_name : ih_l0_rnn_pruner
     starting_epoch: 4
-    ending_epoch: 20
-    frequency: 1
+    ending_epoch: 21
+    frequency: 3
 
   - pruner:
       instance_name : hh_l0_rnn_pruner
     starting_epoch: 4
-    ending_epoch: 20
-    frequency: 1
+    ending_epoch: 21
+    frequency: 3
 
   - pruner:
       instance_name : ih_l1_rnn_pruner
-    starting_epoch: 4
-    ending_epoch: 20
-    frequency: 1
+    starting_epoch: 5
+    ending_epoch: 22
+    frequency: 3
 
   - pruner:
       instance_name : hh_l1_rnn_pruner
-    starting_epoch: 4
-    ending_epoch: 20
-    frequency: 1
+    starting_epoch: 5
+    ending_epoch: 22
+    frequency: 3
 
   - pruner:
       instance_name : embedding_pruner
-    starting_epoch: 5
-    ending_epoch: 21
-    frequency: 1
+    starting_epoch: 6
+    ending_epoch: 23
+    frequency: 3
