@@ -103,9 +103,11 @@ The authors describe AGP:
 - Does not make any assumptions about the structure of the network or its constituent layers, and is therefore more generally applicable.
 
 ## RNN pruner
-- <b>Reference:</b> [Exploring Sparsity in Recurrent Neural Networks](https://arxiv.org/abs/1704.05119)
-- <b>Authors:</b> Sharan Narang, Erich Elsen, Gregory Diamos, Shubho Sengupta
-- <b>Status: not implemented</b><br>
+The authors of [Exploring Sparsity in Recurrent Neural Networks](https://arxiv.org/abs/1704.05119), Sharan Narang, Erich Elsen, Gregory Diamos, and Shubho Sengupta, "propose a technique to reduce the parameters of a network by pruning weights during the initial training of the network."  They use a gradual pruning schedule which is reminiscent of the schedule used in AGP, for element-wise pruning of RNNs, which they also employ during training.  They show pruning of RNN, GRU, LSTM and embedding layers.
+
+Distiller's distiller.pruning.BaiduRNNPruner class implements this pruning algorithm.
+
+<center>![Gradual Pruning](imgs/baidu_rnn_pruning.png)</center>
 
 # Structure pruners
 Element-wise pruning can create very sparse models which can be compressed to consume less memory footprint and bandwidth, but without specialized hardware that can compute using the sparse representation of the tensors, we don't gain any speedup of the computation.  Structure pruners, remove entire "structures", such as kernels, filters, and even entire feature-maps.
