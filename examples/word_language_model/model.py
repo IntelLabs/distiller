@@ -36,9 +36,6 @@ class RNNModel(nn.Module):
         self.nhid = nhid
         self.nlayers = nlayers
 
-        # Neta
-        #self.rnn.weight_hh_l0.register_hook(lambda grad: grad.clamp(min=-100, max=100))
-
 
     def init_weights(self):
         initrange = 0.1
