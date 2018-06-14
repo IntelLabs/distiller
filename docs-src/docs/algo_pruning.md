@@ -107,7 +107,7 @@ The authors of [Exploring Sparsity in Recurrent Neural Networks](https://arxiv.o
 
 Distiller's distiller.pruning.BaiduRNNPruner class implements this pruning algorithm.
 
-<center>![Gradual Pruning](imgs/baidu_rnn_pruning.png)</center>
+<center>![Baidu RNN Pruning](imgs/baidu_rnn_pruning.png)</center>
 
 # Structure pruners
 Element-wise pruning can create very sparse models which can be compressed to consume less memory footprint and bandwidth, but without specialized hardware that can compute using the sparse representation of the tensors, we don't gain any speedup of the computation.  Structure pruners, remove entire "structures", such as kernels, filters, and even entire feature-maps.
