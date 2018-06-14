@@ -66,6 +66,7 @@ These tuples can have 2 values, or 4 values.
 __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
            'ChannelRemover', 'remove_channels',
            'FilterRemover',  'remove_filters',
+           'find_nonzero_channels',
            'execute_thinning_recipes_list']
 
 def create_graph(dataset, arch):
@@ -266,7 +267,7 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
         predecessors = [denormalize_layer_name(model, predecessor) for predecessor in predecessors]
         for predecessor in predecessors:
             # For each of the convolutional layers that preceed, we have to reduce the number of output channels.
-            append_module_directive(thinning_recipe, layer_name, key='out_channels', val=len(nonzero_channels))
+            append_module_directive(thinning_recipe, predecessor, key='out_channels', val=len(nonzero_channels))
 
             # Now remove channels from the weights tensor of the successor conv
             append_param_directive(thinning_recipe, predecessor+'.weight', (0, indices))
@@ -415,7 +416,7 @@ def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
     # Invoke this function when you want to use a list of thinning recipes to convert a programmed model
     # to a thinned model. For example, this is invoked when loading a model from a checkpoint.
     for i, recipe in enumerate(recipe_list):
-        msglogger.info("recipe %d" % i)
+        msglogger.info("recipe %d:" % i)
         execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=True)
 
 def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=False):
@@ -431,10 +432,14 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=Fal
     for layer_name, directives in recipe.modules.items():
         for attr, val in directives.items():
             if attr in ['running_mean', 'running_var']:
-                msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, len(val[1])))
-                setattr(layers[layer_name], attr,
-                        torch.index_select(getattr(layers[layer_name], attr),
-                                           dim=val[0], index=val[1]))
+                running = getattr(layers[layer_name], attr)
+                dim_to_trim = val[0]
+                indices_to_select = val[1]
+                # Check if we're trying to trim a parameter that is already "thin"
+                if running.size(dim_to_trim) != len(indices_to_select):
+                    msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, len(indices_to_select)))
+                    setattr(layers[layer_name], attr,
+                            torch.index_select(running, dim=dim_to_trim, index=indices_to_select))
             else:
                 msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
                 setattr(layers[layer_name], attr, val)
@@ -448,28 +453,32 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=Fal
             indices = directive[1]
             if len(directive) == 4:  # TODO: this code is hard to follow
                 selection_view = param.view(*directive[2])
-                param.data = torch.index_select(selection_view, dim, indices)
+                # Check if we're trying to trim a parameter that is already "thin"
+                if param.data.size(dim) != len(indices):
+                    param.data = torch.index_select(selection_view, dim, indices)
 
                 if param.grad is not None:
                     # We also need to change the dimensions of the gradient tensor.
                     grad_selection_view = param.grad.resize_(*directive[2])
-                    param.grad = torch.index_select(grad_selection_view, dim, indices)
+                    if grad_selection_view.size(dim) != len(indices):
+                        param.grad = torch.index_select(grad_selection_view, dim, indices)
 
                 param.data = param.view(*directive[3])
                 if param.grad is not None:
                     param.grad = param.grad.resize_(*directive[3])
             else:
-                param.data = torch.index_select(param.data, dim, indices)
+                if param.data.size(dim) != len(indices):
+                    param.data = torch.index_select(param.data, dim, indices)
                 # We also need to change the dimensions of the gradient tensor.
                 # If have not done a backward-pass thus far, then the gradient will
                 # not exist, and therefore won't need to be re-dimensioned.
-                if param.grad is not None:
-                    param.grad = torch.index_select(param.grad, dim, indices)
+                if param.grad is not None and param.grad.size(dim) != len(indices):
+                        param.grad = torch.index_select(param.grad, dim, indices)
                 msglogger.info("[thinning] changing param {} shape: {}".format(param_name, len(indices)))
 
             if not loaded_from_file:
                 # If the masks are loaded from a checkpoint file, then we don't need to change
                 # their shape, because they are already correctly shaped
                 mask = zeros_mask_dict[param_name].mask
-                if mask is not None: # and (mask.size(dim) != len(indices)):
+                if mask is not None and (mask.size(dim) != len(indices)):
                     zeros_mask_dict[param_name].mask = torch.index_select(mask, dim, indices)
