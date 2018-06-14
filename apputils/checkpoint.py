@@ -50,7 +50,8 @@ def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=Non
     checkpoint['state_dict'] = model.state_dict()
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
-    checkpoint['optimizer'] = optimizer.state_dict()
+    if optimizer is not None:
+        checkpoint['optimizer'] = optimizer.state_dict()
     if scheduler is not None:
         checkpoint['compression_sched'] = scheduler.state_dict()
     if hasattr(model, 'thinning_recipes'):
@@ -86,18 +87,21 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
                            checkpoint['epoch'])
 
-            if 'thinning_recipes' in checkpoint:
-                msglogger.info("Loaded a thinning recipe from the checkpoint")
-                distiller.execute_thinning_recipes_list(model,
-                                                  compression_scheduler.zeros_mask_dict,
-                                                  checkpoint['thinning_recipes'])
+        if 'thinning_recipes' in checkpoint:
+            if 'compression_sched' not in checkpoint:
+                raise KeyError("Found thinning_recipes key, but missing mandatoy key compression_sched")
+            msglogger.info("Loaded a thinning recipe from the checkpoint")
+            # Cache the recipes in case we need them later
+            model.thinning_recipes = checkpoint['thinning_recipes']
+            distiller.execute_thinning_recipes_list(model,
+                                              compression_scheduler.zeros_mask_dict,
+                                              model.thinning_recipes)
         else:
             msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
             msglogger.info("=> loaded checkpoint '%s' (epoch %d)",
                            chkpt_file, checkpoint['epoch'])
 
         model.load_state_dict(checkpoint['state_dict'])
-
         return model, compression_scheduler, start_epoch
     else:
         msglogger.info("Error: no checkpoint found at %s", chkpt_file)
