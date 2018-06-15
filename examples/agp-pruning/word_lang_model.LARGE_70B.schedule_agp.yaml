@@ -1,0 +1,57 @@
+# Fine grained (element-wise) pruning using Automated Gradual Pruner scheduling for PyTorch's example Word Language model.
+#
+# The README of PyTorch's word language model example code, promises that this configuration will produce a Test perplexity
+# of 72.30, while I was only able to get 84.23, so I use that as the baseline for comparison.
+#
+# time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --epochs 40 --tied
+#
+# =========================================================================================
+# | End of training | test loss  4.43 | test ppl    84.23
+# =========================================================================================
+#
+# To save you time, you can download a pretrained model from here:
+# https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/word_language_model/model.emsize1500.nhid1500.dropout065.tied.pt
+#
+# With the same configuration, and the pruning schedule below, we get comparable perplexity results:
+#
+# python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --epochs 40 --tied --compress=../../examples/agp-pruning/word_lang_model.schedule_agp.yaml
+#
+
+version: 1
+pruners:
+  l0_rnn_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.50
+    weights: [rnn.weight_ih_l0, rnn.weight_hh_l0]
+
+  l1_rnn_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.50
+    weights: [rnn.weight_ih_l1, rnn.weight_hh_l1]
+
+  embedding_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.85
+    weights: [encoder.weight]
+
+policies:
+  - pruner:
+      instance_name : l0_rnn_pruner
+    starting_epoch: 1
+    ending_epoch: 25
+    frequency: 3
+
+  - pruner:
+      instance_name : l1_rnn_pruner
+    starting_epoch: 2
+    ending_epoch: 25
+    frequency: 3
+
+  - pruner:
+      instance_name : embedding_pruner
+    starting_epoch: 3
+    ending_epoch: 26
+    frequency: 3
