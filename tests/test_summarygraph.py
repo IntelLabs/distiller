@@ -80,10 +80,10 @@ def test_connectivity():
     preds = g.predecessors(op, 2)
     assert preds == ['layer1.0.bn2', 'relu']
 
-    op = g.find_op('layer1.0.relu1')
+    op = g.find_op('layer1.0.relu2')
     assert op is not None
     succs = g.successors(op, 4)
-    assert succs == ['layer1.1.bn1', 'layer1.1.relu1']
+    assert succs == ['layer1.1.bn1', 'layer1.1.relu2']
 
     preds = g.predecessors(g.find_op('bn1'), 10)
     assert preds == []
