@@ -18,11 +18,34 @@ from collections import namedtuple
 import re
 import copy
 import logging
+import torch
 import torch.nn as nn
 
 msglogger = logging.getLogger()
 
 QBits = namedtuple('QBits', ['acts', 'wts'])
+
+
+def has_bias(module):
+    return hasattr(module, 'bias') and module.bias is not None
+
+
+def hack_float_backup_parameter(module, name):
+    try:
+        data = dict(module.named_parameters())[name].data
+    except KeyError:
+        raise ValueError('Module has no Parameter named ' + name)
+    module.register_parameter('float_' + name, nn.Parameter(data))
+    module.__delattr__(name)
+    module.register_buffer(name, torch.zeros_like(data))
+
+
+class _ParamToQuant(object):
+    def __init__(self, module, fp_attr_name, q_attr_name, num_bits):
+        self.module = module
+        self.fp_attr_name = fp_attr_name
+        self.q_attr_name = q_attr_name
+        self.num_bits = num_bits
 
 
 class Quantizer(object):
@@ -36,15 +59,18 @@ class Quantizer(object):
         bits_overrides (dict): Dictionary mapping regular expressions of layer name patterns to dictionary with
             values for 'acts' and/or 'wts' to override the default values.
     """
-    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides={}):
+    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides={}, quantize_bias=False,
+                 train_with_fp_copy=False):
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights)
+        self.quantize_bias = quantize_bias
 
         self.model = model
 
         # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
-        self.model.quantizer_metadata = {'type': type(self), 'params': {'bits_activations': bits_activations,
-                                                                        'bits_weights': bits_weights,
-                                                                        'bits_overrides': copy.deepcopy(bits_overrides)}}
+        self.model.quantizer_metadata = {'type': type(self),
+                                         'params': {'bits_activations': bits_activations,
+                                                    'bits_weights': bits_weights,
+                                                    'bits_overrides': copy.deepcopy(bits_overrides)}}
 
         for k, v in bits_overrides.items():
             qbits = QBits(acts=v.get('acts', self.default_qbits.acts), wts=v.get('wts', self.default_qbits.wts))
@@ -83,8 +109,8 @@ class Quantizer(object):
         # To be populated by child classes
         self.param_quantization_fn = None
 
-        # Mapping from parameter name to number of bits, used by quantize_param() function. Populated by prepare_model()
-        self.quantizable_params = {}
+        self.train_with_fp_copy = train_with_fp_copy
+        self.params_to_quantize = []
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear]:
@@ -98,13 +124,28 @@ class Quantizer(object):
         Iterates over the model and replaces modules with their quantized counterparts as defined by
         self.replacement_factory
         """
-        msglogger.info('Preparing model for quantization')
+        msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
         self._pre_process_container(self.model)
+
         for module_name, module in self.model.named_modules():
             qbits = self.module_qbits_map[module_name]
-            if qbits.wts is not None:
-                for param_name, _ in module.named_parameters():
-                    self.quantizable_params['.'.join([module_name, param_name])] = qbits.wts
+            if qbits.wts is None:
+                continue
+
+            curr_parameters = dict(module.named_parameters())
+            for param_name, param in curr_parameters.items():
+                if param_name.endswith('bias') and not self.quantize_bias:
+                    continue
+                fp_attr_name = param_name
+                if self.train_with_fp_copy:
+                    hack_float_backup_parameter(module, param_name)
+                    fp_attr_name = 'float_' + param_name
+                self.params_to_quantize.append(_ParamToQuant(module, fp_attr_name, param_name, qbits.wts))
+
+                param_full_name = '.'.join([module_name, param_name])
+                msglogger.info(
+                    "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
+
         msglogger.info('Quantized model:')
         msglogger.info('')
         msglogger.info(self.model)
@@ -132,13 +173,10 @@ class Quantizer(object):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
 
-    def quantize_param(self, param_name, param_fp):
-        r"""
-        Quantize a parameter tensor according the number of bits set in the initialization
-        """
-        if not self.param_quantization_fn:
-            return param_fp
-        try:
-            return self.param_quantization_fn(param_fp, self.quantizable_params[param_name])
-        except KeyError:
-            return param_fp
+    def quantize_params(self):
+        for ptq in self.params_to_quantize:
+            q_param = self.param_quantization_fn(ptq.module.__getattr__(ptq.fp_attr_name), ptq.num_bits)
+            if self.train_with_fp_copy:
+                ptq.module.__setattr__(ptq.q_attr_name, q_param)
+            else:
+                ptq.module.__getattr__(ptq.q_attr_name).data = q_param.data

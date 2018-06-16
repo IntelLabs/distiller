@@ -113,12 +113,6 @@ class CompressionScheduler(object):
                                             loss, regularizer_loss, self.zeros_mask_dict)
         return regularizer_loss
 
-    def before_update(self, epoch, minibatch_id, minibatches_per_epoch):
-        if epoch in self.policies:
-            for policy in self.policies[epoch]:
-                policy.before_update(self.model, epoch, minibatch_id, minibatches_per_epoch,
-                                          self.zeros_mask_dict)
-
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch):
         # When we get to this point, the weights are no longer maksed.  This is because during the backward
         # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
@@ -133,7 +127,6 @@ class CompressionScheduler(object):
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict)
 
- 
     def on_epoch_end(self, epoch):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
@@ -143,7 +136,19 @@ class CompressionScheduler(object):
 
     def apply_mask(self):
         for name, param in self.model.named_parameters():
-            self.zeros_mask_dict[name].apply_mask(param)
+            try:
+                self.zeros_mask_dict[name].apply_mask(param)
+            except KeyError:
+                # Quantizers for training modify some model parameters by adding a 'float_' prefix
+                # If this is the source of the error, workaround and move on
+                name_parts = name.split('.')
+                if name_parts[-1].startswith('float_'):
+                    name_parts[-1] = name_parts[-1].replace('float_', '', 1)
+                    name = '.'.join(name_parts)
+                    self.zeros_mask_dict[name].apply_mask(param)
+                else:
+                    raise
+
 
     def state_dict(self):
         """Returns the state of the scheduler as a :class:`dict`.

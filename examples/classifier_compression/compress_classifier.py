@@ -111,7 +111,7 @@ parser.add_argument('--act-stats', dest='activation_stats', action='store_true',
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png', 'png_w_params']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
                     ' | '.join(SUMMARY_CHOICES))
@@ -197,7 +197,7 @@ def main():
 
     # Create the model
     png_summary = args.summary is not None and args.summary.startswith('png')
-    is_parallel = not png_summary   # For PNG summary, parallel graphs are illegible
+    is_parallel = not png_summary and args.summary != 'compute' # For PNG summary, parallel graphs are illegible
     model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
 
     compression_scheduler = None
@@ -211,18 +211,17 @@ def main():
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
 
-        if 'resnet' in args.arch and 'cifar' in args.arch:
+        if 'resnet' in args.arch and 'preact' not in args.arch and 'cifar' in args.arch:
             distiller.resnet_cifar_remove_layers(model)
             #model = distiller.resnet_cifar_remove_channels(model, compression_scheduler.zeros_mask_dict)
 
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    msglogger.info("Optimizer (%s): momentum=%s decay=%s", type(optimizer),
-                   args.momentum, args.weight_decay)
-
+    msglogger.info('Optimizer Type: %s', type(optimizer))
+    msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -279,18 +278,15 @@ def main():
         top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
         if args.quantize:
             checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
+            apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
                                      name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
                                      dir=msglogger.logdir)
         exit()
 
     if args.compress:
-        # The main use-case for this sample application is CNN compression.  Compression
+        # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        source = args.compress
-        msglogger.info("Compression schedule (source=%s)", source)
-        compression_scheduler = distiller.CompressionScheduler(model)
-        distiller.config.fileConfig(model, optimizer, compression_scheduler, args.compress, msglogger)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress)
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -358,7 +354,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         input_var = torch.autograd.Variable(inputs)
         target_var = torch.autograd.Variable(target)
 
-        # Execute the forard phase, compute the output and measure loss
+        # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch)
         output = model(input_var)
@@ -377,8 +373,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
-        if compression_scheduler:
-            compression_scheduler.before_update(epoch, train_step, steps_per_epoch)
         optimizer.step()
         if compression_scheduler:
             compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch)

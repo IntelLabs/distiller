@@ -44,15 +44,23 @@ from distiller.regularization import L1Regularizer, GroupLassoRegularizer
 from distiller.learning_rate import *
 from distiller.quantization import *
 from distiller.utils import yaml_ordered_load
-logger = logging.getLogger("app_cfg")
 
-def dictConfig(model, optimizer, schedule, sched_dict, logger):
-    logger.debug(json.dumps(sched_dict, indent=1))
+msglogger = logging.getLogger()
+app_cfg_logger = logging.getLogger("app_cfg")
+
+
+def dict_config(model, optimizer, sched_dict):
+    app_cfg_logger.debug(json.dumps(sched_dict, indent=1))
+
+    schedule = distiller.CompressionScheduler(model)
 
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
     lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
     quantizers = __factory('quantizers', model, sched_dict)
+    if len(quantizers) > 1:
+        print("\nError: Multiple Quantizers not supported")
+        exit(1)
     extensions = __factory('extensions', model, sched_dict)
 
     try:
@@ -83,6 +91,12 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
                 assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
                 quantizer = quantizers[instance_name]
                 policy = distiller.QuantizationPolicy(quantizer)
+
+                # Quantizers for training modify the models parameters, need to update the optimizer
+                if quantizer.train_with_fp_copy:
+                    optimizer_type = type(optimizer)
+                    new_optimizer = optimizer_type(model.parameters(), **optimizer.defaults)
+                    optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
             elif 'lr_scheduler' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'lr_scheduler')
@@ -116,12 +130,13 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
 
     return schedule
 
-def fileConfig(model, optimizer, schedule, filename, logger):
+def file_config(model, optimizer, filename):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
+        msglogger.info('Reading compression schedule from: %s', filename)
         try:
             sched_dict = yaml_ordered_load(stream)
-            dictConfig(model, optimizer, schedule, sched_dict, logger)
+            return dict_config(model, optimizer, sched_dict)
         except yaml.YAMLError as exc:
             print("\nFATAL Parsing error while parsing the pruning schedule configuration file %s" % filename)
             exit(1)

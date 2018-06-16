@@ -28,7 +28,8 @@ import distiller
 msglogger = logging.getLogger()
 
 
-def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=None, is_best=False, name=None, dir='.'):
+def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
+                    best_top1=None, is_best=False, name=None, dir='.'):
     """Save a pytorch training checkpoint
 
     Args:
@@ -40,6 +41,7 @@ def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=Non
         best_top1: the best top1 score seen so far
         is_best: True if this is the best (top1 accuracy) model so far
         name: the name of the checkpoint file
+        dir: directory in which to save the checkpoint
     """
     msglogger.info("Saving checkpoint")
     if not os.path.isdir(dir):

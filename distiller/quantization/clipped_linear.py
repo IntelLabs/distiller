@@ -13,6 +13,8 @@ msglogger = logging.getLogger()
 class LinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, scale_factor, dequantize, inplace):
+        if inplace:
+            ctx.mark_dirty(input)
         output = linear_quantize(input, scale_factor, inplace)
         if dequantize:
             output = linear_dequantize(output, scale_factor, inplace)
@@ -47,13 +49,12 @@ class ClippedLinearQuantization(nn.Module):
 class WRPNQuantizer(Quantizer):
     def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
         super(WRPNQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                            bits_overrides=bits_overrides)
+                                            bits_overrides=bits_overrides, train_with_fp_copy=True)
 
         def wrpn_quantize_param(param_fp, num_bits):
             scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
             out = param_fp.clamp(-1, 1)
-            out = linear_quantize(out, scale_factor, inplace=True)
-            linear_dequantize(out, scale_factor, inplace=True)
+            out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
             return out
 
         def relu_replace_fn(module, name, qbits_map):
@@ -70,15 +71,14 @@ class WRPNQuantizer(Quantizer):
 class DorefaQuantizer(Quantizer):
     def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
         super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                              bits_overrides=bits_overrides)
+                                              bits_overrides=bits_overrides, train_with_fp_copy=True)
 
         def dorefa_quantize_param(param_fp, num_bits):
             scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
             out = param_fp.tanh()
-            out.div_(2 * out.abs().max()).add_(0.5)
-            out = linear_quantize(out, scale_factor, inplace=True)
-            linear_dequantize(out, scale_factor, inplace=True)
-            out.mul_(2).add_(-1)
+            out = out / (2 * out.abs().max()) + 0.5
+            out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
+            out = 2 * out - 1
             return out
 
         def relu_replace_fn(module, name, qbits_map):
