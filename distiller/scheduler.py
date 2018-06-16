@@ -158,7 +158,8 @@ class CompressionScheduler(object):
         masks = {}
         for name, masker in self.zeros_mask_dict.items():
             masks[name] = masker.mask
-        state = { 'masks_dict' : masks }
+        state = {'masks_dict': masks,
+                 'parallel_model': isinstance(self.model, torch.nn.DataParallel)}
         return state
 
     def load_state_dict(self, state):
@@ -181,6 +182,15 @@ class CompressionScheduler(object):
                 print("\t\t" + k)
             exit(1)
 
+        curr_model_parallel = isinstance(self.model, torch.nn.DataParallel)
+        loaded_model_parallel = state['parallel_model']
         for name, mask in self.zeros_mask_dict.items():
+            # DataParallel modules wrap the actual module with a module named "module"...
+            if loaded_model_parallel and not curr_model_parallel:
+                load_name = 'module.' + name
+            elif curr_model_parallel and not loaded_model_parallel:
+                load_name = name.replace('module.', '', 1)
+            else:
+                load_name = name
             masker = self.zeros_mask_dict[name]
-            masker.mask = loaded_masks[name]
+            masker.mask = loaded_masks[load_name]
