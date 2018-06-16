@@ -65,7 +65,6 @@ class AlexNetBN(nn.Module):
         )
 
         for m in self.modules():
-            nn.init
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 fan_in, k_size = (m.in_channels, m.kernel_size[0] * m.kernel_size[1]) if isinstance(m, nn.Conv2d) \
                     else (m.in_features, 1)
