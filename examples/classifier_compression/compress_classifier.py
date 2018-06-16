@@ -229,7 +229,7 @@ def main():
         if which_summary.startswith('png'):
             apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
         else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
+            distiller.model_summary(model, which_summary, args.dataset)
         exit()
 
     # Load the datasets: the dataset to load is inferred from the model name passed
