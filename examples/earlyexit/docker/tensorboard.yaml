@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: tensorboard
+  name: tensorboard-service
+spec:
+  ports:
+  - port: 80
+    name: http
+    targetPort: 6006
+  selector:
+    app: tensorboard
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: tensorboard
+  generateName: tensorboard-deployment-
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tensorboard
+  template:
+    metadata:
+      labels:
+        app: tensorboard
+    spec:
+      priorityClassName: "high"
+      containers:
+      - args:
+        command: ["tensorboard", "--logdir=/mnt/results/earlyexit"]
+        image: nervana-dockrepo01.fm.intel.com:5001/earlyexit
+        name: tensorboard
+        ports:
+        - containerPort: 6006
+          protocol: TCP
+          name: http
+        securityContext:
+          runAsUser: 10013113 # (try running `id`)
+        volumeMounts:
+        - mountPath: "/mnt"
+          name: home
+        env:
+        - name: http_proxy
+          value: http://proxy-chain.intel.com:911
+        - name: https_proxy
+          value: http://proxy-chain.intel.com:912
+        - name: HTTP_PROXY
+          value: http://proxy-chain.intel.com:911
+        - name: HTTPS_PROXY
+          value: http://proxy-chain.intel.com:912
+        - name: no_proxy
+          value: localhost,127.0.0.1,intel.com,.intel.com,cluster,.cluster,10.0.0.0/8,172.168.0.0/16,192.168.0.0/16,10.54.8.248,10.54.4.19,10.54.8.18,132.233.52.91,localhost,127.0.0.1,intel.com,.intel.com,cluster,.cluster,10.54.8.137,10.54.8.241,10.54.8.246,10.54.8.247,10.54.8.248,10.54.4.19,10.105.186.109,172.17.0.1,10.105.186.110,172.17.0.1,10.105.186.111,10.105.186.112,172.17.0.1,10.105.186.113,172.17.0.1,10.105.186.114,10.105.186.115,192.168.1.246,10.105.186.116,172.17.0.1,10.105.186.117,172.17.0.1,10.105.186.118,172.17.0.1,10.105.186.119,10.105.186.120,10.105.186.121,10.105.186.122
+        - name: NO_PROXY
+          value: localhost,127.0.0.1,intel.com,.intel.com,cluster,.cluster,10.0.0.0/8,172.168.0.0/16,192.168.0.0/16,10.54.8.248,10.54.4.19,10.54.8.18,132.233.52.91,localhost,127.0.0.1,intel.com,.intel.com,cluster,.cluster,10.54.8.137,10.54.8.241,10.54.8.246,10.54.8.247,10.54.8.248,10.54.4.19,10.105.186.109,172.17.0.1,10.105.186.110,172.17.0.1,10.105.186.111,10.105.186.112,172.17.0.1,10.105.186.113,172.17.0.1,10.105.186.114,10.105.186.115,192.168.1.246,10.105.186.116,172.17.0.1,10.105.186.117,172.17.0.1,10.105.186.118,172.17.0.1,10.105.186.119,10.105.186.120,10.105.186.121,10.105.186.122
+      volumes:
+      - nfs:
+          server: fmcfs05n02b-03.fm.intel.com
+          path: "/nrv_algo_home01/barad" # Set to your home directory
+        name: home
+
