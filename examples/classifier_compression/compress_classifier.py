@@ -56,7 +56,6 @@ import time
 import os
 import sys
 import random
-import logging.config
 import traceback
 from collections import OrderedDict
 from functools import partial
@@ -68,18 +67,29 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
-
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if module_path not in sys.path:
+try:
+    import distiller
+except ImportError:
+    script_dir = os.path.dirname(__file__)
+    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     sys.path.append(module_path)
-import distiller
+    import distiller
 import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
+# Logger handle
 msglogger = None
+
+
+def float_range(val_str):
+    val = float(val_str)
+    if val < 0 or val >= 1:
+        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
+    return val
+
+
 parser = argparse.ArgumentParser(description='Distiller image classification model compression')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
@@ -111,7 +121,7 @@ parser.add_argument('--act-stats', dest='activation_stats', action='store_true',
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
                     ' | '.join(SUMMARY_CHOICES))
@@ -128,6 +138,12 @@ parser.add_argument('--quantize', action='store_true',
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
+parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+                    help='Portion of training dataset to set aside for validation')
+parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
 
 
 def check_pytorch_version():
@@ -142,11 +158,14 @@ def check_pytorch_version():
               "  3. Activate the new environment")
         exit(1)
 
+
 def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -193,8 +212,7 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
 
     # Create the model
-    is_parallel = args.summary != 'png' # For PNG summary, parallel graphs are illegible
-    model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
+    model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
 
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
@@ -202,31 +220,36 @@ def main():
     tflogger = TensorBoardLogger(msglogger.logdir)
     pylogger = PythonLogger(msglogger)
 
+    # capture thresholds for early-exit training
+    if args.earlyexit:
+        print("=> using early-exit values of '{}'".format(args.earlyexit))
+
+    # NOTE: this likely unnecessary as it could be done via --resume switch to load model 
+    if args.earlyexitmodel:
+        if os.path.isfile(args.earlyexitmodel):
+            earlyexitmodel = torch.load(args.earlyexitmodel)
+            model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
+
     # We can optionally resume from a checkpoint
     if args.resume:
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
 
-        if 'resnet' in args.arch and 'cifar' in args.arch:
-            distiller.resnet_cifar_remove_layers(model)
-            #model = distiller.resnet_cifar_remove_channels(model, compression_scheduler.zeros_mask_dict)
-
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    msglogger.info("Optimizer (%s): momentum=%s decay=%s", type(optimizer),
-                   args.momentum, args.weight_decay)
-
+    msglogger.info('Optimizer Type: %s', type(optimizer))
+    msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
         which_summary = args.summary
-        if which_summary == 'png':
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+        if which_summary.startswith('png'):
+            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
         else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
+            distiller.model_summary(model, which_summary, args.dataset)
         exit()
 
     # Load the datasets: the dataset to load is inferred from the model name passed
@@ -234,7 +257,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.deterministic)
+        args.workers, args.validation_size, args.deterministic)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -275,17 +298,15 @@ def main():
         top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
         if args.quantize:
             checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
-                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name)
+            apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                     dir=msglogger.logdir)
         exit()
 
     if args.compress:
-        # The main use-case for this sample application is CNN compression.  Compression
+        # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        source = args.compress
-        msglogger.info("Compression schedule (source=%s)", source)
-        compression_scheduler = distiller.CompressionScheduler(model)
-        distiller.config.fileConfig(model, optimizer, compression_scheduler, args.compress, msglogger)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress)
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -295,38 +316,41 @@ def main():
 
         # Train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-              loggers=[tflogger, pylogger], print_freq=args.print_freq, log_params_hist=args.log_params_histograms)
+              loggers=[tflogger, pylogger], print_freq=args.print_freq, log_params_hist=args.log_params_histograms,
+              lossweights=args.lossweights)
         distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
         if args.activation_stats:
             distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
                                               collector=activations_sparsity)
 
         # evaluate on validation set
-        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq, epoch)
+        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq,
+                                args.earlyexit, epoch)
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
-        distiller.log_training_progress(stats, None,epoch, steps_completed=0, total_steps=1,
+        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[tflogger])
 
         if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch)
+            compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best, args.name)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
+                                 args.name, args.output_dir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], args.print_freq)
+    test(test_loader, model, criterion, [pylogger], args.print_freq, earlyexit=args.earlyexit)
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          compression_scheduler, loggers, print_freq, log_params_hist):
+          compression_scheduler, loggers, print_freq, log_params_hist, lossweights):
     """Training loop for one epoch."""
-    losses = {'objective_loss'   : tnt.AverageValueMeter(),
-              'regularizer_loss' : tnt.AverageValueMeter()}
+    losses = {'objective_loss':   tnt.AverageValueMeter(),
+              'regularizer_loss': tnt.AverageValueMeter()}
     if compression_scheduler is None:
         # Initialize the regularizer loss to zero
         losses['regularizer_loss'].add(0)
@@ -334,6 +358,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
+    if lossweights:
+        top1_exit0 = AverageMeter()
+        top5_exit0 = AverageMeter()
+        top1_exit1 = AverageMeter()
+        top5_exit1 = AverageMeter()
+        top1_exitN = AverageMeter()
+        top5_exitN = AverageMeter()
 
     total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
@@ -352,19 +383,37 @@ def train(train_loader, model, criterion, optimizer, epoch,
         input_var = torch.autograd.Variable(inputs)
         target_var = torch.autograd.Variable(target)
 
-        # Execute the forard phase, compute the output and measure loss
+        # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
-            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch)
-        output = model(input_var)
-        loss = criterion(output, target_var)
+            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
-        # Measure accuracy and record loss
-        classerr.add(output.data, target)
+        if lossweights:
+            # compute outputs at all exits
+            exitN, exit0, exit1 = model(input_var)
+            loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
+                ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
+            # measure accuracy and record loss
+            prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
+            prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
+            prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
+            # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
+            top1_exit0.update(prec1_exit0[0], inputs.size(0))
+            top5_exit0.update(prec5_exit0[0], inputs.size(0))
+            top1_exit1.update(prec1_exit1[0], inputs.size(0))
+            top5_exit1.update(prec5_exit1[0], inputs.size(0))
+            top1_exitN.update(prec1_exitN[0], inputs.size(0))
+            top5_exitN.update(prec5_exitN[0], inputs.size(0))
+        else:
+            output = model(input_var)
+            loss = criterion(output, target_var)
+            # Measure accuracy and record loss
+            classerr.add(output.data, target)
+            
         losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
-            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss)
+            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss, optimizer)
             loss += regularizer_loss
             losses['regularizer_loss'].add(regularizer_loss.item())
 
@@ -373,7 +422,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         loss.backward()
         optimizer.step()
         if compression_scheduler:
-            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch)
+            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
 
         # measure elapsed time
         batch_time.add(time.time() - end)
@@ -382,15 +431,52 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % print_freq == 0:
             # Log some statistics
             lr = optimizer.param_groups[0]['lr']
-            stats = ('Peformance/Training/',
-                     OrderedDict([
-                         ('Loss', losses['objective_loss'].mean),
-                         ('Reg Loss', losses['regularizer_loss'].mean),
-                         ('Top1', classerr.value(1)),
-                         ('Top5', classerr.value(5)),
-                         ('LR', lr),
-                         ('Time', batch_time.mean)])
-                    )
+
+            if lossweights:
+                # human friendly logging
+                print('Epoch: [{0}][{1}/{2}]\t'
+                      'Time ({batch_time.mean:.3f})\t'
+                      'Data ({data_time.mean:.3f})\t'
+                      'Loss {losses.mean:.4f}\t'
+                      'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
+                      'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
+                      'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
+                      'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
+                      'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
+                      'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
+                       epoch, train_step, len(train_loader), batch_time=batch_time,
+                       data_time=data_time, losses=losses['objective_loss'], top1_exit0=top1_exit0, top5_exit0=top5_exit0,
+                       top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
+                stats = ('Performance/Training/',
+                        OrderedDict([
+                            ('Epoch', epoch),
+                            ('i', train_step),
+                            ('train_loader', len(train_loader)),
+                            ('TimeAvg', batch_time.mean),
+                            ('DataAvg', data_time.mean),
+                            ('Loss', loss.item()),
+                            ('LossAvg', loss.mean()),
+                            ('Prec@1_exit0', top1_exit0.val),
+                            ('Prec@1_exit0_avg', top1_exit0.avg),
+                            ('Prec@5_exit0', top5_exit0.val),
+                            ('Prec@5_exit0_avg', top5_exit0.avg),
+                            ('Prec@1_exit1', top1_exit1.val),
+                            ('Prec@1_exit1_avg', top1_exit1.avg),
+                            ('Prec@5_exit1', top5_exit1.val),
+                            ('Prec@5_exit1_avg', top5_exit1.avg),
+                            ('Prec@1_exitN', top1_exitN.val),
+                            ('Prec@1_exitN_avg', top1_exitN.avg),
+                            ('Prec@5_exitN', top5_exitN.val),
+                            ('Prec@5_exitN_avg', top5_exitN.avg)]))
+            else:
+                stats = ('Peformance/Training/',
+                        OrderedDict([
+                            ('Loss', losses['objective_loss'].mean),
+                            ('Reg Loss', losses['regularizer_loss'].mean),
+                            ('Top1', classerr.value(1)),
+                            ('Top5', classerr.value(5)),
+                            ('LR', lr),
+                            ('Time', batch_time.mean)]))
 
             distiller.log_training_progress(stats,
                                             model.named_parameters() if log_params_hist else None,
@@ -400,32 +486,44 @@ def train(train_loader, model, criterion, optimizer, epoch,
         end = time.time()
 
 
-def validate(val_loader, model, criterion, loggers, print_freq, epoch=-1):
+def validate(val_loader, model, criterion, loggers, print_freq, earlyexit=0, epoch=-1):
     """Model validation"""
     if epoch > -1:
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
     else:
         msglogger.info('--- validate ---------------------')
-    return _validate(val_loader, model, criterion, loggers, print_freq, epoch)
+    return _validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch)
 
 
-def test(test_loader, model, criterion, loggers, print_freq):
+def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    return _validate(test_loader, model, criterion, loggers, print_freq)
+    return _validate(test_loader, model, criterion, loggers, print_freq, earlyexit)
 
 
-def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
+def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, epoch=-1):
     """Execute the validation/test loop."""
-    losses = {'objective_loss' : tnt.AverageValueMeter()}
-    classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
-    batch_time = tnt.AverageValueMeter()
-    # if nclasses<=10:
-    #     # Log the confusion matrix only if the number of classes is small
-    #     confusion = tnt.ConfusionMeter(10)
+    if earlyexit:
+        losses_exit0 = AverageMeter()
+        losses_exit1 = AverageMeter()
+        losses_exitN = AverageMeter()
+        top1 = AverageMeter()
+        top5 = AverageMeter()
+        exit_0 = 0
+        exit_1 = 0
+        exit_N = 0
+    else:
+        losses = {'objective_loss': tnt.AverageValueMeter()}
 
+    classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+
+    batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
-    batch_size = data_loader.batch_size
+    if earlyexit:
+        # set batchsize=1 for Early Exit inference
+        batch_size = 1
+    else:
+        batch_size = data_loader.batch_size
     total_steps = total_samples / batch_size
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
@@ -439,15 +537,48 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
 
-            # compute output
-            output = model(input_var)
-            loss = criterion(output, target_var)
+            if earlyexit:
+                # compute output (exitN) and the rest of the exit outputs
+                exitN, exit0, exit1 = model(input_var)
+                # if we are running validate on a validation set with ground truth, we still calculate loss
+                # we will also need loss anyway in test mode as we want to calculate accuracy.
+                loss_exit0 = criterion(exit0, target_var)
+                loss_exit1 = criterion(exit1, target_var)
+                loss_exitN = criterion(exitN, target_var)
 
-            # measure accuracy and record loss
-            losses['objective_loss'].add(loss.item())
-            classerr.add(output.data, target)
-            # if confusion:
-            #     confusion.add(output.data, target)
+                # measure accuracy and record loss
+                prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
+                prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
+                prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
+
+                losses_exit0.update(loss_exit0.item(), inputs.size(0))
+                losses_exit1.update(loss_exit1.item(), inputs.size(0))
+                losses_exitN.update(loss_exitN.item(), inputs.size(0))
+
+                # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
+                if loss_exit0.item() < earlyexit[0]:
+                    # take the results from the early exit since lower than threshold
+                    top1.update(prec1_exit0[0], inputs.size(0))
+                    top5.update(prec5_exit0[0], inputs.size(0))
+                    exit_0 = exit_0 + 1
+                elif loss_exit1.item() < earlyexit[1]:
+                    # or take the results from the next early exit, since lower than its threshold
+                    top1.update(prec1_exit1[0], inputs.size(0))
+                    top5.update(prec5_exit1[0], inputs.size(0))
+                    exit_1 = exit_1 + 1
+                else:
+                    # skip the exits and include results from end of net
+                    top1.update(prec1_exitN[0], inputs.size(0))
+                    top5.update(prec5_exitN[0], inputs.size(0))
+                    exit_N = exit_N + 1
+            else:
+                # compute output
+                output = model(input_var)
+                loss = criterion(output, target_var)
+
+                # measure accuracy and record loss
+                losses['objective_loss'].add(loss.item())
+                classerr.add(output.data, target)
 
             # measure elapsed time
             batch_time.add(time.time() - end)
@@ -455,19 +586,56 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
 
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
-                stats = ('',
-                         OrderedDict([('Loss', losses['objective_loss'].mean),
-                                      ('Top1', classerr.value(1)),
-                                      ('Top5', classerr.value(5))]))
+                if earlyexit:
+                    print('Test: [{0}/{1}]\t'
+                    'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
+                    'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
+                    'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
+                    'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                    'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                    validation_step, len(data_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                    top1=top1, top5=top5))
+                    stats = ('Performance/Validation/',
+                        OrderedDict([('Test', validation_step),
+                            ('Loss0', losses_exit0.val),
+                            ('LossAvg0', losses_exit0.avg),
+                            ('Loss1', losses_exit1.val),
+                            ('LossAvg1', losses_exit1.avg),
+                            ('LossN', losses_exitN.val),
+                            ('LossAvgN', losses_exitN.avg),
+                            ('Prec@1', top1.val),
+                            ('Prec@1_avg', top1.avg),
+                            ('Prec@5', top5.val),
+                            ('Prec@5', top5.avg)]))
+                else:
+                    stats = ('',
+                             OrderedDict([('Loss', losses['objective_loss'].mean),
+                                          ('Top1', classerr.value(1)),
+                                          ('Top5', classerr.value(5))]))
+
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
-                                                total_steps, print_freq, loggers)
+                                                    total_steps, print_freq, loggers)
 
-    msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
+    if earlyexit:
+        #print some interesting summary stats for number of data points that could exit early
+        print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
+
+        print('Exit_0:')
+        print(exit_0)
+        print('Exit_1:')
+        print(exit_1)
+        print('Exit_N:')
+        print(exit_N)
+        print('Percent early exit #0:')
+        print((exit_0*100.0) / (exit_0+exit_1+exit_N))
+        print('Percent early exit #1:')
+        print((exit_1*100.0) / (exit_0+exit_1+exit_N))
+        
+        return top1.avg, top5.avg, losses_exitN.avg
+    else:
+        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                    classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
-
-    # if confusion:
-    #     msglogger.info('==> Confusion:\n%s', str(confusion.value()))
-    return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
+        return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
 
 
 class PytorchNoGrad(object):
@@ -492,6 +660,37 @@ def get_inference_var(tensor):
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)
 
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 if __name__ == '__main__':
     try:

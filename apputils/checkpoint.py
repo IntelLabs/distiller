@@ -22,13 +22,15 @@ a pruning session, or for querying the pruning schedule of a sparse model.
 
 import os
 import shutil
+from errno import ENOENT
 import logging
 import torch
 import distiller
 msglogger = logging.getLogger()
 
 
-def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=None, is_best=False, name=None):
+def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
+                    best_top1=None, is_best=False, name=None, dir='.'):
     """Save a pytorch training checkpoint
 
     Args:
@@ -40,13 +42,19 @@ def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=Non
         best_top1: the best top1 score seen so far
         is_best: True if this is the best (top1 accuracy) model so far
         name: the name of the checkpoint file
+        dir: directory in which to save the checkpoint
     """
-    msglogger.info("Saving checkpoint")
+    if not os.path.isdir(dir):
+        raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
+
     filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
+    fullpath = os.path.join(dir, filename)
+    msglogger.info("Saving checkpoint to: %s" % fullpath)
     filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
+    fullpath_best = os.path.join(dir, filename_best)
     checkpoint = {}
     checkpoint['epoch'] = epoch
-    checkpoint['arch'] =  arch
+    checkpoint['arch'] = arch
     checkpoint['state_dict'] = model.state_dict()
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
@@ -56,10 +64,12 @@ def save_checkpoint(epoch, arch, model, optimizer, scheduler=None, best_top1=Non
         checkpoint['compression_sched'] = scheduler.state_dict()
     if hasattr(model, 'thinning_recipes'):
         checkpoint['thinning_recipes'] = model.thinning_recipes
+    if hasattr(model, 'quantizer_metadata'):
+        checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    torch.save(checkpoint, filename)
+    torch.save(checkpoint, fullpath)
     if is_best:
-        shutil.copyfile(filename, filename_best)
+        shutil.copyfile(fullpath, fullpath_best)
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None):
@@ -76,6 +86,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     if os.path.isfile(chkpt_file):
         msglogger.info("=> loading checkpoint %s", chkpt_file)
         checkpoint = torch.load(chkpt_file)
+        msglogger.info("Checkpoint keys:\n{}".format("\n\t".join(k for k in checkpoint.keys())))
         start_epoch = checkpoint['epoch'] + 1
         best_top1 = checkpoint.get('best_top1', None)
         if best_top1 is not None:
@@ -86,23 +97,28 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             compression_scheduler.load_state_dict(checkpoint['compression_sched'])
             msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
                            checkpoint['epoch'])
+        else:
+            msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
 
         if 'thinning_recipes' in checkpoint:
             if 'compression_sched' not in checkpoint:
-                raise KeyError("Found thinning_recipes key, but missing mandatoy key compression_sched")
+                raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
             msglogger.info("Loaded a thinning recipe from the checkpoint")
             # Cache the recipes in case we need them later
             model.thinning_recipes = checkpoint['thinning_recipes']
             distiller.execute_thinning_recipes_list(model,
                                               compression_scheduler.zeros_mask_dict,
                                               model.thinning_recipes)
-        else:
-            msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
-            msglogger.info("=> loaded checkpoint '%s' (epoch %d)",
-                           chkpt_file, checkpoint['epoch'])
+
+        if 'quantizer_metadata' in checkpoint:
+            msglogger.info('Loaded quantizer metadata from the checkpoint')
+            qmd = checkpoint['quantizer_metadata']
+            quantizer = qmd['type'](model, **qmd['params'])
+            quantizer.prepare_model()
+
+        msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, checkpoint['epoch'])
 
         model.load_state_dict(checkpoint['state_dict'])
         return model, compression_scheduler, start_epoch
     else:
-        msglogger.info("Error: no checkpoint found at %s", chkpt_file)
-        exit(1)
+        raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
