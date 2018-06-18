@@ -21,6 +21,7 @@ This implements the scheduling of the compression policies.
 from functools import partial
 import logging
 import torch
+from .quantization.quantizer import FP_BKP_PREFIX
 
 msglogger = logging.getLogger()
 
@@ -139,11 +140,11 @@ class CompressionScheduler(object):
             try:
                 self.zeros_mask_dict[name].apply_mask(param)
             except KeyError:
-                # Quantizers for training modify some model parameters by adding a 'float_' prefix
+                # Quantizers for training modify some model parameters by adding a prefix
                 # If this is the source of the error, workaround and move on
                 name_parts = name.split('.')
-                if name_parts[-1].startswith('float_'):
-                    name_parts[-1] = name_parts[-1].replace('float_', '', 1)
+                if name_parts[-1].startswith(FP_BKP_PREFIX):
+                    name_parts[-1] = name_parts[-1].replace(FP_BKP_PREFIX, '', 1)
                     name = '.'.join(name_parts)
                     self.zeros_mask_dict[name].apply_mask(param)
                 else:
@@ -183,7 +184,8 @@ class CompressionScheduler(object):
             exit(1)
 
         curr_model_parallel = isinstance(self.model, torch.nn.DataParallel)
-        loaded_model_parallel = state['parallel_model']
+        # Fallback to 'False' for old checkpoints that don't have this attribute
+        loaded_model_parallel = state.get('parallel_model', False)
         for name, mask in self.zeros_mask_dict.items():
             # DataParallel modules wrap the actual module with a module named "module"...
             if loaded_model_parallel and not curr_model_parallel:

@@ -25,6 +25,8 @@ msglogger = logging.getLogger()
 
 QBits = namedtuple('QBits', ['acts', 'wts'])
 
+FP_BKP_PREFIX = 'float_'
+
 
 def has_bias(module):
     return hasattr(module, 'bias') and module.bias is not None
@@ -35,7 +37,7 @@ def hack_float_backup_parameter(module, name):
         data = dict(module.named_parameters())[name].data
     except KeyError:
         raise ValueError('Module has no Parameter named ' + name)
-    module.register_parameter('float_' + name, nn.Parameter(data))
+    module.register_parameter(FP_BKP_PREFIX + name, nn.Parameter(data))
     module.__delattr__(name)
     module.register_buffer(name, torch.zeros_like(data))
 
@@ -50,7 +52,7 @@ class _ParamToQuant(object):
 
 class Quantizer(object):
     r"""
-    Base class for quantizers
+    Base class for quantizers.
 
     Args:
         model (torch.nn.Module): The model to be quantized
@@ -58,6 +60,15 @@ class Quantizer(object):
             Value of None means do not quantize.
         bits_overrides (dict): Dictionary mapping regular expressions of layer name patterns to dictionary with
             values for 'acts' and/or 'wts' to override the default values.
+        quantize_bias (bool): Flag indicating whether to quantize bias (w. same number of bits as weights) or not.
+        train_with_fp_copy (bool): If true, will modify layers with weights to keep both a quantized and
+            floating-point copy, such that the following flow occurs in each training iteration:
+            1. q_weights = quantize(fp_weights)
+            2. Forward through network using q_weights
+            3. In back-prop:
+                3.1 Gradients calculated with respect to q_weights
+                3.2 We also back-prop through the 'quantize' operation from step 1
+            4. Update fp_weights with gradients calculated in step 3.2
     """
     def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides={}, quantize_bias=False,
                  train_with_fp_copy=False):
@@ -139,17 +150,14 @@ class Quantizer(object):
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
                     hack_float_backup_parameter(module, param_name)
-                    fp_attr_name = 'float_' + param_name
+                    fp_attr_name = FP_BKP_PREFIX + param_name
                 self.params_to_quantize.append(_ParamToQuant(module, fp_attr_name, param_name, qbits.wts))
 
                 param_full_name = '.'.join([module_name, param_name])
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
 
-        msglogger.info('Quantized model:')
-        msglogger.info('')
-        msglogger.info(self.model)
-        msglogger.info('')
+        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_process_container(self, container, prefix=''):
         # Iterate through model, insert quantization functions as appropriate
@@ -174,6 +182,10 @@ class Quantizer(object):
                 self._pre_process_container(module, full_name + '.')
 
     def quantize_params(self):
+        """
+        Quantize all parameters using the parameters using self.param_quantization_fn (using the defined number
+        of bits for each parameter)
+        """
         for ptq in self.params_to_quantize:
             q_param = self.param_quantization_fn(ptq.module.__getattr__(ptq.fp_attr_name), ptq.num_bits)
             if self.train_with_fp_copy:

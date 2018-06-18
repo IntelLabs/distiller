@@ -47,6 +47,14 @@ class ClippedLinearQuantization(nn.Module):
 
 
 class WRPNQuantizer(Quantizer):
+    """
+    Quantizer using the WRPN quantization scheme, as defined in:
+    Mishra et al., WRPN: Wide Reduced-Precision Networks (https://arxiv.org/abs/1709.01134)
+
+    Notes:
+        1. This class does not take care of layer widening as described in the paper
+        2. The paper defines special handling for 1-bit weights which isn't supported here yet
+    """
     def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
         super(WRPNQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
                                             bits_overrides=bits_overrides, train_with_fp_copy=True)
@@ -69,6 +77,15 @@ class WRPNQuantizer(Quantizer):
 
 
 class DorefaQuantizer(Quantizer):
+    """
+    Quantizer using the DoReFa scheme, as defined in:
+    Zhou et al., DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients
+    (https://arxiv.org/abs/1606.06160)
+
+    Notes:
+        1. Gradients quantization not supported yet
+        2. The paper defines special handling for 1-bit weights which isn't supported here yet
+    """
     def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
         super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
                                               bits_overrides=bits_overrides, train_with_fp_copy=True)
