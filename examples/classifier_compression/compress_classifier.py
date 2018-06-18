@@ -111,7 +111,7 @@ parser.add_argument('--act-stats', dest='activation_stats', action='store_true',
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png', 'png_w_params']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
                     ' | '.join(SUMMARY_CHOICES))
@@ -193,7 +193,8 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
 
     # Create the model
-    is_parallel = args.summary != 'png' # For PNG summary, parallel graphs are illegible
+    png_summary = args.summary is not None and args.summary.startswith('png')
+    is_parallel = not png_summary   # For PNG summary, parallel graphs are illegible
     model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
 
     compression_scheduler = None
@@ -223,8 +224,8 @@ def main():
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
         which_summary = args.summary
-        if which_summary == 'png':
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+        if which_summary.startswith('png'):
+            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
         else:
             distiller.model_summary(model, optimizer, which_summary, args.dataset)
         exit()
