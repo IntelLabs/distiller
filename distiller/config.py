@@ -50,13 +50,12 @@ app_cfg_logger = logging.getLogger("app_cfg")
 
 
 def dict_config(model, optimizer, sched_dict):
-    app_cfg_logger.debug(json.dumps(sched_dict, indent=1))
+    app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
     schedule = distiller.CompressionScheduler(model)
 
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
-    lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
     quantizers = __factory('quantizers', model, sched_dict)
     if len(quantizers) > 1:
         print("\nError: Multiple Quantizers not supported")
@@ -64,6 +63,7 @@ def dict_config(model, optimizer, sched_dict):
     extensions = __factory('extensions', model, sched_dict)
 
     try:
+        lr_policies = []
         for policy_def in sched_dict['policies']:
             policy = None
             if 'pruner' in policy_def:
@@ -99,10 +99,10 @@ def dict_config(model, optimizer, sched_dict):
                     optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
             elif 'lr_scheduler' in policy_def:
-                instance_name, args = __policy_params(policy_def, 'lr_scheduler')
-                assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(instance_name)
-                lr_scheduler = lr_schedulers[instance_name]
-                policy = distiller.LRPolicy(lr_scheduler)
+                # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
+                # a quantization policy was initialized (if exists)
+                lr_policies.append(policy_def)
+                continue
 
             elif 'extension' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'extension')
@@ -114,12 +114,18 @@ def dict_config(model, optimizer, sched_dict):
                 print("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]" % policy_def)
                 exit(1)
 
-            if 'epochs' in policy_def:
-                schedule.add_policy(policy, epochs=policy_def['epochs'])
-            else:
-                schedule.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
-                                            ending_epoch=policy_def['ending_epoch'],
-                                            frequency=policy_def['frequency'])
+            add_policy_to_scheduler(policy, policy_def, schedule)
+
+        # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
+        lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
+        for policy_def in lr_policies:
+            instance_name, args = __policy_params(policy_def, 'lr_scheduler')
+            assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(
+                instance_name)
+            lr_scheduler = lr_schedulers[instance_name]
+            policy = distiller.LRPolicy(lr_scheduler)
+            add_policy_to_scheduler(policy, policy_def, schedule)
+
     except AssertionError:
         # propagate the assertion information
         raise
@@ -129,6 +135,16 @@ def dict_config(model, optimizer, sched_dict):
         exit(1)
 
     return schedule
+
+
+def add_policy_to_scheduler(policy, policy_def, schedule):
+    if 'epochs' in policy_def:
+        schedule.add_policy(policy, epochs=policy_def['epochs'])
+    else:
+        schedule.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
+                            ending_epoch=policy_def['ending_epoch'],
+                            frequency=policy_def['frequency'])
+
 
 def file_config(model, optimizer, filename):
     """Read the schedule from file"""
