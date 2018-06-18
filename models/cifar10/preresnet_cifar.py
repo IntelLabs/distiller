@@ -32,7 +32,9 @@ This ResNet also has layer gates, to be able to dynamically remove layers.
 import torch.nn as nn
 import math
 
-__all__ = ['preact_resnet20_cifar', 'preact_resnet32_cifar', 'preact_resnet44_cifar', 'preact_resnet56_cifar']
+__all__ = ['preact_resnet20_cifar', 'preact_resnet32_cifar', 'preact_resnet44_cifar', 'preact_resnet56_cifar',
+           'preact_resnet20_cifar_conv_ds', 'preact_resnet32_cifar_conv_ds', 'preact_resnet44_cifar_conv_ds',
+           'preact_resnet56_cifar_conv_ds']
 
 NUM_CLASSES = 10
 
@@ -60,11 +62,16 @@ class PreactBasicBlock(nn.Module):
         self.preact_downsample = preact_downsample
 
     def forward(self, x):
-        preact = self.pre_bn(x)
-        preact = self.pre_relu(preact)
+        need_preact = self.block_gates[0] or self.block_gates[1] or self.downsample and self.preact_downsample
+        if need_preact:
+            preact = self.pre_bn(x)
+            preact = self.pre_relu(preact)
+            out = preact
+        else:
+            preact = out = x
 
         if self.block_gates[0]:
-            out = self.conv1(preact)
+            out = self.conv1(out)
             out = self.bn(out)
             out = self.relu(out)
 
@@ -85,7 +92,7 @@ class PreactBasicBlock(nn.Module):
 
 
 class PreactResNetCifar(nn.Module):
-    def __init__(self, block, layers, num_classes=NUM_CLASSES, downsample_pool=False):  # TODO: downsample_pool=False
+    def __init__(self, block, layers, num_classes=NUM_CLASSES, conv_downsample=False):
         self.nlayers = 0
         # Each layer manages its own gates
         self.layer_gates = []
@@ -99,11 +106,11 @@ class PreactResNetCifar(nn.Module):
         super(PreactResNetCifar, self).__init__()
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         self.layer1 = self._make_layer(self.layer_gates[0], block, 16, layers[0],
-                                       downsample_pool=downsample_pool)
+                                       conv_downsample=conv_downsample)
         self.layer2 = self._make_layer(self.layer_gates[1], block, 32, layers[1], stride=2,
-                                       downsample_pool=downsample_pool)
+                                       conv_downsample=conv_downsample)
         self.layer3 = self._make_layer(self.layer_gates[2], block, 64, layers[2], stride=2,
-                                       downsample_pool=downsample_pool)
+                                       conv_downsample=conv_downsample)
         self.final_bn = nn.BatchNorm2d(64 * block.expansion)
         self.final_relu = nn.ReLU(inplace=True)
         self.avgpool = nn.AvgPool2d(8, stride=1)
@@ -117,22 +124,23 @@ class PreactResNetCifar(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, downsample_pool=False):
+    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, conv_downsample=False):
         downsample = None
         outplanes = planes * block.expansion
         if stride != 1 or self.inplanes != outplanes:
-            if downsample_pool:
+            if conv_downsample:
+                downsample = nn.Conv2d(self.inplanes, outplanes,
+                                       kernel_size=1, stride=stride, bias=False)
+            else:
+                # Identity downsample uses strided average pooling + padding instead of convolution
                 pad_amount = int(self.inplanes / 2)
                 downsample = nn.Sequential(
                     nn.AvgPool2d(2),
                     nn.ConstantPad3d((0, 0, 0, 0, pad_amount, pad_amount), 0)
                 )
-            else:
-                downsample = nn.Conv2d(self.inplanes, outplanes,
-                                       kernel_size=1, stride=stride, bias=False)
 
         layers = []
-        layers.append(block(layer_gates[0], self.inplanes, planes, stride, downsample, not downsample_pool))
+        layers.append(block(layer_gates[0], self.inplanes, planes, stride, downsample, conv_downsample))
         self.inplanes = outplanes
         for i in range(1, blocks):
             layers.append(block(layer_gates[i], self.inplanes, planes))
@@ -173,3 +181,28 @@ def preact_resnet44_cifar(**kwargs):
 def preact_resnet56_cifar(**kwargs):
     model = PreactResNetCifar(PreactBasicBlock, [9, 9, 9], **kwargs)
     return model
+
+
+def preact_resnet110_cifar(**kwargs):
+    model = PreactResNetCifar(PreactBasicBlock, [18, 18, 18], **kwargs)
+    return model
+
+
+def preact_resnet20_cifar_conv_ds(**kwargs):
+    return preact_resnet20_cifar(conv_downsample=True)
+
+
+def preact_resnet32_cifar_conv_ds(**kwargs):
+    return preact_resnet32_cifar(conv_downsample=True)
+
+
+def preact_resnet44_cifar_conv_ds(**kwargs):
+    return preact_resnet44_cifar(conv_downsample=True)
+
+
+def preact_resnet56_cifar_conv_ds(**kwargs):
+    return preact_resnet56_cifar(conv_downsample=True)
+
+
+def preact_resnet110_cifar_conv_ds(**kwargs):
+    return preact_resnet110_cifar(conv_downsample=True)
