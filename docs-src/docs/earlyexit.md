@@ -4,7 +4,7 @@ While Deep Neural Networks benefit from a large number of layers, it's often the
 ## Why Does Early Exit Work?
 Early Exit is a strategy with a straightforward and easy to understand concept Figure #fig(boundaries) shows a simple example in a 2-D feature space. While a deep network can representative a more complex and expressive boundary between classes (assuming we’re confident of avoiding over-fitting the data), it’s also clear that much of the data can be properly classified with even the simplest of classification boundaries.
 
-![Figure !fig(boundaries): Simple and more expressive classification boundaries](docs-src/docs/imgs/decision_boundary.png)
+![Figure !fig(boundaries): Simple and more expressive classification boundaries](/docs-src/docs/imgs/decision_boundary.png)
 
 Data points far from the boundary can be considered "easy to classify" and achieve a high degree of confidence quicker than do data points close to the boundary. In fact, we can think of the area between the outer straight lines as being the region that is "difficult to classify" and require the full expressiveness of the neural network to accurately classify it.
 

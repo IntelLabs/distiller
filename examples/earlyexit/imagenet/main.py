@@ -18,7 +18,7 @@ import torchvision.datasets as datasets
 import torch.nn.functional as F            # most non-linearities are here
 #import torchvision.models as models       # We need to import our own models with exits
 import models as models
-#use TensorBoard for output
+# use TensorBoard for output
 from tensorboardX import SummaryWriter
 writer = SummaryWriter('runs')
 

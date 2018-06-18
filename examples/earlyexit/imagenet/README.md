@@ -1,6 +1,6 @@
 # ImageNet training in PyTorch
 
-This implements training of popular model architectures, such as ResNet, AlexNet, and VGG on the ImageNet dataset.
+This implements training of popular model architectures, such as ResNet on the ImageNet dataset.
 
 Taken from https://github.com/pytorch/examples/tree/master/imagenet
 

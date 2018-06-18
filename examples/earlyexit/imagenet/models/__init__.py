@@ -1,3 +1,5 @@
+# We currently focus on Resnet, but Early Exit
+# is applicable to other topologies as well.
 #from .alexnet import *
 from .resnet import *
 #from .vgg import *
