@@ -80,6 +80,15 @@ import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
 msglogger = None
+
+
+def float_range(val_str):
+    val = float(val_str)
+    if val < 0 or val >= 1:
+        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
+    return val
+
+
 parser = argparse.ArgumentParser(description='Distiller image classification model compression')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
@@ -129,6 +138,8 @@ parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
+parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+                    help='Portion of training dataset to set aside for validation')
 
 
 def check_pytorch_version():
@@ -142,6 +153,7 @@ def check_pytorch_version():
               "  2. Install the new environment\n"
               "  3. Activate the new environment")
         exit(1)
+
 
 def main():
     global msglogger
@@ -237,7 +249,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.deterministic)
+        args.workers, args.validation_size, args.deterministic)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
