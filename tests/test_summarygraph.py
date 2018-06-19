@@ -33,12 +33,14 @@ fh = logging.FileHandler('test.log')
 logger = logging.getLogger()
 logger.addHandler(fh)
 
+
 def get_input(dataset):
     if dataset == 'imagenet':
         return torch.randn((1, 3, 224, 224), requires_grad=False)
     elif dataset == 'cifar10':
         return torch.randn((1, 3, 32, 32))
     return None
+
 
 def create_graph(dataset, arch):
     dummy_input = get_input(dataset)
@@ -48,9 +50,11 @@ def create_graph(dataset, arch):
     assert model is not None
     return SummaryGraph(model, dummy_input)
 
+
 def test_graph():
     g = create_graph('cifar10', 'resnet20_cifar')
     assert g is not None
+
 
 def test_connectivity():
     g = create_graph('cifar10', 'resnet20_cifar')
@@ -86,6 +90,7 @@ def test_connectivity():
     assert preds == ['0', '1']
     #logging.debug(preds)
 
+
 def test_layer_search():
     g = create_graph('cifar10', 'resnet20_cifar')
     assert g is not None
@@ -118,11 +123,13 @@ def test_layer_search():
     preds = g.predecessors_f('layer1.1.conv1', 'Conv', [], logging)
     assert preds == ['layer1.0.conv2', 'conv1']
 
+
 def normalize_layer_name(layer_name):
     start = layer_name.find('module.')
     if start != -1:
         layer_name = layer_name[:start] + layer_name[start + len('module.'):]
     return layer_name
+
 
 def test_vgg():
     g = create_graph('imagenet', 'vgg19')
@@ -131,12 +138,15 @@ def test_vgg():
     logging.debug(succs)
     succs = g.successors_f('features.34', 'Conv')
 
+
 def test_normalize_layer_name():
     assert "features.0", normalize_layer_name("features.module.0")
     assert "features.0", normalize_layer_name("module.features.0")
     assert "features.0", normalize_layer_name("features.0.module")
 
+
 def test_onnx_name_2_pytorch_name():
-    assert "layer3.0.relu1" == onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1")
-    assert "features.34" == onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]')
-    #assert "features.module.34" == onnx_name_2_pytorch_name('VGG/DataParallel[features]/Sequential/Conv2d[34]')
+    assert "layer3.0.relu1" == onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1", 'Relu')
+    assert "features.34" == onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]', 'Conv')
+    assert "Relu3" == onnx_name_2_pytorch_name('NameWithNoModule.3', 'Relu')
+    #assert "features.module.34" == onnx_name_2_pytorch_name('VGG/DataParallel[features]/Sequential/Conv2d[34]', 'Conv')
