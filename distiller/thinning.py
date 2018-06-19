@@ -225,14 +225,9 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
 
         num_channels = param.size(1)
         nonzero_channels = find_nonzero_channels(param, param_name)
-        num_nnz_channels = nonzero_channels.nelement()
-        if num_nnz_channels == 0:
-            raise ValueError("Trying to set zero channels for parameter %s is not allowed" % param_name)
+
         # If there are non-zero channels in this tensor then continue to next tensor
-<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
-=======
         num_nnz_channels = nonzero_channels.nelement()
->>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
         if num_channels <= num_nnz_channels:
             continue
 
@@ -256,10 +251,6 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
 
             # Now remove channels from the weights tensor of the successor conv
             append_param_directive(thinning_recipe, predecessor+'.weight', (0, indices))
-
-            if layers[predecessor].bias is not None:
-                # This convolution has bias coefficients
-                append_param_directive(thinning_recipe, predecessor+'.bias', (0, indices))
 
         # Now handle the BatchNormalization layer that follows the convolution
         bn_layers = sgraph.predecessors_f(normalize_module_name(layer_name), ['BatchNormalization'])
@@ -296,14 +287,9 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
         filter_view = param.view(param.size(0), -1)
         num_filters = filter_view.size()[0]
         nonzero_filters = torch.nonzero(filter_view.abs().sum(dim=1))
-        num_nnz_filters = nonzero_filters.nelement()
-        if num_nnz_filters == 0:
-            raise ValueError("Trying to set zero filters for parameter %s is not allowed" % param_name)
+
         # If there are non-zero filters in this tensor then continue to next tensor
-<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
-=======
         num_nnz_filters = nonzero_filters.nelement()
->>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
         if num_filters <= num_nnz_filters:
             msglogger.debug("SKipping {} shape={}".format(param_name_2_layer_name(param_name), param.shape))
             continue
@@ -359,12 +345,8 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             assert len(bn_layers) == 1
             # Thinning of the BN layer that follows the convolution
             bn_layer_name = denormalize_module_name(model, bn_layers[0])
-<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
             bn_thinning(thinning_recipe, layers, bn_layer_name,
                         len_thin_features=num_nnz_filters, thin_features=indices)
-=======
-            bn_thinning(thinning_recipe, layers, bn_layer_name, len_thin_features=num_nnz_filters, thin_features=indices)
->>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
     return thinning_recipe
 
 
@@ -466,9 +448,9 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                 dim_to_trim = val[0]
                 indices_to_select = val[1]
                 # Check if we're trying to trim a parameter that is already "thin"
-                if running.size(dim_to_trim) != indices_to_select.nelement():
+                if running.size(dim_to_trim) != len(indices_to_select):
                     msglogger.info("[thinning] {}: setting {} to {}".
-                                   format(layer_name, attr, indices_to_select.nelement()))
+                                   format(layer_name, attr, len(indices_to_select)))
                     setattr(layers[layer_name], attr,
                             torch.index_select(running, dim=dim_to_trim, index=indices_to_select))
             else:
