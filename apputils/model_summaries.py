@@ -30,8 +30,10 @@ from torch.autograd import Variable
 import torch.jit as jit
 import pandas as pd
 from tabulate import tabulate
+import pydot
 
-def onnx_name_2_pytorch_name(name):
+
+def onnx_name_2_pytorch_name(name, op_type):
     # Convert a layer's name from an ONNX name, to a PyTorch name
     # For example:
     #   ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1 ==> layer3.0.relu.1
@@ -45,11 +47,15 @@ def onnx_name_2_pytorch_name(name):
     name_parts = re.findall('\[.*?\]', name)
     name_parts = [part[1:-1] for part in name_parts]
 
-    new_name = '.'.join(name_parts) + instance
-    if new_name == '':
-        new_name = name
+    # If name doesn't have the pattern above, it probably means the op was called via
+    # some functional API and not via a module. Couple of examples:
+    #   x = x.view(...)
+    #   x = F.relu(x)
+    # In this case, to have a meaningful name, we use the op type
+    new_name = ('.'.join(name_parts) if len(name_parts) > 0 else op_type) + instance
 
     return new_name
+
 
 class SummaryGraph(object):
     """We use Pytorch's JIT tracer to run a forward pass and generate a trace graph, which
@@ -102,13 +108,18 @@ class SummaryGraph(object):
             for node in graph.nodes():
                 new_op = self.__create_op(node)
 
-                # in-place operators create very confusing graphs (Resnet, for example),
-                # so we "unroll" them
-                same = [op for op in self.ops.values() if op['orig-name'] == new_op['orig-name']]
+                # Operators with the same name create very confusing graphs (Resnet, for example),
+                # so we "unroll" them.
+                # Sometimes operations of different types have the same name, so we differentiate
+                # using both name and type
+                # (this happens, for example, when an operator is called via some functional API and
+                # not via a module)
+                same = [op for op in self.ops.values() if
+                        op['orig-name'] + op['type'] == new_op['orig-name'] + new_op['type']]
                 if len(same) > 0:
                     new_op['name'] += "." + str(len(same))
 
-                new_op['name'] = onnx_name_2_pytorch_name(new_op['name'])
+                new_op['name'] = onnx_name_2_pytorch_name(new_op['name'], new_op['type'])
                 assert len(new_op['name']) > 0
 
                 self.ops[new_op['name']] = new_op
@@ -137,21 +148,21 @@ class SummaryGraph(object):
         op['params'] = []
         return op
 
-
     def __add_input(self, op, n):
         param = self.__add_param(n)
-        if param is None: return
+        if param is None:
+            return
         if param['id'] not in op['inputs']:
             op['inputs'].append(param['id'])
 
     def __add_output(self, op, n):
         param = self.__add_param(n)
-        if param is None: return
+        if param is None:
+            return
         if param['id'] not in op['outputs']:
             op['outputs'].append(param['id'])
 
     def __add_param(self, n):
-        param = {}
         if n.uniqueName() not in self.params:
             param = self.__tensor_desc(n)
             self.params[n.uniqueName()] = param
@@ -168,7 +179,8 @@ class SummaryGraph(object):
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
         except:
-            return None
+            # Size not specified in type
+            tensor['shape'] = 0,
         return tensor
 
     def param_shape(self, param_id):
@@ -261,7 +273,6 @@ class SummaryGraph(object):
                 ret += self.predecessors(predecessor, depth-1, done_list) #, logging)
             return ret
 
-
     def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None):
         """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
         """
@@ -298,7 +309,6 @@ class SummaryGraph(object):
         for predecessor in preds:
             ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging)
         return ret
-
 
     def successors(self, node, depth, done_list=None):
         """Returns a list of <op>'s successors"""
@@ -370,6 +380,7 @@ class SummaryGraph(object):
             ret += self.successors_f(successor, successors_types, done_list, logging)
         return ret
 
+
 def attributes_summary(sgraph, ignore_attrs):
     """Generate a summary of a graph's attributes.
 
@@ -399,9 +410,11 @@ def attributes_summary(sgraph, ignore_attrs):
         df.loc[i] = [op['name'], op['type'], pretty_attrs(op['attrs'], ignore_attrs)]
     return df
 
+
 def attributes_summary_tbl(sgraph, ignore_attrs):
     df = attributes_summary(sgraph, ignore_attrs)
     return tabulate(df, headers='keys', tablefmt='psql')
+
 
 def connectivity_summary(sgraph):
     """Generate a summary of each node's connectivity.
@@ -414,6 +427,7 @@ def connectivity_summary(sgraph):
     for i, op in enumerate(sgraph.ops):
         df.loc[i] = [op['name'], op['type'], op['inputs'], op['outputs']]
     return df
+
 
 def connectivity_summary_verbose(sgraph):
     """Generate a summary of each node's connectivity, with details
@@ -444,6 +458,7 @@ def connectivity_summary_verbose(sgraph):
 
     return df
 
+
 def connectivity_tbl_summary(sgraph, verbose=False):
     if verbose:
         df = connectivity_summary_verbose(sgraph)
@@ -451,9 +466,6 @@ def connectivity_tbl_summary(sgraph, verbose=False):
         df = connectivity_summary(sgraph)
     return tabulate(df, headers='keys', tablefmt='psql')
 
-
-
-import pydot
 
 def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
     pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir='TB')
@@ -467,32 +479,32 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
                              label="\n".join(op_node)))
 
     for data_node in data_nodes:
-        #pydot_graph.add_node(pydot.Node(data_node))
         pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node)))
-
 
     node_style = {'shape': 'oval',
                   'fillcolor': 'gray',
                   'style': 'rounded, filled'}
 
     if param_nodes is not None:
-        for data_node in param_nodes:
-            pydot_graph.add_node(pydot.Node(data_node, **node_style))
+        for param_node in param_nodes:
+            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node)))
 
     for edge in edges:
         pydot_graph.add_edge(pydot.Edge(edge[0], edge[1]))
 
     return pydot_graph
 
-def draw_model_to_file(sgraph, png_fname):
+
+def draw_model_to_file(sgraph, png_fname, display_param_nodes=False):
     """Create a PNG file, containing a graphiz-dot graph of the netowrk represented
     by SummaryGraph 'sgraph'
     """
-    png = create_png(sgraph)
+    png = create_png(sgraph, display_param_nodes=display_param_nodes)
     with open(png_fname, 'wb') as fid:
         fid.write(png)
 
-def draw_img_classifier_to_file(model, png_fname, dataset):
+
+def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=False):
     try:
         if dataset == 'imagenet':
             dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
@@ -503,40 +515,41 @@ def draw_img_classifier_to_file(model, png_fname, dataset):
             return
 
         g = SummaryGraph(model, dummy_input)
-        draw_model_to_file(g, png_fname)
+        draw_model_to_file(g, png_fname, display_param_nodes)
         print("Network PNG image generation completed")
-    except TypeError as e:
-        print("An error has occured while generating the network PNG image.")
-        print("This feature is not supported on official PyTorch releases.")
-        print("Please check that you are using a valid PyTorch version.")
-        print("You are using pytorch version %s" %torch.__version__)
     except FileNotFoundError:
         print("An error has occured while generating the network PNG image.")
         print("Please check that you have graphviz installed.")
         print("\t$ sudo apt-get install graphviz")
+
 
 def create_png(sgraph, display_param_nodes=False):
     """Create a PNG object containing a graphiz-dot graph of the network,
     as represented by SummaryGraph 'sgraph'
     """
 
-    op_nodes = [op['name'] for op in sgraph.ops]
-    data_nodes = [(id,param.shape) for (id, param) in sgraph.params.items() if data_node_has_parent(sgraph, id)]
-    param_nodes = [id for id in sgraph.params.keys() if not data_node_has_parent(sgraph, id)]
+    op_nodes = [op['name'] for op in sgraph.ops.values()]
+    data_nodes = []
+    param_nodes = []
+    for id, param in sgraph.params.items():
+        n_data = (id, str(param['shape']))
+        if data_node_has_parent(sgraph, id):
+            data_nodes.append(n_data)
+        else:
+            param_nodes.append(n_data)
     edges = sgraph.edges
 
     if not display_param_nodes:
         # Use only the edges that don't have a parameter source
-        edges = [edge for edge in sgraph.edges if edge.src in (data_nodes+op_nodes)]
+        non_param_ids = op_nodes + [dn[0] for dn in data_nodes]
+        edges = [edge for edge in sgraph.edges if edge.src in non_param_ids]
         param_nodes = None
 
-    if False:
-        data_nodes = None
-
-    op_nodes = [(op['name'], op['type']) for op in sgraph.ops]
+    op_nodes = [(op['name'], op['type']) for op in sgraph.ops.values()]
     pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges)
     png = pydot_graph.create_png()
     return png
+
 
 def data_node_has_parent(g, id):
     for edge in g.edges:
