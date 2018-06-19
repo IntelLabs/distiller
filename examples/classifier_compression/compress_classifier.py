@@ -141,6 +141,7 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
+parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
 
 
 def check_pytorch_version():
@@ -229,6 +230,11 @@ def main():
                                 weight_decay=args.weight_decay)
     msglogger.info('Optimizer Type: %s', type(optimizer))
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
+
+    import ADC
+    if args.ADC:
+        ADC.do_adc(model, args.dataset, args.arch)
+        exit()
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
