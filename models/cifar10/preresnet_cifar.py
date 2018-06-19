@@ -33,8 +33,8 @@ import torch.nn as nn
 import math
 
 __all__ = ['preact_resnet20_cifar', 'preact_resnet32_cifar', 'preact_resnet44_cifar', 'preact_resnet56_cifar',
-           'preact_resnet20_cifar_conv_ds', 'preact_resnet32_cifar_conv_ds', 'preact_resnet44_cifar_conv_ds',
-           'preact_resnet56_cifar_conv_ds']
+           'preact_resnet110_cifar', 'preact_resnet20_cifar_conv_ds', 'preact_resnet32_cifar_conv_ds',
+           'preact_resnet44_cifar_conv_ds', 'preact_resnet56_cifar_conv_ds', 'preact_resnet110_cifar_conv_ds']
 
 NUM_CLASSES = 10
 

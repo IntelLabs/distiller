@@ -1,8 +1,8 @@
 quantizers:
-  wrpn_quantizer:
-    class: WRPNQuantizer
+  dorefa_quantizer:
+    class: DorefaQuantizer
     bits_activations: 8
-    bits_weights: 4
+    bits_weights: 3
     bits_overrides:
       conv1:
         wts:
@@ -25,7 +25,7 @@ lr_schedulers:
 
 policies:
     - quantizer:
-        instance_name: wrpn_quantizer
+        instance_name: dorefa_quantizer
       starting_epoch: 0
       ending_epoch: 200
       frequency: 1
