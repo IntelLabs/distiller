@@ -229,6 +229,10 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
         if num_nnz_channels == 0:
             raise ValueError("Trying to set zero channels for parameter %s is not allowed" % param_name)
         # If there are non-zero channels in this tensor then continue to next tensor
+<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
+=======
+        num_nnz_channels = nonzero_channels.nelement()
+>>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
         if num_channels <= num_nnz_channels:
             continue
 
@@ -296,6 +300,10 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
         if num_nnz_filters == 0:
             raise ValueError("Trying to set zero filters for parameter %s is not allowed" % param_name)
         # If there are non-zero filters in this tensor then continue to next tensor
+<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
+=======
+        num_nnz_filters = nonzero_filters.nelement()
+>>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
         if num_filters <= num_nnz_filters:
             msglogger.debug("SKipping {} shape={}".format(param_name_2_layer_name(param_name), param.shape))
             continue
@@ -351,8 +359,12 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             assert len(bn_layers) == 1
             # Thinning of the BN layer that follows the convolution
             bn_layer_name = denormalize_module_name(model, bn_layers[0])
+<<<<<<< bbbe249f8512d67387fee7dd077d5a59d12cda2f
             bn_thinning(thinning_recipe, layers, bn_layer_name,
                         len_thin_features=num_nnz_filters, thin_features=indices)
+=======
+            bn_thinning(thinning_recipe, layers, bn_layer_name, len_thin_features=num_nnz_filters, thin_features=indices)
+>>>>>>> Thinning bug fix: handle zero-sized 'indices' tensor
     return thinning_recipe
 
 
