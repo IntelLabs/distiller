@@ -75,9 +75,8 @@ def model_summary(model, what, dataset=None):
 
 
 def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2, 4]):
-
     df = pd.DataFrame(columns=['Name', 'Shape', 'NNZ (dense)', 'NNZ (sparse)',
-                               'Cols (%)','Rows (%)', 'Ch (%)', '2D (%)', '3D (%)',
+                               'Cols (%)', 'Rows (%)', 'Ch (%)', '2D (%)', '3D (%)',
                                'Fine (%)', 'Std', 'Mean', 'Abs-Mean'])
     pd.set_option('precision', 2)
     params_size = 0
