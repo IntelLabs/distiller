@@ -108,7 +108,6 @@ def test_prune_all_filters(parallel):
 
 def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
     """Test L1 ranking and pruning of filters.
-
     First we rank and prune the filters of a Convolutional layer using
     a L1RankedStructureParameterPruner.  Then we physically remove the
     filters from the model (via "thining" process).
@@ -218,7 +217,6 @@ def run_forward_backward(model, optimizer, dummy_input):
 
 def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     """Test removal of arbitrary channels.
-
     The test receives a specification of channels to remove.
     Based on this specification, the channels are pruned and then physically
     removed from the model (via a "thinning" process).
