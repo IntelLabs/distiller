@@ -53,14 +53,22 @@ def do_adc(model, dataset, arch, data_loader, validate_fn):
     """Random ADC agent"""
     env = CNNEnvironment(model, dataset, arch, data_loader, validate_fn)
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
     for ep in range(10):
         observation = env.reset()
         for t in range(100):
             env.render(0, 0)
             msglogger.info("[episode={}:{}] observation = {}".format(ep, t, observation))
+=======
+    for i_episode in range(10):
+        observation = env.reset()
+        for t in range(19):
+            msglogger.info("{}".format(observation))
+            env._render(0,0)
+>>>>>>> ADC: adjust code to the newest Caoch code base
             # take a random action
             action = env.action_space.sample()
-            observation, reward, done, info = env.step(action)
+            observation, reward, done, info = env._step(action)
             if done:
                 msglogger.info("Episode finished after {} timesteps".format(t+1))
                 break
@@ -70,6 +78,23 @@ class RandomADCActionSpace(object):
     def sample(self):
         return random.uniform(0, 1)
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
+=======
+
+class CNNEnvironment(gym.Env):
+    metadata = {'render.modes': ['human']}
+    STATE_EMBEDDING_LEN = 10
+
+    def __init__(self, model, dataset, arch):
+        self.idx_cntr = 0
+        self.action_space = RandomADCActionSpace()
+        self.dataset = dataset
+        self.arch = arch
+        self.model = model
+        self.conv_layers, self.total_macs = self.__collect_conv_details()
+        msglogger.info("Model %s has %d Convolution layers", arch, len(self.conv_layers))
+        msglogger.info("\tTotal MACs: %s" % pretty_int(self.total_macs))
+>>>>>>> ADC: adjust code to the newest Caoch code base
 
 def collect_conv_details(model, dataset):
     if dataset == 'imagenet':
@@ -79,6 +104,7 @@ def collect_conv_details(model, dataset):
     else:
         raise ValueError("dataset %s is not supported" % dataset)
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
     g = SummaryGraph(model, dummy_input)
     conv_layers = OrderedDict()
     total_macs = 0
@@ -88,6 +114,22 @@ def collect_conv_details(model, dataset):
             conv.t = len(conv_layers)
             conv.k = m.kernel_size[0]
             conv.stride = m.stride
+=======
+        # Gym
+        # spaces documentation: https://gym.openai.com/docs/
+        self.action_space = spaces.Box(0, 1, shape=(1,))
+        self.observation_space = spaces.Box(0, 1, shape=(self.STATE_EMBEDDING_LEN,))
+        # Box(low=np.array([-1.0,-2.0]), high=np.array([2.0,4.0]))
+
+
+    def __collect_conv_details(self):
+        if self.dataset == 'imagenet':
+            dummy_input = torch.randn(1, 3, 224, 224)
+        elif self.dataset == 'cifar10':
+            dummy_input = torch.randn(1, 3, 32, 32)
+        else:
+            raise ValueError("dataset %s is not supported" % dataset)
+>>>>>>> ADC: adjust code to the newest Caoch code base
 
             # Use the SummaryGraph to obtain some other details of the models
             conv_op = g.find_op(normalize_module_name(name))
@@ -111,6 +153,7 @@ class CNNEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
     STATE_EMBEDDING_LEN = 11
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
     def __init__(self, model, dataset, arch, data_loader, validate_fn):
         self.action_space = RandomADCActionSpace()
         self.dataset = dataset
@@ -118,6 +161,11 @@ class CNNEnvironment(gym.Env):
         self.data_loader = data_loader
         self.validate_fn = validate_fn
         self.orig_model = model
+=======
+    def _reset(self):
+        self.idx_cntr = 0
+        return self._get_obs()
+>>>>>>> ADC: adjust code to the newest Caoch code base
 
         self.conv_layers, self.total_macs = collect_conv_details(model, dataset)
         self.reset(init_only=True)
@@ -155,6 +203,7 @@ class CNNEnvironment(gym.Env):
     def num_layers(self):
         return len(self.conv_layers)
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
     def current_layer(self):
         try:
             return self.conv_layers[self.current_layer_id]
@@ -219,16 +268,52 @@ class CNNEnvironment(gym.Env):
         else:
             observation = self._get_obs(next_layer_macs)
             reward = 0
+=======
+
+    def _render(self, mode, close):
+        if self.idx_cntr == 0:
+            msglogger.info("+" + "-" * 20 + "+")
+            msglogger.info("Starting a new episode")
+            msglogger.info("+" + "-" * 20 + "+")
+
+        pylogger = distiller.data_loggers.PythonLogger(msglogger)
+        distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
+
+
+    def _step(self, action):
+        # Take a step
+        self.remove_channels(self.idx_cntr, action)
+        self.idx_cntr = (self.idx_cntr + 1) % self.num_layers()
+        observation = self._get_obs()
+        reward = 0
+        done = False
+        info = None
+        return observation, reward, done, info
+>>>>>>> ADC: adjust code to the newest Caoch code base
 
         self.prev_action = action.item()
         info = {}
         return observation, reward, self.episode_is_done(), info
 
+<<<<<<< 56889bf69968a07cf5f8156e1f93ca8db1a6685d
     def _get_obs(self, macs):
         """Produce a state embedding (i.e. an observation)"""
 
         layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, layer.name)
+=======
+    def _get_obs(self):
+        """Produce a state embedding"""
+        layer = self.conv_layers[self.idx_cntr]
+        conv_module = distiller.model_find_module(self.model, layer.name)
+        layer.macs = 0
+        layer.reduced = 0
+        layer.rest = 0
+        obs = (layer.t, conv_module.out_channels, conv_module.in_channels, layer.h, layer.w, layer.stride, layer.k,
+               layer.macs, layer.reduced, layer.rest)
+        assert len(obs) == self.STATE_EMBEDDING_LEN
+        return obs
+>>>>>>> ADC: adjust code to the newest Caoch code base
 
         obs = (layer.t, conv_module.out_channels, conv_module.in_channels,
                layer.ifm_h, layer.ifm_w, layer.stride, layer.k,
