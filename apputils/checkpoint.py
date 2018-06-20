@@ -46,6 +46,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     msglogger.info("Saving checkpoint")
     if not os.path.isdir(dir):
         msglogger.info("Error: Directory to save checkpoint doesn't exist - {0}".format(os.path.abspath(dir)))
+        exit(1)
     filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
     fullpath = os.path.join(dir, filename)
     filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
@@ -94,10 +95,12 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             compression_scheduler.load_state_dict(checkpoint['compression_sched'])
             msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
                            checkpoint['epoch'])
+        else:
+            msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
 
         if 'thinning_recipes' in checkpoint:
             if 'compression_sched' not in checkpoint:
-                raise KeyError("Found thinning_recipes key, but missing mandatoy key compression_sched")
+                raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
             msglogger.info("Loaded a thinning recipe from the checkpoint")
             # Cache the recipes in case we need them later
             model.thinning_recipes = checkpoint['thinning_recipes']
@@ -110,10 +113,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             qmd = checkpoint['quantizer_metadata']
             quantizer = qmd['type'](model, **qmd['params'])
             quantizer.prepare_model()
-        else:
-            msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
-            msglogger.info("=> loaded checkpoint '%s' (epoch %d)",
-                           chkpt_file, checkpoint['epoch'])
+
+        msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, checkpoint['epoch'])
 
         model.load_state_dict(checkpoint['state_dict'])
         return model, compression_scheduler, start_epoch
