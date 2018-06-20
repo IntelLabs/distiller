@@ -1,23 +1,21 @@
 quantizers:
-  wrpn_quantizer:
-    class: WRPNQuantizer
-#  dorefa_quantizer:
-#    class: DorefaQuantizer
+  dorefa_quantizer:
+    class: DorefaQuantizer
     bits_activations: 8
-    bits_weights: 4
+    bits_weights: 3
     bits_overrides:
       features.0:
-        wts:
-        acts:
+        wts: null
+        acts: null
       features.1:
-        wts:
-        acts:
+        wts: null
+        acts: null
       classifier.5:
-        wts:
-        acts:
+        wts: null
+        acts: null
       classifier.6:
-        wts:
-        acts:
+        wts: null
+        acts: null
 
 lr_schedulers:
   training_lr:
@@ -27,8 +25,7 @@ lr_schedulers:
 
 policies:
     - quantizer:
-        instance_name: wrpn_quantizer
-#        instance_name: dorefa_quantizer
+        instance_name: dorefa_quantizer
       starting_epoch: 0
       ending_epoch: 200
       frequency: 1

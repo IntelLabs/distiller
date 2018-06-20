@@ -5,17 +5,17 @@ quantizers:
     bits_weights: 4
     bits_overrides:
       conv1:
-        wts:
-        acts:
+        wts: null
+        acts: null
       layer1.0.pre_relu:
-        wts:
-        acts:
+        wts: null
+        acts: null
       final_relu:
-        wts:
-        acts:
+        wts: null
+        acts: null
       fc:
-        wts:
-        acts:
+        wts: null
+        acts: null
 
 lr_schedulers:
   training_lr:

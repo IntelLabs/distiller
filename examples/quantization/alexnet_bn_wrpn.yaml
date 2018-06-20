@@ -1,31 +1,31 @@
 quantizers:
-  dorefa_quantizer:
-    class: DorefaQuantizer
+  wrpn_quantizer:
+    class: WRPNQuantizer
     bits_activations: 8
-    bits_weights: 3
+    bits_weights: 4
     bits_overrides:
-      conv1:
+      features.0:
         wts: null
         acts: null
-      layer1.0.pre_relu:
+      features.1:
         wts: null
         acts: null
-      final_relu:
+      classifier.5:
         wts: null
         acts: null
-      fc:
+      classifier.6:
         wts: null
         acts: null
 
 lr_schedulers:
   training_lr:
-    class: MultiStepMultiGammaLR
-    milestones: [80, 120, 160]
-    gammas: [0.1, 0.1, 0.2]
+    class: MultiStepLR
+    milestones: [60, 75]
+    gamma: 0.2
 
 policies:
     - quantizer:
-        instance_name: dorefa_quantizer
+        instance_name: wrpn_quantizer
       starting_epoch: 0
       ending_epoch: 200
       frequency: 1
@@ -33,5 +33,5 @@ policies:
     - lr_scheduler:
         instance_name: training_lr
       starting_epoch: 0
-      ending_epoch: 161
+      ending_epoch: 200
       frequency: 1
