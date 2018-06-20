@@ -1,6 +1,8 @@
 import random
 import logging
 import torch
+import gym
+from gym import spaces
 import distiller
 from apputils import SummaryGraph
 from collections import OrderedDict
@@ -35,14 +37,14 @@ def do_adc(model, dataset, arch):
     """Random ADC agent"""
     env = CNNEnvironment(model, dataset, arch)
 
-    for i_episode in range(8):
+    for i_episode in range(10):
         observation = env.reset()
-        for t in range(2):
+        for t in range(19):
             msglogger.info("{}".format(observation))
-            env.render()
+            env._render(0,0)
             # take a random action
             action = env.action_space.sample()
-            observation, reward, done, info = env.step(action)
+            observation, reward, done, info = env._step(action)
             if done:
                 print("Episode finished after {} timesteps".format(t+1))
                 break
@@ -52,7 +54,11 @@ class RandomADCActionSpace(object):
     def sample(self):
         return random.uniform(0, 1)
 
-class CNNEnvironment(object):
+
+class CNNEnvironment(gym.Env):
+    metadata = {'render.modes': ['human']}
+    STATE_EMBEDDING_LEN = 10
+
     def __init__(self, model, dataset, arch):
         self.idx_cntr = 0
         self.action_space = RandomADCActionSpace()
@@ -64,6 +70,13 @@ class CNNEnvironment(object):
         msglogger.info("\tTotal MACs: %s" % pretty_int(self.total_macs))
 
         self.zeros_mask_dict = create_model_masks(self.model)
+
+        # Gym
+        # spaces documentation: https://gym.openai.com/docs/
+        self.action_space = spaces.Box(0, 1, shape=(1,))
+        self.observation_space = spaces.Box(0, 1, shape=(self.STATE_EMBEDDING_LEN,))
+        # Box(low=np.array([-1.0,-2.0]), high=np.array([2.0,4.0]))
+
 
     def __collect_conv_details(self):
         if self.dataset == 'imagenet':
@@ -99,41 +112,47 @@ class CNNEnvironment(object):
         return conv_layers, total_macs
 
 
-    def reset(self):
+    def _reset(self):
         self.idx_cntr = 0
-        return self.__state_embedding(self.idx_cntr)
+        return self._get_obs()
 
 
     def num_layers(self):
         return len(self.conv_layers)
 
 
-    def render(self):
+    def _render(self, mode, close):
+        if self.idx_cntr == 0:
+            msglogger.info("+" + "-" * 20 + "+")
+            msglogger.info("Starting a new episode")
+            msglogger.info("+" + "-" * 20 + "+")
+
         pylogger = distiller.data_loggers.PythonLogger(msglogger)
         distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
 
 
-    def step(self, action):
+    def _step(self, action):
         # Take a step
         self.remove_channels(self.idx_cntr, action)
         self.idx_cntr = (self.idx_cntr + 1) % self.num_layers()
-        observation = self.__state_embedding(self.idx_cntr)
+        observation = self._get_obs()
         reward = 0
         done = False
         info = None
         return observation, reward, done, info
 
 
-    def __state_embedding(self, idx):
-        if idx not in range(self.num_layers()):
-            raise ValueError("idx=%d is not in correct range (0-%d)" %(idx, self.num_layers()))
-        layer = self.conv_layers[idx]
+    def _get_obs(self):
+        """Produce a state embedding"""
+        layer = self.conv_layers[self.idx_cntr]
         conv_module = distiller.model_find_module(self.model, layer.name)
         layer.macs = 0
         layer.reduced = 0
         layer.rest = 0
-        return (layer.t, conv_module.out_channels, conv_module.in_channels, layer.h, layer.w, layer.stride, layer.k,
-                layer.macs, layer.reduced, layer.rest)
+        obs = (layer.t, conv_module.out_channels, conv_module.in_channels, layer.h, layer.w, layer.stride, layer.k,
+               layer.macs, layer.reduced, layer.rest)
+        assert len(obs) == self.STATE_EMBEDDING_LEN
+        return obs
 
 
     def remove_channels(self, idx, fraction_to_prune):
