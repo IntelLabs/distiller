@@ -184,8 +184,9 @@ class CompressionScheduler(object):
             exit(1)
 
         curr_model_parallel = isinstance(self.model, torch.nn.DataParallel)
-        # Fallback to 'False' for old checkpoints that don't have this attribute
-        loaded_model_parallel = state.get('parallel_model', False)
+        # Fallback to 'True' for old checkpoints that don't have this attribute, since parallel=True is the
+        # default for create_model
+        loaded_model_parallel = state.get('parallel_model', True)
         for name, mask in self.zeros_mask_dict.items():
             # DataParallel modules wrap the actual module with a module named "module"...
             if loaded_model_parallel and not curr_model_parallel:

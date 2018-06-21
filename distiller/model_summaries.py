@@ -42,11 +42,10 @@ def model_summary(model, what, dataset=None):
         csvlogger = CsvLogger('weights.csv')
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
-        # Set batch size > 1 so BatchNorm doesn't crash
         if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(2, 3, 224, 224))
+            dummy_input = Variable(torch.randn(1, 3, 224, 224))
         elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(2, 3, 32, 32))
+            dummy_input = Variable(torch.randn(1, 3, 32, 32))
         else:
             print("Unsupported dataset (%s) - aborting compute operation" % dataset)
             return

@@ -33,6 +33,7 @@ When a YAML file is loaded, its dictionary is extracted and passed to ```dictCon
 """
 
 import logging
+from collections import OrderedDict
 import yaml
 import json
 import inspect
@@ -43,7 +44,6 @@ from distiller.pruning import *
 from distiller.regularization import L1Regularizer, GroupLassoRegularizer
 from distiller.learning_rate import *
 from distiller.quantization import *
-from distiller.utils import yaml_ordered_load
 
 msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
@@ -204,3 +204,22 @@ def __policy_params(policy_def, type):
     name = policy_def[type]['instance_name']
     args = policy_def[type].get('args', None)
     return name, args
+
+
+def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
+    """
+    Function to load YAML file using an OrderedDict
+    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
+    """
+    class OrderedLoader(Loader):
+        pass
+
+    def construct_mapping(loader, node):
+        loader.flatten_mapping(node)
+        return object_pairs_hook(loader.construct_pairs(node))
+
+    OrderedLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_mapping)
+
+    return yaml.load(stream, OrderedLoader)
