@@ -35,6 +35,7 @@ from collections import namedtuple
 import torch
 from .policy import ScheduledTrainingPolicy
 import distiller
+from distiller import normalize_module_name, denormalize_module_name
 from apputils import SummaryGraph
 from models import ALL_MODEL_NAMES, create_model
 msglogger = logging.getLogger()
@@ -69,6 +70,7 @@ __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
            'find_nonzero_channels',
            'execute_thinning_recipes_list']
 
+
 def create_graph(dataset, arch):
     if dataset == 'imagenet':
         dummy_input = torch.randn((1, 3, 224, 224), requires_grad=False)
@@ -79,23 +81,6 @@ def create_graph(dataset, arch):
     model = create_model(False, dataset, arch, parallel=False)
     assert model is not None
     return SummaryGraph(model, dummy_input)
-
-
-def normalize_layer_name(layer_name):
-    start = layer_name.find('module.')
-    normalized_layer_name = layer_name
-    if start != -1:
-        normalized_layer_name = layer_name[:start] + layer_name[start + len('module.'):]
-    return normalized_layer_name
-
-
-def denormalize_layer_name(model, normalized_name):
-    """Convert back from the normalized form of the layer name, to PyTorch's name
-    which contains "artifacts" if DataParallel is used.
-    """
-    ugly = [mod_name for mod_name, _ in model.named_modules() if normalize_layer_name(mod_name) == normalized_name]
-    assert len(ugly) == 1
-    return ugly[0]
 
 
 def param_name_2_layer_name(param_name):
@@ -262,9 +247,9 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
         append_param_directive(thinning_recipe, param_name, (1, indices))
 
         # Find all instances of Convolution layers that immediately preceed this layer
-        predecessors = sgraph.predecessors_f(normalize_layer_name(layer_name), ['Conv'])
+        predecessors = sgraph.predecessors_f(normalize_module_name(layer_name), ['Conv'])
         # Convert the layers names to PyTorch's convoluted naming scheme (when DataParallel is used)
-        predecessors = [denormalize_layer_name(model, predecessor) for predecessor in predecessors]
+        predecessors = [denormalize_module_name(model, predecessor) for predecessor in predecessors]
         for predecessor in predecessors:
             # For each of the convolutional layers that preceed, we have to reduce the number of output channels.
             append_module_directive(thinning_recipe, predecessor, key='out_channels', val=len(nonzero_channels))
@@ -273,11 +258,11 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
             append_param_directive(thinning_recipe, predecessor+'.weight', (0, indices))
 
         # Now handle the BatchNormalization layer that follows the convolution
-        bn_layers = sgraph.predecessors_f(normalize_layer_name(layer_name), ['BatchNormalization'])
+        bn_layers = sgraph.predecessors_f(normalize_module_name(layer_name), ['BatchNormalization'])
         if len(bn_layers) > 0:
             assert len(bn_layers) == 1
             # Thinning of the BN layer that follows the convolution
-            bn_layer_name = denormalize_layer_name(model, bn_layers[0])
+            bn_layer_name = denormalize_module_name(model, bn_layers[0])
             bn_thinning(thinning_recipe, layers, bn_layer_name, len_thin_features=len(nonzero_channels), thin_features=indices)
 
     return thinning_recipe
@@ -331,9 +316,9 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             append_param_directive(thinning_recipe, layer_name+'.bias', (0, indices))
 
         # Find all instances of Convolution or FC (GEMM) layers that immediately follow this layer
-        successors = sgraph.successors_f(normalize_layer_name(layer_name), ['Conv', 'Gemm'])
+        successors = sgraph.successors_f(normalize_module_name(layer_name), ['Conv', 'Gemm'])
         # Convert the layers names to PyTorch's convoluted naming scheme (when DataParallel is used)
-        successors = [denormalize_layer_name(model, successor) for successor in successors]
+        successors = [denormalize_module_name(model, successor) for successor in successors]
         for successor in successors:
 
             if isinstance(layers[successor], torch.nn.modules.Conv2d):
@@ -360,11 +345,11 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
                 append_param_directive(thinning_recipe, successor+'.weight', (1, indices, view_4D, view_2D))
 
         # Now handle the BatchNormalization layer that follows the convolution
-        bn_layers = sgraph.successors_f(normalize_layer_name(layer_name), ['BatchNormalization'])
+        bn_layers = sgraph.successors_f(normalize_module_name(layer_name), ['BatchNormalization'])
         if len(bn_layers) > 0:
             assert len(bn_layers) == 1
             # Thinning of the BN layer that follows the convolution
-            bn_layer_name = denormalize_layer_name(model, bn_layers[0])
+            bn_layer_name = denormalize_module_name(model, bn_layers[0])
             bn_thinning(thinning_recipe, layers, bn_layer_name, len_thin_features=len(nonzero_filters), thin_features=indices)
     return thinning_recipe
 
@@ -412,12 +397,14 @@ class FilterRemover(ScheduledTrainingPolicy):
         # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
         self.done = False
 
+
 def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
     # Invoke this function when you want to use a list of thinning recipes to convert a programmed model
     # to a thinned model. For example, this is invoked when loading a model from a checkpoint.
     for i, recipe in enumerate(recipe_list):
         msglogger.info("recipe %d:" % i)
         execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=True)
+
 
 def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=False):
     """Apply a thinning recipe to a model.

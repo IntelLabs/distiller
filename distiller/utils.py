@@ -24,13 +24,16 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
+
 def to_np(var):
     return var.data.cpu().numpy()
+
 
 def to_var(tensor, cuda=True):
     if cuda and torch.cuda.is_available():
         tensor = tensor.cuda()
     return Variable(tensor)
+
 
 def size2str(torch_size):
     if isinstance(torch_size, torch.Size):
@@ -41,14 +44,44 @@ def size2str(torch_size):
         return size_to_str(torch_size.data.size())
     raise TypeError
 
+
 def size_to_str(torch_size):
     """Convert a pytorch Size object to a string"""
     assert isinstance(torch_size, torch.Size)
     return '('+(', ').join(['%d' % v for v in torch_size])+')'
 
+
+def normalize_module_name(layer_name):
+    """Normalize a module's name.
+
+    PyTorch let's you parallelize the computation of a model, by wrapping a model with a
+    DataParallel module.  Unfortunately, this changs the fully-qualified name of a module,
+    even though the actual functionality of the module doesn't change.
+    Many time, when we search for modules by name, we are indifferent to the DataParallel
+    module and want to use the same module name whether the module is parallel or not.
+    We call this module name normalization, and this is implemented here.
+    """
+    if layer_name.find("module.") >= 0:
+        return layer_name.replace("module.", "")
+    return layer_name.replace(".module", "")
+
+
+def denormalize_module_name(parallel_model, normalized_name):
+    """Convert back from the normalized form of the layer name, to PyTorch's name
+    which contains "artifacts" if DataParallel is used.
+    """
+    fully_qualified_name = [mod_name for mod_name, _ in parallel_model.named_modules() if
+                            normalize_module_name(mod_name) == normalized_name]
+    if len(fully_qualified_name) > 0:
+        return fully_qualified_name[-1]
+    else:
+        return ""   # Did not find a module with the name <normalized_name>
+
+
 def volume(tensor):
     """return the volume of a pytorch tensor"""
     return np.prod(tensor.shape)
+
 
 def density(tensor):
     """Computes the density of a tensor.
@@ -84,6 +117,7 @@ def sparsity(tensor):
     """
     return 1.0 - density(tensor)
 
+
 def sparsity_3D(tensor):
     """Filter-wise sparsity for 4D tensors"""
     if tensor.dim() != 4:
@@ -93,9 +127,11 @@ def sparsity_3D(tensor):
     nonzero_filters = len(torch.nonzero(view_3d.abs().sum(dim=1)))
     return 1 - nonzero_filters/num_filters
 
+
 def density_3D(tensor):
     """Filter-wise density for 4D tensors"""
     return 1 - sparsity_3D(tensor)
+
 
 def sparsity_2D(tensor):
     """Create a list of sparsity levels for each channel in the tensor 't'
@@ -128,9 +164,11 @@ def sparsity_2D(tensor):
     nonzero_structs = len(torch.nonzero(view_2d.abs().sum(dim=1)))
     return 1 - nonzero_structs/num_structs
 
+
 def density_2D(tensor):
     """Kernel-wise sparsity for 4D tensors"""
     return 1 - sparsity_2D(tensor)
+
 
 def sparsity_ch(tensor):
     """Channel-wise sparsity for 4D tensors"""
@@ -150,9 +188,11 @@ def sparsity_ch(tensor):
     nonzero_channels = len(torch.nonzero(k_sums_mat.abs().sum(dim=1)))
     return 1 - nonzero_channels/num_kernels_per_filter
 
+
 def density_ch(tensor):
     """Channel-wise density for 4D tensors"""
     return 1 - sparsity_ch(tensor)
+
 
 def sparsity_cols(tensor):
     """Column-wise sparsity for 2D tensors"""
@@ -163,9 +203,11 @@ def sparsity_cols(tensor):
     nonzero_cols = len(torch.nonzero(tensor.abs().sum(dim=0)))
     return 1 - nonzero_cols/num_cols
 
+
 def density_cols(tensor):
     """Column-wise density for 2D tensors"""
     return 1 - sparsity_cols(tensor)
+
 
 def sparsity_rows(tensor):
     """Row-wise sparsity for 2D matrices"""
@@ -176,9 +218,11 @@ def sparsity_rows(tensor):
     nonzero_rows = len(torch.nonzero(tensor.abs().sum(dim=1)))
     return 1 - nonzero_rows/num_rows
 
+
 def density_rows(tensor):
     """Row-wise density for 2D tensors"""
     return 1 - sparsity_rows(tensor)
+
 
 def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total_steps, log_freq, loggers):
     """Log information about the training progress, and the distribution of the weight tensors.

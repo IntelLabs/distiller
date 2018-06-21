@@ -26,6 +26,7 @@ import distiller
 import pytest
 from models import ALL_MODEL_NAMES, create_model
 from apputils import SummaryGraph, onnx_name_2_pytorch_name
+from distiller import normalize_module_name, denormalize_module_name
 
 # Logging configuration
 logging.basicConfig(level=logging.DEBUG)
@@ -124,13 +125,6 @@ def test_layer_search():
     assert preds == ['layer1.0.conv2', 'conv1']
 
 
-def normalize_layer_name(layer_name):
-    start = layer_name.find('module.')
-    if start != -1:
-        layer_name = layer_name[:start] + layer_name[start + len('module.'):]
-    return layer_name
-
-
 def test_vgg():
     g = create_graph('imagenet', 'vgg19')
     assert g is not None
@@ -139,10 +133,29 @@ def test_vgg():
     succs = g.successors_f('features.34', 'Conv')
 
 
-def test_normalize_layer_name():
-    assert "features.0", normalize_layer_name("features.module.0")
-    assert "features.0", normalize_layer_name("module.features.0")
-    assert "features.0", normalize_layer_name("features.0.module")
+def name_test(dataset, arch):
+    model = create_model(False, dataset, arch, parallel=False)
+    modelp = create_model(False, dataset, arch, parallel=True)
+    assert model is not None and modelp is not None
+
+    mod_names   = [mod_name for mod_name, _ in model.named_modules()]
+    mod_names_p = [mod_name for mod_name, _ in modelp.named_modules()]
+    assert mod_names is not None and mod_names_p is not None
+    assert len(mod_names)+1 == len(mod_names_p)
+
+    for i in range(len(mod_names)-1):
+        assert mod_names[i+1] == normalize_module_name(mod_names_p[i+2])
+        logging.debug("{} {} {}".format(mod_names_p[i+2], mod_names[i+1], normalize_module_name(mod_names_p[i+2])))
+        assert mod_names_p[i+2] == denormalize_module_name(modelp, mod_names[i+1])
+
+
+def test_normalize_module_name():
+    assert "features.0" == normalize_module_name("features.module.0")
+    assert "features.0" == normalize_module_name("module.features.0")
+    assert "features" == normalize_module_name("features.module")
+    name_test('imagenet', 'vgg19')
+    name_test('cifar10', 'resnet20_cifar')
+    name_test('imagenet', 'alexnet')
 
 
 def test_onnx_name_2_pytorch_name():
