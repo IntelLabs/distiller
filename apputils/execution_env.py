@@ -58,7 +58,6 @@ def log_execution_env_state(app_args, gitroot='.'):
 
         if repo.is_dirty():
             logger.debug("Git is dirty")
-            #repo.index.diff(None)
         try:
             branch_name = repo.active_branch.name
         except TypeError:
@@ -80,7 +79,7 @@ def log_execution_env_state(app_args, gitroot='.'):
     logger.debug("App args: %s", app_args)
 
 
-def config_pylogger(log_cfg_file, experiment_name):
+def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
     """Configure the Python logger.
 
     For each execution of the application, we'd like to create a unique log directory.
@@ -90,11 +89,11 @@ def config_pylogger(log_cfg_file, experiment_name):
     TensorBoard, for example.
     """
     timestr = time.strftime("%Y.%m.%d-%H%M%S")
-    filename = timestr if experiment_name is None else experiment_name + '___' + timestr
-    logdir =  os.path.join('./logs', filename)
+    exp_full_name = timestr if experiment_name is None else experiment_name + '___' + timestr
+    logdir = os.path.join(output_dir, exp_full_name)
     if not os.path.exists(logdir):
         os.makedirs(logdir)
-    log_filename = os.path.join(logdir, filename + '.log')
+    log_filename = os.path.join(logdir, exp_full_name + '.log')
     if os.path.isfile(log_cfg_file):
         logging.config.fileConfig(log_cfg_file, defaults={'logfilename': log_filename})
     msglogger = logging.getLogger()

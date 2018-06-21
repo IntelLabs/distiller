@@ -31,12 +31,12 @@ import torch.optim
 import distiller
 msglogger = logging.getLogger()
 
-__all__ = ['model_summary', 'optimizer_summary',                        \
-           'weights_sparsity_summary', 'weights_sparsity_tbl_summary',  \
+__all__ = ['model_summary',
+           'weights_sparsity_summary', 'weights_sparsity_tbl_summary',
            'model_performance_summary', 'model_performance_tbl_summary']
 
 from .data_loggers import PythonLogger, CsvLogger
-def model_summary(model, optimizer, what, dataset=None):
+def model_summary(model, what, dataset=None):
     if what == 'sparsity':
         pylogger = PythonLogger(msglogger)
         csvlogger = CsvLogger('weights.csv')
@@ -55,8 +55,6 @@ def model_summary(model, optimizer, what, dataset=None):
         print(t)
         print("Total MACs: " + "{:,}".format(total_macs))
 
-    elif what == 'optimizer':
-        optimizer_summary(optimizer)
     elif what == 'model':
         # print the simple form of the model
         print(model)
@@ -71,21 +69,6 @@ def model_summary(model, optimizer, what, dataset=None):
             if len(module._modules) == 0:
                 nodes.append([name, module.__class__.__name__])
         print(tabulate(nodes, headers=['Name', 'Type']))
-
-def optimizer_summary(optimizer):
-    assert isinstance(optimizer, torch.optim.SGD)
-    lr = optimizer.param_groups[0]['lr']
-    weight_decay = optimizer.param_groups[0]['weight_decay']
-    momentum = optimizer.param_groups[0]['momentum']
-    dampening = optimizer.param_groups[0]['dampening']
-    nesterov = optimizer.param_groups[0]['nesterov']
-
-    msglogger.info('Optimizer:\n'
-                   '\tmomentum={}'
-                   '\tL2={}'
-                   '\tLR={}'
-                   '\tdampening={}'
-                   '\tnesterov={}'.format(momentum, weight_decay, lr, dampening, nesterov))
 
 
 def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4]):
