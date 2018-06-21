@@ -9,3 +9,4 @@ env/
 .env/
 .idea/
 logs/
+.DS_Store

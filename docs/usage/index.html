@@ -75,7 +75,7 @@
         
             <li><a class="toctree-l3" href="#performing-pruning-sensitivity-analysis">Performing pruning sensitivity analysis</a></li>
         
-            <li><a class="toctree-l3" href="#quantization">Quantization</a></li>
+            <li><a class="toctree-l3" href="#direct-quantization-without-training">"Direct" Quantization Without Training</a></li>
         
             <li><a class="toctree-l3" href="#summaries">Summaries</a></li>
         
@@ -287,22 +287,27 @@ These example schedules (YAML) files, contain the command line that is used in o
 <li>ResNet34 (ImageNet)</li>
 <li>Filter-wise pruning sensitivity-analysis:</li>
 <li>ResNet20 (CIFAR10)</li>
-<li>ResNet56 (CIFAR10)</li>
+<li>ResNet56 (CIFAR10)
+<br><br></li>
 </ul>
 </li>
-<li>
-<p><strong>examples/sensitivity-pruning</strong>:</p>
-<ul>
+<li><strong>examples/sensitivity-pruning</strong>:<ul>
 <li>AlexNet sensitivity pruning with Iterative Pruning</li>
-<li>AlexNet sensitivity pruning with One-Shot Pruning</li>
+<li>AlexNet sensitivity pruning with One-Shot Pruning
+<br><br></li>
 </ul>
 </li>
-<li>
-<p><strong>examples/ssl</strong>:</p>
-<ul>
+<li><strong>examples/ssl</strong>:<ul>
 <li>ResNet20 baseline training (CIFAR10 dataset)</li>
 <li>Structured Sparsity Learning (SSL) with layer removal on ResNet20</li>
-<li>SSL with channels removal on ResNet20</li>
+<li>SSL with channels removal on ResNet20
+<br><br></li>
+</ul>
+</li>
+<li><strong>examples/quantization</strong>:<ul>
+<li>AlexNet w. Batch-Norm (base FP32 + DoReFa)</li>
+<li>Pre-activation ResNet20 on CIFAR10 (base FP32 + DoReFa)</li>
+<li>Pre-activation ResNet18 on ImageNEt (base FP32 + DoReFa)</li>
 </ul>
 </li>
 </ul>
@@ -319,8 +324,8 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 
 <p>The <code>sense</code> command-line argument can be set to either <code>element</code> or <code>filter</code>, depending on the type of analysis you want done.<br></p>
 <p>There is also a <a href="http://localhost:8888/notebooks/sensitivity_analysis.ipynb">Jupyter notebook</a> with example invocations, outputs and explanations.</p>
-<h2 id="quantization">Quantization</h2>
-<p>Currently Distiller support 8-bit quantization only (quantization of lower precision data types will follow shortly) which does not require training, so any model (whether pruned or not) can be quantized.<br>
+<h2 id="direct-quantization-without-training">"Direct" Quantization Without Training</h2>
+<p>Distiller supports 8-bit quantization of trained modules without re-training (using <a href="../algo_quantization/index.html#symmetric-linear-quantization">Symmetric Linear Quantization</a>). So, any model (whether pruned or not) can be quantized.<br />
 Use the <code>--quantize</code> command-line flag, together with <code>--evaluate</code> to evaluate the accuracy of your model after quantization.  The following example qunatizes ResNet18 for ImageNet:</p>
 <pre><code>$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize --evaluate
 </code></pre>
