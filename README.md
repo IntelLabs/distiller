@@ -64,7 +64,10 @@ Highlighted features:
   - One-shot and iterative pruning (and fine-tuning) are supported.
   - Automatic gradual pruning schedule is supported for element-wise pruning, and can be extended to support structures.
   - The compression schedule is expressed in a YAML file so that a single file captures the details of experiments.  This [dependency injection](https://en.wikipedia.org/wiki/Dependency_injection) design decouples the Distiller scheduler and library from future extensions of algorithms.
-* 8-bit quantization is implemented and lower-precision quantization methods will be added soon.
+* Quantization:
+  - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
+  - Support for training with quantization in the loop
+  - One-shot 8-bit quantization of trained full-precision models
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
