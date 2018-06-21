@@ -33,27 +33,37 @@ When a YAML file is loaded, its dictionary is extracted and passed to ```dictCon
 """
 
 import logging
+from collections import OrderedDict
 import yaml
 import json
 import inspect
-import distiller
 from torch.optim.lr_scheduler import *
 import distiller
 from distiller.thinning import *
 from distiller.pruning import *
 from distiller.regularization import L1Regularizer, GroupLassoRegularizer
 from distiller.learning_rate import *
-logger = logging.getLogger("app_cfg")
+from distiller.quantization import *
 
-def dictConfig(model, optimizer, schedule, sched_dict, logger):
-    logger.debug(json.dumps(sched_dict, indent=1))
+msglogger = logging.getLogger()
+app_cfg_logger = logging.getLogger("app_cfg")
+
+
+def dict_config(model, optimizer, sched_dict):
+    app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
+
+    schedule = distiller.CompressionScheduler(model)
 
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
-    lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
+    quantizers = __factory('quantizers', model, sched_dict)
+    if len(quantizers) > 1:
+        print("\nError: Multiple Quantizers not supported")
+        exit(1)
     extensions = __factory('extensions', model, sched_dict)
 
     try:
+        lr_policies = []
         for policy_def in sched_dict['policies']:
             policy = None
             if 'pruner' in policy_def:
@@ -76,11 +86,23 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
                 else:
                     policy = distiller.RegularizationPolicy(regularizer, **args)
 
+            elif 'quantizer' in policy_def:
+                instance_name, args = __policy_params(policy_def, 'quantizer')
+                assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
+                quantizer = quantizers[instance_name]
+                policy = distiller.QuantizationPolicy(quantizer)
+
+                # Quantizers for training modify the models parameters, need to update the optimizer
+                if quantizer.train_with_fp_copy:
+                    optimizer_type = type(optimizer)
+                    new_optimizer = optimizer_type(model.parameters(), **optimizer.defaults)
+                    optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+
             elif 'lr_scheduler' in policy_def:
-                instance_name, args = __policy_params(policy_def, 'lr_scheduler')
-                assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(instance_name)
-                lr_scheduler = lr_schedulers[instance_name]
-                policy = distiller.LRPolicy(lr_scheduler)
+                # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
+                # a quantization policy was initialized (if exists)
+                lr_policies.append(policy_def)
+                continue
 
             elif 'extension' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'extension')
@@ -92,12 +114,18 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
                 print("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]" % policy_def)
                 exit(1)
 
-            if 'epochs' in policy_def:
-                schedule.add_policy(policy, epochs=policy_def['epochs'])
-            else:
-                schedule.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
-                                            ending_epoch=policy_def['ending_epoch'],
-                                            frequency=policy_def['frequency'])
+            add_policy_to_scheduler(policy, policy_def, schedule)
+
+        # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
+        lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
+        for policy_def in lr_policies:
+            instance_name, args = __policy_params(policy_def, 'lr_scheduler')
+            assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(
+                instance_name)
+            lr_scheduler = lr_schedulers[instance_name]
+            policy = distiller.LRPolicy(lr_scheduler)
+            add_policy_to_scheduler(policy, policy_def, schedule)
+
     except AssertionError:
         # propagate the assertion information
         raise
@@ -108,12 +136,23 @@ def dictConfig(model, optimizer, schedule, sched_dict, logger):
 
     return schedule
 
-def fileConfig(model, optimizer, schedule, filename, logger):
+
+def add_policy_to_scheduler(policy, policy_def, schedule):
+    if 'epochs' in policy_def:
+        schedule.add_policy(policy, epochs=policy_def['epochs'])
+    else:
+        schedule.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
+                            ending_epoch=policy_def['ending_epoch'],
+                            frequency=policy_def['frequency'])
+
+
+def file_config(model, optimizer, filename):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
+        msglogger.info('Reading compression schedule from: %s', filename)
         try:
-            sched_dict = yaml.load(stream)
-            dictConfig(model, optimizer, schedule, sched_dict, logger)
+            sched_dict = yaml_ordered_load(stream)
+            return dict_config(model, optimizer, sched_dict)
         except yaml.YAMLError as exc:
             print("\nFATAL Parsing error while parsing the pruning schedule configuration file %s" % filename)
             exit(1)
@@ -165,3 +204,22 @@ def __policy_params(policy_def, type):
     name = policy_def[type]['instance_name']
     args = policy_def[type].get('args', None)
     return name, args
+
+
+def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
+    """
+    Function to load YAML file using an OrderedDict
+    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
+    """
+    class OrderedLoader(Loader):
+        pass
+
+    def construct_mapping(loader, node):
+        loader.flatten_mapping(node)
+        return object_pairs_hook(loader.construct_pairs(node))
+
+    OrderedLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_mapping)
+
+    return yaml.load(stream, OrderedLoader)

@@ -16,7 +16,7 @@
 
 from .utils import *
 from .thresholding import GroupThresholdMixin, threshold_mask
-from .config import fileConfig, dictConfig
+from .config import file_config, dict_config
 from .model_summaries import *
 from .scheduler import *
 from .sensitivity import *
@@ -25,7 +25,7 @@ from .policy import *
 from .thinning import *
 
 #del utils
-del dictConfig
+del dict_config
 del thinning
 #del model_summaries
 #del scheduler

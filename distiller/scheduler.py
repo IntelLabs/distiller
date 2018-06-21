@@ -21,6 +21,7 @@ This implements the scheduling of the compression policies.
 from functools import partial
 import logging
 import torch
+from .quantization.quantizer import FP_BKP_PREFIX
 
 msglogger = logging.getLogger()
 
@@ -127,7 +128,6 @@ class CompressionScheduler(object):
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict)
 
- 
     def on_epoch_end(self, epoch):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
@@ -135,10 +135,20 @@ class CompressionScheduler(object):
                 meta['current_epoch'] = epoch
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
-
     def apply_mask(self):
         for name, param in self.model.named_parameters():
-            self.zeros_mask_dict[name].apply_mask(param)
+            try:
+                self.zeros_mask_dict[name].apply_mask(param)
+            except KeyError:
+                # Quantizers for training modify some model parameters by adding a prefix
+                # If this is the source of the error, workaround and move on
+                name_parts = name.split('.')
+                if name_parts[-1].startswith(FP_BKP_PREFIX):
+                    name_parts[-1] = name_parts[-1].replace(FP_BKP_PREFIX, , 1)
+                    name = '.'.join(name_parts)
+                    self.zeros_mask_dict[name].apply_mask(param)
+                else:
+                    raise
 
 
     def state_dict(self):
@@ -149,9 +159,9 @@ class CompressionScheduler(object):
         masks = {}
         for name, masker in self.zeros_mask_dict.items():
             masks[name] = masker.mask
-        state = { 'masks_dict' : masks }
+        state = {'masks_dict': masks,
+                 'parallel_model': isinstance(self.model, torch.nn.DataParallel)}
         return state
-
 
     def load_state_dict(self, state):
         """Loads the scheduler state.
@@ -173,6 +183,17 @@ class CompressionScheduler(object):
                 print("\t\t" + k)
             exit(1)
 
+        curr_model_parallel = isinstance(self.model, torch.nn.DataParallel)
+        # Fallback to 'True' for old checkpoints that don't have this attribute, since parallel=True is the
+        # default for create_model
+        loaded_model_parallel = state.get('parallel_model', True)
         for name, mask in self.zeros_mask_dict.items():
+            # DataParallel modules wrap the actual module with a module named "module"...
+            if loaded_model_parallel and not curr_model_parallel:
+                load_name = 'module.' + name
+            elif curr_model_parallel and not loaded_model_parallel:
+                load_name = name.replace('module.', , 1)
+            else:
+                load_name = name
             masker = self.zeros_mask_dict[name]
-            masker.mask = loaded_masks[name]
+            masker.mask = loaded_masks[load_name]

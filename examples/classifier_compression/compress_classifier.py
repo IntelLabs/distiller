@@ -80,6 +80,15 @@ import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
 msglogger = None
+
+
+def float_range(val_str):
+    val = float(val_str)
+    if val < 0 or val >= 1:
+        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
+    return val
+
+
 parser = argparse.ArgumentParser(description='Distiller image classification model compression')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
@@ -111,7 +120,7 @@ parser.add_argument('--act-stats', dest='activation_stats', action='store_true',
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png', 'png_w_params']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
                     ' | '.join(SUMMARY_CHOICES))
@@ -128,6 +137,9 @@ parser.add_argument('--quantize', action='store_true',
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
+parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+                    help='Portion of training dataset to set aside for validation')
 
 
 def check_pytorch_version():
@@ -142,11 +154,14 @@ def check_pytorch_version():
               "  3. Activate the new environment")
         exit(1)
 
+
 def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -194,7 +209,7 @@ def main():
 
     # Create the model
     png_summary = args.summary is not None and args.summary.startswith('png')
-    is_parallel = not png_summary   # For PNG summary, parallel graphs are illegible
+    is_parallel = not png_summary and args.summary != 'compute' # For PNG summary, parallel graphs are illegible
     model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
 
     compression_scheduler = None
@@ -208,18 +223,17 @@ def main():
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
 
-        if 'resnet' in args.arch and 'cifar' in args.arch:
+        if 'resnet' in args.arch and 'preact' not in args.arch and 'cifar' in args.arch:
             distiller.resnet_cifar_remove_layers(model)
             #model = distiller.resnet_cifar_remove_channels(model, compression_scheduler.zeros_mask_dict)
 
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    msglogger.info("Optimizer (%s): momentum=%s decay=%s", type(optimizer),
-                   args.momentum, args.weight_decay)
-
+    msglogger.info('Optimizer Type: %s', type(optimizer))
+    msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -227,7 +241,7 @@ def main():
         if which_summary.startswith('png'):
             apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
         else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
+            distiller.model_summary(model, which_summary, args.dataset)
         exit()
 
     # Load the datasets: the dataset to load is inferred from the model name passed
@@ -235,7 +249,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.deterministic)
+        args.workers, args.validation_size, args.deterministic)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -276,17 +290,15 @@ def main():
         top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
         if args.quantize:
             checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
-                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name)
+            apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                     dir=msglogger.logdir)
         exit()
 
     if args.compress:
-        # The main use-case for this sample application is CNN compression.  Compression
+        # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        source = args.compress
-        msglogger.info("Compression schedule (source=%s)", source)
-        compression_scheduler = distiller.CompressionScheduler(model)
-        distiller.config.fileConfig(model, optimizer, compression_scheduler, args.compress, msglogger)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress)
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -317,7 +329,8 @@ def main():
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best, args.name)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
+                                 args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], args.print_freq)
@@ -353,7 +366,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         input_var = torch.autograd.Variable(inputs)
         target_var = torch.autograd.Variable(target)
 
-        # Execute the forard phase, compute the output and measure loss
+        # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch)
         output = model(input_var)

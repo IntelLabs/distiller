@@ -314,8 +314,7 @@ compression_scheduler = None
 if args.compress:
     # Create a CompressionScheduler and configure it from a YAML schedule file
     source = args.compress
-    compression_scheduler = distiller.CompressionScheduler(model)
-    distiller.config.fileConfig(model, None, compression_scheduler, args.compress, msglogger)
+    compression_scheduler = distiller.config.file_config(model, None, args.compress)
 
 optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                  momentum=args.momentum,

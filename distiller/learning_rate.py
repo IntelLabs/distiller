@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+from bisect import bisect_right
 from torch.optim.lr_scheduler import _LRScheduler
 
 
@@ -37,3 +38,21 @@ class PolynomialLR(_LRScheduler):
         # base_lr * (1 - iter/max_iter) ^ (power)
         return [base_lr * (1 - self.last_epoch / self.T_max) ** self.power
                 for base_lr in self.base_lrs]
+
+
+class MultiStepMultiGammaLR(_LRScheduler):
+    def __init__(self, optimizer, milestones, gammas, last_epoch=-1):
+        if not list(milestones) == sorted(milestones):
+            raise ValueError('Milestones should be a list of'
+                             ' increasing integers. Got {}', milestones)
+
+        self.milestones = milestones
+        self.multiplicative_gammas = [1]
+        for idx, gamma in enumerate(gammas):
+            self.multiplicative_gammas.append(gamma * self.multiplicative_gammas[idx])
+
+        super(MultiStepMultiGammaLR, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        idx = bisect_right(self.milestones, self.last_epoch)
+        return [base_lr * self.multiplicative_gammas[idx] for base_lr in self.base_lrs]

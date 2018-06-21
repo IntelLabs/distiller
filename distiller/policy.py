@@ -20,10 +20,12 @@
 - RegularizationPolicy: regulization scheduling
 - LRPolicy: learning-rate decay scheduling
 """
+import torch
+
 import logging
 msglogger = logging.getLogger()
 
-__all__ = ['PruningPolicy', 'RegularizationPolicy', 'LRPolicy', 'ScheduledTrainingPolicy']
+__all__ = ['PruningPolicy', 'RegularizationPolicy', 'QuantizationPolicy', 'LRPolicy', 'ScheduledTrainingPolicy']
 
 class ScheduledTrainingPolicy(object):
     """ Base class for all scheduled training policies.
@@ -130,3 +132,16 @@ class LRPolicy(ScheduledTrainingPolicy):
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
         self.lr_scheduler.step()
+
+
+class QuantizationPolicy(ScheduledTrainingPolicy):
+    def __init__(self, quantizer):
+        super(QuantizationPolicy, self).__init__()
+        self.quantizer = quantizer
+        self.quantizer.prepare_model()
+        self.quantizer.quantize_params()
+
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+        # After parameters update, quantize the parameters again
+        # (Doing this here ensures the model parameters are quantized at training completion (and at validation time)
+        self.quantizer.quantize_params()
