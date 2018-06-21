@@ -30,8 +30,9 @@ agent_params.output_filter = MujocoOutputFilter()
 #      Gym                   #
 ##############################
 env_params = GymEnvironmentParameters()
-env_params.level = '/home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
-#env_params.seed = 1
+#env_params.level = '/home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
+env_params.level = '../distiller/examples/automated_deep_compression/gym_env/distiller_adc/distiller_adc.py:AutomatedDeepCompression'
+
 
 vis_params = VisualizationParameters()
 
