@@ -1,17 +1,16 @@
 # Compression scheduler
-In iterative pruning, we create some kind of pruning regimen that specifies how to prune, and what to prune at every stage of the pruning and training stages. This motivated the design of ```CompressionScheduler```: it needed to be part of the training loop, and to be able to make and implement pruning, regularization and (later) quantization decisions.  We wanted to be able to change the particulars of the compression schedule, w/o touching the code, and settled on using YAML as a container for this specification.  We found that when we make many experiments on the same code base, it is easier to maintain all of these experiments if we decouple the differences from the code-base.  Therefore, we added to the scheduler support for learning-rate decay scheduling because, again, we wanted the freedom to change the LR-decay policy without changing code.  
+In iterative pruning, we create some kind of pruning regimen that specifies how to prune, and what to prune at every stage of the pruning and training stages. This motivated the design of ```CompressionScheduler```: it needed to be part of the training loop, and to be able to make and implement pruning, regularization and quantization decisions.  We wanted to be able to change the particulars of the compression schedule, w/o touching the code, and settled on using YAML as a container for this specification.  We found that when we make many experiments on the same code base, it is easier to maintain all of these experiments if we decouple the differences from the code-base.  Therefore, we added to the scheduler support for learning-rate decay scheduling because, again, we wanted the freedom to change the LR-decay policy without changing code.  
 
 ## High level overview
-Let's briefly discuss the main mechanisms and abstractions: A schedule specification is composed of a list of sections defining instances of Pruners, Regularizers, LR-scheduler and Policies.
+Let's briefly discuss the main mechanisms and abstractions: A schedule specification is composed of a list of sections defining instances of Pruners, Regularizers, Quantizers, LR-scheduler and Policies.
 
-  -  Pruners and Regularizers are very similar: they implement either a Pruning algorithm or a Regularization algorithm.  
+  - Pruners, Regularizers and Quantizers are very similar: They implement either a Pruning/Regularization/Quantization algorithm, respectively. 
   - An LR-scheduler specifies the LR-decay algorithm.  
 
 These define the **what** part of the schedule.  
 
-The Policies define the **when** part of the schedule: at which epoch to start applying the Pruner/Regularizer/LR-decay, the epoch to end, and how often to invoke the policy (frequency of application).  A policy also defines the instance of Pruner/Regularizer/LR-decay it is managing.
-<br>
-The CompressionScheduler is configured from a YAML file or from a dictionary, but you can also manually create Policies, Pruners and Regularizers from code.
+The Policies define the **when** part of the schedule: at which epoch to start applying the Pruner/Regularizer/Quantizer/LR-decay, the epoch to end, and how often to invoke the policy (frequency of application).  A policy also defines the instance of Pruner/Regularizer/Quantizer/LR-decay it is managing.  
+The CompressionScheduler is configured from a YAML file or from a dictionary, but you can also manually create Policies, Pruners, Regularizers and Quantizers from code.
 
 ## Syntax through example
 We'll use ```alexnet.schedule_agp.yaml``` to explain some of the YAML syntax for configuring Sensitivity Pruning of Alexnet.
@@ -53,9 +52,9 @@ There is only one version of the YAML syntax, and the version number is not veri
 ```
 version: 1
 ```
-In the ```pruners``` section, we define the instances of pruners we want the scheduler to instantiate and use.<br>
-We define a single pruner instance, named ```my_pruner``` of algorithm ```SensitivityPruner```.  We will refer to this instance in the ```Policies``` section.<br>
-Then we list the sensitivity multipliers, \\(s\\), of each of the weight tensors.<br>
+In the ```pruners``` section, we define the instances of pruners we want the scheduler to instantiate and use.  
+We define a single pruner instance, named ```my_pruner```, of algorithm ```SensitivityPruner```.  We will refer to this instance in the ```Policies``` section.  
+Then we list the sensitivity multipliers, \\(s\\), of each of the weight tensors.  
 You may list as many Pruners as you want in this section, as long as each has a unique name.  You can several types of pruners in one schedule.
 
 ```
@@ -73,7 +72,7 @@ pruners:
       'classifier.6.weight': 0.6
 ```
 
-Next, we want to specify the learning-rate decay scheduling in the ```lr_schedulers``` section.  We assign a name to this instance: ```pruning_lr```.  As in the ```pruners``` section, you may use any name, as long as all LR-schedulers have a unique name.  At the moment, only one instance of LR-scheduler is allowed.  You can use any LR-scheduler class that ```torch.optim.lr_scheduler``` supports and pass their arguments.  The keyword arguments (kwargs) are passed directly to the constructor of the subclasses of [_LRScheduler](http://pytorch.org/docs/master/_modules/torch/optim/lr_scheduler.html), so that as new LR-schedulers are added to ```torch.optim.lr_scheduler```, they can be used without changing the application code.
+Next, we want to specify the learning-rate decay scheduling in the ```lr_schedulers``` section.  We assign a name to this instance: ```pruning_lr```.  As in the ```pruners``` section, you may use any name, as long as all LR-schedulers have a unique name.  At the moment, only one instance of LR-scheduler is allowed.  The LR-scheduler must be a subclass of PyTorch's [\_LRScheduler](http://pytorch.org/docs/master/_modules/torch/optim/lr_scheduler.html).  You can use any of the schedulers defined in ```torch.optim.lr_scheduler``` (see [here](https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate)).  In addition, we've implemented some additional schedulers in Distiller (see [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/learning_rate.py)). The keyword arguments (kwargs) are passed directly to the LR-scheduler's constructor, so that as new LR-schedulers are added to ```torch.optim.lr_scheduler```, they can be used without changing the application code.
 
 ```
 lr_schedulers:
@@ -82,7 +81,7 @@ lr_schedulers:
      gamma: 0.9
 ```   
 
-Finally, we define the ```policies``` section which defines the actual scheduling.  A ```Policy``` manages an instance of a ```Pruner```, ```Regularizer```, or ```LRSchedule```, by naming the instance.  In the example below, a ```PruningPolicy``` uses the pruner instance named ```my_pruner```: it activates it at a frequency of 2 epochs (i.e. every other epoch), starting at epoch 0, and ending at epoch 38.  
+Finally, we define the ```policies``` section which defines the actual scheduling.  A ```Policy``` manages an instance of a ```Pruner```, ```Regularizer```, `Quantizer`, or ```LRScheduler```, by naming the instance.  In the example below, a ```PruningPolicy``` uses the pruner instance named ```my_pruner```: it activates it at a frequency of 2 epochs (i.e. every other epoch), starting at epoch 0, and ending at epoch 38.  
 ```
 policies:
   - pruner:
@@ -237,4 +236,44 @@ policies:
     ending_epoch: 200
     frequency: 1
 
+```
+
+## Quantization
+
+Similarly to pruners and regularizers, specifying a quantizer in the scheduler YAML follows the constructor arguments of the `Quantizer` class (see details [here](design.md#quantization)).
+Let's see an example:
+
+```
+quantizers:
+  dorefa_quantizer:
+    class: DorefaQuantizer
+    bits_activations: 8
+    bits_weights: 4
+    bits_overrides:
+      conv1:
+        wts: null
+        acts: null
+      relu1:
+        wts: null
+        acts: null
+      final_relu:
+        wts: null
+        acts: null
+      fc:
+        wts: null
+        acts: null
+```
+
+- The specific quantization method we're instantiating here is `DorefaQuantizer`.
+- Then we define the default bit-widths for activations and weights, in this case 8 and 4-bits, respectively. 
+- Then, we define the `bits_overrides` mapping. In this case, we choose not to quantize the first and last layer of the model. In the case of `DorefaQuantizer`, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters `conv1`, the first activation layer `relu1`, the last activation layer `final_relu` and the last layer with parameters `fc`.
+- Specifying `null` means "do not quantize".
+- Note that for quantizers, we reference names of modules, not names of parameters as we do for pruners and regularizers.
+- We can also reference **groups of layers** in the `bits_overrides` mapping. This is done using regular expressions. Suppose we have a sub-module in our model named `block1`, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named `conv1`, `conv2` and so on. In that case we would define the following:
+
+```
+bits_overrides:
+  block1.conv*:
+    wts: 2
+    acts: null
 ```

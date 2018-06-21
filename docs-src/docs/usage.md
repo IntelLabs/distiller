@@ -107,14 +107,20 @@ For more details on the example schedules, you can refer to the coverage of the 
     - Filter-wise pruning sensitivity-analysis:
       - ResNet20 (CIFAR10)
       - ResNet56 (CIFAR10)
+<br><br>
 * **examples/sensitivity-pruning**:
     - AlexNet sensitivity pruning with Iterative Pruning
     - AlexNet sensitivity pruning with One-Shot Pruning
-
+<br><br>
 * **examples/ssl**:
     - ResNet20 baseline training (CIFAR10 dataset)
     - Structured Sparsity Learning (SSL) with layer removal on ResNet20
     - SSL with channels removal on ResNet20
+<br><br>
+* **examples/quantization**:
+    - AlexNet w. Batch-Norm (base FP32 + DoReFa)
+    - Pre-activation ResNet20 on CIFAR10 (base FP32 + DoReFa)
+    - Pre-activation ResNet18 on ImageNEt (base FP32 + DoReFa)
 
 
 ## Experiment reproducibility
@@ -135,8 +141,8 @@ The ```sense``` command-line argument can be set to either ```element``` or ```f
 
 There is also a [Jupyter notebook](http://localhost:8888/notebooks/sensitivity_analysis.ipynb) with example invocations, outputs and explanations.
 
-## Quantization
-Currently Distiller support 8-bit quantization only (quantization of lower precision data types will follow shortly) which does not require training, so any model (whether pruned or not) can be quantized.<br>
+## "Direct" Quantization Without Training
+Distiller supports 8-bit quantization of trained modules without re-training (using [Symmetric Linear Quantization](algo_quantization.md#symmetric-linear-quantization)). So, any model (whether pruned or not) can be quantized.  
 Use the ```--quantize``` command-line flag, together with ```--evaluate``` to evaluate the accuracy of your model after quantization.  The following example qunatizes ResNet18 for ImageNet:
 ```
 $ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize --evaluate
