@@ -58,7 +58,8 @@ The high-level flow is as follows:
 - Replace the existing module with the module returned by the function. It is important to note that the **name** of the module **does not** change, as that could break the `forward` function of the parent module.
 
 Different quantization methods may, obviously, use different quantized operations. In addition, different methods may employ different "strategies" of replacing / wrapping existing modules. For instance, some methods replace ReLU with another activation function, while others keep it. Hence, for each quantization method, a different **mapping** will likely be defined.  
-Each sub-class of `Quantizer` should populate the `replacement_factory` dictionary attribute with the appropriate mapping.
+Each sub-class of `Quantizer` should populate the `replacement_factory` dictionary attribute with the appropriate mapping.  
+To execute the model transformation, call the `prepare_model` function of the `Quantizer` instance.
 
 ### Flexible Bit-Widths
 
@@ -77,6 +78,8 @@ The `Quantizer` class supports training with quantization in the loop, as descri
 1. The existing `torch.nn.Parameter`, e.g. `weights`, is replaced by a `torch.nn.Parameter` named `float_weight`.
 2. To maintain the existing functionality of the module, we then register a `buffer` in the module with the original name - `weights`.
 3. During training, `float_weight` will be passed to `param_quantization_fn` and the result will be stored in `weight`.
+
+**Important Note**: Since this process modifies the model's parameters, it must be done **before** an PyTorch `Optimizer` is created (this refers to any of the sub-classes defined [here](https://pytorch.org/docs/stable/optim.html#algorithms)).
 
 The base `Quantizer` class is implemented in `distiller/quantization/quantizer.py`.  
 For a simple sub-class implementing symmetric linear quantization, see `SymmetricLinearQuantizer` in `distiller/quantization/range_linear.py`. For examples of lower-precision methods using training with quantization see `DorefaQuantizer` and `WRPNQuantizer` in `distiller/quantization/clipped_linear.py`
