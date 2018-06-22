@@ -16,6 +16,7 @@
 
 import os
 import sys
+import pytest
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -28,6 +29,16 @@ from distiller.learning_rate import MultiStepMultiGammaLR
 def test_multi_step_multi_gamma_lr():
     dummy_tensor = torch.zeros(3, 3, 3, requires_grad=True)
     dummy_optimizer = Optimizer([dummy_tensor], {'lr': 0.1})
+
+    # Test input checks
+    with pytest.raises(ValueError):
+        lr_sched = MultiStepMultiGammaLR(dummy_optimizer, milestones=[60, 30, 80], gammas=[0.1, 0.1, 0.2])
+    with pytest.raises(ValueError):
+        lr_sched = MultiStepMultiGammaLR(dummy_optimizer, milestones=[30, 60], gammas=[0.1, 0.1, 0.2])
+    with pytest.raises(ValueError):
+        lr_sched = MultiStepMultiGammaLR(dummy_optimizer, milestones=[30, 60, 80], gammas=[0.1, 0.1])
+
+    # Test functionality
     lr_sched = MultiStepMultiGammaLR(dummy_optimizer, milestones=[30, 60, 80], gammas=[0.1, 0.1, 0.2])
     expected_gammas = [1, 1 * 0.1, 1 * 0.1 * 0.1, 1 * 0.1 * 0.1 * 0.2]
     expected_lrs = [0.1 * gamma for gamma in expected_gammas]
