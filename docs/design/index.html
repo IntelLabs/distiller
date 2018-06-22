@@ -217,7 +217,8 @@ train():
 <li>Replace the existing module with the module returned by the function. It is important to note that the <strong>name</strong> of the module <strong>does not</strong> change, as that could break the <code>forward</code> function of the parent module.</li>
 </ul>
 <p>Different quantization methods may, obviously, use different quantized operations. In addition, different methods may employ different "strategies" of replacing / wrapping existing modules. For instance, some methods replace ReLU with another activation function, while others keep it. Hence, for each quantization method, a different <strong>mapping</strong> will likely be defined.<br />
-Each sub-class of <code>Quantizer</code> should populate the <code>replacement_factory</code> dictionary attribute with the appropriate mapping.</p>
+Each sub-class of <code>Quantizer</code> should populate the <code>replacement_factory</code> dictionary attribute with the appropriate mapping.<br />
+To execute the model transformation, call the <code>prepare_model</code> function of the <code>Quantizer</code> instance.</p>
 <h3 id="flexible-bit-widths">Flexible Bit-Widths</h3>
 <ul>
 <li>Each instance of <code>Quantizer</code> is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the <code>bits_activations</code> and <code>bits_weights</code> parameters in <code>Quantizer</code>'s constructor. Sub-classes may define bit-widths for other tensor types as needed.</li>
@@ -233,6 +234,7 @@ Each sub-class of <code>Quantizer</code> should populate the <code>replacement_f
 <li>To maintain the existing functionality of the module, we then register a <code>buffer</code> in the module with the original name - <code>weights</code>.</li>
 <li>During training, <code>float_weight</code> will be passed to <code>param_quantization_fn</code> and the result will be stored in <code>weight</code>.</li>
 </ol>
+<p><strong>Important Note</strong>: Since this process modifies the model's parameters, it must be done <strong>before</strong> an PyTorch <code>Optimizer</code> is created (this refers to any of the sub-classes defined <a href="https://pytorch.org/docs/stable/optim.html#algorithms">here</a>).</p>
 <p>The base <code>Quantizer</code> class is implemented in <code>distiller/quantization/quantizer.py</code>.<br />
 For a simple sub-class implementing symmetric linear quantization, see <code>SymmetricLinearQuantizer</code> in <code>distiller/quantization/range_linear.py</code>. For examples of lower-precision methods using training with quantization see <code>DorefaQuantizer</code> and <code>WRPNQuantizer</code> in <code>distiller/quantization/clipped_linear.py</code></p>
               
