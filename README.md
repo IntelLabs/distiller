@@ -263,7 +263,7 @@ $ pip3 install -r doc-requirements.txt
 
 To build the project documentation run:
 ```
-$ cd distiller/docs
+$ cd distiller/docs-src
 $ mkdocs build --clean
 ```
 This will create a folder named 'site' which contains the documentation website.
