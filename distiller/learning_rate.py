@@ -41,10 +41,20 @@ class PolynomialLR(_LRScheduler):
 
 
 class MultiStepMultiGammaLR(_LRScheduler):
+    """Similar to torch.otpim.MultiStepLR, but instead of a single gamma value, specify a gamma value per-milestone.
+
+    Args:
+        optimizer (Optimizer): Wrapped optimizer.
+        milestones (list): List of epoch indices. Must be increasing.
+        gammas (list): List of gamma values. Must have same length as milestones.
+        last_epoch (int): The index of last epoch. Default: -1.
+    """
     def __init__(self, optimizer, milestones, gammas, last_epoch=-1):
         if not list(milestones) == sorted(milestones):
             raise ValueError('Milestones should be a list of'
                              ' increasing integers. Got {}', milestones)
+        if len(milestones) != len(gammas):
+            raise ValueError('Milestones and Gammas lists should be of same length.')
 
         self.milestones = milestones
         self.multiplicative_gammas = [1]
