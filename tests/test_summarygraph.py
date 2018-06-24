@@ -18,6 +18,7 @@ import logging
 import torch
 import os
 import sys
+import pytest
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -129,14 +130,15 @@ def test_vgg():
     logging.debug(succs)
     succs = g.successors_f('features.34', 'Conv')
 
+
 def test_simplenet():
     g = create_graph('cifar10', 'simplenet_cifar')
     assert g is not None
-    preds = g.predecessors_f(normalize_layer_name('module.conv1'), 'Conv')
+    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
     logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
     assert len(preds) == 0
 
-    preds = g.predecessors_f(normalize_layer_name('module.conv2'), 'Conv')
+    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
     logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
     assert len(preds) == 1
 
