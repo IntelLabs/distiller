@@ -1,6 +1,7 @@
 <center> <img src="imgs/banner1.png"></center>
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/NervanaSystems/distiller/blob/master/LICENSE)
+[![DOI](https://zenodo.org/badge/130871393.svg)](https://zenodo.org/badge/latestdoi/130871393)
 
 <div align="center">
   <h3>
@@ -45,6 +46,7 @@ Network compression can reduce the memory footprint of a neural network, increas
 * [Generating the HTML documentation site](#generating-the-html-documentation-site)
 * [Versioning](#versioning)
 * [License](#license)
+* [Citation](#citation)
 * [Acknowledgments](#acknowledgments)
 * [Disclaimer](#disclaimer)
 
@@ -283,6 +285,23 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
+
+## Citation
+
+If you used Distiller for your work, please use the following citation:
+
+```
+@misc{neta_zmora_2018_1297430,
+  author       = {Neta Zmora and
+                  Guy Jacob and
+                  Gal Novik},
+  title        = {Neural Network Distiller},
+  month        = jun,
+  year         = 2018,
+  doi          = {10.5281/zenodo.1297430},
+  url          = {https://doi.org/10.5281/zenodo.1297430}
+}
+```
 
 ## Acknowledgments
 
