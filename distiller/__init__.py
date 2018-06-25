@@ -35,7 +35,7 @@ del thinning
 #del policy
 
 # Distiller version
-__version__ = "0.2.0-pre"
+__version__ = "0.2.0"
 
 def model_find_param_name(model, param_to_find):
     """Look up the name of a model parameter.
