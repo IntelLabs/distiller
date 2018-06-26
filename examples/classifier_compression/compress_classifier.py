@@ -499,6 +499,7 @@ class PytorchNoGrad(object):
 
 def get_inference_var(tensor):
     """This is a temporary function to bridge some difference between PyTorch 3.x and 4.x"""
+    tensor = tensor.cuda(async=True)
     if torch.__version__ >= '0.4':
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)

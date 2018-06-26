@@ -41,20 +41,22 @@ def test_png_generation():
     apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, True)
     apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, False)
 
+
 def test_negative():
     DATASET = "cifar10"
     ARCH = "resnet20_cifar"
     model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
 
     with pytest.raises(ValueError):
-        distiller.model_summary(model, optimizer=None, what='png', dataset=DATASET)
+        distiller.model_summary(model, what='png', dataset=DATASET)
+
 
 def test_summary():
     DATASET = "cifar10"
     ARCH = "resnet20_cifar"
     model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
 
-    distiller.model_summary(model, optimizer=None, what='sparsity', dataset=DATASET)
-    distiller.model_summary(model, optimizer=None, what='compute', dataset=DATASET)
-    distiller.model_summary(model, optimizer=None, what='model', dataset=DATASET)
-    distiller.model_summary(model, optimizer=None, what='modules', dataset=DATASET)
+    distiller.model_summary(model, what='sparsity', dataset=DATASET)
+    distiller.model_summary(model, what='compute', dataset=DATASET)
+    distiller.model_summary(model, what='model', dataset=DATASET)
+    distiller.model_summary(model, what='modules', dataset=DATASET)
