@@ -233,7 +233,13 @@ def main():
 
     import ADC
     if args.ADC:
-        ADC.do_adc(model, args.dataset, args.arch)
+        train_loader, val_loader, test_loader, _ = apputils.load_data(
+            args.dataset, os.path.expanduser(args.data), args.batch_size,
+            args.workers, args.deterministic)
+        validate_fn = partial(validate, val_loader=val_loader, criterion=criterion,
+                             loggers=[pylogger], print_freq=args.print_freq)
+
+        ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn)
         exit()
 
     # This sample application can be invoked to produce various summary reports.
