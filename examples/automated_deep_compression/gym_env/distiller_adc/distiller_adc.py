@@ -49,7 +49,7 @@ class AutomatedDeepCompression(gym.Env):
         else:
             return 0
 
-    def _step(self, action):
+    def step(self, action):
         # action is 0 or 1
         # if action == 0:
         #     if 0 < self.state:
@@ -64,7 +64,7 @@ class AutomatedDeepCompression(gym.Env):
 
         return self._get_obs(), self._reward(), self._terminate(), {}
 
-    def _reset(self):
+    def reset(self):
         self.steps = 0
 
         self.state = self.start_state
@@ -80,6 +80,6 @@ class AutomatedDeepCompression(gym.Env):
 
         return self.observation
 
-    def _render(self, mode, close):
+    def render(self, mode, close):
         print("render(): mode={}  close={}".format(mode, close))
         return np.zeros(1)
