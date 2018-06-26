@@ -263,6 +263,10 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
             # Now remove channels from the weights tensor of the successor conv
             append_param_directive(thinning_recipe, predecessor+'.weight', (0, indices))
 
+            if layers[predecessor].bias is not None:
+                # This convolution has bias coefficients
+                append_param_directive(thinning_recipe, predecessor+'.bias', (0, indices))
+
         # Now handle the BatchNormalization layer that follows the convolution
         bn_layers = sgraph.predecessors_f(normalize_module_name(layer_name), ['BatchNormalization'])
         if len(bn_layers) > 0:
