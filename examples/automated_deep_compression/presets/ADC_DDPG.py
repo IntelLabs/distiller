@@ -4,7 +4,7 @@ from graph_managers.graph_manager import ScheduleParameters
 from base_parameters import VisualizationParameters
 from core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps
 from environments.gym_environment import MujocoInputFilter, GymEnvironmentParameters, MujocoOutputFilter
-
+from exploration_policies.additive_noise import AdditiveNoiseParameters
 
 ####################
 # Block Scheduling #
@@ -19,6 +19,7 @@ schedule_params.heatup_steps = EnvironmentSteps(1000)
 # DDPG Agent Params #
 #####################
 agent_params = DDPGAgentParameters()
+agent_params.exploration = AdditiveNoiseParameters()
 agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
 agent_params.input_filter = MujocoInputFilter()
 agent_params.output_filter = MujocoOutputFilter()
