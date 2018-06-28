@@ -2,6 +2,7 @@ import random
 import math
 import copy
 import logging
+import numpy as np
 import torch
 import gym
 from gym import spaces
@@ -126,6 +127,8 @@ class CNNEnvironment(gym.Env):
         msglogger.info("Model %s has %d Convolution layers", arch, len(self.conv_layers))
         msglogger.info("\tTotal MACs: %s" % pretty_int(self.total_macs))
 
+        self.debug_stats = {'episode': 0}
+
         # Gym
         # spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Box(0, 1, shape=(1,))
@@ -219,6 +222,7 @@ class CNNEnvironment(gym.Env):
         if self.episode_is_done():
             observation = self.get_final_obs()
             reward = self.compute_reward()
+            self.debug_stats['episode'] += 1
         else:
             observation = self._get_obs(next_layer_macs)
             reward = 0
@@ -233,9 +237,9 @@ class CNNEnvironment(gym.Env):
         layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, layer.name)
 
-        obs = (layer.t, conv_module.out_channels, conv_module.in_channels,
-               layer.ifm_h, layer.ifm_w, layer.stride, layer.k,
-               macs, self.removed_macs(), self.remaining_macs(), self.prev_action)
+        obs = np.array([layer.t, conv_module.out_channels, conv_module.in_channels,
+               layer.ifm_h, layer.ifm_w, layer.stride[0], layer.k,
+               macs, self.removed_macs(), self.remaining_macs(), self.prev_action])
         assert len(obs) == self.STATE_EMBEDDING_LEN
         return obs
 
@@ -243,9 +247,9 @@ class CNNEnvironment(gym.Env):
         """Return the final stae embedding (observation)
         The final state is reached after we traverse all of the Convolution layers.
         """
-        obs = (-1, 0, 0,
+        obs = np.array([-1, 0, 0,
                0, 0, 0, 0,
-               0, self.removed_macs(), 0, self.prev_action)
+               0, self.removed_macs(), 0, self.prev_action])
         assert len(obs) == self.STATE_EMBEDDING_LEN
         return obs
 
@@ -262,12 +266,14 @@ class CNNEnvironment(gym.Env):
         """Physically remove channels and corresponding filters from the model"""
         if idx not in range(self.num_layers()):
             raise ValueError("idx=%d is not in correct range (0-%d)" % (idx, self.num_layers()))
+        if fraction_to_prune < 0:
+            raise ValueError("fraction_to_prune=%f is illegal" % (fraction_to_prune))
 
         if fraction_to_prune == 0:
             return
-
-        if fraction_to_prune < 0:
-            raise ValueError("fraction_to_prune=%f is illegal" % (fraction_to_prune))
+        if fraction_to_prune == 1.0:
+            # For now, prevent the removal of entire layers
+            fraction_to_prune = 0.99
 
         layer = self.conv_layers[idx]
         conv_pname = layer.name + ".weight"
@@ -296,7 +302,7 @@ class CNNEnvironment(gym.Env):
         pylogger = distiller.data_loggers.PythonLogger(msglogger)
         distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
 
-        top1, top5, vloss = self.validate_fn(model=self.model.cuda(), epoch=0)
+        top1, top5, vloss = self.validate_fn(model=self.model.cuda(), epoch=self.debug_stats['episode'])
 
         _, total_macs = collect_conv_details(self.model, self.dataset)
         reward = -1 * vloss * math.log(total_macs)
