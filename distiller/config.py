@@ -82,7 +82,7 @@ def dict_config(model, optimizer, sched_dict):
                 assert instance_name in regularizers, "Regularizer {} was not defined in the list of regularizers".format(instance_name)
                 regularizer = regularizers[instance_name]
                 if args is None:
-                   policy = distiller.RegularizationPolicy(regularizer)
+                    policy = distiller.RegularizationPolicy(regularizer)
                 else:
                     policy = distiller.RegularizationPolicy(regularizer, **args)
 
