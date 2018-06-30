@@ -1,3 +1,13 @@
+#
+# THIS IS CURRENTLY BROKEN!
+# There are two challenges to getting this to work:
+#   1. If we want to remove layers, we should use a thinning recipe and leave instructions.  Otherwise, it's very hard to
+#      decide if we should remove layers or not.
+#   2. We need a generic solution for removing layers.  Perhaps a new module type which wraps a layer and has a bypass-gate.
+#
+# If you still want to use this, until we implement a proper solution, invoke thinning.resnet_cifar_remove_layers from
+# compress_classifier.py.
+#
 # We used this schedule to train CIFAR10-ResNet20 from scratch with SSL.
 # After running this schedule, use ssl_4D-removal_finetuning.yaml to "physically" remove the layers and fine-tune the smaller model.
 #

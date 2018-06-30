@@ -2,7 +2,7 @@
 # This schedule performs 3D (filter-wise) regularization of some of the convolution layers, together with
 # element-wise pruning using sensitivity-pruning.
 #
-# time python3 compress_classifier.py -a=vgg19 -p=50 ../../../data.imagenet --epochs=10 --lr=0.00001 --compress=../pruning_filters_for_efficient_convnets/vgg19.schedule_filter_rank.yaml --pretrained --momentum=0
+# time python3 compress_classifier.py -a=vgg19 -p=50 ../../../data.imagenet --epochs=10 --lr=0.00001 --compress=../pruning_filters_for_efficient_convnets/vgg19.schedule_filter_rank.yaml --pretrained
 #
 
 
