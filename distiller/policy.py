@@ -40,18 +40,18 @@ class ScheduledTrainingPolicy(object):
         """A new epcoh is about to begin"""
         pass
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizr=None):
         """The forward-pass of a new mini-batch is about to begin"""
         pass
 
     def before_backward_pass(self, model, epoch, minibatch_id, minibatches_per_epoch, loss,
-                             regularizer_loss, zeros_mask_dict):
+                             regularizer_loss, zeros_mask_dict, optimizer=None):
         """The mini-batch training pass has completed the forward-pass,
         and is about to begin the backward pass.
         """
         pass
 
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         """The mini-batch training pass has ended"""
         pass
 
@@ -81,7 +81,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
         for param_name, param in model.named_parameters():
             self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         for param_name, param in model.named_parameters():
             zeros_mask_dict[param_name].apply_mask(param)
 
@@ -100,11 +100,11 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
         self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
 
     def before_backward_pass(self, model, epoch, minibatch_id, minibatches_per_epoch, loss,
-                             regularizer_loss, zeros_mask_dict):
+                             regularizer_loss, zeros_mask_dict, optimizer=None):
         for param_name, param in model.named_parameters():
             self.regularizer.loss(param, param_name, regularizer_loss, zeros_mask_dict)
 
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         if self.regularizer.threshold_criteria is None:
             return
 
@@ -141,7 +141,7 @@ class QuantizationPolicy(ScheduledTrainingPolicy):
         self.quantizer.prepare_model()
         self.quantizer.quantize_params()
 
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         # After parameters update, quantize the parameters again
         # (Doing this here ensures the model parameters are quantized at training completion (and at validation time)
         self.quantizer.quantize_params()

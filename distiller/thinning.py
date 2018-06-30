@@ -149,10 +149,10 @@ def resnet_cifar_remove_layers(model):
         model.module.layer_gates[layer][block][conv] = False
 
 
-def remove_channels(model, zeros_mask_dict, arch, dataset):
+def remove_channels(model, zeros_mask_dict, arch, dataset, optimizer):
     sgraph = create_graph(dataset, arch)
     thinning_recipe = create_thinning_recipe_channels(sgraph, model, zeros_mask_dict)
-    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe)
+    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe, optimizer)
     return model
 
 
@@ -188,10 +188,10 @@ def find_nonzero_channels_list(param, param_name):
     return nnz_channels.cpu().numpy().tolist()
 
 
-def apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe):
+def apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe, optimizer):
     if len(thinning_recipe.modules) > 0 or len(thinning_recipe.parameters) > 0:
         # Now actually remove the filters, chaneels and make the weight tensors smaller
-        execute_thinning_recipe(model, zeros_mask_dict, thinning_recipe)
+        execute_thinning_recipe(model, zeros_mask_dict, thinning_recipe, optimizer)
 
         # Stash the recipe, so that it will be serialized together with the model
         if hasattr(model, 'thinning_recipes'):
@@ -204,10 +204,10 @@ def apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe):
         msglogger.error("Failed to create a thinning recipe")
 
 
-def remove_filters(model, zeros_mask_dict, arch, dataset):
+def remove_filters(model, zeros_mask_dict, arch, dataset, optimizer):
     sgraph = create_graph(dataset, arch)
     thinning_recipe = create_thinning_recipe_filters(sgraph, model, zeros_mask_dict)
-    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe)
+    apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe, optimizer)
     return model
 
 
@@ -375,7 +375,7 @@ class ChannelRemover(ScheduledTrainingPolicy):
         self.dataset = dataset
 
     def on_epoch_end(self, model, zeros_mask_dict, meta):
-        self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset)
+        self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset, meta.get('optimizer', None))
 
 
 class FilterRemover(ScheduledTrainingPolicy):
@@ -387,24 +387,24 @@ class FilterRemover(ScheduledTrainingPolicy):
         self.done = False
         self.active_cb = "on_minibatch_begin"
 
-    def __apply(self, model, zeros_mask_dict):
+    def __apply(self, model, zeros_mask_dict, optimizer):
         if not self.done:
             # We want to execute the thinning function only once, not every invocation of on_minibatch_begin
-            self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset)
+            self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset, optimizer=optimizer)
             self.done = True
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         # We hook onto the on_minibatch_begin because we want to run after the pruner which sparsified
         # the tensors.  Pruners configure their pruning mask in on_epoch_begin, but apply the mask
         # only in on_minibatch_begin
         if self.active_cb != "on_minibatch_begin":
             return
-        self.__apply(model, zeros_mask_dict)
+        self.__apply(model, zeros_mask_dict, optimizer)
 
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict):
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         if self.active_cb != "on_minibatch_end":
             return
-        self.__apply(model, zeros_mask_dict)
+        self.__apply(model, zeros_mask_dict, optimizer)
 
     def on_epoch_end(self, model, zeros_mask_dict, meta):
         # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
@@ -416,15 +416,45 @@ def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
     # to a thinned model. For example, this is invoked when loading a model from a checkpoint.
     for i, recipe in enumerate(recipe_list):
         msglogger.info("recipe %d:" % i)
-        execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=True)
+        execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer=None, loaded_from_file=True)
 
 
-def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=False):
+def optimizer_thinning(optimizer, param, dim, indices, new_shape=None):
+    """Adjust the size of the SGD vecolity-tracking tensors.
+
+    The SGD momentum update (velocity) is dependent on the weights, and because during thinning we
+    dynamically change the weights shapes, we need to make the apporpriate changes in the Optimizer,
+    or disable the momentum.
+
+    This function is brittle as it is tested on SGD only and relies on the internal representation of
+    the SGD optimizer, which can change w/o notice.
+    """
+    if optimizer is None or not isinstance(optimizer, torch.optim.SGD):
+        return False
+    for group in optimizer.param_groups:
+        momentum = group.get('momentum', 0)
+        if momentum == 0:
+            continue
+        for p in group['params']:
+            if id(p) != id(param):
+                continue
+            param_state = optimizer.state[p]
+            if 'momentum_buffer' in param_state:
+                param_state['momentum_buffer'] = torch.index_select(param_state['momentum_buffer'], dim, indices)
+                if new_shape is not None:
+                    msglogger.info("optimizer_thinning: new shape {}".format(*new_shape))
+                    param_state['momentum_buffer'] = param_state['momentum_buffer'].resize_(*new_shape)
+                return True
+    return False
+
+
+def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_from_file=False):
     """Apply a thinning recipe to a model.
 
     This will remove filters and channels, as well as handle batch-normalization parameter
     adjustment, and thinning of weight tensors.
     """
+
     layers = {}
     for name, m in model.named_modules():
         layers[name] = m
@@ -458,12 +488,14 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=Fal
                 # Check if we're trying to trim a parameter that is already "thin"
                 if param.data.size(dim) != len_indices:
                     param.data = torch.index_select(selection_view, dim, indices)
-
-                if param.grad is not None:
-                    # We also need to change the dimensions of the gradient tensor.
-                    grad_selection_view = param.grad.resize_(*directive[2])
-                    if grad_selection_view.size(dim) != len_indices:
-                        param.grad = torch.index_select(grad_selection_view, dim, indices)
+                    if param.grad is not None:
+                        # We also need to change the dimensions of the gradient tensor.
+                        grad_selection_view = param.grad.resize_(*directive[2])
+                        if grad_selection_view.size(dim) != len_indices:
+                            param.grad = torch.index_select(grad_selection_view, dim, indices)
+                            if optimizer_thinning(optimizer, param, dim, indices, directive[3]):
+                                msglogger.info("Updated [4D] velocity buffer for {} (dim={},size={},shape={})".
+                                               format(param_name, dim, len_indices, directive[3]))
 
                 param.data = param.view(*directive[3])
                 if param.grad is not None:
@@ -471,12 +503,14 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, loaded_from_file=Fal
             else:
                 if param.data.size(dim) != len_indices:
                     param.data = torch.index_select(param.data, dim, indices)
+                    msglogger.info("[thinning] changed param {} shape: {}".format(param_name, len_indices))
                 # We also need to change the dimensions of the gradient tensor.
                 # If have not done a backward-pass thus far, then the gradient will
                 # not exist, and therefore won't need to be re-dimensioned.
                 if param.grad is not None and param.grad.size(dim) != len_indices:
-                        param.grad = torch.index_select(param.grad, dim, indices)
-                msglogger.info("[thinning] changing param {} shape: {}".format(param_name, len_indices))
+                    param.grad = torch.index_select(param.grad, dim, indices)
+                    if optimizer_thinning(optimizer, param, dim, indices):
+                        msglogger.info("Updated velocity buffer %s" % param_name)
 
             if not loaded_from_file:
                 # If the masks are loaded from a checkpoint file, then we don't need to change

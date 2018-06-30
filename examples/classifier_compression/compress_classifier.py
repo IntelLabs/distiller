@@ -223,10 +223,6 @@ def main():
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
 
-        if 'resnet' in args.arch and 'preact' not in args.arch and 'cifar' in args.arch:
-            distiller.resnet_cifar_remove_layers(model)
-            #model = distiller.resnet_cifar_remove_channels(model, compression_scheduler.zeros_mask_dict)
-
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
@@ -320,11 +316,11 @@ def main():
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
-        distiller.log_training_progress(stats, None,epoch, steps_completed=0, total_steps=1,
+        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[tflogger])
 
         if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch)
+            compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
@@ -339,8 +335,8 @@ def main():
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, print_freq, log_params_hist):
     """Training loop for one epoch."""
-    losses = {'objective_loss'   : tnt.AverageValueMeter(),
-              'regularizer_loss' : tnt.AverageValueMeter()}
+    losses = {'objective_loss':   tnt.AverageValueMeter(),
+              'regularizer_loss': tnt.AverageValueMeter()}
     if compression_scheduler is None:
         # Initialize the regularizer loss to zero
         losses['regularizer_loss'].add(0)
@@ -368,7 +364,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
-            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch)
+            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
         output = model(input_var)
         loss = criterion(output, target_var)
 
@@ -378,7 +374,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
-            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss)
+            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss, optimizer)
             loss += regularizer_loss
             losses['regularizer_loss'].add(regularizer_loss.item())
 
@@ -387,7 +383,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         loss.backward()
         optimizer.step()
         if compression_scheduler:
-            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch)
+            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
 
         # measure elapsed time
         batch_time.add(time.time() - end)

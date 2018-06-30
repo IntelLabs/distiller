@@ -86,24 +86,24 @@ class CompressionScheduler(object):
                 self.policies[epoch].append(policy)
             assert len(self.policies[epoch]) > 0
 
-        self.sched_metadata[policy] = { 'starting_epoch' : starting_epoch,
-                                        'ending_epoch' : ending_epoch,
-                                        'frequency' : frequency }
+        self.sched_metadata[policy] = {'starting_epoch': starting_epoch,
+                                       'ending_epoch': ending_epoch,
+                                       'frequency': frequency}
 
-    def on_epoch_begin(self, epoch):
+    def on_epoch_begin(self, epoch, optimizer=None):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 meta = self.sched_metadata[policy]
                 meta['current_epoch'] = epoch
                 policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta)
 
-    def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch):
+    def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 policy.on_minibatch_begin(self.model, epoch, minibatch_id, minibatches_per_epoch,
-                                          self.zeros_mask_dict)
+                                          self.zeros_mask_dict, optimizer)
 
-    def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss):
+    def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss, optimizer=None):
         # Last chance to compute the regularization loss, and optionally add it to the data loss
         regularizer_loss = torch.tensor(0, dtype=torch.float, device=self.device)
 
@@ -114,25 +114,26 @@ class CompressionScheduler(object):
                                             loss, regularizer_loss, self.zeros_mask_dict)
         return regularizer_loss
 
-    def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch):
+    def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         # When we get to this point, the weights are no longer maksed.  This is because during the backward
         # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
         # component is being called-back.
         weights_are_masked = False
- 
+
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 if not weights_are_masked:
                     self.apply_mask()
                     weights_are_masked = True
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
-                                        self.zeros_mask_dict)
+                                        self.zeros_mask_dict, optimizer)
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, epoch, optimizer=None):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 meta = self.sched_metadata[policy]
                 meta['current_epoch'] = epoch
+                meta['optimizer'] = optimizer
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
     def apply_mask(self):
