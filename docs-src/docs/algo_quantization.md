@@ -60,8 +60,8 @@ Let us denote the original floating-point tensor by \(x_f\), the quantized tenso
 (The \(round\) operation is round-to-nearest-integer)  
   
 Let's see how a **convolution** or **fully-connected (FC)** layer is quantized using this method: (we denote input, output, weights and bias with  \(x, y, w\) and \(b\) respectively)
-\[y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \sum{ \left( x_q w_q + \frac{q_b}{q_x q_w}b_q \right) }\]
-\[y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \sum{ \left( x_q w_q + \frac{q_b}{q_x q_w}b_q \right) } \right) \]
+\[y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right)\]
+\[y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right) \right) \]
 Note how the bias has to be re-scaled to match the scale of the summation.
 
 ### Implementation
