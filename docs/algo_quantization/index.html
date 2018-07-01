@@ -220,8 +220,8 @@ Let us denote the original floating-point tensor by <script type="math/tex">x_f<
 <script type="math/tex; mode=display">x_q = round(q_x x_f)</script>
 (The <script type="math/tex">round</script> operation is round-to-nearest-integer)  </p>
 <p>Let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized using this method: (we denote input, output, weights and bias with  <script type="math/tex">x, y, w</script> and <script type="math/tex">b</script> respectively)
-<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \sum{ \left( x_q w_q + \frac{q_b}{q_x q_w}b_q \right) }</script>
-<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \sum{ \left( x_q w_q + \frac{q_b}{q_x q_w}b_q \right) } \right) </script>
+<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right)</script>
+<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right) \right) </script>
 Note how the bias has to be re-scaled to match the scale of the summation.</p>
 <h3 id="implementation">Implementation</h3>
 <p>We've implemented <strong>convolution</strong> and <strong>FC</strong> using this method.  </p>
