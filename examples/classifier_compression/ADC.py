@@ -16,6 +16,8 @@ from base_parameters import TaskParameters
 from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager
 
 msglogger = logging.getLogger()
+pylogger = distiller.data_loggers.PythonLogger(msglogger)
+tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
 
 
 # TODO: move this to utils
@@ -133,7 +135,6 @@ class CNNEnvironment(gym.Env):
         # spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Box(0, 1, shape=(1,))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN,))
-        # Box(low=np.array([-1.0,-2.0]), high=np.array([2.0,4.0]))
 
     def reset(self, init_only=False):
         """Reset the environment.
@@ -143,7 +144,6 @@ class CNNEnvironment(gym.Env):
         self.current_layer_id = 1
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
-        #self.model = self.model.cuda()
         self.zeros_mask_dict = create_model_masks(self.model)
         self._remaining_macs = self.total_macs
         self._removed_macs = 0
@@ -202,13 +202,14 @@ class CNNEnvironment(gym.Env):
             msglogger.info("+" + "-" * 50 + "+")
 
         msglogger.info("Environment: current_layer_id=%d" % self.current_layer_id)
-        pylogger = distiller.data_loggers.PythonLogger(msglogger)
         distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
 
     def step(self, action):
         """Take a step, given an action.
         This is invoked by the Agent.
         """
+        action /= 5
+
         layer_macs = self.get_macs(self.current_layer())
         self.__remove_channels(self.current_layer_id, action)
         layer_macs_after_action = self.get_macs(self.current_layer())
@@ -296,15 +297,18 @@ class CNNEnvironment(gym.Env):
         distiller.remove_channels(self.model, self.zeros_mask_dict, self.arch, self.dataset)
 
     def compute_reward(self):
-        print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=")
         """The ADC paper defines reward = -Error"""
-
-        pylogger = distiller.data_loggers.PythonLogger(msglogger)
         distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
 
         top1, top5, vloss = self.validate_fn(model=self.model.cuda(), epoch=self.debug_stats['episode'])
 
         _, total_macs = collect_conv_details(self.model, self.dataset)
         reward = -1 * vloss * math.log(total_macs)
-        msglogger.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ {}".format(reward))
+        msglogger.info("++++++++++++++++++++++++++++++++++++++++++++++++++reward={}  macs={}".format(reward, total_macs))
+        stats = ('Peformance/Validation/',
+                 OrderedDict([('reward', reward),
+                              ('total_macs', total_macs)]))
+        distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=0, total_steps=1,
+                                        log_freq=1, loggers=[tflogger, pylogger])
+
         return reward
