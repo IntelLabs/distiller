@@ -306,7 +306,7 @@ if args.summary:
             threshold = bottomk.data[-1]
             msglogger.info("parameter %s: q = %.2f" %(name, threshold))
     else:
-        distiller.model_summary(model, None, which_summary, 'wikitext2')
+        distiller.model_summary(model, which_summary, 'wikitext2')
     exit(0)
 
 compression_scheduler = None
@@ -317,8 +317,8 @@ if args.compress:
     compression_scheduler = distiller.config.file_config(model, None, args.compress)
 
 optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                 momentum=args.momentum,
-                                 weight_decay=args.weight_decay)
+                            momentum=args.momentum,
+                            weight_decay=args.weight_decay)
 lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                           patience=0, verbose=True, factor=0.5)
 
