@@ -5,6 +5,10 @@
 
 <div align="center">
   <h3>
+    <a href="https://github.com/NervanaSystems/distiller/wiki">
+      Wiki and tutorials
+    </a>
+    <span> | </span>
     <a href="https://nervanasystems.github.io/distiller/index.html">
       Documentation
     </a>
