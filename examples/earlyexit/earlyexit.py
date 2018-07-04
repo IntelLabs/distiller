@@ -51,6 +51,11 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.nn.functional as F            # most non-linearities are here
 
+script_dir = os.path.dirname(__file__)
+module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
+
 import distiller
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.earlyexit as earlyexit
@@ -343,10 +348,8 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
                 ('Prec@5_exitN', top5_exitN.val),
                 ('Prec@5_exitN', top5_exitN.avg)]))
             distiller.log_training_progress(stats,
-                                            model.named_parameters() if log_params_hist else None,
-                                            epoch, steps_completed,
-                                            steps_per_epoch, print_freq,
-                                            loggers)
+                model.named_parameters() if log_params_hist else None,
+                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -409,15 +412,27 @@ def validate(val_loader, model, criterion, earlyexit):
         end = time.time()
 
         if i % args.print_freq == 0:
-            print('Test: [{0}/{1}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
-                  'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
-                  'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                   i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
-                   top1=top1, top5=top5))
+            stats = ('Performance/Validation/', OrderedDict([('Epoch', epoch),
+                ('i', i),
+                ('train_loader', len(val_loader)),
+                ('Time', batch_time.val),
+                ('TimeAvg', batch_time.avg),
+                ('Data', data_time.val),
+                ('DataAvg', data_time.avg),
+                ('Loss0', loss0.val),
+                ('LossAvg0', loss0.avg),
+                ('Loss1', loss1.val),
+                ('LossAvg1', loss1.avg),
+                ('LossN', lossN.val),
+                ('LossAvgN', lossN.avg),
+                ('Prec@1', top1.val),
+                ('Prec@1_avg', top1.avg),
+                ('Prec@5', top5.val),
+                ('Prec@5', top5.avg)]))
+            distiller.log_training_progress(stats,
+                model.named_parameters() if log_params_hist else None,
+                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
