@@ -80,7 +80,7 @@ def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4
     params_size = 0
     sparse_params_size = 0
     for name, param in model.state_dict().items():
-        if (param.dim() in param_dims) and any(type in name for type in ['weight', 'bias']):
+        if (param.dim() in param_dims) and any(type in name for type in ['.weight', '.bias']):
             _density = distiller.density(param)
             params_size += torch.numel(param)
             sparse_params_size += param.numel() * _density
@@ -115,8 +115,9 @@ def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4
         return df, total_sparsity
     return df
 
-def weights_sparsity_tbl_summary(model, return_total_sparsity=False):
-    df, total_sparsity = weights_sparsity_summary(model, return_total_sparsity=True)
+def weights_sparsity_tbl_summary(model, return_total_sparsity=False, param_dims=[2,4]):
+    df, total_sparsity = weights_sparsity_summary(model, return_total_sparsity=True,
+                                                  param_dims=param_dims)
     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
     if return_total_sparsity:
         return t, total_sparsity
