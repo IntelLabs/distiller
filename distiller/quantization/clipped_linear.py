@@ -86,9 +86,10 @@ class DorefaQuantizer(Quantizer):
         1. Gradients quantization not supported yet
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
+    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}, quantize_bias=False):
         super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                              bits_overrides=bits_overrides, train_with_fp_copy=True)
+                                              bits_overrides=bits_overrides, train_with_fp_copy=True,
+                                              quantize_bias=quantize_bias)
 
         def dorefa_quantize_param(param_fp, num_bits):
             scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
