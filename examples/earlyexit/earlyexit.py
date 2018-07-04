@@ -54,11 +54,7 @@ import torch.nn.functional as F            # most non-linearities are here
 import distiller
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.earlyexit as earlyexit
-from models.imagenet import resnet-earlyexit
-
-# use TensorBoard for output
-from tensorboardX import SummaryWriter
-writer = SummaryWriter('runs')
+from models.imagenet import resnet_earlyexit
 
 
 model_names = sorted(name for name in models.__dict__
@@ -338,14 +334,6 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
                                             epoch, steps_completed,
                                             steps_per_epoch, print_freq,
                                             loggers)
-            niter = epoch*len(train_loader)+i
-            writer.add_scalar('Train/Loss', losses.val, niter)
-            writer.add_scalar('TrainExit0/Prec@1', top1_exit0.val, niter)
-            writer.add_scalar('TrainExit0/Prec@5', top5_exit0.val, niter)
-            writer.add_scalar('TrainExit1/Prec@1', top1_exit1.val, niter)
-            writer.add_scalar('TrainExit1/Prec@5', top5_exit1.val, niter)
-            writer.add_scalar('TrainExitN/Prec@1', top1_exitN.val, niter)
-            writer.add_scalar('TrainExitN/Prec@5', top5_exitN.val, niter)
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -417,14 +405,6 @@ def validate(val_loader, model, criterion, earlyexit):
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                    i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
                    top1=top1, top5=top5))
-            niter = epoch*len(train_loader)+i
-            writer.add_scalar('Train/Loss', losses.val, niter)
-            writer.add_scalar('TrainExit0/Prec@1', top1_exit0.val, niter)
-            writer.add_scalar('TrainExit0/Prec@5', top5_exit0.val, niter)
-            writer.add_scalar('TrainExit1/Prec@1', top1_exit1.val, niter)
-            writer.add_scalar('TrainExit1/Prec@5', top5_exit1.val, niter)
-            writer.add_scalar('TrainExitN/Prec@1', top1_exitN.val, niter)
-            writer.add_scalar('TrainExitN/Prec@5', top5_exitN.val, niter)
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
