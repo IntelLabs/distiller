@@ -316,19 +316,32 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         end = time.time()
 
         if i % args.print_freq == 0:
-            stats = ('Performance/Training/', OrderedDict([Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
-                  'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
-                  'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
-                  'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
-                  'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
-                  'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
-                   top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN]))
+            stats = ('Peformance/Validation/',
+                 OrderedDict([('Loss', vloss),
+                              ('Top1', top1),
+                              ('Top5', top5)]))
+
+            stats = ('Performance/Training/', OrderedDict([('Epoch', epoch),
+                ('i', i),
+                ('train_loader', len(train_loader)),
+                ('Time', batch_time.val),
+                ('TimeAvg', batch_time.avg),
+                ('Data', data_time.val),
+                ('DataAvg', data_time.avg),
+                ('Loss', loss.val),
+                ('LossAvg', loss.avg),
+                ('Prec@1_exit0', top1_exit0.val),
+                ('Prec@1_exit0_avg', top1_exit0.avg),
+                ('Prec@5_exit0', top5_exit0.val),
+                ('Prec@5_exit0', top5_exit0.avg),
+                ('Prec@1_exit1', top1_exit1.val),
+                ('Prec@1_exit1_avg', top1_exit1.avg),
+                ('Prec@5_exit1', top5_exit1.val),
+                ('Prec@5_exit1', top5_exit1.avg),
+                ('Prec@1_exitN', top1_exitN.val),
+                ('Prec@1_exitN_avg', top1_exitN.avg),
+                ('Prec@5_exitN', top5_exitN.val),
+                ('Prec@5_exitN', top5_exitN.avg)]))
             distiller.log_training_progress(stats,
                                             model.named_parameters() if log_params_hist else None,
                                             epoch, steps_completed,
