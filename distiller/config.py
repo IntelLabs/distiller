@@ -37,6 +37,7 @@ from collections import OrderedDict
 import yaml
 import json
 import inspect
+import torch
 from torch.optim.lr_scheduler import *
 import distiller
 from distiller.thinning import *
@@ -49,10 +50,10 @@ msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
 
 
-def dict_config(model, optimizer, sched_dict):
+def dict_config(model, optimizer, sched_dict, device=torch.device("cuda")):
     app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
-    schedule = distiller.CompressionScheduler(model)
+    schedule = distiller.CompressionScheduler(model, device=device)
 
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
@@ -146,13 +147,13 @@ def add_policy_to_scheduler(policy, policy_def, schedule):
                             frequency=policy_def['frequency'])
 
 
-def file_config(model, optimizer, filename):
+def file_config(model, optimizer, filename, device=torch.device("cuda")):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
         msglogger.info('Reading compression schedule from: %s', filename)
         try:
             sched_dict = yaml_ordered_load(stream)
-            return dict_config(model, optimizer, sched_dict)
+            return dict_config(model, optimizer, sched_dict, device)
         except yaml.YAMLError as exc:
             print("\nFATAL Parsing error while parsing the pruning schedule configuration file %s" % filename)
             exit(1)
