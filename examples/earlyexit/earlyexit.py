@@ -94,7 +94,7 @@ parser.add_argument('--checkpointdir', default='', metavar='CHECKPOINTDIR', type
 parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
-parser.add_argument('--name', '-n', default='',type=str, metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--name', '-n', type=str, metavar='NAME', default=None, help='Experiment name')
 
 
 best_prec1 = 0
@@ -116,7 +116,7 @@ def main():
     global args, best_prec1, msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(args.checkpointdir, 'logging.conf'), args.name)
+    msglogger = apputils.config_pylogger(os.path.join(args.checkpointdir, '/logging.conf'), args.name)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -181,13 +181,13 @@ def main():
     cudnn.benchmark = True
 
     # This sample application can be invoked to produce various summary reports.
-    if args.summary:
+'''    if args.summary:
         which_summary = args.summary
         if which_summary == 'png':
             apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
         else:
             distiller.model_summary(model, optimizer, which_summary, args.dataset)
-        exit()
+        exit()'''
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
