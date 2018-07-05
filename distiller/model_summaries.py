@@ -29,13 +29,15 @@ import torch
 from torch.autograd import Variable
 import torch.optim
 import distiller
+from .data_loggers import PythonLogger, CsvLogger
+
 msglogger = logging.getLogger()
 
 __all__ = ['model_summary',
            'weights_sparsity_summary', 'weights_sparsity_tbl_summary',
            'model_performance_summary', 'model_performance_tbl_summary']
 
-from .data_loggers import PythonLogger, CsvLogger
+
 def model_summary(model, what, dataset=None):
     if what == 'sparsity':
         pylogger = PythonLogger(msglogger)
@@ -71,7 +73,7 @@ def model_summary(model, what, dataset=None):
         print(tabulate(nodes, headers=['Name', 'Type']))
 
 
-def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4]):
+def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2, 4]):
 
     df = pd.DataFrame(columns=['Name', 'Shape', 'NNZ (dense)', 'NNZ (sparse)',
                                'Cols (%)','Rows (%)', 'Ch (%)', '2D (%)', '3D (%)',
@@ -79,8 +81,11 @@ def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4
     pd.set_option('precision', 2)
     params_size = 0
     sparse_params_size = 0
+    summary_param_types = ['weight', 'bias']
     for name, param in model.state_dict().items():
-        if (param.dim() in param_dims) and any(type in name for type in ['weight', 'bias']):
+        # Extract just the actual parameter's name, which in this context we treat as its "type"
+        curr_param_type = name.split('.')[-1]
+        if param.dim() in param_dims and curr_param_type in summary_param_types:
             _density = distiller.density(param)
             params_size += torch.numel(param)
             sparse_params_size += param.numel() * _density
@@ -115,12 +120,14 @@ def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2,4
         return df, total_sparsity
     return df
 
-def weights_sparsity_tbl_summary(model, return_total_sparsity=False):
-    df, total_sparsity = weights_sparsity_summary(model, return_total_sparsity=True)
+
+def weights_sparsity_tbl_summary(model, return_total_sparsity=False, param_dims=[2, 4]):
+    df, total_sparsity = weights_sparsity_summary(model, return_total_sparsity=True, param_dims=param_dims)
     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
     if return_total_sparsity:
         return t, total_sparsity
     return t
+
 
 # Performance data collection  code follows from here down
 
@@ -137,6 +144,7 @@ def conv_visitor(self, input, output, df, model, memo):
             (self.in_channels / self.groups * self.kernel_size[0] * self.kernel_size[1]))
     attrs = 'k=' + '('+(', ').join(['%d' % v for v in self.kernel_size])+')'
     module_visitor(self, input, output, df, model, weights_vol, macs, attrs)
+
 
 def fc_visitor(self, input, output, df, model, memo):
     assert isinstance(self, torch.nn.Linear)
@@ -187,6 +195,7 @@ def model_performance_summary(model, dummy_input, batch_size=1):
     for handle in hook_handles: handle.remove()
 
     return df
+
 
 def model_performance_tbl_summary(model, dummy_input, batch_size):
     df = model_performance_summary(model, dummy_input, batch_size)
