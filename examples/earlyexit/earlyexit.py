@@ -68,9 +68,9 @@ import distiller.earlyexit as earlyexit
 from models.imagenet import resnet_earlyexit
 
 
-model_names = sorted(name for name in models.__dict__
+model_names = sorted(name for name in resnet_earlyexit.__dict__
     if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+    and callable(resnet_earlyexit.__dict__[name]))
 
 msglogger = None
 parser = argparse.ArgumentParser(description='PyTorch Early Exit ImageNet Training')
