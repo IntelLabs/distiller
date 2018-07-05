@@ -81,7 +81,8 @@ class Quantizer(object):
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_weights': bits_weights,
-                                                    'bits_overrides': copy.deepcopy(bits_overrides)}}
+                                                    'bits_overrides': copy.deepcopy(bits_overrides),
+                                                    'quantize_bias': quantize_bias}}
 
         for k, v in bits_overrides.items():
             qbits = QBits(acts=v.get('acts', self.default_qbits.acts), wts=v.get('wts', self.default_qbits.wts))
