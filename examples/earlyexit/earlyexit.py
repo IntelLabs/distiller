@@ -94,7 +94,7 @@ parser.add_argument('--checkpointdir', default='', metavar='CHECKPOINTDIR', type
 parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
-parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--name', '-n', default='',type=str, metavar='NAME', default=None, help='Experiment name')
 
 
 best_prec1 = 0
