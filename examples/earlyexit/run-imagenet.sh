@@ -9,5 +9,6 @@ fullstring="${lossweight0}_${lossweight1}"
 fullstring2="${threshold0}_${threshold1}"
 
 python -u earlyexit.py --pretrained --batch-size=64 --earlyexit $threshold0 $threshold1 \
-    --arch=resnet50 --lossweights $lossweight0 $lossweight1 --checkpointdir=$fullstring --lr=0.01 \ 
-    /dataset/aeon/I1K/i1k-extracted/ |& tee -a $fullstring/log_$fullstring2
+    --arch=resnet50 --lossweights $lossweight0 $lossweight1 \
+    --checkpointdir=/public/barad/$fullstring --lr=0.01 \ 
+    --name $fullstring2 /dataset/aeon/I1K/i1k-extracted/ |& tee -a $fullstring/log_$fullstring2
