@@ -341,7 +341,7 @@ def validate(val_loader, model, criterion, earlyexit):
     losses_exitN = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    
+
     # switch to evaluate mode
     model.eval()
     exit_0 = 0
@@ -372,12 +372,12 @@ def validate(val_loader, model, criterion, earlyexit):
         losses_exitN.update(loss_exitN.data[0], input.size(0))
 
         # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
-        if (loss_exit0.cpu().data.numpy()[0] < earlyexit[0]):
+        if loss_exit0.cpu().data.numpy()[0] < earlyexit[0]:
             # take the results from the early exit since lower than threshold
             top1.update(prec1_exit0[0], input.size(0))
             top5.update(prec5_exit0[0], input.size(0))
             exit_0 = exit_0 + 1
-        elif (loss_exit1.cpu().data.numpy()[0] < earlyexit[1]):
+        elif loss_exit1.cpu().data.numpy()[0] < earlyexit[1]:
             # or take the results from the next early exit, since lower than its threshold
             top1.update(prec1_exit1[0], input.size(0))
             top5.update(prec5_exit1[0], input.size(0))

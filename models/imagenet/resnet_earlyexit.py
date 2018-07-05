@@ -5,7 +5,10 @@ import torch.utils.model_zoo as model_zoo
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
-
+# The following URLs represent pretrained models without exits and can't be used
+# directly for preloading as the topology is slightly altered to account
+# for the exits. We'll be providing publically pretrained models for examples
+# with exits in future releases.
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
     'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',

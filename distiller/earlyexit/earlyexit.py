@@ -1,8 +1,46 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+"""This is an example application for early exit image classification models.
+
+The application borrows its main flow code from torchvision's ImageNet classification
+training sample application (https://github.com/pytorch/examples/tree/master/imagenet).
+We tried to keep it similar, in order to make it familiar and easy to understand.
+
+Integrating early exits in very simple: short blocks of exit processing code including a
+fully connected layer are required in order to calculate the Cross-Entropy Loss at that exit
+for training. Additionally, the loss function now becomes a weighted average of exit losses.
+
+The basic dataflow of our example does not actually take an exit to avoid following layers.
+Instead, the code evaluates the losses at each layer and inference code then calculates the
+accuracy based upon actually taking the exit for that data input. So in our example, every data
+point passes all exit layers (including exit_N which is the final, natural exit for the network)
+"""
+
 import importlib
+import math
 import argparse
 import os
+import sys
+import random
+import logging.config
 import shutil
+import traceback
 import time
+from functools import partial
 import numpy as np
 
 import torch
@@ -17,70 +55,72 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.nn.functional as F            # most non-linearities are here
 
+script_dir = os.path.dirname(__file__)
+module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
+
 import distiller
-
-#import torchvision.models as models       # We need to import our own models with exits
-#import models as models                   # Just use imagenet_extra_models.resnet-earlyexit
-# use TensorBoard for output
-from tensorboardX import SummaryWriter
-writer = SummaryWriter('runs')
+import apputils
+from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
+import distiller.earlyexit as earlyexit
+from models.imagenet import resnet_earlyexit
 
 
-model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+model_names = sorted(name for name in resnet_earlyexit.__dict__
+                     if name.islower() and not name.startswith("__")
+                     and callable(resnet_earlyexit.__dict__[name]))
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
+msglogger = None
+parser = argparse.ArgumentParser(description='PyTorch Early Exit ImageNet Training')
+parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50',
-                    choices=model_names,
-                    help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet50)')
-parser.add_argument('-j', '--workers', default=30, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
-parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    help='evaluate model on validation set')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--world-size', default=1, type=int,
-                    help='number of distributed processes')
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
-                    help='url used to set up distributed training')
-parser.add_argument('--dist-backend', default='gloo', type=str,
-                    help='distributed backend')
-parser.add_argument('--checkpointdir', default='', metavar='CHECKPOINTDIR', type=str,
-                    help='Subdirectory to save checkpoint and best model files during training')
-parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights',
-                    help='List of loss weights for exits (e.g. --lossweights 0.1 0.3)')
-parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit',
-                    help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+                    choices=model_names, help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet50)')
+parser.add_argument('-j', '--workers', default=30, type=int, metavar='N', help='number of data loading workers (default: 4)')
+parser.add_argument('--epochs', default=90, type=int, metavar='N', help='number of total epochs to run')
+parser.add_argument('--start-epoch', default=0, type=int, metavar='N', help='manual epoch number (useful on restarts)')
+parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size (default: 256)')
+parser.add_argument('--lr', '--learning-rate', default=0.1, type=float, metavar='LR', help='initial learning rate')
+parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
+parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='W', help='weight decay (default: 1e-4)')
+parser.add_argument('--print-freq', '-p', default=10, type=int, metavar='N', help='print frequency (default: 10)')
+parser.add_argument('--resume', default='', type=str, metavar='PATH', help='path to latest checkpoint (default: none)')
+parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true', help='evaluate model on validation set')
+parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
+parser.add_argument('--world-size', default=1, type=int, help='number of distributed processes')
+parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str, help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='gloo', type=str, help='distributed backend')
+parser.add_argument('--checkpointdir', default='', metavar='CHECKPOINTDIR', type=str, help='Subdirectory to save checkpoint and best model files during training')
+parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for exits (e.g. --lossweights 0.1 0.3)')
+parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
 
 
 best_prec1 = 0
 
+def check_pytorch_version():
+    if torch.__version__ < '0.4.0':
+        print("\nNOTICE:")
+        print("The Distiller \'master\' branch now requires at least PyTorch version 0.4.0 due to "
+              "PyTorch API changes which are not backward-compatible.\n"
+              "Please install PyTorch 0.4.0 or its derivative.\n"
+              "If you are using a virtual environment, do not forget to update it:\n"
+              "  1. Deactivate the old environment\n"
+              "  2. Install the new environment\n"
+              "  3. Activate the new environment")
+        exit(1)
+
 
 def main():
-    global args, best_prec1
+    global args, best_prec1, msglogger
+    check_pytorch_version()
     args = parser.parse_args()
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+
+    # Log various details about the execution environment.  It is sometimes useful
+    # to refer to past experiment executions and this information may be useful.
+    apputils.log_execution_env_state(sys.argv, gitroot=module_path)
+    msglogger.debug("Distiller: %s", distiller.__version__)
 
     args.distributed = args.world_size > 1
 
@@ -91,16 +131,16 @@ def main():
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
-        model = models.__dict__[args.arch](pretrained=True)
+        model = resnet_earlyexit.__dict__[args.arch](pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = models.__dict__[args.arch]()
+        model = resnet_earlyexit.__dict__[args.arch]()
 
     # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
     if args.earlyexitmodel:
-      if os.path.isfile(args.earlyexitmodel):
-        earlyexitmodel = torch.load(args.earlyexitmodel)
-        model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
+        if os.path.isfile(args.earlyexitmodel):
+            earlyexitmodel = torch.load(args.earlyexitmodel)
+            model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
 
     if not args.distributed:
         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
@@ -139,6 +179,15 @@ def main():
 
     cudnn.benchmark = True
 
+    # This sample application can be invoked to produce various summary reports.
+    if args.summary:
+        which_summary = args.summary
+        if which_summary == 'png':
+            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+        else:
+            distiller.model_summary(model, optimizer, which_summary, args.dataset)
+        exit()
+
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
@@ -173,8 +222,11 @@ def main():
         batch_size=1, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
+    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d',
+                   len(train_loader.sampler), len(val_loader.sampler))
+
     if args.evaluate:
-        validate(val_loader, model, criterion, args.earlyexit)           
+        validate(val_loader, model, criterion, args.earlyexit)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -201,6 +253,7 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, epoch, lossweights):
+    """Training loop for one epoch."""
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -225,7 +278,8 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
 
         # compute outputs at all exits
         exitN, exit0, exit1 = model(input_var)
-        loss = (lossweights[0] * criterion(exit0,target_var)) + (lossweights[1] * criterion(exit1,target_var)) + ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN,target_var))
+        loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
+                ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
 
         # measure accuracy and record loss
         prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
@@ -252,36 +306,42 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         end = time.time()
 
         if i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
-                  'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
-                  'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
-                  'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
-                  'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
-                  'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
-                   top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
-            niter = epoch*len(train_loader)+i
-            writer.add_scalar('Train/Loss', losses.val, niter)
-            writer.add_scalar('TrainExit0/Prec@1', top1_exit0.val, niter)
-            writer.add_scalar('TrainExit0/Prec@5', top5_exit0.val, niter)
-            writer.add_scalar('TrainExit1/Prec@1', top1_exit1.val, niter)
-            writer.add_scalar('TrainExit1/Prec@5', top5_exit1.val, niter)
-            writer.add_scalar('TrainExitN/Prec@1', top1_exitN.val, niter)
-            writer.add_scalar('TrainExitN/Prec@5', top5_exitN.val, niter)
+            stats = ('Performance/Training/',
+                    OrderedDict([
+                        ('Epoch', epoch),
+                        ('i', i),
+                        ('train_loader', len(train_loader)),
+                        ('Time', batch_time.val),
+                        ('TimeAvg', batch_time.avg),
+                        ('Data', data_time.val),
+                        ('DataAvg', data_time.avg),
+                        ('Loss', loss.val),
+                        ('LossAvg', loss.avg),
+                        ('Prec@1_exit0', top1_exit0.val),
+                        ('Prec@1_exit0_avg', top1_exit0.avg),
+                        ('Prec@5_exit0', top5_exit0.val),
+                        ('Prec@5_exit0', top5_exit0.avg),
+                        ('Prec@1_exit1', top1_exit1.val),
+                        ('Prec@1_exit1_avg', top1_exit1.avg),
+                        ('Prec@5_exit1', top5_exit1.val),
+                        ('Prec@5_exit1', top5_exit1.avg),
+                        ('Prec@1_exitN', top1_exitN.val),
+                        ('Prec@1_exitN_avg', top1_exitN.avg),
+                        ('Prec@5_exitN', top5_exitN.val),
+                        ('Prec@5_exitN', top5_exitN.avg)]))
+            distiller.log_training_progress(stats,
+                                            model.named_parameters() if log_params_hist else None,
+                                            epoch, steps_completed, steps_per_epoch, print_freq, loggers)
 
 def validate(val_loader, model, criterion, earlyexit):
+    """Model validation"""
     batch_time = AverageMeter()
     losses_exit0 = AverageMeter()
     losses_exit1 = AverageMeter()
     losses_exitN = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    
+
     # switch to evaluate mode
     model.eval()
     exit_0 = 0
@@ -312,12 +372,12 @@ def validate(val_loader, model, criterion, earlyexit):
         losses_exitN.update(loss_exitN.data[0], input.size(0))
 
         # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
-        if (loss_exit0.cpu().data.numpy()[0] < earlyexit[0]):
+        if loss_exit0.cpu().data.numpy()[0] < earlyexit[0]:
             # take the results from the early exit since lower than threshold
             top1.update(prec1_exit0[0], input.size(0))
             top5.update(prec5_exit0[0], input.size(0))
             exit_0 = exit_0 + 1
-        elif (loss_exit1.cpu().data.numpy()[0] < earlyexit[1]):
+        elif loss_exit1.cpu().data.numpy()[0] < earlyexit[1]:
             # or take the results from the next early exit, since lower than its threshold
             top1.update(prec1_exit1[0], input.size(0))
             top5.update(prec5_exit1[0], input.size(0))
@@ -334,23 +394,27 @@ def validate(val_loader, model, criterion, earlyexit):
         end = time.time()
 
         if i % args.print_freq == 0:
-            print('Test: [{0}/{1}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
-                  'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
-                  'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                   i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
-                   top1=top1, top5=top5))
-            niter = epoch*len(train_loader)+i
-            writer.add_scalar('Train/Loss', losses.val, niter)
-            writer.add_scalar('TrainExit0/Prec@1', top1_exit0.val, niter)
-            writer.add_scalar('TrainExit0/Prec@5', top5_exit0.val, niter)
-            writer.add_scalar('TrainExit1/Prec@1', top1_exit1.val, niter)
-            writer.add_scalar('TrainExit1/Prec@5', top5_exit1.val, niter)
-            writer.add_scalar('TrainExitN/Prec@1', top1_exitN.val, niter)
-            writer.add_scalar('TrainExitN/Prec@5', top5_exitN.val, niter)
+            stats = ('Performance/Validation/', OrderedDict([('Epoch', epoch),
+                ('i', i),
+                ('train_loader', len(val_loader)),
+                ('Time', batch_time.val),
+                ('TimeAvg', batch_time.avg),
+                ('Data', data_time.val),
+                ('DataAvg', data_time.avg),
+                ('Loss0', loss0.val),
+                ('LossAvg0', loss0.avg),
+                ('Loss1', loss1.val),
+                ('LossAvg1', loss1.avg),
+                ('LossN', lossN.val),
+                ('LossAvgN', lossN.avg),
+                ('Prec@1', top1.val),
+                ('Prec@1_avg', top1.avg),
+                ('Prec@5', top5.val),
+                ('Prec@5', top5.avg)]))
+            distiller.log_training_progress(stats,
+                model.named_parameters() if log_params_hist else None,
+                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
