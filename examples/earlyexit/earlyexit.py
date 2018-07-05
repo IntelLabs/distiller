@@ -61,19 +61,21 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 
 import distiller
+import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.earlyexit as earlyexit
 from models.imagenet import resnet_earlyexit
 
 
 model_names = sorted(name for name in resnet_earlyexit.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(resnet_earlyexit.__dict__[name]))
+                     if name.islower() and not name.startswith("__")
+                     and callable(resnet_earlyexit.__dict__[name]))
 
 msglogger = None
 parser = argparse.ArgumentParser(description='PyTorch Early Exit ImageNet Training')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50', choices=model_names, help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet50)')
+parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50',
+                    choices=model_names, help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet50)')
 parser.add_argument('-j', '--workers', default=30, type=int, metavar='N', help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N', help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N', help='manual epoch number (useful on restarts)')
@@ -129,16 +131,16 @@ def main():
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
-        model = models.__dict__[args.arch](pretrained=True)
+        model = resnet_earlyexit.__dict__[args.arch](pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = models.__dict__[args.arch]()
+        model = resnet_earlyexit.__dict__[args.arch]()
 
     # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
     if args.earlyexitmodel:
-      if os.path.isfile(args.earlyexitmodel):
-        earlyexitmodel = torch.load(args.earlyexitmodel)
-        model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
+        if os.path.isfile(args.earlyexitmodel):
+            earlyexitmodel = torch.load(args.earlyexitmodel)
+            model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
 
     if not args.distributed:
         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
@@ -219,12 +221,12 @@ def main():
         ])),
         batch_size=1, shuffle=False,
         num_workers=args.workers, pin_memory=True)
-    
-    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+
+    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d',
+                   len(train_loader.sampler), len(val_loader.sampler))
 
     if args.evaluate:
-        validate(val_loader, model, criterion, args.earlyexit)           
+        validate(val_loader, model, criterion, args.earlyexit)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -276,7 +278,8 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
 
         # compute outputs at all exits
         exitN, exit0, exit1 = model(input_var)
-        loss = (lossweights[0] * criterion(exit0,target_var)) + (lossweights[1] * criterion(exit1,target_var)) + ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN,target_var))
+        loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
+                ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
 
         # measure accuracy and record loss
         prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
@@ -303,35 +306,32 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         end = time.time()
 
         if i % args.print_freq == 0:
-            stats = ('Peformance/Validation/',
-                 OrderedDict([('Loss', vloss),
-                              ('Top1', top1),
-                              ('Top5', top5)]))
-
-            stats = ('Performance/Training/', OrderedDict([('Epoch', epoch),
-                ('i', i),
-                ('train_loader', len(train_loader)),
-                ('Time', batch_time.val),
-                ('TimeAvg', batch_time.avg),
-                ('Data', data_time.val),
-                ('DataAvg', data_time.avg),
-                ('Loss', loss.val),
-                ('LossAvg', loss.avg),
-                ('Prec@1_exit0', top1_exit0.val),
-                ('Prec@1_exit0_avg', top1_exit0.avg),
-                ('Prec@5_exit0', top5_exit0.val),
-                ('Prec@5_exit0', top5_exit0.avg),
-                ('Prec@1_exit1', top1_exit1.val),
-                ('Prec@1_exit1_avg', top1_exit1.avg),
-                ('Prec@5_exit1', top5_exit1.val),
-                ('Prec@5_exit1', top5_exit1.avg),
-                ('Prec@1_exitN', top1_exitN.val),
-                ('Prec@1_exitN_avg', top1_exitN.avg),
-                ('Prec@5_exitN', top5_exitN.val),
-                ('Prec@5_exitN', top5_exitN.avg)]))
+            stats = ('Performance/Training/',
+                    OrderedDict([
+                        ('Epoch', epoch),
+                        ('i', i),
+                        ('train_loader', len(train_loader)),
+                        ('Time', batch_time.val),
+                        ('TimeAvg', batch_time.avg),
+                        ('Data', data_time.val),
+                        ('DataAvg', data_time.avg),
+                        ('Loss', loss.val),
+                        ('LossAvg', loss.avg),
+                        ('Prec@1_exit0', top1_exit0.val),
+                        ('Prec@1_exit0_avg', top1_exit0.avg),
+                        ('Prec@5_exit0', top5_exit0.val),
+                        ('Prec@5_exit0', top5_exit0.avg),
+                        ('Prec@1_exit1', top1_exit1.val),
+                        ('Prec@1_exit1_avg', top1_exit1.avg),
+                        ('Prec@5_exit1', top5_exit1.val),
+                        ('Prec@5_exit1', top5_exit1.avg),
+                        ('Prec@1_exitN', top1_exitN.val),
+                        ('Prec@1_exitN_avg', top1_exitN.avg),
+                        ('Prec@5_exitN', top5_exitN.val),
+                        ('Prec@5_exitN', top5_exitN.avg)]))
             distiller.log_training_progress(stats,
-                model.named_parameters() if log_params_hist else None,
-                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+                                            model.named_parameters() if log_params_hist else None,
+                                            epoch, steps_completed, steps_per_epoch, print_freq, loggers)
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
