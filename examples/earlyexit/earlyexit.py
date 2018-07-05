@@ -181,13 +181,14 @@ def main():
     cudnn.benchmark = True
 
     # This sample application can be invoked to produce various summary reports.
-'''    if args.summary:
-        which_summary = args.summary
-        if which_summary == 'png':
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
-        else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
-        exit()'''
+    #if args.summary:
+    #    which_summary = args.summary
+    #    if which_summary == 'png':
+    #        apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+    #    else:
+    #        distiller.model_summary(model, optimizer, which_summary, args.dataset)
+    #    exit()
+
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
