@@ -55,9 +55,10 @@ class WRPNQuantizer(Quantizer):
         1. This class does not take care of layer widening as described in the paper
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}):
+    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides={}, quantize_bias=False):
         super(WRPNQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                            bits_overrides=bits_overrides, train_with_fp_copy=True)
+                                            bits_overrides=bits_overrides, train_with_fp_copy=True,
+                                            quantize_bias=quantize_bias)
 
         def wrpn_quantize_param(param_fp, num_bits):
             scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
