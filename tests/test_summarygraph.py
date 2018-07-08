@@ -22,10 +22,8 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 import distiller
-
-import pytest
 from models import ALL_MODEL_NAMES, create_model
-from apputils import SummaryGraph, onnx_name_2_pytorch_name
+from apputils import *
 from distiller import normalize_module_name, denormalize_module_name
 
 # Logging configuration
@@ -66,13 +64,13 @@ def test_connectivity():
 
     edges = g.edges
     assert edges[0].src == '0' and edges[0].dst == 'conv1'
-    #logging.debug(g.ops[1]['name'])
+
     # Test two sequential calls to predecessors (this was a bug once)
     preds = g.predecessors(g.find_op('bn1'), 1)
     preds = g.predecessors(g.find_op('bn1'), 1)
     assert preds == ['108', '2', '3', '4', '5']
     # Test successors
-    succs = g.successors(g.find_op('bn1'), 2)#, logging)
+    succs = g.successors(g.find_op('bn1'), 2)
     assert succs == ['relu']
 
     op = g.find_op('layer1.0')
@@ -89,7 +87,6 @@ def test_connectivity():
     assert preds == []
     preds = g.predecessors(g.find_op('bn1'), 3)
     assert preds == ['0', '1']
-    #logging.debug(preds)
 
 
 def test_layer_search():
@@ -133,6 +130,30 @@ def test_vgg():
     succs = g.successors_f('features.34', 'Conv')
 
 
+def test_simplenet():
+    g = create_graph('cifar10', 'simplenet_cifar')
+    assert g is not None
+    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
+    logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
+    assert len(preds) == 0
+
+    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
+    logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
+    assert len(preds) == 1
+
+
+def test_simplenet():
+    g = create_graph('cifar10', 'simplenet_cifar')
+    assert g is not None
+    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
+    logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
+    assert len(preds) == 0
+
+    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
+    logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
+    assert len(preds) == 1
+
+
 def name_test(dataset, arch):
     model = create_model(False, dataset, arch, parallel=False)
     modelp = create_model(False, dataset, arch, parallel=True)
@@ -163,3 +184,18 @@ def test_onnx_name_2_pytorch_name():
     assert "features.34" == onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]', 'Conv')
     assert "Relu3" == onnx_name_2_pytorch_name('NameWithNoModule.3', 'Relu')
     #assert "features.module.34" == onnx_name_2_pytorch_name('VGG/DataParallel[features]/Sequential/Conv2d[34]', 'Conv')
+
+
+def test_connectivity_summary():
+    g = create_graph('cifar10', 'resnet20_cifar')
+    assert g is not None
+
+    summary = connectivity_summary(g)
+    assert len(summary) == 73
+
+    verbose_summary = connectivity_summary_verbose(g)
+    assert len(verbose_summary  ) == 73
+
+
+if __name__ == '__main__':
+    test_connectivity_summary()

@@ -178,7 +178,7 @@ class SummaryGraph(object):
             s = str(n.type())
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
-        except:
+        except ValueError:
             # Size not specified in type
             tensor['shape'] = 0,
         return tensor
@@ -198,14 +198,14 @@ class SummaryGraph(object):
             op['attrs']['MACs'] = 0
             if op['type'] == 'Conv':
                 conv_out = op['outputs'][0]
-                conv_in =  op['inputs'][0]
+                conv_in = op['inputs'][0]
                 conv_w = op['attrs']['kernel_shape']
                 ofm_vol = self.param_volume(conv_out)
                 # MACs = volume(OFM) * (#IFM * K^2)
                 op['attrs']['MACs'] = ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1]
             elif op['type'] == 'Gemm':
-                conv_out =  op['outputs'][0]
-                conv_in =  op['inputs'][0]
+                conv_out = op['outputs'][0]
+                conv_in = op['inputs'][0]
                 n_ifm = self.param_shape(conv_in)[1]
                 n_ofm = self.param_shape(conv_out)[1]
                 # MACs = #IFM * #OFM
@@ -424,7 +424,7 @@ def connectivity_summary(sgraph):
     """
     df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
     pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops):
+    for i, op in enumerate(sgraph.ops.values()):
         df.loc[i] = [op['name'], op['type'], op['inputs'], op['outputs']]
     return df
 
@@ -443,7 +443,7 @@ def connectivity_summary_verbose(sgraph):
 
     df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
     pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops):
+    for i, op in enumerate(sgraph.ops.values()):
         outputs = []
         for blob in op['outputs']:
             if blob in sgraph.params:
@@ -467,16 +467,21 @@ def connectivity_tbl_summary(sgraph, verbose=False):
     return tabulate(df, headers='keys', tablefmt='psql')
 
 
-def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
-    pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir='TB')
+def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', styles=None):
+    """Low-level API to create a PyDot graph (dot formatted).
+    """
+    pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir=rankdir)
 
-    node_style = {'shape': 'record',
-                  'fillcolor': '#6495ED',
-                  'style': 'rounded, filled'}
+    op_node_style = {'shape': 'record',
+                     'fillcolor': '#6495ED',
+                     'style': 'rounded, filled'}
 
     for op_node in op_nodes:
-        pydot_graph.add_node(pydot.Node(op_node[0], **node_style,
-                             label="\n".join(op_node)))
+        style = op_node_style
+        # Check if we should override the style of this node.
+        if styles is not None and op_node[0] in styles:
+            style = styles[op_node[0]]
+        pydot_graph.add_node(pydot.Node(op_node[0], **style, label="\n".join(op_node)))
 
     for data_node in data_nodes:
         pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node)))
@@ -495,37 +500,20 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges):
     return pydot_graph
 
 
-def draw_model_to_file(sgraph, png_fname, display_param_nodes=False):
-    """Create a PNG file, containing a graphiz-dot graph of the netowrk represented
-    by SummaryGraph 'sgraph'
-    """
-    png = create_png(sgraph, display_param_nodes=display_param_nodes)
-    with open(png_fname, 'wb') as fid:
-        fid.write(png)
-
-
-def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=False):
-    try:
-        if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
-        elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(1, 3, 32, 32))
-        else:
-            print("Unsupported dataset (%s) - aborting draw operation" % dataset)
-            return
-
-        g = SummaryGraph(model, dummy_input)
-        draw_model_to_file(g, png_fname, display_param_nodes)
-        print("Network PNG image generation completed")
-    except FileNotFoundError:
-        print("An error has occured while generating the network PNG image.")
-        print("Please check that you have graphviz installed.")
-        print("\t$ sudo apt-get install graphviz")
-
-
-def create_png(sgraph, display_param_nodes=False):
+def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
     """Create a PNG object containing a graphiz-dot graph of the network,
-    as represented by SummaryGraph 'sgraph'
+    as represented by SummaryGraph 'sgraph'.
+
+    Args:
+        sgraph (SummaryGraph): the SummaryGraph instance to draw.
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
     """
 
     op_nodes = [op['name'] for op in sgraph.ops.values()]
@@ -546,9 +534,67 @@ def create_png(sgraph, display_param_nodes=False):
         param_nodes = None
 
     op_nodes = [(op['name'], op['type']) for op in sgraph.ops.values()]
-    pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges)
+    pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir, styles)
     png = pydot_graph.create_png()
     return png
+
+
+def draw_model_to_file(sgraph, png_fname, display_param_nodes=False, rankdir='TB', styles=None):
+    """Create a PNG file, containing a graphiz-dot graph of the netowrk represented
+    by SummaryGraph 'sgraph'
+
+    Args:
+        sgraph (SummaryGraph): the SummaryGraph instance to draw.
+        png_fname (string): PNG file name
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
+        """
+    png = create_png(sgraph, display_param_nodes=display_param_nodes)
+    with open(png_fname, 'wb') as fid:
+        fid.write(png)
+
+
+def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=False,
+                                rankdir='TB', styles=None):
+    """Draw a PyTorch image classifier to a PNG file.  This a helper function that
+    simplifies the interface of draw_model_to_file().
+
+    Args:
+        model: PyTorch model instance
+        png_fname (string): PNG file name
+        dataset (string): one of 'imagenet' or 'cifar10'.  This is required in order to
+                          create a dummy input of the correct shape.
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
+    """
+    try:
+        if dataset == 'imagenet':
+            dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
+        elif dataset == 'cifar10':
+            dummy_input = Variable(torch.randn(1, 3, 32, 32))
+        else:
+            print("Unsupported dataset (%s) - aborting draw operation" % dataset)
+            return
+
+        g = SummaryGraph(model, dummy_input)
+        draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
+        print("Network PNG image generation completed")
+    except FileNotFoundError:
+        print("An error has occured while generating the network PNG image.")
+        print("Please check that you have graphviz installed.")
+        print("\t$ sudo apt-get install graphviz")
 
 
 def data_node_has_parent(g, id):
