@@ -1,4 +1,0 @@
-gym==0.9.4
-numpy
-networkx
-matplotlib
