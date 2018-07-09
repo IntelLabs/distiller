@@ -78,6 +78,8 @@ import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
+import examples.automated_deep_compression.ADC as ADC
+
 
 # Logger handle
 msglogger = None
@@ -231,13 +233,12 @@ def main():
     msglogger.info('Optimizer Type: %s', type(optimizer))
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
-    import ADC
     if args.ADC:
         train_loader, val_loader, test_loader, _ = apputils.load_data(
             args.dataset, os.path.expanduser(args.data), args.batch_size,
             args.workers, args.validation_size, args.deterministic)
-        validate_fn = partial(validate, val_loader=val_loader, criterion=criterion,
-                             loggers=[pylogger], print_freq=args.print_freq)
+        validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
+                              loggers=[pylogger], print_freq=args.print_freq)
 
         ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn)
         exit()
