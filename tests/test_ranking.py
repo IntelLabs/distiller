@@ -18,11 +18,13 @@ import logging
 import torch
 import os
 import sys
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
-import distiller
-import pytest
+try:
+    import distiller
+except ImportError:
+    module_path = os.path.abspath(os.path.join('..'))
+    if module_path not in sys.path:
+        sys.path.append(module_path)
+    import distiller
 import common  # common test code
 
 # Logging configuration
@@ -31,30 +33,31 @@ fh = logging.FileHandler('test.log')
 logger = logging.getLogger()
 logger.addHandler(fh)
 
+
 def test_ch_ranking():
     # Tensor with shape [3, 2, 2, 2] -- 3 filters, 2 channels
-    param = torch.tensor([[[[11.,12],
-                            [13,14]],
+    param = torch.tensor([[[[11., 12],
+                            [13,  14]],
 
-                           [[15.,16],
-                            [17,18]]],
+                           [[15., 16],
+                            [17,  18]]],
                           # Filter #2
-                          [[[21.,22],
-                            [23,24]],
+                          [[[21., 22],
+                            [23,  24]],
 
-                           [[25.,26],
-                            [27,28]]],
+                           [[25., 26],
+                            [27,  28]]],
                           # Filter #3
-                          [[[31.,32],
-                            [33,34]],
+                          [[[31., 32],
+                            [33,  34]],
 
-                           [[35.,36],
-                            [37,38]]]])
+                           [[35., 36],
+                            [37,  38]]]])
 
     fraction_to_prune = 0.5
     bottomk_channels, channel_mags = distiller.pruning.L1RankedStructureParameterPruner.rank_channels(fraction_to_prune, param)
     logger.info("bottom {}% channels: {}".format(fraction_to_prune*100, bottomk_channels))
-    assert bottomk_channels == torch.tensor([ 90.])
+    assert bottomk_channels == torch.tensor([90.])
 
 
 def test_ranked_channel_pruning():
@@ -68,7 +71,7 @@ def test_ranked_channel_pruning():
     assert distiller.sparsity_ch(conv1_p) == 0.0
 
     # # Create a channel-ranking pruner
-    reg_regims = {"layer1.0.conv1.weight" : [0.1, "Channels"]}
+    reg_regims = {"layer1.0.conv1.weight": [0.1, "Channels"]}
     pruner = distiller.pruning.L1RankedStructureParameterPruner("channel_pruner", reg_regims)
     pruner.set_param_mask(conv1_p, "layer1.0.conv1.weight", zeros_mask_dict, meta=None)
 
@@ -93,6 +96,6 @@ def test_ranked_channel_pruning():
     assert conv1.in_channels == 16
 
     # Test thinning
-    distiller.remove_channels(model, zeros_mask_dict, "resnet20_cifar", "cifar10")
+    distiller.remove_channels(model, zeros_mask_dict, "resnet20_cifar", "cifar10", optimizer=None)
     assert conv0.out_channels == 15
     assert conv1.in_channels == 15
