@@ -8,7 +8,7 @@ import gym
 from gym import spaces
 import distiller
 from apputils import SummaryGraph
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
 
@@ -16,13 +16,7 @@ from base_parameters import TaskParameters
 from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager
 
 msglogger = logging.getLogger()
-pylogger = distiller.data_loggers.PythonLogger(msglogger)
-tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
-
-
-# TODO: move this to utils
-def pretty_int(i):
-    return "{:,}".format(i)
+Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
 
 
 # TODO: this is also defined in test_pruning.py
@@ -36,7 +30,11 @@ def create_model_masks(model):
 
 
 USE_COACH = True
+
+
 def do_adc(model, dataset, arch, data_loader, validate_fn):
+    np.random.seed()
+
     if USE_COACH:
         task_parameters = TaskParameters(framework_type="tensorflow",
                                          experiment_path="./experiments/test")
@@ -114,9 +112,12 @@ def collect_conv_details(model, dataset):
 
 class CNNEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
-    STATE_EMBEDDING_LEN = 11
+    STATE_EMBEDDING_LEN = len(Observation._fields)
 
     def __init__(self, model, dataset, arch, data_loader, validate_fn):
+        self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
+        self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
+
         self.action_space = RandomADCActionSpace()
         self.dataset = dataset
         self.arch = arch
@@ -124,10 +125,10 @@ class CNNEnvironment(gym.Env):
         self.validate_fn = validate_fn
         self.orig_model = model
 
-        self.conv_layers, self.total_macs = collect_conv_details(model, dataset)
+        self.conv_layers, self.dense_model_macs = collect_conv_details(model, dataset)
         self.reset(init_only=True)
         msglogger.info("Model %s has %d Convolution layers", arch, len(self.conv_layers))
-        msglogger.info("\tTotal MACs: %s" % pretty_int(self.total_macs))
+        msglogger.info("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
 
         self.debug_stats = {'episode': 0}
 
@@ -141,11 +142,11 @@ class CNNEnvironment(gym.Env):
         This is invoked by the Agent.
         """
         msglogger.info("Resetting the environment")
-        self.current_layer_id = 1
+        self.current_layer_id = 0
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
         self.zeros_mask_dict = create_model_masks(self.model)
-        self._remaining_macs = self.total_macs
+        self._remaining_macs = self.dense_model_macs
         self._removed_macs = 0
 
         # self.unprocessed_layers = []
@@ -155,8 +156,11 @@ class CNNEnvironment(gym.Env):
         if init_only:
             return
 
-        layer_macs = self.get_macs(self.current_layer())
-        return self._get_obs(layer_macs)
+        #layer_macs = self.get_macs(self.current_layer())
+        #return self._get_obs(layer_macs)
+        obs, _, _, _, = self.step(0)
+        return obs
+
 
     def num_layers(self):
         return len(self.conv_layers)
@@ -175,22 +179,22 @@ class CNNEnvironment(gym.Env):
         Convolution layers.
         This is normalized to the range 0..1
         """
-        #return 1 - self.sum_list_macs(self.unprocessed_layers) / self.total_macs
-        return self._remaining_macs / self.total_macs
+        #return 1 - self.sum_list_macs(self.unprocessed_layers) / self.dense_model_macs
+        return self._remaining_macs / self.dense_model_macs
 
     def removed_macs(self):
         """Return the amount of MACs removed so far.
         This is normalized to the range 0..1
         """
-        #return self.sum_list_macs(self.processed_layers) / self.total_macs
-        return self._removed_macs / self.total_macs
+        #return self.sum_list_macs(self.processed_layers) / self.dense_model_macs
+        return self._removed_macs / self.dense_model_macs
 
-    def sum_list_macs(self, conv_list):
-        """Sum the MACs in the provided list of Convolution layers"""
-        total_macs = 0
-        for conv in conv_list:
-            total_macs += conv.macs
-        return total_macs
+    # def sum_list_macs(self, conv_list):
+    #     """Sum the MACs in the provided list of Convolution layers"""
+    #     total_macs = 0
+    #     for conv in conv_list:
+    #         total_macs += conv.macs
+    #     return total_macs
 
     def render(self, mode, close):
         """Provide some feedback to the user about what's going on
@@ -202,23 +206,22 @@ class CNNEnvironment(gym.Env):
             msglogger.info("+" + "-" * 50 + "+")
 
         msglogger.info("Environment: current_layer_id=%d" % self.current_layer_id)
-        distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
+        distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
     def step(self, action):
         """Take a step, given an action.
         This is invoked by the Agent.
         """
-        action /= 5
-
         layer_macs = self.get_macs(self.current_layer())
-        self.__remove_channels(self.current_layer_id, action)
+        if action > 0:
+            prev_action = self.__remove_channels(self.current_layer_id, action)
         layer_macs_after_action = self.get_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self.current_layer_id += 1
         next_layer_macs = self.get_macs(self.current_layer())
         self._removed_macs += (layer_macs - layer_macs_after_action)
-        self._remaining_macs -= layer_macs
+        self._remaining_macs -= next_layer_macs
 
         if self.episode_is_done():
             observation = self.get_final_obs()
@@ -228,7 +231,11 @@ class CNNEnvironment(gym.Env):
             observation = self._get_obs(next_layer_macs)
             reward = 0
 
-        self.prev_action = action.item()
+        if action > 0:
+            self.prev_action = prev_action
+        else:
+            self.prev_action = 0
+
         info = {}
         return observation, reward, self.episode_is_done(), info
 
@@ -239,9 +246,12 @@ class CNNEnvironment(gym.Env):
         conv_module = distiller.model_find_module(self.model, layer.name)
 
         obs = np.array([layer.t, conv_module.out_channels, conv_module.in_channels,
-               layer.ifm_h, layer.ifm_w, layer.stride[0], layer.k,
-               macs, self.removed_macs(), self.remaining_macs(), self.prev_action])
+                        layer.ifm_h, layer.ifm_w, layer.stride[0], layer.k,
+                        macs/self.dense_model_macs, self.removed_macs(), self.remaining_macs(), self.prev_action])
+
         assert len(obs) == self.STATE_EMBEDDING_LEN
+        assert (macs/self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
+        msglogger.info("obs={}".format(Observation._make(obs)))
         return obs
 
     def get_final_obs(self):
@@ -249,8 +259,8 @@ class CNNEnvironment(gym.Env):
         The final state is reached after we traverse all of the Convolution layers.
         """
         obs = np.array([-1, 0, 0,
-               0, 0, 0, 0,
-               0, self.removed_macs(), 0, self.prev_action])
+                         0, 0, 0, 0,
+                         0, self.removed_macs(), 0, self.prev_action])
         assert len(obs) == self.STATE_EMBEDDING_LEN
         return obs
 
@@ -271,7 +281,7 @@ class CNNEnvironment(gym.Env):
             raise ValueError("fraction_to_prune=%f is illegal" % (fraction_to_prune))
 
         if fraction_to_prune == 0:
-            return
+            return 0
         if fraction_to_prune == 1.0:
             # For now, prevent the removal of entire layers
             fraction_to_prune = 0.99
@@ -289,26 +299,43 @@ class CNNEnvironment(gym.Env):
 
         if self.zeros_mask_dict[conv_pname].mask is None or \
            distiller.sparsity_ch(self.zeros_mask_dict[conv_pname].mask) == 0:
-            msglogger.info("remove_channels: aborting because there are no channels to prune")
-            return
+            msglogger.info("__remove_channels: aborting because there are no channels to prune")
+            return 0
 
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
+        actual_sparsity = distiller.sparsity_ch(conv_p)
         distiller.remove_channels(self.model, self.zeros_mask_dict, self.arch, self.dataset)
+        return actual_sparsity
 
     def compute_reward(self):
         """The ADC paper defines reward = -Error"""
-        distiller.log_weights_sparsity(self.model, -1, loggers=[pylogger])
+        distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
-        top1, top5, vloss = self.validate_fn(model=self.model.cuda(), epoch=self.debug_stats['episode'])
-
+        top1, top5, vloss = self.validate_fn(model=self.model, epoch=self.debug_stats['episode'])
         _, total_macs = collect_conv_details(self.model, self.dataset)
         reward = -1 * vloss * math.log(total_macs)
-        msglogger.info("++++++++++++++++++++++++++++++++++++++++++++++++++reward={}  macs={}".format(reward, total_macs))
+        #reward = -1 * vloss * math.sqrt(math.log(total_macs))
+        #reward = top1 / math.log(total_macs)
+        #alpha = 0.9
+        #reward = -1 * ( (1-alpha)*(top1/100) + 10*alpha*(total_macs/self.dense_model_macs) )
+
+        #alpha = 0.99
+        #reward = -1 * ( (1-alpha)*(top1/100) + alpha*(total_macs/self.dense_model_macs) )
+
+        #reward = vloss * math.log(total_macs)
+        #reward = -1 * vloss * (total_macs / self.dense_model_macs)
+        #reward = top1 * (self.dense_model_macs / total_macs)
+        #reward = -1 * math.log(total_macs)
+        #reward =  -1 * vloss
         stats = ('Peformance/Validation/',
-                 OrderedDict([('reward', reward),
-                              ('total_macs', total_macs)]))
+                 OrderedDict([('Loss', vloss),
+                              ('Top1', top1),
+                              ('Top5', top5),
+                              ('reward', reward),
+                              ('total_macs', int(total_macs)),
+                              ('log(total_macs)', math.log(total_macs))]))
         distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=0, total_steps=1,
-                                        log_freq=1, loggers=[tflogger, pylogger])
+                                        log_freq=1, loggers=[self.tflogger, self.pylogger])
 
         return reward
