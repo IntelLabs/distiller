@@ -319,6 +319,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
                         ('Data', data_time.val),
                         ('DataAvg', data_time.avg),
                         ('Loss', loss.item()),
+                        ('LossAvg', loss.mean()),
                         ('Prec@1_exit0', top1_exit0.val),
                         ('Prec@1_exit0_avg', top1_exit0.avg),
                         ('Prec@5_exit0', top5_exit0.val),
