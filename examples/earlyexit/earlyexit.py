@@ -290,7 +290,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
 
         # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.item(), input.size(0))
 
         top1_exit0.update(prec1_exit0[0], input.size(0))
         top5_exit0.update(prec5_exit0[0], input.size(0))
@@ -318,8 +318,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
                         ('TimeAvg', batch_time.avg),
                         ('Data', data_time.val),
                         ('DataAvg', data_time.avg),
-                        ('Loss', loss.val),
-                        ('LossAvg', loss.avg),
+                        ('Loss', loss.item()),
                         ('Prec@1_exit0', top1_exit0.val),
                         ('Prec@1_exit0_avg', top1_exit0.avg),
                         ('Prec@5_exit0', top5_exit0.val),
