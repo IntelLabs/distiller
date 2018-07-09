@@ -326,7 +326,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             if isinstance(layers[successor], torch.nn.modules.Conv2d):
                 # For each of the convolutional layers that follow, we have to reduce the number of input channels.
                 append_module_directive(thinning_recipe, successor, key='in_channels', val=num_nnz_filters)
-                msglogger.info("[recipe] {}: setting in_channels = {}".format(successor, num_nnz_filters))
+                msglogger.debug("[recipe] {}: setting in_channels = {}".format(successor, num_nnz_filters))
 
                 # Now remove channels from the weights tensor of the successor conv
                 append_param_directive(thinning_recipe, successor+'.weight', (1, indices))
@@ -336,7 +336,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
                 fm_size = layers[successor].in_features // layers[layer_name].out_channels
                 in_features = fm_size * num_nnz_filters
                 append_module_directive(thinning_recipe, successor, key='in_features', val=in_features)
-                msglogger.info("[recipe] {}: setting in_features = {}".format(successor, in_features))
+                msglogger.debug("[recipe] {}: setting in_features = {}".format(successor, in_features))
 
                 # Now remove channels from the weights tensor of the successor FC layer:
                 # This is a bit tricky:
@@ -455,12 +455,12 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                 indices_to_select = val[1]
                 # Check if we're trying to trim a parameter that is already "thin"
                 if running.size(dim_to_trim) != indices_to_select.nelement():
-                    msglogger.info("[thinning] {}: setting {} to {}".
+                    msglogger.debug("[thinning] {}: setting {} to {}".
                                    format(layer_name, attr, indices_to_select.nelement()))
                     setattr(layers[layer_name], attr,
                             torch.index_select(running, dim=dim_to_trim, index=indices_to_select))
             else:
-                msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
+                msglogger.debug("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
                 setattr(layers[layer_name], attr, val)
 
     assert len(recipe.parameters) > 0
