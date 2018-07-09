@@ -332,9 +332,11 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
                         ('Prec@1_exitN_avg', top1_exitN.avg),
                         ('Prec@5_exitN', top5_exitN.val),
                         ('Prec@5_exitN', top5_exitN.avg)]))
-            distiller.log_training_progress(stats,
-                                            model.named_parameters() if log_params_hist else None,
-                                            epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+            #distiller.log_training_progress(stats,
+            #                                model.named_parameters() if log_params_hist else None,
+            #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+            distiller.log_training_progress(stats, None, epoch, steps_completed,
+                                            steps_per_epoch, print_freq, loggers)
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -414,8 +416,10 @@ def validate(val_loader, model, criterion, earlyexit):
                 ('Prec@1_avg', top1.avg),
                 ('Prec@5', top5.val),
                 ('Prec@5', top5.avg)]))
-            distiller.log_training_progress(stats,
-                model.named_parameters() if log_params_hist else None,
+            #distiller.log_training_progress(stats,
+            #    model.named_parameters() if log_params_hist else None,
+            #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+            distiller.log_training_progress(stats, None,
                 epoch, steps_completed, steps_per_epoch, print_freq, loggers)
 
 
