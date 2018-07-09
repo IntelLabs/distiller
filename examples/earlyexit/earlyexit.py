@@ -114,7 +114,7 @@ def check_pytorch_version():
 
 
 def main():
-    global args, best_prec1, msglogger
+    global args, best_prec1, msglogger, tflogger, pylogger
     check_pytorch_version()
     args = parser.parse_args()
     msglogger = apputils.config_pylogger(os.path.join(args.checkpointdir, 'logging.conf'), args.name)
