@@ -138,6 +138,11 @@ def main():
         print("=> creating model '{}'".format(args.arch))
         model = resnet_earlyexit.__dict__[args.arch]()
 
+    # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
+    # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
+    tflogger = TensorBoardLogger(msglogger.logdir)
+    pylogger = PythonLogger(msglogger)
+
     # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
     if args.earlyexitmodel:
         if os.path.isfile(args.earlyexitmodel):
