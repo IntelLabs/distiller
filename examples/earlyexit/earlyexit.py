@@ -335,7 +335,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
             #distiller.log_training_progress(stats,
             #                                model.named_parameters() if log_params_hist else None,
             #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-            distiller.log_training_progress(stats, None, epoch, None, None, None, msglogger)
+            distiller.log_training_progress(stats, None, epoch, None, None, None, loggers=[tflogger, pylogger])
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -418,7 +418,7 @@ def validate(val_loader, model, criterion, earlyexit):
             #distiller.log_training_progress(stats,
             #    model.named_parameters() if log_params_hist else None,
             #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-            distiller.log_training_progress(stats, None, epoch, None, None, None, msglogger)
+            distiller.log_training_progress(stats, None, epoch, None, None, None, loggers=[tflogger, pylogger])
 
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
