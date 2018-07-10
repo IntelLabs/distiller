@@ -313,6 +313,22 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # human friendly logging
+        if i % args.print_freq == 0:
+            print('Epoch: [{0}][{1}/{2}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
+                  'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
+                  'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
+                  'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
+                  'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
+                  'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
+                   epoch, i, len(train_loader), batch_time=batch_time,
+                   data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
+                   top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
+        # machine friendly logging
         stats = ('Performance/Training/',
                 OrderedDict([
                     ('Epoch', epoch),
@@ -405,6 +421,18 @@ def validate(val_loader, model, criterion, earlyexit):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # human friendly logging
+        if i % args.print_freq == 0:
+            print('Test: [{0}/{1}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
+                  'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
+                  'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
+                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                   i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                   top1=top1, top5=top5))
+        # machine friendly logging
         stats = ('Performance/Validation/',
             OrderedDict([('Epoch', epoch),
                 ('i', i),
