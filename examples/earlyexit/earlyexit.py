@@ -313,34 +313,37 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
-            stats = ('Performance/Training/',
-                    OrderedDict([
-                        ('Epoch', epoch),
-                        ('i', i),
-                        ('train_loader', len(train_loader)),
-                        ('Time', batch_time.val),
-                        ('TimeAvg', batch_time.avg),
-                        ('Data', data_time.val),
-                        ('DataAvg', data_time.avg),
-                        ('Loss', loss.item()),
-                        ('LossAvg', loss.mean()),
-                        ('Prec@1_exit0', top1_exit0.val),
-                        ('Prec@1_exit0_avg', top1_exit0.avg),
-                        ('Prec@5_exit0', top5_exit0.val),
-                        ('Prec@5_exit0', top5_exit0.avg),
-                        ('Prec@1_exit1', top1_exit1.val),
-                        ('Prec@1_exit1_avg', top1_exit1.avg),
-                        ('Prec@5_exit1', top5_exit1.val),
-                        ('Prec@5_exit1', top5_exit1.avg),
-                        ('Prec@1_exitN', top1_exitN.val),
-                        ('Prec@1_exitN_avg', top1_exitN.avg),
-                        ('Prec@5_exitN', top5_exitN.val),
-                        ('Prec@5_exitN', top5_exitN.avg)]))
-            #distiller.log_training_progress(stats,
-            #                                model.named_parameters() if log_params_hist else None,
-            #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-            distiller.log_training_progress(stats, None, epoch, None, None, None, loggers=[tflogger, pylogger])
+        stats = ('Performance/Training/',
+                OrderedDict([
+                    ('Epoch', epoch),
+                    ('i', i),
+                    ('train_loader', len(train_loader)),
+                    ('Time', batch_time.val),
+                    ('TimeAvg', batch_time.avg),
+                    ('Data', data_time.val),
+                    ('DataAvg', data_time.avg),
+                    ('Loss', loss.item()),
+                    ('LossAvg', loss.mean()),
+                    ('Prec@1_exit0', top1_exit0.val),
+                    ('Prec@1_exit0_avg', top1_exit0.avg),
+                    ('Prec@5_exit0', top5_exit0.val),
+                    ('Prec@5_exit0', top5_exit0.avg),
+                    ('Prec@1_exit1', top1_exit1.val),
+                    ('Prec@1_exit1_avg', top1_exit1.avg),
+                    ('Prec@5_exit1', top5_exit1.val),
+                    ('Prec@5_exit1', top5_exit1.avg),
+                    ('Prec@1_exitN', top1_exitN.val),
+                    ('Prec@1_exitN_avg', top1_exitN.avg),
+                    ('Prec@5_exitN', top5_exitN.val),
+                    ('Prec@5_exitN', top5_exitN.avg)]))
+        #distiller.log_training_progress(stats,
+        #                                model.named_parameters() if log_params_hist else None,
+        #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+        distiller.log_training_progress(stats, None, epoch,
+                    steps_completed=1,
+                    steps_per_epoch=1,
+                    print_freq=args.print_freq,
+                    loggers=[tflogger, pylogger])
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -402,8 +405,8 @@ def validate(val_loader, model, criterion, earlyexit):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
-            stats = ('Performance/Validation/', OrderedDict([('Epoch', epoch),
+        stats = ('Performance/Validation/',
+            OrderedDict([('Epoch', epoch),
                 ('i', i),
                 ('train_loader', len(val_loader)),
                 ('Time', batch_time.val),
@@ -420,11 +423,14 @@ def validate(val_loader, model, criterion, earlyexit):
                 ('Prec@1_avg', top1.avg),
                 ('Prec@5', top5.val),
                 ('Prec@5', top5.avg)]))
-            #distiller.log_training_progress(stats,
-            #    model.named_parameters() if log_params_hist else None,
-            #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-            distiller.log_training_progress(stats, None, epoch, None, None, None, loggers=[tflogger, pylogger])
-
+        #distiller.log_training_progress(stats,
+        #    model.named_parameters() if log_params_hist else None,
+        #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+        distiller.log_training_progress(stats, None, epoch,
+                    steps_completed=1,
+                    steps_per_epoch=1,
+                    print_freq=args.print_freq,
+                    loggers=[tflogger, pylogger])
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
