@@ -167,7 +167,7 @@ def create_channels_mask(conv_p, channels_to_remove):
     mask = channels.expand(num_filters, num_channels)
     mask.unsqueeze_(-1)
     mask.unsqueeze_(-1)
-    mask = mask.expand(num_filters, num_channels, kernel_height, kernel_width).contiguous()
+    mask = mask.expand(num_filters, num_channels, kernel_height, kernel_width).contiguous().cuda()
 
     assert mask.shape == conv_p.shape
     return mask
@@ -177,7 +177,7 @@ def run_forward_backward(model, optimizer, dummy_input):
     criterion = torch.nn.CrossEntropyLoss().cuda()
     model.train()
     output = model(dummy_input)
-    target = torch.LongTensor(1).random_(2)
+    target = torch.LongTensor(1).random_(2).cuda()
     loss = criterion(output, target)
     optimizer.zero_grad()
     loss.backward()
@@ -233,7 +233,7 @@ def arbitrary_channel_pruning(config, channels_to_remove):
         assert bn1.bias.size(0) == cnt_nnz_channels
         assert bn1.weight.size(0) == cnt_nnz_channels
 
-    dummy_input = torch.randn(1, 3, 32, 32)
+    dummy_input = torch.randn(1, 3, 32, 32).cuda()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
     run_forward_backward(model, optimizer, dummy_input)
 
@@ -278,7 +278,7 @@ def test_conv_fc_interface(model=None, zeros_mask_dict=None):
     ratio_to_prune = 0.1
     conv_name = "features.34"
     fc_name = "classifier.0"
-    dummy_input = torch.randn(1, 3, 224, 224)
+    dummy_input = torch.randn(1, 3, 224, 224).cuda()
 
     if model is None or zeros_mask_dict is None:
         model, zeros_mask_dict = common.setup_test(arch, dataset)

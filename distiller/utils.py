@@ -19,10 +19,11 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
-from functools import reduce
 import numpy as np
 import torch
 from torch.autograd import Variable
+import torch.nn as nn
+from copy import deepcopy
 
 
 def to_np(var):
@@ -259,3 +260,46 @@ def log_weights_sparsity(model, epoch, loggers):
     """Log information about the weights sparsity"""
     for logger in loggers:
         logger.log_weights_sparsity(model, epoch)
+
+
+class DoNothingModuleWrapper(nn.Module):
+    """Implement a nn.Module which wraps another nn.Module.
+
+    The DoNothingModuleWrapper wrapper does nothing but forward
+    to the wrapped module.
+    One use-case for this class, is for replacing nn.DataParallel
+    by a module that does nothing :-).  This is a trick we use
+    to transform data-parallel to serialized models.
+    """
+    def __init__(self, module):
+        super(DoNothingModuleWrapper, self).__init__()
+        self.wrapped_module = module
+
+    def forward(self, *inputs, **kwargs):
+        return self.wrapped_module(*inputs, **kwargs)
+
+
+def make_non_parallel_copy(model):
+    """Make a non-data-parallel copy of the provided model.
+
+    nn.DataParallel instances are replaced by DoNothingModuleWrapper
+    instances.
+    """
+    def replace_data_parallel(container, prefix=''):
+        for name, module in container.named_children():
+            full_name = prefix + name
+            if isinstance(module, nn.DataParallel):
+                # msglogger.debug('Replacing module {}'.format(full_name))
+                container._modules[name] = DoNothingModuleWrapper(module.module)
+            if len(module._modules) > 0:
+                # For a container we call recursively
+                replace_data_parallel(module, full_name + '.')
+
+    # Make a copy of the model, because we're going to change it
+    new_model = deepcopy(model)
+    if isinstance(new_model, nn.DataParallel):
+        #new_model = new_model.module #
+        new_model = DoNothingModuleWrapper(new_model.module)
+
+    replace_data_parallel(new_model)
+    return new_model

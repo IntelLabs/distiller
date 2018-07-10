@@ -209,9 +209,7 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
 
     # Create the model
-    png_summary = args.summary is not None and args.summary.startswith('png')
-    is_parallel = not png_summary and args.summary != 'compute'  # For PNG summary, parallel graphs are illegible
-    model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
+    model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
 
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format

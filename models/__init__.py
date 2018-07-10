@@ -70,8 +70,9 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
 
     if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
         model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
-        model.cuda()
     elif parallel:
         model = torch.nn.DataParallel(model, device_ids=device_ids).cuda()
+
+    model.cuda()
 
     return model

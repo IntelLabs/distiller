@@ -18,7 +18,7 @@
 
 Thinning a model is the process of taking a dense network architecture with a parameter model that
 has structure-sparsity (filters or channels) in the weights tensors of convolution layers, and making changes
- in the network architecture and parameters, in order to completely remove the structures.
+in the network architecture and parameters, in order to completely remove the structures.
 The new architecture is smaller (condensed), with less channels and filters in some of the convolution layers.
 Linear and BatchNormalization layers are also adjusted as required.
 
