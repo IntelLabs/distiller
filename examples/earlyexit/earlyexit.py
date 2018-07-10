@@ -342,7 +342,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         distiller.log_training_progress(stats, None, epoch,
                     steps_completed=0,
                     total_steps=1,
-                    print_freq=args.print_freq,
+                    log_freq=args.print_freq,
                     loggers=[tflogger, pylogger])
 
 def validate(val_loader, model, criterion, earlyexit):
@@ -429,7 +429,7 @@ def validate(val_loader, model, criterion, earlyexit):
         distiller.log_training_progress(stats, None, epoch,
                     steps_completed=0,
                     total_steps=1,
-                    print_freq=args.print_freq,
+                    log_freq=args.print_freq,
                     loggers=[tflogger, pylogger])
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
