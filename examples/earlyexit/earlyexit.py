@@ -340,8 +340,8 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         #                                model.named_parameters() if log_params_hist else None,
         #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
         distiller.log_training_progress(stats, None, epoch,
-                    steps_completed=1,
-                    steps_per_epoch=1,
+                    steps_completed=0,
+                    total_steps=1,
                     print_freq=args.print_freq,
                     loggers=[tflogger, pylogger])
 
@@ -427,8 +427,8 @@ def validate(val_loader, model, criterion, earlyexit):
         #    model.named_parameters() if log_params_hist else None,
         #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
         distiller.log_training_progress(stats, None, epoch,
-                    steps_completed=1,
-                    steps_per_epoch=1,
+                    steps_completed=0,
+                    total_steps=1,
                     print_freq=args.print_freq,
                     loggers=[tflogger, pylogger])
 
