@@ -31,6 +31,7 @@ import torch.jit as jit
 import pandas as pd
 from tabulate import tabulate
 import pydot
+import distiller
 
 
 def onnx_name_2_pytorch_name(name, op_type):
@@ -90,7 +91,7 @@ class SummaryGraph(object):
 
     def __init__(self, model, dummy_input):
         with torch.onnx.set_training(model, False):
-            trace, _ = jit.get_trace_graph(model, dummy_input)
+            trace, _ = jit.get_trace_graph(model, dummy_input.cuda())
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
@@ -588,6 +589,7 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
             print("Unsupported dataset (%s) - aborting draw operation" % dataset)
             return
 
+        model = distiller.make_non_parallel_copy(model)
         g = SummaryGraph(model, dummy_input)
         draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
         print("Network PNG image generation completed")

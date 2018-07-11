@@ -23,8 +23,8 @@ import distiller
 from models import create_model
 
 
-def setup_test(arch, dataset):
-    model = create_model(False, dataset, arch, parallel=False)
+def setup_test(arch, dataset, parallel=True):
+    model = create_model(False, dataset, arch, parallel=parallel)
     assert model is not None
 
     # Create the masks
