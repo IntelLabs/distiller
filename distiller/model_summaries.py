@@ -170,11 +170,7 @@ def module_visitor(self, input, output, df, model, weights_vol, macs, attrs=None
 
 
 def model_performance_summary(model, dummy_input, batch_size=1):
-    """Collect performance data
-
-    warning: in PyTorch 0.4 this function does not return correct values when
-    the graph contains torch.nn.DataParallel layers.
-    """
+    """Collect performance data"""
     def install_perf_collector(m):
         if isinstance(m, torch.nn.Conv2d):
             hook_handles.append(m.register_forward_hook(
