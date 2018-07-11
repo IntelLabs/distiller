@@ -83,7 +83,7 @@ def vgg19_imagenet(is_parallel):
                                        ("features.32", "features.34")],
                          bn_name=None)
 
-@pytest.fixture(params=[False])
+@pytest.fixture(params=[True, False])
 def parallel(request):
     return request.param
 
