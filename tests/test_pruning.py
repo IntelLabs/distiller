@@ -41,54 +41,79 @@ NetConfig = namedtuple("test_config", "arch dataset bn_name module_pairs")
 #
 # Model configurations
 #
-def simplenet():
-    return NetConfig(arch="simplenet_cifar", dataset="cifar10",
-                     module_pairs=[("conv1", "conv2")],
-                     bn_name=None)
+def simplenet(is_parallel):
+    if is_parallel:
+        return NetConfig(arch="simplenet_cifar", dataset="cifar10",
+                         module_pairs=[("module.conv1", "module.conv2")],
+                         bn_name=None)
+    else:
+        return NetConfig(arch="simplenet_cifar", dataset="cifar10",
+                         module_pairs=[("conv1", "conv2")],
+                         bn_name=None)
 
 
-def resnet20_cifar():
-    return NetConfig(arch="resnet20_cifar", dataset="cifar10",
-                     module_pairs=[("layer1.0.conv1", "layer1.0.conv2")],
-                     bn_name="layer1.0.bn1")
+def resnet20_cifar(is_parallel):
+    if is_parallel:
+        return NetConfig(arch="resnet20_cifar", dataset="cifar10",
+                         module_pairs=[("module.layer1.0.conv1", "module.layer1.0.conv2")],
+                         bn_name="module.layer1.0.bn1")
+    else:
+        return NetConfig(arch="resnet20_cifar", dataset="cifar10",
+                         module_pairs=[("layer1.0.conv1", "layer1.0.conv2")],
+                         bn_name="layer1.0.bn1")
 
 
-def vgg19_imagenet():
-    return NetConfig(arch="vgg19", dataset="imagenet",
-                     module_pairs=[("features.21", "features.23"),
-                                   ("features.23", "features.25"),
-                                   ("features.25", "features.28"),
-                                   ("features.28", "features.30"),
-                                   ("features.30", "features.32"),
-                                   ("features.32", "features.34")],
-                     bn_name=None)
+def vgg19_imagenet(is_parallel):
+    if is_parallel:
+        return NetConfig(arch="vgg19", dataset="imagenet",
+                         module_pairs=[("features.module.21", "features.module.23"),
+                                       ("features.module.23", "features.module.25"),
+                                       ("features.module.25", "features.module.28"),
+                                       ("features.module.28", "features.module.30"),
+                                       ("features.module.30", "features.module.32"),
+                                       ("features.module.32", "features.module.34")],
+                         bn_name=None)
+    else:
+        return NetConfig(arch="vgg19", dataset="imagenet",
+                         module_pairs=[("features.21", "features.23"),
+                                       ("features.23", "features.25"),
+                                       ("features.25", "features.28"),
+                                       ("features.28", "features.30"),
+                                       ("features.30", "features.32"),
+                                       ("features.32", "features.34")],
+                         bn_name=None)
+
+@pytest.fixture(params=[False])
+def parallel(request):
+    return request.param
+
+def test_ranked_filter_pruning(parallel):
+    ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=0.1, is_parallel=parallel)
+    ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=0.5, is_parallel=parallel)
+    ranked_filter_pruning(simplenet(parallel),      ratio_to_prune=0.5, is_parallel=parallel)
+    ranked_filter_pruning(vgg19_imagenet(parallel), ratio_to_prune=0.1, is_parallel=parallel)
+    model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(parallel),
+                                                   ratio_to_prune=0.1,
+                                                   is_parallel=parallel)
+    test_conv_fc_interface(parallel, model, zeros_mask_dict)
 
 
-def test_ranked_filter_pruning():
-    ranked_filter_pruning(resnet20_cifar(), ratio_to_prune=0.1)
-    ranked_filter_pruning(resnet20_cifar(), ratio_to_prune=0.5)
-    ranked_filter_pruning(simplenet(), ratio_to_prune=0.5)
-    ranked_filter_pruning(vgg19_imagenet(), ratio_to_prune=0.1)
-    model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(), ratio_to_prune=0.1)
-    test_conv_fc_interface(model, zeros_mask_dict)
-
-
-def test_prune_all_filters():
+def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
     is illegal and should raise an exception.
     """
     with pytest.raises(ValueError):
-        ranked_filter_pruning(resnet20_cifar(), ratio_to_prune=1.0)
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0, is_parallel=parallel)
 
 
-def ranked_filter_pruning(config, ratio_to_prune):
+def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
     """Test L1 ranking and pruning of filters.
 
     First we rank and prune the filters of a Convolutional layer using
     a L1RankedStructureParameterPruner.  Then we physically remove the
     filters from the model (via "thining" process).
     """
-    model, zeros_mask_dict = common.setup_test(config.arch, config.dataset)
+    model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
     for pair in config.module_pairs:
         # Test that we can access the weights tensor of the first convolution in layer 1
@@ -132,22 +157,29 @@ def ranked_filter_pruning(config, ratio_to_prune):
     return model, zeros_mask_dict
 
 
-def test_arbitrary_channel_pruning():
-    arbitrary_channel_pruning(resnet20_cifar(), channels_to_remove=[0, 2])
-    arbitrary_channel_pruning(simplenet(), channels_to_remove=[0, 2])
+def test_arbitrary_channel_pruning(parallel):
+    arbitrary_channel_pruning(resnet20_cifar(parallel),
+                              channels_to_remove=[0, 2],
+                              is_parallel=parallel)
+    arbitrary_channel_pruning(simplenet(parallel),
+                              channels_to_remove=[0, 2],
+                              is_parallel=parallel)
 
 
-def test_prune_all_channels():
+def test_prune_all_channels(parallel):
     """Pruning all of the channels in a weights tensor of a Convolution
     is illegal and should raise an exception.
     """
     with pytest.raises(ValueError):
-        arbitrary_channel_pruning(resnet20_cifar(),
-                                  channels_to_remove=[ch for ch in range(16)])
+        arbitrary_channel_pruning(resnet20_cifar(parallel),
+                                  channels_to_remove=[ch for ch in range(16)],
+                                  is_parallel=parallel)
 
 
-def test_channel_pruning_conv_bias():
-    arbitrary_channel_pruning(simplenet(), channels_to_remove=[0, 1])
+def test_channel_pruning_conv_bias(parallel):
+    arbitrary_channel_pruning(simplenet(parallel),
+                              channels_to_remove=[0, 1],
+                              is_parallel=parallel)
 
 
 def create_channels_mask(conv_p, channels_to_remove):
@@ -184,14 +216,14 @@ def run_forward_backward(model, optimizer, dummy_input):
     optimizer.step()
 
 
-def arbitrary_channel_pruning(config, channels_to_remove):
+def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     """Test removal of arbitrary channels.
 
     The test receives a specification of channels to remove.
     Based on this specification, the channels are pruned and then physically
     removed from the model (via a "thinning" process).
     """
-    model, zeros_mask_dict = common.setup_test(config.arch, config.dataset)
+    model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
     assert len(config.module_pairs) == 1   # This is a temporary restriction on the test
     pair = config.module_pairs[0]
@@ -244,7 +276,7 @@ def arbitrary_channel_pruning(config, channels_to_remove):
     #   - tensors are already thin, so this is a new flow)
     # (1)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None)
-    model_2 = create_model(False, config.dataset, config.arch, parallel=False)
+    model_2 = create_model(False, config.dataset, config.arch, parallel=is_parallel)
     model(dummy_input)
     model_2(dummy_input)
     conv2 = common.find_module_by_name(model_2, pair[1])
@@ -269,19 +301,22 @@ def arbitrary_channel_pruning(config, channels_to_remove):
     logger.info("test_arbitrary_channel_pruning - Done 2")
 
 
-def test_conv_fc_interface(model=None, zeros_mask_dict=None):
+def test_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=None):
     """A special case of convolution filter-pruning occurs when the next layer is
     fully-connected (linear).  This test is for this case and uses VGG16.
     """
     arch = "vgg19"
     dataset = "imagenet"
     ratio_to_prune = 0.1
-    conv_name = "features.34"
+    if is_parallel:
+        conv_name = "features.module.34"
+    else:
+        conv_name = "features.34"
     fc_name = "classifier.0"
     dummy_input = torch.randn(1, 3, 224, 224).cuda()
 
     if model is None or zeros_mask_dict is None:
-        model, zeros_mask_dict = common.setup_test(arch, dataset)
+        model, zeros_mask_dict = common.setup_test(arch, dataset, is_parallel)
 
     # Run forward and backward passes, in order to create the gradients and optimizer params
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
@@ -323,8 +358,11 @@ def test_conv_fc_interface(model=None, zeros_mask_dict=None):
 
 
 if __name__ == '__main__':
-    test_ranked_filter_pruning()
-    test_arbitrary_channel_pruning()
-    test_prune_all_channels()
-    model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(), ratio_to_prune=0.1)
-    test_conv_fc_interface(model, zeros_mask_dict)
+    for is_parallel in [True, False]:
+        test_ranked_filter_pruning(is_parallel)
+        test_arbitrary_channel_pruning(is_parallel)
+        test_prune_all_channels(is_parallel)
+        model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(is_parallel),
+                                                       ratio_to_prune=0.1,
+                                                       is_parallel=is_parallel)
+        test_conv_fc_interface(is_parallel, model, zeros_mask_dict)
