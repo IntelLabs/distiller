@@ -39,6 +39,7 @@ import random
 import logging.config
 import shutil
 import traceback
+from collections import OrderedDict
 import time
 from functools import partial
 import numpy as np
@@ -94,6 +95,7 @@ parser.add_argument('--checkpointdir', default='', metavar='CHECKPOINTDIR', type
 parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
+parser.add_argument('--name', '-n', type=str, metavar='NAME', default=None, help='Experiment name')
 
 
 best_prec1 = 0
@@ -112,10 +114,10 @@ def check_pytorch_version():
 
 
 def main():
-    global args, best_prec1, msglogger
+    global args, best_prec1, msglogger, tflogger, pylogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+    msglogger = apputils.config_pylogger(os.path.join(args.checkpointdir, 'logging.conf'), args.name)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -135,6 +137,11 @@ def main():
     else:
         print("=> creating model '{}'".format(args.arch))
         model = resnet_earlyexit.__dict__[args.arch]()
+
+    # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
+    # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
+    tflogger = TensorBoardLogger(msglogger.logdir)
+    pylogger = PythonLogger(msglogger)
 
     # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
     if args.earlyexitmodel:
@@ -180,13 +187,14 @@ def main():
     cudnn.benchmark = True
 
     # This sample application can be invoked to produce various summary reports.
-    if args.summary:
-        which_summary = args.summary
-        if which_summary == 'png':
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
-        else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
-        exit()
+    #if args.summary:
+    #    which_summary = args.summary
+    #    if which_summary == 'png':
+    #        apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+    #    else:
+    #        distiller.model_summary(model, optimizer, which_summary, args.dataset)
+    #    exit()
+
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
@@ -287,7 +295,7 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
 
         # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.item(), input.size(0))
 
         top1_exit0.update(prec1_exit0[0], input.size(0))
         top5_exit0.update(prec5_exit0[0], input.size(0))
@@ -305,33 +313,53 @@ def train(train_loader, model, criterion, optimizer, epoch, lossweights):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # human friendly logging
         if i % args.print_freq == 0:
-            stats = ('Performance/Training/',
-                    OrderedDict([
-                        ('Epoch', epoch),
-                        ('i', i),
-                        ('train_loader', len(train_loader)),
-                        ('Time', batch_time.val),
-                        ('TimeAvg', batch_time.avg),
-                        ('Data', data_time.val),
-                        ('DataAvg', data_time.avg),
-                        ('Loss', loss.val),
-                        ('LossAvg', loss.avg),
-                        ('Prec@1_exit0', top1_exit0.val),
-                        ('Prec@1_exit0_avg', top1_exit0.avg),
-                        ('Prec@5_exit0', top5_exit0.val),
-                        ('Prec@5_exit0', top5_exit0.avg),
-                        ('Prec@1_exit1', top1_exit1.val),
-                        ('Prec@1_exit1_avg', top1_exit1.avg),
-                        ('Prec@5_exit1', top5_exit1.val),
-                        ('Prec@5_exit1', top5_exit1.avg),
-                        ('Prec@1_exitN', top1_exitN.val),
-                        ('Prec@1_exitN_avg', top1_exitN.avg),
-                        ('Prec@5_exitN', top5_exitN.val),
-                        ('Prec@5_exitN', top5_exitN.avg)]))
-            distiller.log_training_progress(stats,
-                                            model.named_parameters() if log_params_hist else None,
-                                            epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+            print('Epoch: [{0}][{1}/{2}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
+                  'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
+                  'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
+                  'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
+                  'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
+                  'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
+                   epoch, i, len(train_loader), batch_time=batch_time,
+                   data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
+                   top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
+        # machine friendly logging
+        stats = ('Performance/Training/',
+                OrderedDict([
+                    ('Epoch', epoch),
+                    ('i', i),
+                    ('train_loader', len(train_loader)),
+                    ('Time', batch_time.val),
+                    ('TimeAvg', batch_time.avg),
+                    ('Data', data_time.val),
+                    ('DataAvg', data_time.avg),
+                    ('Loss', loss.item()),
+                    ('LossAvg', loss.mean()),
+                    ('Prec@1_exit0', top1_exit0.val),
+                    ('Prec@1_exit0_avg', top1_exit0.avg),
+                    ('Prec@5_exit0', top5_exit0.val),
+                    ('Prec@5_exit0', top5_exit0.avg),
+                    ('Prec@1_exit1', top1_exit1.val),
+                    ('Prec@1_exit1_avg', top1_exit1.avg),
+                    ('Prec@5_exit1', top5_exit1.val),
+                    ('Prec@5_exit1', top5_exit1.avg),
+                    ('Prec@1_exitN', top1_exitN.val),
+                    ('Prec@1_exitN_avg', top1_exitN.avg),
+                    ('Prec@5_exitN', top5_exitN.val),
+                    ('Prec@5_exitN', top5_exitN.avg)]))
+        #distiller.log_training_progress(stats,
+        #                                model.named_parameters() if log_params_hist else None,
+        #                                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+        distiller.log_training_progress(stats, None, epoch,
+                    steps_completed=0,
+                    total_steps=1,
+                    log_freq=args.print_freq,
+                    loggers=[tflogger, pylogger])
 
 def validate(val_loader, model, criterion, earlyexit):
     """Model validation"""
@@ -393,8 +421,20 @@ def validate(val_loader, model, criterion, earlyexit):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # human friendly logging
         if i % args.print_freq == 0:
-            stats = ('Performance/Validation/', OrderedDict([('Epoch', epoch),
+            print('Test: [{0}/{1}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
+                  'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
+                  'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
+                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                   i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                   top1=top1, top5=top5))
+        # machine friendly logging
+        stats = ('Performance/Validation/',
+            OrderedDict([('Epoch', epoch),
                 ('i', i),
                 ('train_loader', len(val_loader)),
                 ('Time', batch_time.val),
@@ -411,10 +451,14 @@ def validate(val_loader, model, criterion, earlyexit):
                 ('Prec@1_avg', top1.avg),
                 ('Prec@5', top5.val),
                 ('Prec@5', top5.avg)]))
-            distiller.log_training_progress(stats,
-                model.named_parameters() if log_params_hist else None,
-                epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-
+        #distiller.log_training_progress(stats,
+        #    model.named_parameters() if log_params_hist else None,
+        #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
+        distiller.log_training_progress(stats, None, epoch,
+                    steps_completed=0,
+                    total_steps=1,
+                    log_freq=args.print_freq,
+                    loggers=[tflogger, pylogger])
 
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
