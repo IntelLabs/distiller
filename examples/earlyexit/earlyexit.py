@@ -437,8 +437,6 @@ def validate(val_loader, model, criterion, earlyexit):
             OrderedDict([('Test', i),
                 ('Time', batch_time.val),
                 ('TimeAvg', batch_time.avg),
-                ('Data', data_time.val),
-                ('DataAvg', data_time.avg),
                 ('Loss0', loss0.val),
                 ('LossAvg0', loss0.avg),
                 ('Loss1', loss1.val),
