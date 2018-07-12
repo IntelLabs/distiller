@@ -493,7 +493,7 @@ def validate(val_loader, model, criterion, loggers, print_freq, earlyexit=0, epo
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
     else:
         msglogger.info('--- validate ---------------------')
-    return _validate(val_loader, model, criterion, loggers, print_freq, epoch, earlyexit)
+    return _validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch)
 
 
 def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
