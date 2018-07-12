@@ -616,10 +616,12 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                     total_steps, print_freq, loggers)
 
-    if not earlyexit:
+    if earlyexit:
+        return top1.avg, top5.avg, losses_exitN.avg
+    else:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                    classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
-    return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
+        return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
 
 
 class PytorchNoGrad(object):
