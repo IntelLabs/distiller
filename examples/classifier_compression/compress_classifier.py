@@ -56,7 +56,6 @@ import time
 import os
 import sys
 import random
-import logging.config
 import traceback
 from collections import OrderedDict
 from functools import partial
@@ -68,18 +67,29 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
-
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if module_path not in sys.path:
+try:
+    import distiller
+except ImportError:
+    script_dir = os.path.dirname(__file__)
+    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     sys.path.append(module_path)
-import distiller
+    import distiller
 import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
+# Logger handle
 msglogger = None
+
+
+def float_range(val_str):
+    val = float(val_str)
+    if val < 0 or val >= 1:
+        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
+    return val
+
+
 parser = argparse.ArgumentParser(description='Distiller image classification model compression')
 parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
@@ -111,7 +121,7 @@ parser.add_argument('--act-stats', dest='activation_stats', action='store_true',
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'optimizer', 'model', 'modules', 'png']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
                     ' | '.join(SUMMARY_CHOICES))
@@ -128,6 +138,9 @@ parser.add_argument('--quantize', action='store_true',
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
+parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+                    help='Portion of training dataset to set aside for validation')
 
 
 def check_pytorch_version():
@@ -142,11 +155,14 @@ def check_pytorch_version():
               "  3. Activate the new environment")
         exit(1)
 
+
 def main():
     global msglogger
     check_pytorch_version()
     args = parser.parse_args()
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -193,8 +209,7 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
 
     # Create the model
-    is_parallel = args.summary != 'png' # For PNG summary, parallel graphs are illegible
-    model = create_model(args.pretrained, args.dataset, args.arch, parallel=is_parallel, device_ids=args.gpus)
+    model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
 
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
@@ -207,26 +222,21 @@ def main():
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
 
-        if 'resnet' in args.arch and 'cifar' in args.arch:
-            distiller.resnet_cifar_remove_layers(model)
-            #model = distiller.resnet_cifar_remove_channels(model, compression_scheduler.zeros_mask_dict)
-
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    msglogger.info("Optimizer (%s): momentum=%s decay=%s", type(optimizer),
-                   args.momentum, args.weight_decay)
-
+    msglogger.info('Optimizer Type: %s', type(optimizer))
+    msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
         which_summary = args.summary
-        if which_summary == 'png':
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset)
+        if which_summary.startswith('png'):
+            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
         else:
-            distiller.model_summary(model, optimizer, which_summary, args.dataset)
+            distiller.model_summary(model, which_summary, args.dataset)
         exit()
 
     # Load the datasets: the dataset to load is inferred from the model name passed
@@ -234,7 +244,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.deterministic)
+        args.workers, args.validation_size, args.deterministic)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -275,17 +285,15 @@ def main():
         top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
         if args.quantize:
             checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, model, optimizer, best_top1=top1,
-                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name)
+            apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                     dir=msglogger.logdir)
         exit()
 
     if args.compress:
-        # The main use-case for this sample application is CNN compression.  Compression
+        # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        source = args.compress
-        msglogger.info("Compression schedule (source=%s)", source)
-        compression_scheduler = distiller.CompressionScheduler(model)
-        distiller.config.fileConfig(model, optimizer, compression_scheduler, args.compress, msglogger)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress)
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -307,16 +315,17 @@ def main():
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
-        distiller.log_training_progress(stats, None,epoch, steps_completed=0, total_steps=1,
+        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[tflogger])
 
         if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch)
+            compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best, args.name)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
+                                 args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], args.print_freq)
@@ -325,8 +334,8 @@ def main():
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, print_freq, log_params_hist):
     """Training loop for one epoch."""
-    losses = {'objective_loss'   : tnt.AverageValueMeter(),
-              'regularizer_loss' : tnt.AverageValueMeter()}
+    losses = {'objective_loss':   tnt.AverageValueMeter(),
+              'regularizer_loss': tnt.AverageValueMeter()}
     if compression_scheduler is None:
         # Initialize the regularizer loss to zero
         losses['regularizer_loss'].add(0)
@@ -352,9 +361,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
         input_var = torch.autograd.Variable(inputs)
         target_var = torch.autograd.Variable(target)
 
-        # Execute the forard phase, compute the output and measure loss
+        # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
-            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch)
+            compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
         output = model(input_var)
         loss = criterion(output, target_var)
 
@@ -364,7 +373,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
-            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss)
+            regularizer_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss, optimizer)
             loss += regularizer_loss
             losses['regularizer_loss'].add(regularizer_loss.item())
 
@@ -373,7 +382,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         loss.backward()
         optimizer.step()
         if compression_scheduler:
-            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch)
+            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
 
         # measure elapsed time
         batch_time.add(time.time() - end)
@@ -389,8 +398,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                          ('Top1', classerr.value(1)),
                          ('Top5', classerr.value(5)),
                          ('LR', lr),
-                         ('Time', batch_time.mean)])
-                    )
+                         ('Time', batch_time.mean)]))
 
             distiller.log_training_progress(stats,
                                             model.named_parameters() if log_params_hist else None,
@@ -417,13 +425,9 @@ def test(test_loader, model, criterion, loggers, print_freq):
 
 def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
     """Execute the validation/test loop."""
-    losses = {'objective_loss' : tnt.AverageValueMeter()}
+    losses = {'objective_loss': tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
-    # if nclasses<=10:
-    #     # Log the confusion matrix only if the number of classes is small
-    #     confusion = tnt.ConfusionMeter(10)
-
     total_samples = len(data_loader.sampler)
     batch_size = data_loader.batch_size
     total_steps = total_samples / batch_size
@@ -446,8 +450,6 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
             # measure accuracy and record loss
             losses['objective_loss'].add(loss.item())
             classerr.add(output.data, target)
-            # if confusion:
-            #     confusion.add(output.data, target)
 
             # measure elapsed time
             batch_time.add(time.time() - end)
@@ -464,9 +466,6 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
 
     msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                    classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
-
-    # if confusion:
-    #     msglogger.info('==> Confusion:\n%s', str(confusion.value()))
     return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
 
 
