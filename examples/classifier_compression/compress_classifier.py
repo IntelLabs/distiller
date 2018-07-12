@@ -487,7 +487,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         end = time.time()
 
 
-def validate(val_loader, model, criterion, loggers, print_freq, epoch=-1, earlyexit):
+def validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch=-1):
     """Model validation"""
     if epoch > -1:
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
@@ -502,7 +502,7 @@ def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
     return _validate(test_loader, model, criterion, loggers, print_freq, earlyexit)
 
 
-def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1, earlyexit):
+def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epoch=-1):
     """Execute the validation/test loop."""
     if earlyexit:
         losses_exit0 = AverageMeter()
