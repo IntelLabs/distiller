@@ -449,7 +449,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 stats = ('Performance/Training/',
                         OrderedDict([
                             ('Epoch', epoch),
-                            ('i', i),
+                            ('i', train_step),
                             ('train_loader', len(train_loader)),
                             ('Time', batch_time.val),
                             ('TimeAvg', batch_time.avg),
