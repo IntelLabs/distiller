@@ -434,8 +434,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
             if lossweights:
                 # human friendly logging
                 print('Epoch: [{0}][{1}/{2}]\t'
-                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                      'Time ({batch_time.mean:.3f})\t'
+                      'Data ({data_time.mean:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
                       'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
@@ -451,10 +451,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
                             ('Epoch', epoch),
                             ('i', train_step),
                             ('train_loader', len(train_loader)),
-                            ('Time', batch_time.val),
-                            ('TimeAvg', batch_time.avg),
-                            ('Data', data_time.val),
-                            ('DataAvg', data_time.avg),
+                            ('TimeAvg', batch_time.mean),
+                            ('DataAvg', data_time.mean),
                             ('Loss', loss.item()),
                             ('LossAvg', loss.mean()),
                             ('Prec@1_exit0', top1_exit0.val),
@@ -585,18 +583,15 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
             if steps_completed % print_freq == 0:
                 if earlyexit:
                     print('Test: [{0}/{1}]\t'
-                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                     'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
                     'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
                     'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
                     'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                     'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                    i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                    validation_step, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
                     top1=top1, top5=top5))
                     stats = ('Performance/Validation/',
-                        OrderedDict([('Test', i),
-                            ('Time', batch_time.val),
-                            ('TimeAvg', batch_time.avg),
+                        OrderedDict([('Test', validation_step),
                             ('Loss0', losses_exit0.val),
                             ('LossAvg0', losses_exit0.avg),
                             ('Loss1', losses_exit1.val),
