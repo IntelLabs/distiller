@@ -339,7 +339,7 @@ def main():
         is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
-                                 args.name, msglogger.logdir)
+                                 args.name, args.output_dir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], args.print_freq, earlyexit=args.earlyexit)
