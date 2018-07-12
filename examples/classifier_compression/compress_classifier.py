@@ -358,12 +358,12 @@ def train(train_loader, model, criterion, optimizer, epoch,
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
     if lossweights:
-        top1_exit0 = tnt.AverageValueMeter()
-        top5_exit0 = tnt.AverageValueMeter()
-        top1_exit1 = tnt.AverageValueMeter()
-        top5_exit1 = tnt.AverageValueMeter()
-        top1_exitN = tnt.AverageValueMeter()
-        top5_exitN = tnt.AverageValueMeter()
+        top1_exit0 = AverageMeter()
+        top5_exit0 = AverageMeter()
+        top1_exit1 = AverageMeter()
+        top5_exit1 = AverageMeter()
+        top1_exitN = AverageMeter()
+        top5_exitN = AverageMeter()
 
     total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
@@ -655,6 +655,23 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 if __name__ == '__main__':
     try:
