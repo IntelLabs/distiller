@@ -434,9 +434,7 @@ def validate(val_loader, model, criterion, earlyexit):
                    top1=top1, top5=top5))
         # machine friendly logging
         stats = ('Performance/Validation/',
-            OrderedDict([('Epoch', epoch),
-                ('i', i),
-                ('train_loader', len(val_loader)),
+            OrderedDict([('Test', i),
                 ('Time', batch_time.val),
                 ('TimeAvg', batch_time.avg),
                 ('Data', data_time.val),
