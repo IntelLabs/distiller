@@ -395,17 +395,17 @@ def validate(val_loader, model, criterion, earlyexit):
         prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
         prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
 
-        losses_exit0.update(loss_exit0.data[0], input.size(0))
-        losses_exit1.update(loss_exit1.data[0], input.size(0))
-        losses_exitN.update(loss_exitN.data[0], input.size(0))
+        losses_exit0.update(loss_exit0.item(), input.size(0))
+        losses_exit1.update(loss_exit1.item(), input.size(0))
+        losses_exitN.update(loss_exitN.item(), input.size(0))
 
         # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
-        if loss_exit0.cpu().data.numpy()[0] < earlyexit[0]:
+        if loss_exit0.item() < earlyexit[0]:
             # take the results from the early exit since lower than threshold
             top1.update(prec1_exit0[0], input.size(0))
             top5.update(prec5_exit0[0], input.size(0))
             exit_0 = exit_0 + 1
-        elif loss_exit1.cpu().data.numpy()[0] < earlyexit[1]:
+        elif loss_exit1.item() < earlyexit[1]:
             # or take the results from the next early exit, since lower than its threshold
             top1.update(prec1_exit1[0], input.size(0))
             top5.update(prec5_exit1[0], input.size(0))
