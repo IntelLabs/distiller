@@ -436,7 +436,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 print('Epoch: [{0}][{1}/{2}]\t'
                       'Time ({batch_time.mean:.3f})\t'
                       'Data ({data_time.mean:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                      'Loss {loss:.4f}\t'
                       'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
                       'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
                       'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
