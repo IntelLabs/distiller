@@ -396,7 +396,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
             prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
             prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
             # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
-            losses.update(loss.item(), input.size(0))
             top1_exit0.update(prec1_exit0[0], input.size(0))
             top5_exit0.update(prec5_exit0[0], input.size(0))
             top1_exit1.update(prec1_exit1[0], input.size(0))
@@ -408,7 +407,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
             loss = criterion(output, target_var)
             # Measure accuracy and record loss
             classerr.add(output.data, target)
-            losses['objective_loss'].add(loss.item())
+            
+        losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
