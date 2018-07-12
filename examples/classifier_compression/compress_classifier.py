@@ -323,8 +323,8 @@ def main():
                                               collector=activations_sparsity)
 
         # evaluate on validation set
-        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq, epoch,
-                                    earlyexit=args.earlyexit)
+        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq,
+                                args.earlyexit, epoch)
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
