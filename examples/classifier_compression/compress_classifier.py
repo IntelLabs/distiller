@@ -443,7 +443,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                       'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
                       'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
                       'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
-                       epoch, i, len(train_loader), batch_time=batch_time,
+                       epoch, train_step, len(train_loader), batch_time=batch_time,
                        data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
                        top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
                 stats = ('Performance/Training/',
