@@ -357,7 +357,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
-    if earlyexit:
+    if lossweights:
         top1_exit0 = tnt.AverageValueMeter()
         top5_exit0 = tnt.AverageValueMeter()
         top1_exit1 = tnt.AverageValueMeter()
@@ -386,7 +386,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
-        if earlyexit:
+        if lossweights:
             # compute outputs at all exits
             exitN, exit0, exit1 = model(input_var)
             loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
@@ -431,7 +431,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             # Log some statistics
             lr = optimizer.param_groups[0]['lr']
 
-            if earlyexit:
+            if lossweights:
                 # human friendly logging
                 print('Epoch: [{0}][{1}/{2}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
