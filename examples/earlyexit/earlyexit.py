@@ -450,7 +450,7 @@ def validate(val_loader, model, criterion, earlyexit):
         #distiller.log_training_progress(stats,
         #    model.named_parameters() if log_params_hist else None,
         #    epoch, steps_completed, steps_per_epoch, print_freq, loggers)
-        distiller.log_training_progress(stats, None, None,
+        distiller.log_training_progress(stats, None, 1,
                     steps_completed=0,
                     total_steps=1,
                     log_freq=args.print_freq,
