@@ -546,25 +546,25 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                 prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
                 prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
 
-                losses_exit0.update(loss_exit0.item(), input.size(0))
-                losses_exit1.update(loss_exit1.item(), input.size(0))
-                losses_exitN.update(loss_exitN.item(), input.size(0))
+                losses_exit0.update(loss_exit0.item(), inputs.size(0))
+                losses_exit1.update(loss_exit1.item(), inputs.size(0))
+                losses_exitN.update(loss_exitN.item(), inputs.size(0))
 
                 # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                 if loss_exit0.item() < earlyexit[0]:
                     # take the results from the early exit since lower than threshold
-                    top1.update(prec1_exit0[0], input.size(0))
-                    top5.update(prec5_exit0[0], input.size(0))
+                    top1.update(prec1_exit0[0], inputs.size(0))
+                    top5.update(prec5_exit0[0], inputs.size(0))
                     exit_0 = exit_0 + 1
                 elif loss_exit1.item() < earlyexit[1]:
                     # or take the results from the next early exit, since lower than its threshold
-                    top1.update(prec1_exit1[0], input.size(0))
-                    top5.update(prec5_exit1[0], input.size(0))
+                    top1.update(prec1_exit1[0], inputs.size(0))
+                    top5.update(prec5_exit1[0], inputs.size(0))
                     exit_1 = exit_1 + 1
                 else:
                     # skip the exits and include results from end of net
-                    top1.update(prec1_exitN[0], input.size(0))
-                    top5.update(prec5_exitN[0], input.size(0))
+                    top1.update(prec1_exitN[0], inputs.size(0))
+                    top5.update(prec5_exitN[0], inputs.size(0))
                     exit_N = exit_N + 1
             else:
                 # compute output
