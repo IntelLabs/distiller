@@ -141,6 +141,9 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
+parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
 
 
 def check_pytorch_version():
@@ -216,6 +219,15 @@ def main():
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
     tflogger = TensorBoardLogger(msglogger.logdir)
     pylogger = PythonLogger(msglogger)
+
+    # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
+    if args.earlyexitmodel:
+        if os.path.isfile(args.earlyexitmodel):
+            earlyexitmodel = torch.load(args.earlyexitmodel)
+            model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
+    # capture threshold for early-exit training
+    if args.earlyexit:
+        print("=> using early-exit values of '{}'".format(args.earlyexit))
 
     # We can optionally resume from a checkpoint
     if args.resume:
@@ -303,14 +315,16 @@ def main():
 
         # Train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-              loggers=[tflogger, pylogger], print_freq=args.print_freq, log_params_hist=args.log_params_histograms)
+              loggers=[tflogger, pylogger], print_freq=args.print_freq, log_params_hist=args.log_params_histograms,
+              lossweights=args.lossweights)
         distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
         if args.activation_stats:
             distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
                                               collector=activations_sparsity)
 
         # evaluate on validation set
-        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq, epoch)
+        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq, epoch,
+                                    earlyexit=args.earlyexit)
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
@@ -328,11 +342,11 @@ def main():
                                  args.name, msglogger.logdir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], args.print_freq)
+    test(test_loader, model, criterion, [pylogger], args.print_freq, earlyexit=args.earlyexit)
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          compression_scheduler, loggers, print_freq, log_params_hist):
+          compression_scheduler, loggers, print_freq, log_params_hist, lossweights):
     """Training loop for one epoch."""
     losses = {'objective_loss':   tnt.AverageValueMeter(),
               'regularizer_loss': tnt.AverageValueMeter()}
@@ -343,6 +357,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
+    if earlyexit:
+        top1_exit0 = tnt.AverageValueMeter()
+        top5_exit0 = tnt.AverageValueMeter()
+        top1_exit1 = tnt.AverageValueMeter()
+        top5_exit1 = tnt.AverageValueMeter()
+        top1_exitN = tnt.AverageValueMeter()
+        top5_exitN = tnt.AverageValueMeter()
 
     total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
@@ -364,12 +385,30 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
-        output = model(input_var)
-        loss = criterion(output, target_var)
 
-        # Measure accuracy and record loss
-        classerr.add(output.data, target)
-        losses['objective_loss'].add(loss.item())
+        if earlyexit:
+            # compute outputs at all exits
+            exitN, exit0, exit1 = model(input_var)
+            loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
+                ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
+            # measure accuracy and record loss
+            prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
+            prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
+            prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
+            # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
+            losses.update(loss.item(), input.size(0))
+            top1_exit0.update(prec1_exit0[0], input.size(0))
+            top5_exit0.update(prec5_exit0[0], input.size(0))
+            top1_exit1.update(prec1_exit1[0], input.size(0))
+            top5_exit1.update(prec5_exit1[0], input.size(0))
+            top1_exitN.update(prec1_exitN[0], input.size(0))
+            top5_exitN.update(prec5_exitN[0], input.size(0))
+        else:
+            output = model(input_var)
+            loss = criterion(output, target_var)
+            # Measure accuracy and record loss
+            classerr.add(output.data, target)
+            losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we add any regularization loss computed by the scheduler
@@ -391,14 +430,54 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % print_freq == 0:
             # Log some statistics
             lr = optimizer.param_groups[0]['lr']
-            stats = ('Peformance/Training/',
-                     OrderedDict([
-                         ('Loss', losses['objective_loss'].mean),
-                         ('Reg Loss', losses['regularizer_loss'].mean),
-                         ('Top1', classerr.value(1)),
-                         ('Top5', classerr.value(5)),
-                         ('LR', lr),
-                         ('Time', batch_time.mean)]))
+
+            if earlyexit:
+                # human friendly logging
+                print('Epoch: [{0}][{1}/{2}]\t'
+                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                      'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
+                      'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
+                      'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
+                      'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
+                      'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
+                      'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
+                       epoch, i, len(train_loader), batch_time=batch_time,
+                       data_time=data_time, loss=losses, top1_exit0=top1_exit0, top5_exit0=top5_exit0,
+                       top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
+                stats = ('Performance/Training/',
+                        OrderedDict([
+                            ('Epoch', epoch),
+                            ('i', i),
+                            ('train_loader', len(train_loader)),
+                            ('Time', batch_time.val),
+                            ('TimeAvg', batch_time.avg),
+                            ('Data', data_time.val),
+                            ('DataAvg', data_time.avg),
+                            ('Loss', loss.item()),
+                            ('LossAvg', loss.mean()),
+                            ('Prec@1_exit0', top1_exit0.val),
+                            ('Prec@1_exit0_avg', top1_exit0.avg),
+                            ('Prec@5_exit0', top5_exit0.val),
+                            ('Prec@5_exit0', top5_exit0.avg),
+                            ('Prec@1_exit1', top1_exit1.val),
+                            ('Prec@1_exit1_avg', top1_exit1.avg),
+                            ('Prec@5_exit1', top5_exit1.val),
+                            ('Prec@5_exit1', top5_exit1.avg),
+                            ('Prec@1_exitN', top1_exitN.val),
+                            ('Prec@1_exitN_avg', top1_exitN.avg),
+                            ('Prec@5_exitN', top5_exitN.val),
+                            ('Prec@5_exitN', top5_exitN.avg)]))
+            else:
+                stats = ('Peformance/Training/',
+                        OrderedDict([
+                            ('Loss', losses['objective_loss'].mean),
+                            ('Reg Loss', losses['regularizer_loss'].mean),
+                            ('Top1', classerr.value(1)),
+                            ('Top5', classerr.value(5)),
+                            ('LR', lr),
+                            ('Time', batch_time.mean)]))
 
             distiller.log_training_progress(stats,
                                             model.named_parameters() if log_params_hist else None,
@@ -408,25 +487,35 @@ def train(train_loader, model, criterion, optimizer, epoch,
         end = time.time()
 
 
-def validate(val_loader, model, criterion, loggers, print_freq, epoch=-1):
+def validate(val_loader, model, criterion, loggers, print_freq, epoch=-1, earlyexit):
     """Model validation"""
     if epoch > -1:
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
     else:
         msglogger.info('--- validate ---------------------')
-    return _validate(val_loader, model, criterion, loggers, print_freq, epoch)
+    return _validate(val_loader, model, criterion, loggers, print_freq, epoch, earlyexit)
 
 
-def test(test_loader, model, criterion, loggers, print_freq):
+def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    return _validate(test_loader, model, criterion, loggers, print_freq)
+    return _validate(test_loader, model, criterion, loggers, print_freq, earlyexit)
 
 
-def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
+def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1, earlyexit):
     """Execute the validation/test loop."""
-    losses = {'objective_loss': tnt.AverageValueMeter()}
+    if earlyexit:
+        losses_exit0 = AverageMeter()
+        losses_exit1 = AverageMeter()
+        losses_exitN = AverageMeter()
+        exit_0 = 0
+        exit_1 = 0
+        exit_N = 0
+    else:
+        losses = {'objective_loss': tnt.AverageValueMeter()}
+
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
     batch_size = data_loader.batch_size
@@ -443,13 +532,48 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
 
-            # compute output
-            output = model(input_var)
-            loss = criterion(output, target_var)
+            if earlyexit:
+                # compute output (exitN) and the rest of the exit outputs
+                exitN, exit0, exit1 = model(input_var)
+                # if we are running validate on a validation set with ground truth, we still calculate loss
+                # we will also need loss anyway in test mode as we want to calculate accuracy.
+                loss_exit0 = criterion(exit0, target_var)
+                loss_exit1 = criterion(exit1, target_var)
+                loss_exitN = criterion(exitN, target_var)
 
-            # measure accuracy and record loss
-            losses['objective_loss'].add(loss.item())
-            classerr.add(output.data, target)
+                # measure accuracy and record loss
+                prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
+                prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
+                prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
+
+                losses_exit0.update(loss_exit0.item(), input.size(0))
+                losses_exit1.update(loss_exit1.item(), input.size(0))
+                losses_exitN.update(loss_exitN.item(), input.size(0))
+
+                # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
+                if loss_exit0.item() < earlyexit[0]:
+                    # take the results from the early exit since lower than threshold
+                    top1.update(prec1_exit0[0], input.size(0))
+                    top5.update(prec5_exit0[0], input.size(0))
+                    exit_0 = exit_0 + 1
+                elif loss_exit1.item() < earlyexit[1]:
+                    # or take the results from the next early exit, since lower than its threshold
+                    top1.update(prec1_exit1[0], input.size(0))
+                    top5.update(prec5_exit1[0], input.size(0))
+                    exit_1 = exit_1 + 1
+                else:
+                    # skip the exits and include results from end of net
+                    top1.update(prec1_exitN[0], input.size(0))
+                    top5.update(prec5_exitN[0], input.size(0))
+                    exit_N = exit_N + 1
+            else:
+                # compute output
+                output = model(input_var)
+                loss = criterion(output, target_var)
+
+                # measure accuracy and record loss
+                losses['objective_loss'].add(loss.item())
+                classerr.add(output.data, target)
 
             # measure elapsed time
             batch_time.add(time.time() - end)
@@ -457,12 +581,38 @@ def _validate(data_loader, model, criterion, loggers, print_freq, epoch=-1):
 
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
-                stats = ('',
-                         OrderedDict([('Loss', losses['objective_loss'].mean),
-                                      ('Top1', classerr.value(1)),
-                                      ('Top5', classerr.value(5))]))
+                if earlyexit:
+                    print('Test: [{0}/{1}]\t'
+                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
+                    'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
+                    'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
+                    'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                    'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                    i, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                    top1=top1, top5=top5))
+                    stats = ('Performance/Validation/',
+                        OrderedDict([('Test', i),
+                            ('Time', batch_time.val),
+                            ('TimeAvg', batch_time.avg),
+                            ('Loss0', losses_exit0.val),
+                            ('LossAvg0', losses_exit0.avg),
+                            ('Loss1', losses_exit1.val),
+                            ('LossAvg1', losses_exit1.avg),
+                            ('LossN', losses_exitN.val),
+                            ('LossAvgN', losses_exitN.avg),
+                            ('Prec@1', top1.val),
+                            ('Prec@1_avg', top1.avg),
+                            ('Prec@5', top5.val),
+                            ('Prec@5', top5.avg)]))
+                else:
+                    stats = ('',
+                             OrderedDict([('Loss', losses['objective_loss'].mean),
+                                          ('Top1', classerr.value(1)),
+                                          ('Top5', classerr.value(5))]))
+
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
-                                                total_steps, print_freq, loggers)
+                                                    total_steps, print_freq, loggers)
 
     msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                    classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
