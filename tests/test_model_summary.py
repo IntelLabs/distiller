@@ -48,6 +48,7 @@ def test_negative():
     model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
 
     with pytest.raises(ValueError):
+        # png is not a supported summary type, so we expect this to fail with a ValueError
         distiller.model_summary(model, what='png', dataset=DATASET)
 
 
