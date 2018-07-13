@@ -81,11 +81,9 @@ def weights_sparsity_summary(model, return_total_sparsity=False, param_dims=[2, 
     pd.set_option('precision', 2)
     params_size = 0
     sparse_params_size = 0
-    summary_param_types = ['weight', 'bias']
     for name, param in model.state_dict().items():
         # Extract just the actual parameter's name, which in this context we treat as its "type"
-        curr_param_type = name.split('.')[-1]
-        if param.dim() in param_dims and curr_param_type in summary_param_types:
+        if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
             _density = distiller.density(param)
             params_size += torch.numel(param)
             sparse_params_size += param.numel() * _density
