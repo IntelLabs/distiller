@@ -36,7 +36,7 @@ logger.addHandler(fh)
 def test_png_generation():
     DATASET = "cifar10"
     ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
+    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
     # 2 different ways to create a PNG
     apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, True)
     apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, False)
@@ -45,7 +45,7 @@ def test_png_generation():
 def test_negative():
     DATASET = "cifar10"
     ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
+    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
 
     with pytest.raises(ValueError):
         # png is not a supported summary type, so we expect this to fail with a ValueError
@@ -55,7 +55,7 @@ def test_negative():
 def test_summary():
     DATASET = "cifar10"
     ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET)
+    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
 
     distiller.model_summary(model, what='sparsity', dataset=DATASET)
     distiller.model_summary(model, what='compute', dataset=DATASET)

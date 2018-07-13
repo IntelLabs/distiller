@@ -61,7 +61,7 @@ def test_ch_ranking():
 
 
 def test_ranked_channel_pruning():
-    model, zeros_mask_dict = common.setup_test("resnet20_cifar", "cifar10")
+    model, zeros_mask_dict = common.setup_test("resnet20_cifar", "cifar10", parallel=False)
 
     # Test that we can access the weights tensor of the first convolution in layer 1
     conv1_p = distiller.model_find_param(model, "layer1.0.conv1.weight")
