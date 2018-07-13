@@ -20,6 +20,7 @@ import distiller
 from .pruner import _ParameterPruner
 msglogger = logging.getLogger()
 
+# TODO: support different policies for ranking structures
 class L1RankedStructureParameterPruner(_ParameterPruner):
     """Uses mean L1-norm to rank structures and prune a specified percentage of structures
     """
@@ -27,6 +28,7 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
         super(L1RankedStructureParameterPruner, self).__init__(name)
         self.name = name
         self.reg_regims = reg_regims
+
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.reg_regims.keys():
@@ -37,7 +39,59 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
         if fraction_to_prune == 0:
             return
 
-        assert group_type == "3D", "Currently only filter ranking is supported"
+        if group_type not in ['3D', 'Channels']:
+            raise ValueError("Currently only filter (3D) and channel ranking is supported")
+        if group_type == "3D":
+            return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict)
+        elif group_type == "Channels":
+            return self.rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict)
+
+    @staticmethod
+    def rank_channels(fraction_to_prune, param):
+        num_filters = param.size(0)
+        num_channels = param.size(1)
+        kernel_size = param.size(2) * param.size(3)
+
+        # First, reshape the weights tensor such that each channel (kernel) in the original
+        # tensor, is now a row in the 2D tensor.
+        view_2d = param.view(-1, kernel_size)
+        # Next, compute the sums of each kernel
+        kernel_sums = view_2d.abs().sum(dim=1)
+        # Now group by channels
+        k_sums_mat = kernel_sums.view(num_filters, num_channels).t()
+        channel_mags = k_sums_mat.mean(dim=1)
+        k = int(fraction_to_prune * channel_mags.size(0))
+        if k == 0:
+            msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
+                            num_channels, 100*fraction_to_prune)
+            return None, None
+
+        bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
+        return bottomk, channel_mags
+
+
+    def rank_prune_channels(self, fraction_to_prune, param, param_name, zeros_mask_dict):
+        bottomk_channels, channel_mags = self.rank_channels(fraction_to_prune, param)
+        if bottomk_channels is None:
+            # Empty list means that fraction_to_prune is too low to prune anything
+            return
+
+        num_filters = param.size(0)
+        num_channels = param.size(1)
+
+        threshold = bottomk_channels[-1]
+        binary_map = channel_mags.gt(threshold).type(param.data.type())
+        a = binary_map.expand(num_filters, num_channels)
+        c = a.unsqueeze(-1)
+        d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
+        zeros_mask_dict[param_name].mask = d.view(num_filters, num_channels, param.size(2), param.size(3))
+
+        msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
+                       distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
+                       fraction_to_prune, len(bottomk_channels), num_channels)
+
+
+    def rank_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         view_filters = param.view(param.size(0), -1)
         filter_mags = view_filters.data.abs().mean(dim=1)
