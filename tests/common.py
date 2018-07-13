@@ -23,7 +23,7 @@ import distiller
 from models import create_model
 
 
-def setup_test(arch, dataset, parallel=True):
+def setup_test(arch, dataset, parallel):
     model = create_model(False, dataset, arch, parallel=parallel)
     assert model is not None
 

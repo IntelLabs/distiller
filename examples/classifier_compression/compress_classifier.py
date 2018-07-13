@@ -67,17 +67,18 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
+script_dir = os.path.dirname(__file__)
+module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
 try:
     import distiller
 except ImportError:
-    script_dir = os.path.dirname(__file__)
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     sys.path.append(module_path)
     import distiller
 import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
+
 
 # Logger handle
 msglogger = None
@@ -127,7 +128,7 @@ parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     ' | '.join(SUMMARY_CHOICES))
 parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
                     help='configuration file for pruning the model (default is to use hard-coded schedule)')
-parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter'],
+parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
                     help='test the sensitivity of layers to pruning')
 parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
@@ -141,6 +142,7 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
+parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
 
 
 def check_pytorch_version():
@@ -210,7 +212,6 @@ def main():
 
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
-
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -229,6 +230,23 @@ def main():
                                 weight_decay=args.weight_decay)
     msglogger.info('Optimizer Type: %s', type(optimizer))
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
+
+    if args.ADC:
+        HAVE_GYM_INSTALLED = False
+        if not HAVE_GYM_INSTALLED:
+            raise ValueError("ADC is currently experimental and uses non-public Coach features")
+
+        import examples.automated_deep_compression.ADC as ADC
+        train_loader, val_loader, test_loader, _ = apputils.load_data(
+            args.dataset, os.path.expanduser(args.data), args.batch_size,
+            args.workers, args.validation_size, args.deterministic)
+
+        validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
+                              loggers=[pylogger], print_freq=args.print_freq)
+
+        save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, name='adc')
+        ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn, save_checkpoint_fn)
+        exit()
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -264,7 +282,7 @@ def main():
         which_params = [param_name for param_name, _ in model.named_parameters()]
         sensitivity = distiller.perform_sensitivity_analysis(model,
                                                              net_params=which_params,
-                                                             sparsities=np.arange(0.0, 0.50, 0.05) if args.sensitivity == 'filter' else np.arange(0.0, 0.95, 0.05),
+                                                             sparsities=np.arange(0.0, 0.95, 0.05),
                                                              test_func=test_fnc,
                                                              group=args.sensitivity)
         distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
@@ -358,7 +376,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         data_time.add(time.time() - end)
 
         target = target.cuda(async=True)
-        input_var = torch.autograd.Variable(inputs)
+        input_var = inputs.cuda()
         target_var = torch.autograd.Variable(target)
 
         # Execute the forward phase, compute the output and measure loss
@@ -487,6 +505,7 @@ class PytorchNoGrad(object):
 
 def get_inference_var(tensor):
     """This is a temporary function to bridge some difference between PyTorch 3.x and 4.x"""
+    tensor = tensor.cuda(async=True)
     if torch.__version__ >= '0.4':
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)
@@ -495,10 +514,12 @@ def get_inference_var(tensor):
 if __name__ == '__main__':
     try:
         main()
+    except KeyboardInterrupt:
+        print("\n-- KeyboardInterrupt --")
     except Exception as e:
         if msglogger is not None:
             msglogger.error(traceback.format_exc())
-        raise e
+        raise
     finally:
         if msglogger is not None:
             msglogger.info()

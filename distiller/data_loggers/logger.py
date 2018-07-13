@@ -70,13 +70,15 @@ class PythonLogger(DataLogger):
 
     def log_training_progress(self, stats_dict, epoch, completed, total, freq):
         stats_dict = stats_dict[1]
-        if epoch>-1:
+        if epoch > -1:
             log = 'Epoch: [{}][{:5d}/{:5d}]    '.format(epoch, completed, int(total))
         else:
             log = 'Test: [{:5d}/{:5d}]    '.format(completed, int(total))
-            #log = 'Test: [{1:5d}/{2:5d}]    '.format(total)
         for name, val in stats_dict.items():
-            log = log + '{name} {val:.6f}    '.format(name=name, val=val)
+            if isinstance(val, int):
+                log = log + '{name} {val}    '.format(name=name, val=distiller.pretty_int(val))
+            else:
+                log = log + '{name} {val:.6f}    '.format(name=name, val=val)
         self.pylogger.info(log)
 
 

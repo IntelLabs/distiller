@@ -52,6 +52,10 @@ def size_to_str(torch_size):
     return '('+(', ').join(['%d' % v for v in torch_size])+')'
 
 
+def pretty_int(i):
+    return "{:,}".format(i)
+
+
 def normalize_module_name(layer_name):
     """Normalize a module's name.
 
