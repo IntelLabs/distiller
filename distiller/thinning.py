@@ -72,7 +72,7 @@ def create_graph(dataset, arch):
 
     model = create_model(False, dataset, arch, parallel=False)
     assert model is not None
-    return SummaryGraph(model, dummy_input)
+    return SummaryGraph(model, dummy_input.cuda())
 
 
 def param_name_2_layer_name(param_name):
@@ -491,7 +491,7 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
             else:
                 if param.data.size(dim) != len_indices:
                     param.data = torch.index_select(param.data, dim, indices)
-                    msglogger.info("[thinning] changed param {} shape: {}".format(param_name, len_indices))
+                    msglogger.debug("[thinning] changed param {} shape: {}".format(param_name, len_indices))
                 # We also need to change the dimensions of the gradient tensor.
                 # If have not done a backward-pass thus far, then the gradient will
                 # not exist, and therefore won't need to be re-dimensioned.

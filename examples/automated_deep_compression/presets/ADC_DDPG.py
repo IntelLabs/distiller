@@ -15,8 +15,12 @@ from architectures.tensorflow_components.architecture import Dense
 ####################
 schedule_params = ScheduleParameters()
 schedule_params.improve_steps = EnvironmentEpisodes(400)
-schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(10)
-schedule_params.evaluation_steps = EnvironmentEpisodes(3)
+if True:
+    schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(10)
+    schedule_params.evaluation_steps = EnvironmentEpisodes(3)
+else:
+    schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(1)
+    schedule_params.evaluation_steps = EnvironmentEpisodes(1)
 schedule_params.heatup_steps = EnvironmentSteps(2)
 
 #####################
@@ -28,6 +32,9 @@ agent_params.network_wrappers['actor'].middleware_parameters.scheme = [Dense([30
 agent_params.network_wrappers['critic'].input_embedders_parameters['observation'].scheme = [Dense([300])]
 agent_params.network_wrappers['critic'].middleware_parameters.scheme = [Dense([300])]
 agent_params.network_wrappers['critic'].input_embedders_parameters['action'].scheme = [Dense([300])]
+#agent_params.network_wrappers['critic'].clip_gradients = 100
+#agent_params.network_wrappers['actor'].clip_gradients = 100
+
 agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
 # agent_params.memory.max_size = (MemoryGranularity.Episodes, 2000)

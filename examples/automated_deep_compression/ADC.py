@@ -17,7 +17,7 @@ from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager
 
 msglogger = logging.getLogger()
 Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
-
+ALMOST_ONE = 0.9999
 
 # TODO: this is also defined in test_pruning.py
 def create_model_masks(model):
@@ -32,7 +32,7 @@ def create_model_masks(model):
 USE_COACH = True
 
 
-def do_adc(model, dataset, arch, data_loader, validate_fn):
+def do_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
     np.random.seed()
 
     if USE_COACH:
@@ -47,14 +47,15 @@ def do_adc(model, dataset, arch, data_loader, validate_fn):
             'dataset': dataset,
             'arch': arch,
             'data_loader': data_loader,
-            'validate_fn': validate_fn
+            'validate_fn': validate_fn,
+            'save_checkpoint_fn': save_checkpoint_fn
         }
         graph_manager.create_graph(task_parameters)
         graph_manager.improve()
         return
 
     """Random ADC agent"""
-    env = CNNEnvironment(model, dataset, arch, data_loader, validate_fn)
+    env = CNNEnvironment(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn)
 
     for ep in range(10):
         observation = env.reset()
@@ -114,7 +115,7 @@ class CNNEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
     STATE_EMBEDDING_LEN = len(Observation._fields)
 
-    def __init__(self, model, dataset, arch, data_loader, validate_fn):
+    def __init__(self, model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
 
@@ -123,6 +124,7 @@ class CNNEnvironment(gym.Env):
         self.arch = arch
         self.data_loader = data_loader
         self.validate_fn = validate_fn
+        self.save_checkpoint_fn = save_checkpoint_fn
         self.orig_model = model
 
         self.conv_layers, self.dense_model_macs = collect_conv_details(model, dataset)
@@ -214,7 +216,9 @@ class CNNEnvironment(gym.Env):
         """
         layer_macs = self.get_macs(self.current_layer())
         if action > 0:
-            prev_action = self.__remove_channels(self.current_layer_id, action)
+            actual_action = self.__remove_channels(self.current_layer_id, action)
+        else:
+            actual_action = 0
         layer_macs_after_action = self.get_macs(self.current_layer())
 
         # Update the various counters after taking the step
@@ -223,19 +227,23 @@ class CNNEnvironment(gym.Env):
         self._removed_macs += (layer_macs - layer_macs_after_action)
         self._remaining_macs -= next_layer_macs
 
+        #self.prev_action = actual_action
         if self.episode_is_done():
             observation = self.get_final_obs()
             reward = self.compute_reward()
+            # Save the learned-model checkpoint
+            scheduler = distiller.CompressionScheduler(self.model)
+            scheduler.load_state_dict(state={'masks_dict': self.zeros_mask_dict})
+            self.save_checkpoint_fn(epoch=self.debug_stats['episode'], model=self.model, scheduler=scheduler)
             self.debug_stats['episode'] += 1
         else:
             observation = self._get_obs(next_layer_macs)
-            reward = 0
+            if True:
+                reward = 0
+            else:
+                reward = self.compute_reward()
 
-        if action > 0:
-            self.prev_action = prev_action
-        else:
-            self.prev_action = 0
-
+        self.prev_action = actual_action
         info = {}
         return observation, reward, self.episode_is_done(), info
 
@@ -273,7 +281,7 @@ class CNNEnvironment(gym.Env):
         # MACs = volume(OFM) * (#IFM * K^2)
         return (conv_module.out_channels * layer.ofm_h * layer.ofm_w) * (conv_module.in_channels * layer.k**2)
 
-    def __remove_channels(self, idx, fraction_to_prune):
+    def __remove_channels(self, idx, fraction_to_prune, prune_what="channels"):
         """Physically remove channels and corresponding filters from the model"""
         if idx not in range(self.num_layers()):
             raise ValueError("idx=%d is not in correct range (0-%d)" % (idx, self.num_layers()))
@@ -284,7 +292,7 @@ class CNNEnvironment(gym.Env):
             return 0
         if fraction_to_prune == 1.0:
             # For now, prevent the removal of entire layers
-            fraction_to_prune = 0.99
+            fraction_to_prune = ALMOST_ONE
 
         layer = self.conv_layers[idx]
         conv_pname = layer.name + ".weight"
@@ -292,20 +300,28 @@ class CNNEnvironment(gym.Env):
 
         msglogger.info("ADC: removing %.1f%% channels from %s" % (fraction_to_prune*100, conv_pname))
 
+        if prune_what == "channels":
+            calculate_sparsity = distiller.sparsity_ch
+            reg_regims = {conv_pname: [fraction_to_prune, "Channels"]}
+            remove_structures = distiller.remove_channels
+        else:
+            calculate_sparsity = distiller.sparsity_3D
+            reg_regims = {conv_pname: [fraction_to_prune, "3D"]}
+            remove_structures = distiller.remove_filters
+
         # Create a channel-ranking pruner
-        reg_regims = {conv_pname: [fraction_to_prune, "Channels"]}
-        pruner = distiller.pruning.L1RankedStructureParameterPruner("channel_pruner", reg_regims)
+        pruner = distiller.pruning.L1RankedStructureParameterPruner("adc_pruner", reg_regims)
         pruner.set_param_mask(conv_p, conv_pname, self.zeros_mask_dict, meta=None)
 
-        if self.zeros_mask_dict[conv_pname].mask is None or \
-           distiller.sparsity_ch(self.zeros_mask_dict[conv_pname].mask) == 0:
+        if (self.zeros_mask_dict[conv_pname].mask is None or
+            calculate_sparsity(self.zeros_mask_dict[conv_pname].mask) == 0):
             msglogger.info("__remove_channels: aborting because there are no channels to prune")
             return 0
 
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
-        actual_sparsity = distiller.sparsity_ch(conv_p)
-        distiller.remove_channels(self.model, self.zeros_mask_dict, self.arch, self.dataset)
+        actual_sparsity = calculate_sparsity(conv_p)
+        remove_structures(self.model, self.zeros_mask_dict, self.arch, self.dataset, optimizer=None)
         return actual_sparsity
 
     def compute_reward(self):

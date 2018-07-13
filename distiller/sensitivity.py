@@ -65,7 +65,8 @@ def perform_sensitivity_analysis(model, net_params, sparsities, test_func, group
     The test_func is expected to execute the model on a test/validation dataset,
     and return the results for top1 and top5 accuracies, and the loss value.
     """
-    assert group in ['element', 'filter']
+    if group not in ['element', 'filter', 'channel']:
+        raise ValueError("group parameter contains an illegal value: {}".format(group))
     sensitivities = OrderedDict()
 
     for param_name in net_params:
@@ -86,11 +87,17 @@ def perform_sensitivity_analysis(model, net_params, sparsities, test_func, group
                 # Element-wise sparasity
                 sparsity_levels = {param_name: sparsity_level}
                 pruner = distiller.pruning.SparsityLevelParameterPruner(name='sensitivity', levels=sparsity_levels)
-            else:
+            elif group == 'filter':
                 # Filter ranking
                 if model.state_dict()[param_name].dim() != 4:
                     continue
                 regims = {param_name: [sparsity_level, '3D']}
+                pruner = distiller.pruning.L1RankedStructureParameterPruner(name='sensitivity', reg_regims=regims)
+            elif group == 'channel':
+                # Filter ranking
+                if model.state_dict()[param_name].dim() != 4:
+                    continue
+                regims = {param_name: [sparsity_level, 'Channels']}
                 pruner = distiller.pruning.L1RankedStructureParameterPruner(name='sensitivity', reg_regims=regims)
 
             policy = distiller.PruningPolicy(pruner, pruner_args=None)
