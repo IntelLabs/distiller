@@ -78,7 +78,6 @@ import apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
-import examples.automated_deep_compression.ADC as ADC
 
 
 # Logger handle
@@ -233,6 +232,11 @@ def main():
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.ADC:
+        HAVE_GYM_INSTALLED = False
+        if not HAVE_GYM_INSTALLED:
+            raise ValueError("ADC is currently experimental and uses non-public Coach features")
+
+        import examples.automated_deep_compression.ADC as ADC
         train_loader, val_loader, test_loader, _ = apputils.load_data(
             args.dataset, os.path.expanduser(args.data), args.batch_size,
             args.workers, args.validation_size, args.deterministic)
