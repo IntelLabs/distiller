@@ -458,15 +458,15 @@ def train(train_loader, model, criterion, optimizer, epoch,
                             ('Prec@1_exit0', top1_exit0.val),
                             ('Prec@1_exit0_avg', top1_exit0.avg),
                             ('Prec@5_exit0', top5_exit0.val),
-                            ('Prec@5_exit0', top5_exit0.avg),
+                            ('Prec@5_exit0_avg', top5_exit0.avg),
                             ('Prec@1_exit1', top1_exit1.val),
                             ('Prec@1_exit1_avg', top1_exit1.avg),
                             ('Prec@5_exit1', top5_exit1.val),
-                            ('Prec@5_exit1', top5_exit1.avg),
+                            ('Prec@5_exit1_avg', top5_exit1.avg),
                             ('Prec@1_exitN', top1_exitN.val),
                             ('Prec@1_exitN_avg', top1_exitN.avg),
                             ('Prec@5_exitN', top5_exitN.val),
-                            ('Prec@5_exitN', top5_exitN.avg)]))
+                            ('Prec@5_exitN_avg', top5_exitN.avg)]))
             else:
                 stats = ('Peformance/Training/',
                         OrderedDict([
@@ -588,7 +588,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                     'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
                     'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                     'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                    validation_step, len(val_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
+                    validation_step, len(data_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
                     top1=top1, top5=top5))
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
