@@ -518,7 +518,11 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
 
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
-    batch_size = data_loader.batch_size
+    if earlyexit:
+        # set batchsize=1 for Early Exit inference
+        batch_size = 1
+    else:
+        batch_size = data_loader.batch_size
     total_steps = total_samples / batch_size
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
