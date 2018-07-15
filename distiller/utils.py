@@ -80,7 +80,7 @@ def denormalize_module_name(parallel_model, normalized_name):
     if len(fully_qualified_name) > 0:
         return fully_qualified_name[-1]
     else:
-        return ""   # Did not find a module with the name <normalized_name>
+        return normalized_name   # Did not find a module with the name <normalized_name>
 
 
 def volume(tensor):
@@ -277,10 +277,10 @@ class DoNothingModuleWrapper(nn.Module):
     """
     def __init__(self, module):
         super(DoNothingModuleWrapper, self).__init__()
-        self.wrapped_module = module
+        self.module = module
 
     def forward(self, *inputs, **kwargs):
-        return self.wrapped_module(*inputs, **kwargs)
+        return self.module(*inputs, **kwargs)
 
 
 def make_non_parallel_copy(model):
