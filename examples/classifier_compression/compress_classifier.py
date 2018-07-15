@@ -612,6 +612,20 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                                                     total_steps, print_freq, loggers)
 
     if earlyexit:
+        #print some interesting summary stats for number of data points that could exit early
+        print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
+
+        print('Exit_0:')
+        print(exit_0)
+        print('Exit_1:')
+        print(exit_1)
+        print('Exit_N:')
+        print(exit_N)
+        print('Percent early exit #0:')
+        print((exit_0*100.0) / (exit_0+exit_1+exit_N))
+        print('Percent early exit #1:')
+        print((exit_1*100.0) / (exit_0+exit_1+exit_N))
+        
         return top1.avg, top5.avg, losses_exitN.avg
     else:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
