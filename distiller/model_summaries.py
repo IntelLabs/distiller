@@ -21,7 +21,6 @@
     - model details
 """
 from functools import partial
-import numpy as np
 import pandas as pd
 from tabulate import tabulate
 import logging
