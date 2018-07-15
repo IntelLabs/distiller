@@ -220,14 +220,15 @@ def main():
     tflogger = TensorBoardLogger(msglogger.logdir)
     pylogger = PythonLogger(msglogger)
 
-    # if earlyexit, load early-exit model (truncated net at exit) on top of pretrained parameters
+    # capture thresholds for early-exit training
+    if args.earlyexit:
+        print("=> using early-exit values of '{}'".format(args.earlyexit))
+
+    # NOTE: this likely unnecessary as it could be done via --resume switch to load model 
     if args.earlyexitmodel:
         if os.path.isfile(args.earlyexitmodel):
             earlyexitmodel = torch.load(args.earlyexitmodel)
             model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
-    # capture threshold for early-exit training
-    if args.earlyexit:
-        print("=> using early-exit values of '{}'".format(args.earlyexit))
 
     # We can optionally resume from a checkpoint
     if args.resume:
