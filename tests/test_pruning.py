@@ -66,7 +66,8 @@ def resnet20_cifar(is_parallel):
 def vgg19_imagenet(is_parallel):
     if is_parallel:
         return NetConfig(arch="vgg19", dataset="imagenet",
-                         module_pairs=[("features.module.21", "features.module.23"),
+                         module_pairs=[("features.module.0", "features.module.2"),
+                                       ("features.module.21", "features.module.23"),
                                        ("features.module.23", "features.module.25"),
                                        ("features.module.25", "features.module.28"),
                                        ("features.module.28", "features.module.30"),
@@ -163,6 +164,9 @@ def test_arbitrary_channel_pruning(parallel):
     arbitrary_channel_pruning(simplenet(parallel),
                               channels_to_remove=[0, 2],
                               is_parallel=parallel)
+    arbitrary_channel_pruning(vgg19_imagenet(parallel),
+                              channels_to_remove=[0, 2],
+                              is_parallel=parallel)
 
 
 def test_prune_all_channels(parallel):
@@ -223,7 +227,6 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     """
     model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
-    assert len(config.module_pairs) == 1   # This is a temporary restriction on the test
     pair = config.module_pairs[0]
     conv2 = common.find_module_by_name(model, pair[1])
     assert conv2 is not None
@@ -250,7 +253,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     # Now, let's do the actual network thinning
     distiller.remove_channels(model, zeros_mask_dict, config.arch, config.dataset, optimizer=None)
     conv1 = common.find_module_by_name(model, pair[0])
-
+    assert conv1
     assert conv1.out_channels == cnt_nnz_channels
     assert conv2.in_channels == cnt_nnz_channels
     assert conv1.weight.size(0) == cnt_nnz_channels
@@ -263,7 +266,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
         assert bn1.bias.size(0) == cnt_nnz_channels
         assert bn1.weight.size(0) == cnt_nnz_channels
 
-    dummy_input = torch.randn(1, 3, 32, 32).cuda()
+    dummy_input = common.get_dummy_input(config.dataset)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
     run_forward_backward(model, optimizer, dummy_input)
 
@@ -364,3 +367,7 @@ if __name__ == '__main__':
                                                        ratio_to_prune=0.1,
                                                        is_parallel=is_parallel)
         test_conv_fc_interface(is_parallel, model, zeros_mask_dict)
+
+        arbitrary_channel_pruning(vgg19_imagenet(parallel),
+                                  channels_to_remove=[0, 2],
+                                  is_parallel=parallel)

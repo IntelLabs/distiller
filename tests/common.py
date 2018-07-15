@@ -16,6 +16,7 @@
 
 import os
 import sys
+import torch
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -40,3 +41,11 @@ def find_module_by_name(model, module_to_find):
         if name == module_to_find:
             return m
     return None
+
+
+def get_dummy_input(dataset):
+    if dataset == "imagenet":
+        return torch.randn(1, 3, 224, 224).cuda()
+    elif dataset == "cifar10":
+        return torch.randn(1, 3, 32, 32).cuda()
+    raise ValueError("Trying to use an unknown dataset " + dataset)
