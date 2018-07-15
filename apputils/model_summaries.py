@@ -16,9 +16,8 @@
 
 """This module provides various model summary information.
 
-This code is currently in "experimental" state, as we wait for the next release
-of PyTorch with stable support for the JIT tracer functionality we employ in this
-code (it was built with a 4.x master branch).
+This code is proven to work on CNN image classification models using PyTorch 04.
+RNNs are currently not working well.
 """
 
 import re
