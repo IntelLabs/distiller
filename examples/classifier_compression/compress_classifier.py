@@ -505,9 +505,9 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                 loss_exit1 = criterion(exit1, target_var)
                 loss_exitN = criterion(exitN, target_var)
 
-                losses_exit0.add(loss_exit0.item)
-                losses_exit1.add(loss_exit1.item)
-                losses_exitN.add(loss_exitN.item)
+                losses_exit0.add(loss_exit0.item())
+                losses_exit1.add(loss_exit1.item())
+                losses_exitN.add(loss_exitN.item())
 
                 # We need to go through the batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
