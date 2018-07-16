@@ -475,8 +475,8 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
         exit_0 = 0
         exit_1 = 0
         exit_N = 0
-    else:
-        losses = {'objective_loss': tnt.AverageValueMeter()}
+        
+    losses = {'objective_loss': tnt.AverageValueMeter()}
 
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
@@ -497,14 +497,13 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
             target_var = get_inference_var(target)
 
             if earlyexit:
-                # compute output (exitN) and the rest of the exit outputs
+                # compute output at all the exit outputs
                 exitN, exit0, exit1 = model(input_var)
-                # if we are running validate on a validation set with ground truth, we still calculate loss
-                # we will also need loss anyway in test mode as we want to calculate accuracy.
                 loss_exit0 = criterion(exit0, target_var)
                 loss_exit1 = criterion(exit1, target_var)
                 loss_exitN = criterion(exitN, target_var)
 
+                # measure accuracy and record loss
                 losses_exit0.add(loss_exit0.item())
                 losses_exit1.add(loss_exit1.item())
                 losses_exitN.add(loss_exitN.item())
