@@ -156,7 +156,7 @@ class ResNet(nn.Module):
         exit0 = self.conv1_exit0(exit0)
         exit0 = self.conv2_exit0(exit0)
         exit0 = self.avgpool(exit0)
-        exit0 = exit1.view(exit0.size(0), -1)
+        exit0 = exit0.view(exit0.size(0), -1)
         exit0 = self.fc_exit0(exit0)
 
         x = self.layer2(x)
