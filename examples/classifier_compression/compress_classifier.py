@@ -568,7 +568,6 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
 
     if earlyexit:
         #print some interesting summary stats for number of data points that could exit early
-        #         msglogger.info("Running sensitivity tests")
         msglogger.info("Exit 0: %d", exit_0)
         msglogger.info("Exit 1: %d", exit_1)
         msglogger.info("Exit N: %d", exit_N)

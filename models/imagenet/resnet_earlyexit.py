@@ -113,11 +113,11 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         # Define exit layers
-        self.conv1_exit1 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
-        self.conv2_exit1 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
-        self.conv1_exit2 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
-        self.fc_exit1 = nn.Linear(147 * block.expansion, num_classes)
-        self.fc_exit2 = nn.Linear(192 * block.expansion, num_classes)
+        self.conv1_exit0 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
+        self.conv2_exit0 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
+        self.conv1_exit1 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
+        self.fc_exit0 = nn.Linear(147 * block.expansion, num_classes)
+        self.fc_exit1 = nn.Linear(192 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -152,19 +152,19 @@ class ResNet(nn.Module):
 
         x = self.layer1(x)
 
-        exit1 = self.avgpool(x)
-        exit1 = self.conv1_exit1(exit1)
-        exit1 = self.conv2_exit1(exit1)
-        exit1 = self.avgpool(exit1)
-        exit1 = exit1.view(exit1.size(0), -1)
-        exit1 = self.fc_exit1(exit1)
+        exit0 = self.avgpool(x)
+        exit0 = self.conv1_exit0(exit0)
+        exit0 = self.conv2_exit0(exit0)
+        exit0 = self.avgpool(exit0)
+        exit0 = exit1.view(exit0.size(0), -1)
+        exit0 = self.fc_exit0(exit0)
 
         x = self.layer2(x)
 
-        exit2 = self.conv1_exit2(x)
-        exit2 = self.avgpool(exit2)
-        exit2 = exit2.view(exit2.size(0), -1)
-        exit2 = self.fc_exit2(exit2)
+        exit1 = self.conv1_exit1(x)
+        exit1 = self.avgpool(exit1)
+        exit1 = exit1.view(exit1.size(0), -1)
+        exit1 = self.fc_exit1(exit1)
 
         x = self.layer3(x)
         x = self.layer4(x)
@@ -173,7 +173,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return x, exit1, exit2
+        return x, exit0, exit1
 
 
 def resnet18(pretrained=False, **kwargs):
