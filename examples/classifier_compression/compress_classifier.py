@@ -475,10 +475,9 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
         exit_0 = 0
         exit_1 = 0
         exit_N = 0
-        
-    losses = {'objective_loss': tnt.AverageValueMeter()}
-
-    classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+    else:    
+        losses = {'objective_loss': tnt.AverageValueMeter()}
+        classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
@@ -542,7 +541,6 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                 if earlyexit:
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
-                            ('Loss', losses['objective_loss'].mean)
                             ('Loss0', losses_exit0.data),
                             ('LossAvg0', losses_exit0.mean),
                             ('Loss1', losses_exit1.data),
