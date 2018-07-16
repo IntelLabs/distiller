@@ -605,3 +605,16 @@ def get_inference_var(tensor):
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)
 
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        if msglogger is not None:
+            msglogger.error(traceback.format_exc())
+        raise e
+    finally:
+        if msglogger is not None:
+            msglogger.info('')
+            msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))
