@@ -143,7 +143,6 @@ parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
 parser.add_argument('--lossweights', type=float, nargs='*', dest='lossweights', help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit', type=float, nargs='*', dest='earlyexit', help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
-parser.add_argument('--earlyexitmodel', dest='earlyexitmodel', help='Specify file containing trained model WITH early-exit')
 
 
 def check_pytorch_version():
@@ -222,13 +221,8 @@ def main():
 
     # capture thresholds for early-exit training
     if args.earlyexit:
-        print("=> using early-exit values of '{}'".format(args.earlyexit))
+        msglogger.info('=> using early-exit values of %s', args.earlyexit)
 
-    # NOTE: this likely unnecessary as it could be done via --resume switch to load model 
-    if args.earlyexitmodel:
-        if os.path.isfile(args.earlyexitmodel):
-            earlyexitmodel = torch.load(args.earlyexitmodel)
-            model.load_state_dict(earlyexitmodel['state_dict'], strict=False)
 
     # We can optionally resume from a checkpoint
     if args.resume:
@@ -347,7 +341,7 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          compression_scheduler, loggers, print_freq, log_params_hist, lossweights):
+          compression_scheduler, loggers, print_freq, log_params_hist, lossweights=0):
     """Training loop for one epoch."""
     losses = {'objective_loss':   tnt.AverageValueMeter(),
               'regularizer_loss': tnt.AverageValueMeter()}
@@ -359,12 +353,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
     if lossweights:
-        top1_exit0 = AverageMeter()
-        top5_exit0 = AverageMeter()
-        top1_exit1 = AverageMeter()
-        top5_exit1 = AverageMeter()
-        top1_exitN = AverageMeter()
-        top5_exitN = AverageMeter()
+        exit0err = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+        exit1err = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+        exitNerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
     total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
@@ -390,19 +381,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if lossweights:
             # compute outputs at all exits
             exitN, exit0, exit1 = model(input_var)
+            # while there are multiple exits, there is still just one loss (linear combo of exit losses)
             loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
                 ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
             # measure accuracy and record loss
-            prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
-            prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
-            prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
-            # while there are multiple exits, there is still just one loss (linear combo of exit losses - see above)
-            top1_exit0.update(prec1_exit0[0], inputs.size(0))
-            top5_exit0.update(prec5_exit0[0], inputs.size(0))
-            top1_exit1.update(prec1_exit1[0], inputs.size(0))
-            top5_exit1.update(prec5_exit1[0], inputs.size(0))
-            top1_exitN.update(prec1_exitN[0], inputs.size(0))
-            top5_exitN.update(prec5_exitN[0], inputs.size(0))
+            exit0err.add(exit0.data, target)
+            exit1err.add(exit1.data, target)
+            exitNerr.add(exitN.data, target)
         else:
             output = model(input_var)
             loss = criterion(output, target_var)
@@ -433,41 +418,17 @@ def train(train_loader, model, criterion, optimizer, epoch,
             lr = optimizer.param_groups[0]['lr']
 
             if lossweights:
-                # human friendly logging
-                print('Epoch: [{0}][{1}/{2}]\t'
-                      'Time ({batch_time.mean:.3f})\t'
-                      'Data ({data_time.mean:.3f})\t'
-                      'Loss {losses.mean:.4f}\t'
-                      'Prec@1_exit0 {top1_exit0.val:.3f} ({top1_exit0.avg:.3f})\t'
-                      'Prec@5_exit0 {top5_exit0.val:.3f} ({top5_exit0.avg:.3f})\t'
-                      'Prec@1_exit1 {top1_exit1.val:.3f} ({top1_exit1.avg:.3f})\t'
-                      'Prec@5_exit1 {top5_exit1.val:.3f} ({top5_exit1.avg:.3f})\t'
-                      'Prec@1_exitN {top1_exitN.val:.3f} ({top1_exitN.avg:.3f})\t'
-                      'Prec@5_exitN {top5_exitN.val:.3f} ({top5_exitN.avg:.3f})'.format(
-                       epoch, train_step, len(train_loader), batch_time=batch_time,
-                       data_time=data_time, losses=losses['objective_loss'], top1_exit0=top1_exit0, top5_exit0=top5_exit0,
-                       top1_exit1=top1_exit1, top5_exit1=top5_exit1, top1_exitN=top1_exitN, top5_exitN=top5_exitN))
                 stats = ('Performance/Training/',
                         OrderedDict([
                             ('Epoch', epoch),
                             ('i', train_step),
-                            ('train_loader', len(train_loader)),
-                            ('TimeAvg', batch_time.mean),
-                            ('DataAvg', data_time.mean),
-                            ('Loss', loss.item()),
-                            ('LossAvg', loss.mean()),
-                            ('Prec@1_exit0', top1_exit0.val),
-                            ('Prec@1_exit0_avg', top1_exit0.avg),
-                            ('Prec@5_exit0', top5_exit0.val),
-                            ('Prec@5_exit0_avg', top5_exit0.avg),
-                            ('Prec@1_exit1', top1_exit1.val),
-                            ('Prec@1_exit1_avg', top1_exit1.avg),
-                            ('Prec@5_exit1', top5_exit1.val),
-                            ('Prec@5_exit1_avg', top5_exit1.avg),
-                            ('Prec@1_exitN', top1_exitN.val),
-                            ('Prec@1_exitN_avg', top1_exitN.avg),
-                            ('Prec@5_exitN', top5_exitN.val),
-                            ('Prec@5_exitN_avg', top5_exitN.avg)]))
+                            ('Objective Loss', losses['objective_loss'].mean)
+                            ('Prec@1_exit0', exit0err.value(1)),
+                            ('Prec@5_exit0', exit0err.value(5)),
+                            ('Prec@1_exit1', exit1err.value(1)),
+                            ('Prec@5_exit1', exit1err.value(5)),
+                            ('Prec@1_exitN', exitNerr.value(1)),
+                            ('Prec@5_exitN', exitNerr.value(5))]))
             else:
                 stats = ('Peformance/Training/',
                         OrderedDict([
@@ -504,11 +465,13 @@ def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
 def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, epoch=-1):
     """Execute the validation/test loop."""
     if earlyexit:
-        losses_exit0 = AverageMeter()
-        losses_exit1 = AverageMeter()
-        losses_exitN = AverageMeter()
-        top1 = AverageMeter()
-        top5 = AverageMeter()
+        exit0err = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+        exit1err = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+        exitNerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+        losses_exit0 = tnt.AverageValueMeter()
+        losses_exit1 = tnt.AverageValueMeter()
+        losses_exitN = tnt.AverageValueMeter()
+        # init counts to determine portion that can exit early
         exit_0 = 0
         exit_1 = 0
         exit_N = 0
@@ -519,11 +482,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
 
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
-    if earlyexit:
-        # set batchsize=1 for Early Exit inference
-        batch_size = 1
-    else:
-        batch_size = data_loader.batch_size
+    batch_size = data_loader.batch_size
     total_steps = total_samples / batch_size
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
@@ -546,31 +505,26 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
                 loss_exit1 = criterion(exit1, target_var)
                 loss_exitN = criterion(exitN, target_var)
 
-                # measure accuracy and record loss
-                prec1_exit0, prec5_exit0 = accuracy(exit0.data, target, topk=(1, 5))
-                prec1_exit1, prec5_exit1 = accuracy(exit1.data, target, topk=(1, 5))
-                prec1_exitN, prec5_exitN = accuracy(exitN.data, target, topk=(1, 5))
+                losses_exit0.add(loss_exit0.item)
+                losses_exit1.add(loss_exit1.item)
+                losses_exitN.add(loss_exitN.item)
 
-                losses_exit0.update(loss_exit0.item(), inputs.size(0))
-                losses_exit1.update(loss_exit1.item(), inputs.size(0))
-                losses_exitN.update(loss_exitN.item(), inputs.size(0))
-
+                # We need to go through the batch itself - this is now a vector of losses through the batch.
+                # Collecting stats on which exit early can be done across the batch at this time.
+                #                 
                 # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                 if loss_exit0.item() < earlyexit[0]:
                     # take the results from the early exit since lower than threshold
-                    top1.update(prec1_exit0[0], inputs.size(0))
-                    top5.update(prec5_exit0[0], inputs.size(0))
-                    exit_0 = exit_0 + 1
+                    exit0err.add(exit0.data, target)
+                    exit_0 += 1
                 elif loss_exit1.item() < earlyexit[1]:
                     # or take the results from the next early exit, since lower than its threshold
-                    top1.update(prec1_exit1[0], inputs.size(0))
-                    top5.update(prec5_exit1[0], inputs.size(0))
-                    exit_1 = exit_1 + 1
+                    exit1err.add(exit1.data, target)
+                    exit_1 += 1
                 else:
-                    # skip the exits and include results from end of net
-                    top1.update(prec1_exitN[0], inputs.size(0))
-                    top5.update(prec5_exitN[0], inputs.size(0))
-                    exit_N = exit_N + 1
+                    # skip the early exits and include results from end of net
+                    exitNerr.add(exitN.data, target)
+                    exit_N += 1
             else:
                 # compute output
                 output = model(input_var)
@@ -587,26 +541,22 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
                 if earlyexit:
-                    print('Test: [{0}/{1}]\t'
-                    'Loss0 {loss0.val:.4f} ({loss0.avg:.4f})\t'
-                    'Loss1 {loss1.val:.4f} ({loss1.avg:.4f})\t'
-                    'LossN {lossN.val:.4f} ({lossN.avg:.4f})\t'
-                    'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                    'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                    validation_step, len(data_loader), batch_time=batch_time, loss0=losses_exit0,loss1=losses_exit1, lossN=losses_exitN,
-                    top1=top1, top5=top5))
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
-                            ('Loss0', losses_exit0.val),
-                            ('LossAvg0', losses_exit0.avg),
-                            ('Loss1', losses_exit1.val),
-                            ('LossAvg1', losses_exit1.avg),
-                            ('LossN', losses_exitN.val),
-                            ('LossAvgN', losses_exitN.avg),
-                            ('Prec@1', top1.val),
-                            ('Prec@1_avg', top1.avg),
-                            ('Prec@5', top5.val),
-                            ('Prec@5', top5.avg)]))
+                            ('Loss', losses['objective_loss'].mean)
+                            ('Loss0', losses_exit0.data),
+                            ('LossAvg0', losses_exit0.mean),
+                            ('Loss1', losses_exit1.data),
+                            ('LossAvg1', losses_exit1.mean),
+                            ('LossN', losses_exitN.data),
+                            ('LossAvgN', losses_exitN.mean),
+                            ('Top1 exit0', exit0err.value(1)),
+                            ('Top5 exit0', exit0err.value(5)),
+                            ('Top1 exit1', exit1err.value(1)),
+                            ('Top5 exit1', exit1err.value(5)),
+                            ('Top1 exitN', exitNerr.value(1)),
+                            ('Top5 exitN', exitNerr.value(5))
+                            ]))
                 else:
                     stats = ('',
                              OrderedDict([('Loss', losses['objective_loss'].mean),
@@ -618,20 +568,15 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit=0, e
 
     if earlyexit:
         #print some interesting summary stats for number of data points that could exit early
-        print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
-
-        print('Exit_0:')
-        print(exit_0)
-        print('Exit_1:')
-        print(exit_1)
-        print('Exit_N:')
-        print(exit_N)
-        print('Percent early exit #0:')
-        print((exit_0*100.0) / (exit_0+exit_1+exit_N))
-        print('Percent early exit #1:')
-        print((exit_1*100.0) / (exit_0+exit_1+exit_N))
+        #         msglogger.info("Running sensitivity tests")
+        msglogger.info("Exit 0: %d", exit_0)
+        msglogger.info("Exit 1: %d", exit_1)
+        msglogger.info("Exit N: %d", exit_N)
+        msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_1+exit_N))
+        msglogger.info("Percent Early Exit #1: %.3f", (exit_1*100.0) / (exit_0+exit_1+exit_N))
         
-        return top1.avg, top5.avg, losses_exitN.avg
+        # NOTE: only returning the last exit stats
+        return exitNerr.value()[0], exitNerr.value()[1], losses_exitN.mean
     else:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                    classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
@@ -660,46 +605,3 @@ def get_inference_var(tensor):
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)
 
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-if __name__ == '__main__':
-    try:
-        main()
-    except Exception as e:
-        if msglogger is not None:
-            msglogger.error(traceback.format_exc())
-        raise e
-    finally:
-        if msglogger is not None:
-            msglogger.info('')
-            msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))

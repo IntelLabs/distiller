@@ -112,6 +112,7 @@ class ResNet(nn.Module):
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        # Define exit layers
         self.conv1_exit1 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
         self.conv2_exit1 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
         self.conv1_exit2 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
