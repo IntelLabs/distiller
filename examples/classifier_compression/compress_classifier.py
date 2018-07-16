@@ -422,7 +422,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                         OrderedDict([
                             ('Epoch', epoch),
                             ('i', train_step),
-                            ('Objective Loss', losses['objective_loss'].mean)
+                            ('Objective Loss', losses['objective_loss'].mean),
                             ('Prec@1_exit0', exit0err.value(1)),
                             ('Prec@5_exit0', exit0err.value(5)),
                             ('Prec@1_exit1', exit1err.value(1)),
