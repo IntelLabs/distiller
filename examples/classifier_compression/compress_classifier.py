@@ -514,33 +514,34 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
             if earlyexit:
                 # compute output at all the exit outputs
                 exitN, exit0, exit1 = model(input_var)
-                loss_exit0 = criterion(exit0, target_var)
-                loss_exit1 = criterion(exit1, target_var)
-                loss_exitN = criterion(exitN, target_var)
 
-                # measure accuracy and record loss
-                losses_exit0.add(loss_exit0.item())
-                losses_exit1.add(loss_exit1.item())
-                losses_exitN.add(loss_exitN.item())
+                for batchnum in range(0, batch_size):
+                    loss_exit0 = criterion(torch.tensor(np.array(exit0[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit1 = criterion(torch.tensor(np.array(exit1[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exitN = criterion(torch.tensor(np.array(exitN[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
 
-                # We need to go through the batch itself - this is now a vector of losses through the batch.
-                # Collecting stats on which exit early can be done across the batch at this time.
-                #                 
-                # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
-                if loss_exit0.item() < earlyexit[0]:
-                    # take the results from the early exit since lower than threshold
-                    exit0err.add(exit0.data, target)
-                    exit_0 += 1
-                elif loss_exit1.item() < earlyexit[1]:
-                    # or take the results from the next early exit, since lower than its threshold
-                    exit1err.add(exit1.data, target)
-                    exit_1 += 1
-                else:
-                    # skip the early exits and include results from end of net
-                    exitNerr.add(exitN.data, target)
-                    exit_N += 1
+                    # measure accuracy and record loss
+                    losses_exit0.add(loss_exit0.item())
+                    losses_exit1.add(loss_exit1.item())
+                    losses_exitN.add(loss_exitN.item())
+
+                    # We need to go through the batch itself - this is now a vector of losses through the batch.
+                    # Collecting stats on which exit early can be done across the batch at this time.
+                    #                 
+                    # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
+                    if loss_exit0.item() < earlyexit[0]:
+                        # take the results from the early exit since lower than threshold
+                        exit0err.add(exit0.data[batchnum], target[batchnum])
+                        exit_0 += 1
+                    elif loss_exit1.item() < earlyexit[1]:
+                        # or take the results from the next early exit, since lower than its threshold
+                        exit1err.add(exit1.data[batchnum], target[batchnum])
+                        exit_1 += 1
+                    else:
+                        # skip the early exits and include results from end of net
+                        exitNerr.add(exitN.data[batchnum], target[batchnum])
+                        exit_N += 1
             else:
-
                 # compute output
                 output = model(input_var)
                 loss = criterion(output, target_var)
@@ -558,11 +559,8 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
                 if earlyexit:
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
-                            ('Loss0', losses_exit0.data),
                             ('LossAvg0', losses_exit0.mean),
-                            ('Loss1', losses_exit1.data),
                             ('LossAvg1', losses_exit1.mean),
-                            ('LossN', losses_exitN.data),
                             ('LossAvgN', losses_exitN.mean),
                             ('Top1 exit0', exit0err.value(1)),
                             ('Top5 exit0', exit0err.value(5)),
