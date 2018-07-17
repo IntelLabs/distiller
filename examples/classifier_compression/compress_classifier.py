@@ -313,6 +313,7 @@ def main():
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress)
 
+    best_epoch = start_epoch
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
         msglogger.info('\n')
@@ -341,7 +342,10 @@ def main():
 
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
-        best_top1 = max(top1, best_top1)
+        if is_best:
+            best_epoch = epoch
+            best_top1 = top1
+        msglogger.info('==> Best validation Top1: %.3f   Epoch: %d', best_top1, best_epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
                                  args.name, msglogger.logdir)
 
