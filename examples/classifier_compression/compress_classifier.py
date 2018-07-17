@@ -531,15 +531,15 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
                     # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                     if loss_exit0.item() < earlyexit[0]:
                         # take the results from the early exit since lower than threshold
-                        exit0err.add(exit0.data[batchnum], target[batchnum])
+                        exit0err.add(exit0.data[batchnum], torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_0 += 1
                     elif loss_exit1.item() < earlyexit[1]:
                         # or take the results from the next early exit, since lower than its threshold
-                        exit1err.add(exit1.data[batchnum], target[batchnum])
+                        exit1err.add(exit1.data[batchnum], torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_1 += 1
                     else:
                         # skip the early exits and include results from end of net
-                        exitNerr.add(exitN.data[batchnum], target[batchnum])
+                        exitNerr.add(exitN.data[batchnum], torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
             else:
                 # compute output
