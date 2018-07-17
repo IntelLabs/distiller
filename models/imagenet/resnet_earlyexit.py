@@ -173,7 +173,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return x, exit0, exit1
+        return list(exit0, exit1, x)
 
 
 def resnet18(pretrained=False, **kwargs):

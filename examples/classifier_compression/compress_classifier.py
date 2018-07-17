@@ -328,7 +328,7 @@ def main():
         # Train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
               loggers=[tflogger, pylogger], print_freq=args.print_freq, log_params_hist=args.log_params_histograms,
-              lossweights=args.lossweights)
+              lossweights=args.lossweights, dataset=args.dataset)
         distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
         if args.activation_stats:
             distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
@@ -336,7 +336,7 @@ def main():
 
         # evaluate on validation set
         top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq,
-                                    args.earlyexit, epoch)
+                                    args.earlyexit, epoch, dataset=args.dataset)
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
@@ -354,11 +354,11 @@ def main():
                                  args.name, msglogger.logdir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], args.print_freq, earlyexit=args.earlyexit)
+    test(test_loader, model, criterion, [pylogger], args.print_freq, earlyexit=args.earlyexit, dataset=args.dataset)
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          compression_scheduler, loggers, print_freq, log_params_hist, lossweights):
+          compression_scheduler, loggers, print_freq, log_params_hist, lossweights, dataset):
     """Training loop for one epoch."""
     losses = {'objective_loss':   tnt.AverageValueMeter(),
               'regularizer_loss': tnt.AverageValueMeter()}
@@ -396,15 +396,20 @@ def train(train_loader, model, criterion, optimizer, epoch,
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
         if lossweights:
-            # compute outputs at all exits
-            exitN, exit0, exit1 = model(input_var)
+            # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+            output = model(input_var)
             # while there are multiple exits, there is still just one loss (linear combo of exit losses)
-            loss = ((lossweights[0] * criterion(exit0, target_var)) + (lossweights[1] * criterion(exit1, target_var)) +
-                ((1.0 - (lossweights[0]+lossweights[1])) * criterion(exitN, target_var)))
             # measure accuracy and record loss
-            exit0err.add(exit0.data, target)
-            exit1err.add(exit1.data, target)
-            exitNerr.add(exitN.data, target)
+            if dataset == 'cifar10':
+                loss = ((lossweights[0] * criterion(output[0], target_var)) + ((1.0 - lossweights[0]) * criterion(output[1], target_var)))
+                exit0err.add(output[0].data, target)
+                exitNerr.add(output[1].data, target)
+            else:             # imagenet
+                loss = ((lossweights[0] * criterion(output[0], target_var)) + (lossweights[1] * criterion(output[1], target_var)) +
+                    ((1.0 - (lossweights[0]+lossweights[1])) * criterion(output[2], target_var)))
+                exit0err.add(output[0].data, target)
+                exit1err.add(output[1].data, target)
+                exitNerr.add(output[N].data, target)
         else:
             output = model(input_var)
             loss = criterion(output, target_var)
@@ -433,7 +438,17 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % print_freq == 0:
             # Log some statistics
             lr = optimizer.param_groups[0]['lr']
-            if lossweights:
+            if lossweights and dataset == 'cifar10':
+                stats = ('Performance/Training/',
+                        OrderedDict([
+                            ('Epoch', epoch),
+                            ('i', train_step),
+                            ('Objective Loss', losses['objective_loss'].mean),
+                            ('Prec@1_exit0', exit0err.value(1)),
+                            ('Prec@5_exit0', exit0err.value(5)),
+                            ('Prec@1_exitN', exitNerr.value(1)),
+                            ('Prec@5_exitN', exitNerr.value(5))]))
+            elif lossweights:   #imagenet
                 stats = ('Performance/Training/',
                         OrderedDict([
                             ('Epoch', epoch),
@@ -463,22 +478,22 @@ def train(train_loader, model, criterion, optimizer, epoch,
         end = time.time()
 
 
-def validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch=-1):
+def validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch=-1, dataset=None):
     """Model validation"""
     if epoch > -1:
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
     else:
         msglogger.info('--- validate ---------------------')
-    return _validate(val_loader, model, criterion, loggers, print_freq, earlyexit, epoch)
+    return _validate(val_loader, model, criterion, loggers, print_freq, earlyexit, dataset, epoch)
 
 
-def test(test_loader, model, criterion, loggers, print_freq, earlyexit):
+def test(test_loader, model, criterion, loggers, print_freq, earlyexit, dataset):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    return _validate(test_loader, model, criterion, loggers, print_freq, earlyexit)
+    return _validate(test_loader, model, criterion, loggers, print_freq, earlyexit, dataset)
 
 
-def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epoch=-1):
+def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dataset, epoch=-1):
     """Execute the validation/test loop."""
     if earlyexit:
         exit0err = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
@@ -511,35 +526,57 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
 
-            if earlyexit:
-                # compute output at all the exit outputs
-                exitN, exit0, exit1 = model(input_var)
+            if earlyexit and dataset == 'cifar10':
+                # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+                output = model(input_var)
 
+                # We need to go through the batch itself - this is now a vector of losses through the batch.
+                # Collecting stats on which exit early can be done across the batch at this time.
                 for batchnum in range(0, batch_size):
-                    loss_exit0 = criterion(torch.tensor(np.array(exit0[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exit1 = criterion(torch.tensor(np.array(exit1[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exitN = criterion(torch.tensor(np.array(exitN[batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exitN = criterion(torch.tensor(np.array(output[1][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+
+                    # measure accuracy and record loss
+                    losses_exit0.add(loss_exit0.item())
+                    losses_exitN.add(loss_exitN.item())
+
+                    # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
+                    if loss_exit0.item() < earlyexit[0]:
+                        # take the results from the early exit since lower than threshold
+                        exit0err.add(torch.tensor(np.array(output[0].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exit_0 += 1
+                    else:
+                        # skip the early exits and include results from end of net
+                        exitNerr.add(torch.tensor(np.array(output[1].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exit_N += 1
+            elif earlyexit:       # imagenet
+                # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+                output = model(input_var)
+
+                # We need to go through the batch itself - this is now a vector of losses through the batch.
+                # Collecting stats on which exit early can be done across the batch at this time.
+                for batchnum in range(0, batch_size):
+                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit1 = criterion(torch.tensor(np.array(output[1][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exitN = criterion(torch.tensor(np.array(output[2][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
 
                     # measure accuracy and record loss
                     losses_exit0.add(loss_exit0.item())
                     losses_exit1.add(loss_exit1.item())
                     losses_exitN.add(loss_exitN.item())
 
-                    # We need to go through the batch itself - this is now a vector of losses through the batch.
-                    # Collecting stats on which exit early can be done across the batch at this time.
-                    #                 
                     # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                     if loss_exit0.item() < earlyexit[0]:
                         # take the results from the early exit since lower than threshold
-                        exit0err.add(torch.tensor(np.array(exit0.data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exit0err.add(torch.tensor(np.array(output[0].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_0 += 1
                     elif loss_exit1.item() < earlyexit[1]:
                         # or take the results from the next early exit, since lower than its threshold
-                        exit1err.add(torch.tensor(np.array(exit1.data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exit1err.add(torch.tensor(np.array(output[1].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_1 += 1
                     else:
                         # skip the early exits and include results from end of net
-                        exitNerr.add(torch.tensor(np.array(exitN.data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exitNerr.add(torch.tensor(np.array(output[2].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
             else:
                 # compute output
@@ -556,7 +593,20 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
 
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
-                if earlyexit:
+                if earlyexit and dataset == 'cifar10':
+                    stats = ('Performance/Validation/',
+                        OrderedDict([('Test', validation_step),
+                            ('LossAvg0', losses_exit0.mean),
+                            ('LossAvg1', losses_exit1.mean),
+                            ('LossAvgN', losses_exitN.mean),
+                            ('Top1 exit0', exit0err.value(1)),
+                            ('Top5 exit0', exit0err.value(5)),
+                            ('Top1 exit1', exit1err.value(1)),
+                            ('Top5 exit1', exit1err.value(5)),
+                            ('Top1 exitN', exitNerr.value(1)),
+                            ('Top5 exitN', exitNerr.value(5))
+                            ]))
+                elif earlyexit:     # imagenet
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
                             ('LossAvg0', losses_exit0.mean),
@@ -577,7 +627,12 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, epo
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, print_freq, loggers)
-    if earlyexit:
+    if earlyexit and dataset == 'cifar10':
+        #print some interesting summary stats for number of data points that could exit early
+        msglogger.info("Exit 0: %d", exit_0)
+        msglogger.info("Exit N: %d", exit_N)
+        msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_N))
+    elif earlyexit:    # imagenet
         #print some interesting summary stats for number of data points that could exit early
         msglogger.info("Exit 0: %d", exit_0)
         msglogger.info("Exit 1: %d", exit_1)
