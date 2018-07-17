@@ -77,7 +77,7 @@ class Quantizer(object):
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
     """
-    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
                  quantize_bias=False, train_with_fp_copy=False):
         if not isinstance(bits_overrides, OrderedDict):
             raise TypeError('bits_overrides must be an instance of collections.OrderedDict')
@@ -86,6 +86,7 @@ class Quantizer(object):
         self.quantize_bias = quantize_bias
 
         self.model = model
+        self.optimizer = optimizer
 
         # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
         self.model.quantizer_metadata = {'type': type(self),
@@ -165,6 +166,12 @@ class Quantizer(object):
                 param_full_name = '.'.join([module_name, param_name])
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
+
+        # Modified the models parameters, so need to update the optimizer
+        if self.train_with_fp_copy:
+            optimizer_type = type(self.optimizer)
+            new_optimizer = optimizer_type(self.model.parameters(), **self.optimizer.defaults)
+            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
