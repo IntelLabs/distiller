@@ -140,6 +140,16 @@ class WRPNQuantizer(Quantizer):
         self.replacement_factory[nn.ReLU] = relu_replace_fn
 
 
+def dorefa_quantize_param(param_fp, num_bits):
+    scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
+    out = param_fp.tanh()
+    out = out / (2 * out.abs().max()) + 0.5
+    out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
+    out = 2 * out - 1
+    return out
+
+
+
 class DorefaQuantizer(Quantizer):
     """
     Quantizer using the DoReFa scheme, as defined in:
@@ -154,14 +164,6 @@ class DorefaQuantizer(Quantizer):
         super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
                                               bits_overrides=bits_overrides, train_with_fp_copy=True,
                                               quantize_bias=quantize_bias)
-
-        def dorefa_quantize_param(param_fp, num_bits):
-            scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
-            out = param_fp.tanh()
-            out = out / (2 * out.abs().max()) + 0.5
-            out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
-            out = 2 * out - 1
-            return out
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -184,21 +186,13 @@ class PACTQuantizer(Quantizer):
         super(PACTQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
                                             bits_weights=bits_weights, bits_overrides=bits_overrides, train_with_fp_copy=True)
 
-        def pact_quantize_param(param_fp, num_bits):
-            scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
-            out = param_fp.tanh()
-            out = out / (2 * out.abs().max()) + 0.5
-            out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
-            out = 2 * out - 1
-            return out
-
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
             if bits_acts is None:
                 return module
             return LearnedClippedLinearQuantization(bits_acts, act_clip_init_val, dequantize=True, inplace=module.inplace)
 
-        self.param_quantization_fn = pact_quantize_param
+        self.param_quantization_fn = dorefa_quantize_param
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
 
