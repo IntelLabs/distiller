@@ -1,0 +1,38 @@
+quantizers:
+  dorefa_quantizer:
+    class: DorefaQuantizer
+    bits_activations: 8
+    bits_weights: 3
+    bits_overrides:
+    # Don't quantize first and last layer
+      conv1:
+        wts: null
+        acts: null
+      layer1.0.pre_relu:
+        wts: null
+        acts: null
+      final_relu:
+        wts: null
+        acts: null
+      fc:
+        wts: null
+        acts: null
+
+lr_schedulers:
+  training_lr:
+    class: MultiStepMultiGammaLR
+    milestones: [80, 120, 160]
+    gammas: [0.1, 0.1, 0.2]
+
+policies:
+    - quantizer:
+        instance_name: dorefa_quantizer
+      starting_epoch: 0
+      ending_epoch: 200
+      frequency: 1
+
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 161
+      frequency: 1

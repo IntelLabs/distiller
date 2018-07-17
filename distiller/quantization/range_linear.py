@@ -126,6 +126,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         self.current_accum_scale = 1
 
     def pre_quantized_forward(self, input):
+        super(RangeLinearQuantParamLayerWrapper, self).forward(input)
+
+    def pre_quantized_forward(self, input):
         in_scale = symmetric_linear_quantization_scale_factor(self.num_bits_acts, get_tensor_max_abs(input))
         self.current_accum_scale = in_scale * self.w_scale
         if self.has_bias:
