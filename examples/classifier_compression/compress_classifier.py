@@ -596,29 +596,26 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
 
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
-                if earlyexit and dataset == 'cifar10':
-                    stats = ('Performance/Validation/',
-                        OrderedDict([('Test', validation_step),
-                            ('LossAvg0', losses_exit0.mean),
-                            ('LossAvgN', losses_exitN.mean),
-                            ('Top1 exit0', exit0err.value(1)),
-                            ('Top5 exit0', exit0err.value(5)),
-                            ('Top1 exitN', exitNerr.value(1)),
-                            ('Top5 exitN', exitNerr.value(5))
-                            ]))
-                elif earlyexit:     # imagenet
-                    stats = ('Performance/Validation/',
-                        OrderedDict([('Test', validation_step),
-                            ('LossAvg0', losses_exit0.mean),
-                            ('LossAvg1', losses_exit1.mean),
-                            ('LossAvgN', losses_exitN.mean),
-                            ('Top1 exit0', exit0err.value(1)),
-                            ('Top5 exit0', exit0err.value(5)),
-                            ('Top1 exit1', exit1err.value(1)),
-                            ('Top5 exit1', exit1err.value(5)),
-                            ('Top1 exitN', exitNerr.value(1)),
-                            ('Top5 exitN', exitNerr.value(5))
-                            ]))
+                if earlyexit:
+                    # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch, then accessing the value will
+                    # cause a divide by zero. We avoid this by setting the errors to zero (but the branch is not taken). So we'll build the OrderedDict
+                    # accordingly and we will not print for an exit error when that exit is never taken.
+                    statsDict = collections.OrderedDict()
+                    statsDict['Test'] = validation_step
+                    statsDict['LossAvg0'] = losses_exit0.mean
+                    if dataset != 'cifar10':
+                        statsDict['LossAvg1'] = losses_exit1.mean
+                    statsDict['LossAvgN'] = losses_exitN.mean
+                    if exit_0:
+                        statsDict['Top1 exit0'] = exit0err.value(1)
+                        statsDict['Top5 exit0'] = exit0err.value(5)
+                    if exit_1:
+                        statsDict['Top1 exit1'] = exit1err.value(1)
+                        statsDict['Top5 exit1'] = exit1err.value(5)
+                    if exit_N:
+                        statsDict['Top1 exitN'] = exitNerr.value(1)
+                        statsDict['Top5 exitN'] = exitNerr.value(5)
+                    stats = ('Performance/Validation/', statsDict)
                 else:
                     stats = ('',
                          OrderedDict([('Loss', losses['objective_loss'].mean),
