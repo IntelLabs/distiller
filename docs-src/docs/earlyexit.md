@@ -9,13 +9,26 @@ Early Exit is a strategy with a straightforward and easy to understand concept F
 Data points far from the boundary can be considered "easy to classify" and achieve a high degree of confidence quicker than do data points close to the boundary. In fact, we can think of the area between the outer straight lines as being the region that is "difficult to classify" and require the full expressiveness of the neural network to accurately classify it.
 
 ## Example code for Early Exit
-The CIFAR10 image set example is based on code from Yerlan Idelbayev. The imagenet example code based on pytorch/torchvision example for resnet-50 and imagenet. Exits are inserted in a methodology similar to BranchyNet work.
+Both CIFAR10 and Imagenet code comes directly from publically available examples from Pytorch. The only edits are the exits that are inserted in a methodology similar to BranchyNet work. 
+
+### Early Exit Parameters
+*--earlyexit* defines the
+thresholds for each of the early exits. The output cross entropy must be less than these thresholds to take this exit,
+otherwise the data continues along the regular path.
+
+*--lossweights* provide the weights for the linear
+combination of losses during training to compute a signle, overall loss.
 
 ### CIFAR10
-The cifar10 subdirectory is taken from Yerlan Idelbayev's Github repo available at https://github.com/akamaster/pytorch_resnet_cifar10. The code has been modified to include a single early exit. 
+In the case of CIFAR10, we have inserted a single exit after the first full layer grouping. The layers on the exit
+path itself includes a convolutional layer and a fully connected layer. If you move the exit, be sure to match the
+proper sizes for inputs and outputs to the exit layers.
 
-### imagenet
-The imagenet subdirectory is taken directly from the torchvision source code. This supports training and inference of the imagenet dataset via several well known deep architectures. ResNet-50 is the architecture of interest in this study.
+### Imagenet
+The imagenet subdirectory is taken directly from the torchvision source code. This supports training and inference of
+the imagenet dataset via several well known deep architectures. ResNet-50 is the architecture of interest in this
+study, however the exit is defined in the generic resnet code and could be used with other size resnets. There are
+two exits inserted in this example. Again, exit layers must have their sizes match properly.
 
 ## References
 <div id="panda"></div> **Priyadarshini Panda, Abhronil Sengupta, Kaushik Roy**.

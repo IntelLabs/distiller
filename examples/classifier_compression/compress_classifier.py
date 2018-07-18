@@ -336,7 +336,7 @@ def main():
 
         # evaluate on validation set
         top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args.print_freq,
-                                    args.earlyexit, epoch, dataset=args.dataset)
+                                     args.earlyexit, epoch, dataset=args.dataset)
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
@@ -406,7 +406,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 exitNerr.add(output[1].data, target)
             else:             # imagenet
                 loss = ((lossweights[0] * criterion(output[0], target_var)) + (lossweights[1] * criterion(output[1], target_var)) +
-                    ((1.0 - (lossweights[0]+lossweights[1])) * criterion(output[2], target_var)))
+                        ((1.0 - (lossweights[0]+lossweights[1])) * criterion(output[2], target_var)))
                 exit0err.add(output[0].data, target)
                 exit1err.add(output[1].data, target)
                 exitNerr.add(output[N].data, target)
@@ -415,7 +415,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             loss = criterion(output, target_var)
             # Measure accuracy and record loss
             classerr.add(output.data, target)
-            
+
         losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
@@ -440,35 +440,35 @@ def train(train_loader, model, criterion, optimizer, epoch,
             lr = optimizer.param_groups[0]['lr']
             if lossweights and dataset == 'cifar10':
                 stats = ('Performance/Training/',
-                        OrderedDict([
-                            ('Epoch', epoch),
-                            ('i', train_step),
-                            ('Objective Loss', losses['objective_loss'].mean),
-                            ('Prec@1_exit0', exit0err.value(1)),
-                            ('Prec@5_exit0', exit0err.value(5)),
-                            ('Prec@1_exitN', exitNerr.value(1)),
-                            ('Prec@5_exitN', exitNerr.value(5))]))
+                         OrderedDict([
+                             ('Epoch', epoch),
+                             ('i', train_step),
+                             ('Objective Loss', losses['objective_loss'].mean),
+                             ('Prec@1_exit0', exit0err.value(1)),
+                             ('Prec@5_exit0', exit0err.value(5)),
+                             ('Prec@1_exitN', exitNerr.value(1)),
+                             ('Prec@5_exitN', exitNerr.value(5))]))
             elif lossweights:   #imagenet
                 stats = ('Performance/Training/',
-                        OrderedDict([
-                            ('Epoch', epoch),
-                            ('i', train_step),
-                            ('Objective Loss', losses['objective_loss'].mean),
-                            ('Prec@1_exit0', exit0err.value(1)),
-                            ('Prec@5_exit0', exit0err.value(5)),
-                            ('Prec@1_exit1', exit1err.value(1)),
-                            ('Prec@5_exit1', exit1err.value(5)),
-                            ('Prec@1_exitN', exitNerr.value(1)),
-                            ('Prec@5_exitN', exitNerr.value(5))]))
+                         OrderedDict([
+                             ('Epoch', epoch),
+                             ('i', train_step),
+                             ('Objective Loss', losses['objective_loss'].mean),
+                             ('Prec@1_exit0', exit0err.value(1)),
+                             ('Prec@5_exit0', exit0err.value(5)),
+                             ('Prec@1_exit1', exit1err.value(1)),
+                             ('Prec@5_exit1', exit1err.value(5)),
+                             ('Prec@1_exitN', exitNerr.value(1)),
+                             ('Prec@5_exitN', exitNerr.value(5))]))
             else:
                 stats = ('Peformance/Training/',
                          OrderedDict([
-                            ('Loss', losses['objective_loss'].mean),
-                            ('Reg Loss', losses['regularizer_loss'].mean),
-                            ('Top1', classerr.value(1)),
-                            ('Top5', classerr.value(5)),
-                            ('LR', lr),
-                            ('Time', batch_time.mean)]))
+                             ('Loss', losses['objective_loss'].mean),
+                             ('Reg Loss', losses['regularizer_loss'].mean),
+                             ('Top1', classerr.value(1)),
+                             ('Top5', classerr.value(5)),
+                             ('LR', lr),
+                             ('Time', batch_time.mean)]))
 
             distiller.log_training_progress(stats,
                                             model.named_parameters() if log_params_hist else None,
@@ -506,7 +506,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         exit_0 = 0
         exit_1 = 0
         exit_N = 0
-    else:    
+    else:
         losses = {'objective_loss': tnt.AverageValueMeter()}
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
@@ -527,14 +527,17 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             target_var = get_inference_var(target)
 
             if earlyexit and dataset == 'cifar10':
-                # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+                # compute outputs at all exits - output is now a list of all exits
+                # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
                 output = model(input_var)
 
                 # We need to go through the batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
                 for batchnum in range(0, batch_size):
-                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exitN = criterion(torch.tensor(np.array(output[1][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum], ndmin=2)),
+                                           torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exitN = criterion(torch.tensor(np.array(output[1][batchnum], ndmin=2)),
+                                           torch.full([1], target_var[batchnum], dtype=torch.long))
 
                     # measure accuracy and record loss
                     losses_exit0.add(loss_exit0.item())
@@ -543,11 +546,13 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                     # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                     if loss_exit0.item() < earlyexit[0]:
                         # take the results from the early exit since lower than threshold
-                        exit0err.add(torch.tensor(np.array(output[0].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exit0err.add(torch.tensor(np.array(output[0].data[batchnum], ndmin=2)),
+                                     torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_0 += 1
                     else:
                         # skip the early exits and include results from end of net
-                        exitNerr.add(torch.tensor(np.array(output[1].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                        exitNerr.add(torch.tensor(np.array(output[1].data[batchnum], ndmin=2)),
+                                     torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
             elif earlyexit:       # imagenet
                 # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
@@ -556,9 +561,12 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                 # We need to go through the batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
                 for batchnum in range(0, batch_size):
-                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exit1 = criterion(torch.tensor(np.array(output[1][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exitN = criterion(torch.tensor(np.array(output[2][batchnum],ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum], ndmin=2)),
+                                           torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exit1 = criterion(torch.tensor(np.array(output[1][batchnum], ndmin=2)),
+                                           torch.full([1], target_var[batchnum], dtype=torch.long))
+                    loss_exitN = criterion(torch.tensor(np.array(output[2][batchnum], ndmin=2)),
+                                           torch.full([1], target_var[batchnum], dtype=torch.long))
 
                     # measure accuracy and record loss
                     losses_exit0.add(loss_exit0.item())
@@ -639,7 +647,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         msglogger.info("Exit N: %d", exit_N)
         msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_1+exit_N))
         msglogger.info("Percent Early Exit #1: %.3f", (exit_1*100.0) / (exit_0+exit_1+exit_N))
-        
+
         # NOTE: only returning the last exit stats
         return exitNerr.value()[0], exitNerr.value()[1], losses_exitN.mean
     else:
