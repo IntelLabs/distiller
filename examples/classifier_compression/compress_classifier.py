@@ -409,7 +409,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                         ((1.0 - (lossweights[0]+lossweights[1])) * criterion(output[2], target_var)))
                 exit0err.add(output[0].data, target)
                 exit1err.add(output[1].data, target)
-                exitNerr.add(output[N].data, target)
+                exitNerr.add(output[2].data, target)
         else:
             output = model(input_var)
             loss = criterion(output, target_var)
