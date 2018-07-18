@@ -610,12 +610,21 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                     if exit_0:
                         statsDict['Top1 exit0'] = exit0err.value(1) / exit_0
                         statsDict['Top5 exit0'] = exit0err.value(5) / exit_0
+                    else:
+                        statsDict['Top1 exit0'] = 'N/A'
+                        statsDict['Top5 exit0'] = 'N/A'
                     if exit_1:
                         statsDict['Top1 exit1'] = exit1err.value(1) / exit_1
                         statsDict['Top5 exit1'] = exit1err.value(5) / exit_1
+                    else:
+                        statsDict['Top1 exit1'] = 'N/A'
+                        statsDict['Top5 exit1'] = 'N/A'
                     if exit_N:
                         statsDict['Top1 exitN'] = exitNerr.value(1) / exit_N
                         statsDict['Top5 exitN'] = exitNerr.value(5) / exit_N
+                    else:
+                        statsDict['Top1 exitN'] = 'N/A'
+                        statsDict['Top5 exitN'] = 'N/A'
                     stats = ('Performance/Validation/', statsDict)
                 else:
                     stats = ('',
