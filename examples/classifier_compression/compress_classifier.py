@@ -600,12 +600,9 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                     stats = ('Performance/Validation/',
                         OrderedDict([('Test', validation_step),
                             ('LossAvg0', losses_exit0.mean),
-                            ('LossAvg1', losses_exit1.mean),
                             ('LossAvgN', losses_exitN.mean),
                             ('Top1 exit0', exit0err.value(1)),
                             ('Top5 exit0', exit0err.value(5)),
-                            ('Top1 exit1', exit1err.value(1)),
-                            ('Top5 exit1', exit1err.value(5)),
                             ('Top1 exitN', exitNerr.value(1)),
                             ('Top5 exitN', exitNerr.value(5))
                             ]))
