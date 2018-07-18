@@ -531,9 +531,10 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
             output = model(input_var)
             if earlyexit and dataset == 'cifar10':
-                # We need to go through the batch itself - this is now a vector of losses through the batch.
+                # We need to go through this batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
-                for batchnum in range(0, batch_size):
+                # Note that we can't use batch_size as last batch might be smaller
+                for batchnum in range(0, target_var.size()[0]):
                     loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum], ndmin=2)),
                                            torch.full([1], target_var[batchnum], dtype=torch.long))
                     loss_exitN = criterion(torch.tensor(np.array(output[1][batchnum], ndmin=2)),
@@ -610,21 +611,12 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                     if exit_0:
                         statsDict['Top1 exit0'] = exit0err.value(1) / exit_0
                         statsDict['Top5 exit0'] = exit0err.value(5) / exit_0
-                    else:
-                        statsDict['Top1 exit0'] = 'N/A'
-                        statsDict['Top5 exit0'] = 'N/A'
                     if exit_1:
                         statsDict['Top1 exit1'] = exit1err.value(1) / exit_1
                         statsDict['Top5 exit1'] = exit1err.value(5) / exit_1
-                    else:
-                        statsDict['Top1 exit1'] = 'N/A'
-                        statsDict['Top5 exit1'] = 'N/A'
                     if exit_N:
                         statsDict['Top1 exitN'] = exitNerr.value(1) / exit_N
                         statsDict['Top5 exitN'] = exitNerr.value(5) / exit_N
-                    else:
-                        statsDict['Top1 exitN'] = 'N/A'
-                        statsDict['Top5 exitN'] = 'N/A'
                     stats = ('Performance/Validation/', statsDict)
                 else:
                     stats = ('',
