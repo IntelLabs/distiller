@@ -631,6 +631,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         msglogger.info("Exit 0: %d", exit_0)
         msglogger.info("Exit N: %d", exit_N)
         msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_N))
+        return statsDict['Top1 exitN'], statsDict['Top5 exitN'], losses_exitN.mean
     elif earlyexit:    # imagenet
         #print some interesting summary stats for number of data points that could exit early
         msglogger.info("Exit 0: %d", exit_0)
