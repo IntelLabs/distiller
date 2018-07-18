@@ -638,9 +638,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         msglogger.info("Exit N: %d", exit_N)
         msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_1+exit_N))
         msglogger.info("Percent Early Exit #1: %.3f", (exit_1*100.0) / (exit_0+exit_1+exit_N))
-
-        # NOTE: only returning the last exit stats
-        return exitNerr.value()[0], exitNerr.value()[1], losses_exitN.mean
+        return statsDict['Top1 exitN'], statsDict['Top5 exitN'], losses_exitN.mean
     else:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
