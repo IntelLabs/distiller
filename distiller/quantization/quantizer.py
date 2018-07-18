@@ -168,7 +168,7 @@ class Quantizer(object):
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
 
         # Modified the models parameters, so need to update the optimizer
-        if self.train_with_fp_copy:
+        if self.optimizer and self.train_with_fp_copy:
             optimizer_type = type(self.optimizer)
             new_optimizer = optimizer_type(self.model.parameters(), **self.optimizer.defaults)
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})

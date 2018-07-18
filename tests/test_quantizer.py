@@ -95,9 +95,9 @@ def dummy_quantize_params(param, num_bits):
 
 
 class DummyQuantizer(Quantizer):
-    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
                  quantize_bias=False, train_with_fp_copy=False):
-        super(DummyQuantizer, self).__init__(model, bits_activations, bits_weights, bits_overrides, quantize_bias,
+        super(DummyQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_overrides, quantize_bias,
                                              train_with_fp_copy)
 
         self.replacement_factory[nn.Conv2d] = lambda module, name, qbits_map: DummyWrapperLayer(module, qbits_map[name])

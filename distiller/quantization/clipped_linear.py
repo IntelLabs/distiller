@@ -198,12 +198,15 @@ class PACTQuantizer(Quantizer):
 
     def prepare_model(self):
         super(PACTQuantizer, self).prepare_model()
-        optimizer_type = type(self.optimizer)
-        params = [param for name, param in self.model.named_parameters() if 'clip_val' not in name]
-        clip_val_params = [param for name, param in self.model.named_parameters() if 'clip_val' in name]
-        new_optimizer = optimizer_type([{'params': params},
-                                        {'params': clip_val_params}],#, 'weight_decay': 0.01}],
-                                        **self.optimizer.defaults)
-        self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+
+        # Optionally update the optimization parameters of the clip val parameters
+        if self.optimizer:
+            optimizer_type = type(self.optimizer)
+            params = [param for name, param in self.model.named_parameters() if 'clip_val' not in name]
+            clip_val_params = [param for name, param in self.model.named_parameters() if 'clip_val' in name]
+            new_optimizer = optimizer_type([{'params': params},
+                                            {'params': clip_val_params}],#, 'weight_decay': 0.01}],
+                                            **self.optimizer.defaults)
+            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
 
