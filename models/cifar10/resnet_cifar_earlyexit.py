@@ -108,6 +108,7 @@ class ResNetCifar(nn.Module):
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.fc = nn.Linear(64 * block.expansion, num_classes)
 
+        # Define early exit layers
         self.linear_exit0 = nn.Linear(1600, num_classes)
 
 
@@ -143,6 +144,7 @@ class ResNetCifar(nn.Module):
 
         x = self.layer1(x)
 
+        # Add early exit layers
         exit0 = nn.functional.avg_pool2d(x, 3)
         exit0 = exit0.view(exit0.size(0), -1)
         exit0 = self.linear_exit0(exit0)
@@ -154,7 +156,11 @@ class ResNetCifar(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return list(exit0, x)
+        # return a list of probabilities
+        output = []
+        output.append(exit0)
+        output.append(x)
+        return output
 
 
 def resnet20_cifar_earlyexit(**kwargs):

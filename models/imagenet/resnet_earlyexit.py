@@ -112,7 +112,7 @@ class ResNet(nn.Module):
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-        # Define exit layers
+        # Define early exit layers
         self.conv1_exit0 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
         self.conv2_exit0 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
         self.conv1_exit1 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
@@ -152,6 +152,7 @@ class ResNet(nn.Module):
 
         x = self.layer1(x)
 
+        # Add early exit layers
         exit0 = self.avgpool(x)
         exit0 = self.conv1_exit0(exit0)
         exit0 = self.conv2_exit0(exit0)
@@ -161,6 +162,7 @@ class ResNet(nn.Module):
 
         x = self.layer2(x)
 
+        # Add early exit layers
         exit1 = self.conv1_exit1(x)
         exit1 = self.avgpool(exit1)
         exit1 = exit1.view(exit1.size(0), -1)
@@ -173,7 +175,12 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return list(exit0, exit1, x)
+        # return a list of probabilities
+        output = []
+        output.append(exit0)
+        output.append(exit1)
+        output.append(x)
+        return output
 
 
 def resnet18(pretrained=False, **kwargs):
