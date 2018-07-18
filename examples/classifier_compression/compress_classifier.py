@@ -597,9 +597,10 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             steps_completed = (validation_step+1)
             if steps_completed % print_freq == 0:
                 if earlyexit:
-                    # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch, then accessing the value will
+                    # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch, then accessing the value(k) will
                     # cause a divide by zero. We avoid this by setting the errors to zero (but the branch is not taken). So we'll build the OrderedDict
-                    # accordingly and we will not print for an exit error when that exit is never taken.
+                    # accordingly and we will not print for an exit error when that exit is never taken. We also divide by the portion of the batch that
+                    # exited at that exit.
                     statsDict = OrderedDict()
                     statsDict['Test'] = validation_step
                     statsDict['LossAvg0'] = losses_exit0.mean
@@ -607,14 +608,14 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                         statsDict['LossAvg1'] = losses_exit1.mean
                     statsDict['LossAvgN'] = losses_exitN.mean
                     if exit_0:
-                        statsDict['Top1 exit0'] = exit0err.value(1)
-                        statsDict['Top5 exit0'] = exit0err.value(5)
+                        statsDict['Top1 exit0'] = exit0err.value(1) / exit_0
+                        statsDict['Top5 exit0'] = exit0err.value(5) / exit_0
                     if exit_1:
-                        statsDict['Top1 exit1'] = exit1err.value(1)
-                        statsDict['Top5 exit1'] = exit1err.value(5)
+                        statsDict['Top1 exit1'] = exit1err.value(1) / exit_1
+                        statsDict['Top5 exit1'] = exit1err.value(5) / exit_1
                     if exit_N:
-                        statsDict['Top1 exitN'] = exitNerr.value(1)
-                        statsDict['Top5 exitN'] = exitNerr.value(5)
+                        statsDict['Top1 exitN'] = exitNerr.value(1) / exit_N
+                        statsDict['Top5 exitN'] = exitNerr.value(5) / exit_N
                     stats = ('Performance/Validation/', statsDict)
                 else:
                     stats = ('',
