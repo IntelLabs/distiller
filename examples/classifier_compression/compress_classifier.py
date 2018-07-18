@@ -600,7 +600,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                     # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch, then accessing the value will
                     # cause a divide by zero. We avoid this by setting the errors to zero (but the branch is not taken). So we'll build the OrderedDict
                     # accordingly and we will not print for an exit error when that exit is never taken.
-                    statsDict = collections.OrderedDict()
+                    statsDict = OrderedDict()
                     statsDict['Test'] = validation_step
                     statsDict['LossAvg0'] = losses_exit0.mean
                     if dataset != 'cifar10':
