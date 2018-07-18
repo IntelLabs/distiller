@@ -526,11 +526,11 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
 
+            # compute output from model
+            # If using Early Exit, then compute outputs at all exits - output is now a list of all exits
+            # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+            output = model(input_var)
             if earlyexit and dataset == 'cifar10':
-                # compute outputs at all exits - output is now a list of all exits
-                # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
-                output = model(input_var)
-
                 # We need to go through the batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
                 for batchnum in range(0, batch_size):
@@ -554,10 +554,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                         exitNerr.add(torch.tensor(np.array(output[1].data[batchnum], ndmin=2)),
                                      torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
-            elif earlyexit:       # imagenet
-                # compute outputs at all exits - output is now a list of all exits from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
-                output = model(input_var)
-
+            elif earlyexit: # imagenet
                 # We need to go through the batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
                 for batchnum in range(0, batch_size):
@@ -586,11 +583,9 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                         # skip the early exits and include results from end of net
                         exitNerr.add(torch.tensor(np.array(output[2].data[batchnum], ndmin=2)), torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
-            else:
-                # compute output
-                output = model(input_var)
+            else:    # not using earlyexit
+                # compute loss
                 loss = criterion(output, target_var)
-
                 # measure accuracy and record loss
                 losses['objective_loss'].add(loss.item())
                 classerr.add(output.data, target)
