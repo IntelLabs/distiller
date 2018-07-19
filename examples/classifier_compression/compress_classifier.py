@@ -629,7 +629,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         msglogger.info("Exit 0: %d", exit_0)
         msglogger.info("Exit N: %d", exit_N)
         msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_N))
-        return statsDict['Top1 exitN'], statsDict['Top5 exitN'], losses_exitN.mean
+        return (exit0err.value(1) + exitNerr.value(1)), (exit0err.value(5) + exitNerr.value(5)), (losses_exit0.mean + losses_exitN.mean)
     elif earlyexit:    # imagenet
         #print some interesting summary stats for number of data points that could exit early
         msglogger.info("Exit 0: %d", exit_0)
@@ -637,7 +637,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
         msglogger.info("Exit N: %d", exit_N)
         msglogger.info("Percent Early Exit #0: %.3f", (exit_0*100.0) / (exit_0+exit_1+exit_N))
         msglogger.info("Percent Early Exit #1: %.3f", (exit_1*100.0) / (exit_0+exit_1+exit_N))
-        return statsDict['Top1 exitN'], statsDict['Top5 exitN'], losses_exitN.mean
+        return (exit0err.value(1) + exit1err.value(1) + exitNerr.value(1)), (exit0err.value(5) + exit1err.value(5) + exitNerr.value(5)), (losses_exit0.mean + losses_exit1.mean + losses_exitN.mean)
     else:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
