@@ -531,8 +531,8 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             output = model(input_var)
 
             if earlyexit and dataset == 'cifar10':
-                loss_exit0 = criterion(output, target_var)
-                loss_exitN = criterion(output, target_var)
+                loss_exit0 = criterion(output[0], target_var)
+                loss_exitN = criterion(output[1], target_var)
 
                 # measure accuracy and record loss
                 losses_exit0.add(loss_exit0.item())
@@ -556,9 +556,9 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                                      torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
             elif earlyexit: # imagenet
-                loss_exit0 = criterion(output, target_var)
-                loss_exit1 = criterion(output, target_var)
-                loss_exitN = criterion(output, target_var)
+                loss_exit0 = criterion(output[0], target_var)
+                loss_exit1 = criterion(output[0], target_var)
+                loss_exitN = criterion(output[0], target_var)
 
                 # measure accuracy and record loss
                 losses_exit0.add(loss_exit0.item())
