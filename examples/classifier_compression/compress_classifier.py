@@ -525,28 +525,28 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
             target = target.cuda(async=True)
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
-
             # compute output from model
             # If using Early Exit, then compute outputs at all exits - output is now a list of all exits
             # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
             output = model(input_var)
+
             if earlyexit and dataset == 'cifar10':
+                loss_exit0 = criterion(output, target_var)
+                loss_exitN = criterion(output, target_var)
+
+                # measure accuracy and record loss
+                losses_exit0.add(loss_exit0.item())
+                losses_exitN.add(loss_exitN.item())
+
                 # We need to go through this batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
                 # Note that we can't use batch_size as last batch might be smaller
-                for batchnum in range(0, target_var.size()[0]):
-                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum], ndmin=2)),
-                                           torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exitN = criterion(torch.tensor(np.array(output[1][batchnum], ndmin=2)),
-                                           torch.full([1], target_var[batchnum], dtype=torch.long))
-
-                    # measure accuracy and record loss
-                    losses_exit0.add(loss_exit0.item())
-                    losses_exitN.add(loss_exitN.item())
-
+                thisBatchSize = target_var.size()[0]
+                for batchnum in range(0, thisBatchSize):
                     # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                     if loss_exit0.item() < earlyexit[0]:
                         # take the results from the early exit since lower than threshold
+                        # why not do exit0err.add(output[0].data, target)?
                         exit0err.add(torch.tensor(np.array(output[0].data[batchnum], ndmin=2)),
                                      torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_0 += 1
@@ -556,21 +556,20 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                                      torch.full([1], target_var[batchnum], dtype=torch.long))
                         exit_N += 1
             elif earlyexit: # imagenet
-                # We need to go through the batch itself - this is now a vector of losses through the batch.
+                loss_exit0 = criterion(output, target_var)
+                loss_exit1 = criterion(output, target_var)
+                loss_exitN = criterion(output, target_var)
+
+                # measure accuracy and record loss
+                losses_exit0.add(loss_exit0.item())
+                losses_exit1.add(loss_exit1.item())
+                losses_exitN.add(loss_exitN.item())
+
+                # We need to go through this batch itself - this is now a vector of losses through the batch.
                 # Collecting stats on which exit early can be done across the batch at this time.
-                for batchnum in range(0, batch_size):
-                    loss_exit0 = criterion(torch.tensor(np.array(output[0][batchnum], ndmin=2)),
-                                           torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exit1 = criterion(torch.tensor(np.array(output[1][batchnum], ndmin=2)),
-                                           torch.full([1], target_var[batchnum], dtype=torch.long))
-                    loss_exitN = criterion(torch.tensor(np.array(output[2][batchnum], ndmin=2)),
-                                           torch.full([1], target_var[batchnum], dtype=torch.long))
-
-                    # measure accuracy and record loss
-                    losses_exit0.add(loss_exit0.item())
-                    losses_exit1.add(loss_exit1.item())
-                    losses_exitN.add(loss_exitN.item())
-
+                # Note that we can't use batch_size as last batch might be smaller
+                thisBatchSize = target_var.size()[0]
+                for batchnum in range(0, thisBatchSize):
                     # take exit based on CrossEntropyLoss as a confidence measure (lower is more confident)
                     if loss_exit0.item() < earlyexit[0]:
                         # take the results from the early exit since lower than threshold
@@ -600,8 +599,7 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                 if earlyexit:
                     # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch, then accessing the value(k) will
                     # cause a divide by zero. We avoid this by setting the errors to zero (but the branch is not taken). So we'll build the OrderedDict
-                    # accordingly and we will not print for an exit error when that exit is never taken. We also divide by the portion of the batch that
-                    # exited at that exit.
+                    # accordingly and we will not print for an exit error when that exit is never taken.
                     statsDict = OrderedDict()
                     statsDict['Test'] = validation_step
                     statsDict['LossAvg0'] = losses_exit0.mean
@@ -609,14 +607,14 @@ def _validate(data_loader, model, criterion, loggers, print_freq, earlyexit, dat
                         statsDict['LossAvg1'] = losses_exit1.mean
                     statsDict['LossAvgN'] = losses_exitN.mean
                     if exit_0:
-                        statsDict['Top1 exit0'] = exit0err.value(1) / exit_0
-                        statsDict['Top5 exit0'] = exit0err.value(5) / exit_0
+                        statsDict['Top1 exit0'] = exit0err.value(1)
+                        statsDict['Top5 exit0'] = exit0err.value(5)
                     if exit_1:
-                        statsDict['Top1 exit1'] = exit1err.value(1) / exit_1
-                        statsDict['Top5 exit1'] = exit1err.value(5) / exit_1
+                        statsDict['Top1 exit1'] = exit1err.value(1)
+                        statsDict['Top5 exit1'] = exit1err.value(5)
                     if exit_N:
-                        statsDict['Top1 exitN'] = exitNerr.value(1) / exit_N
-                        statsDict['Top5 exitN'] = exitNerr.value(5) / exit_N
+                        statsDict['Top1 exitN'] = exitNerr.value(1)
+                        statsDict['Top5 exitN'] = exitNerr.value(5)
                     stats = ('Performance/Validation/', statsDict)
                 else:
                     stats = ('',
