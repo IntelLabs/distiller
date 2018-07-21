@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 from collections import namedtuple
+import numpy as np
 import logging
 import torch
 import os
@@ -365,7 +366,7 @@ def test_threshold_mask():
     a[1, 4, 17, 31] = 0.2
     # Create and apply a mask
     mask = distiller.threshold_mask(a, threshold=0.3)
-    assert np.sum(mask) == (distiller.volume(a) - 1)
+    assert np.sum(distiller.to_np(mask)) == (distiller.volume(a) - 1)
     assert mask[1, 4, 17, 31] == 0
     assert common.almost_equal(distiller.sparsity(mask), 1/distiller.volume(a))
 
@@ -404,8 +405,6 @@ def test_magnitude_pruning():
 
 
 if __name__ == '__main__':
-    test_magnitude_pruning(), exit()
-
     for is_parallel in [True, False]:
         test_ranked_filter_pruning(is_parallel)
         test_arbitrary_channel_pruning(is_parallel)
