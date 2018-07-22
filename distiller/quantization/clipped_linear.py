@@ -118,10 +118,11 @@ class WRPNQuantizer(Quantizer):
         1. This class does not take care of layer widening as described in the paper
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(), quantize_bias=False):
-        super(WRPNQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                            bits_overrides=bits_overrides, train_with_fp_copy=True,
-                                            quantize_bias=quantize_bias)
+    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(),
+                 quantize_bias=False):
+        super(WRPNQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
+                                            bits_weights=bits_weights, bits_overrides=bits_overrides,
+                                            train_with_fp_copy=True, quantize_bias=quantize_bias)
 
         def wrpn_quantize_param(param_fp, num_bits):
             scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
@@ -149,7 +150,6 @@ def dorefa_quantize_param(param_fp, num_bits):
     return out
 
 
-
 class DorefaQuantizer(Quantizer):
     """
     Quantizer using the DoReFa scheme, as defined in:
@@ -160,10 +160,11 @@ class DorefaQuantizer(Quantizer):
         1. Gradients quantization not supported yet
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(), quantize_bias=False):
-        super(DorefaQuantizer, self).__init__(model, bits_activations=bits_activations, bits_weights=bits_weights,
-                                              bits_overrides=bits_overrides, train_with_fp_copy=True,
-                                              quantize_bias=quantize_bias)
+    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(),
+                 quantize_bias=False):
+        super(DorefaQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
+                                              bits_weights=bits_weights, bits_overrides=bits_overrides,
+                                              train_with_fp_copy=True, quantize_bias=quantize_bias)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -181,32 +182,37 @@ class PACTQuantizer(Quantizer):
     Quantizer using the PACT quantization scheme, as defined in:
     Choi et al., PACT: Parameterized Clipping Activation for Quantized Neural Networks
     (https://arxiv.org/abs/1805.06085)
+
+    Args:
+        act_clip_init_val (float): Initial clipping value for activations, referred to as "alpha" in the paper
+            (default: 8.0)
+        act_clip_decay (float): L2 penalty applied to the clipping values, referred to as "lambda_alpha" in the paper.
+            If None then the optimizer's default weight decay value is used (default: None)
     """
-    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides={}, act_clip_init_val=8.0):
+    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(),
+                 quantize_bias=False, act_clip_init_val=8.0, act_clip_decay=None):
         super(PACTQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
-                                            bits_weights=bits_weights, bits_overrides=bits_overrides, train_with_fp_copy=True)
+                                            bits_weights=bits_weights, bits_overrides=bits_overrides,
+                                            train_with_fp_copy=True, quantize_bias=quantize_bias)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
             if bits_acts is None:
                 return module
-            return LearnedClippedLinearQuantization(bits_acts, act_clip_init_val, dequantize=True, inplace=module.inplace)
+            return LearnedClippedLinearQuantization(bits_acts, act_clip_init_val, dequantize=True,
+                                                    inplace=module.inplace)
 
         self.param_quantization_fn = dorefa_quantize_param
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
 
-    def prepare_model(self):
-        super(PACTQuantizer, self).prepare_model()
+        self.act_clip_decay = act_clip_decay
 
-        # Optionally update the optimization parameters of the clip val parameters
-        if self.optimizer:
-            optimizer_type = type(self.optimizer)
-            params = [param for name, param in self.model.named_parameters() if 'clip_val' not in name]
-            clip_val_params = [param for name, param in self.model.named_parameters() if 'clip_val' in name]
-            new_optimizer = optimizer_type([{'params': params},
-                                            {'params': clip_val_params}],#, 'weight_decay': 0.01}],
-                                            **self.optimizer.defaults)
-            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
-
-
+    # In PACT, LearnedClippedLinearQuantization is used for activation, which contains a learnt 'clip_val' parameter
+    # We optimize this value separately from the main model parameters
+    def _get_updated_optimizer_params_groups(self):
+        base_group = {'params': [param for name, param in self.model.named_parameters() if 'clip_val' not in name]}
+        clip_val_group = {'params': [param for name, param in self.model.named_parameters() if 'clip_val' in name]}
+        if self.act_clip_decay is not None:
+            clip_val_group['weight_decay'] = self.act_clip_decay
+        return [base_group, clip_val_group]
