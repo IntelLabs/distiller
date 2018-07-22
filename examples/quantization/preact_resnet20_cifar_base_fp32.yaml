@@ -1,3 +1,21 @@
+
+# time python3 compress_classifier.py -a preact_resnet20_cifar --lr 0.1 -p 50 -b 128 ../../../data.cifar10/ -j 1
+# --epochs 200 --compress=../quantization/preact_resnet20_cifar_base_fp32.yaml --out-dir="logs/" --wd=0.0002 --vs=0
+
+
+#2018-07-18 12:25:56,477 - --- validate (epoch=199)-----------
+#2018-07-18 12:25:56,477 - 10000 samples (128 per mini-batch)
+#2018-07-18 12:25:57,810 - Epoch: [199][   50/   78]    Loss 0.312961    Top1 92.140625    Top5 99.765625
+#2018-07-18 12:25:58,402 - ==> Top1: 92.270    Top5: 99.800    Loss: 0.307
+#
+#2018-07-18 12:25:58,404 - ==> Best validation Top1: 92.560   Epoch: 127
+#2018-07-18 12:25:58,404 - Saving checkpoint to: logs/checkpoint.pth.tar
+#2018-07-18 12:25:58,418 - --- test ---------------------
+#2018-07-18 12:25:58,418 - 10000 samples (128 per mini-batch)
+#2018-07-18 12:25:59,664 - Test: [   50/   78]    Loss 0.312961    Top1 92.140625    Top5 99.765625
+#2018-07-18 12:26:00,248 - ==> Top1: 92.270    Top5: 99.800    Loss: 0.307
+
+
 lr_schedulers:
   training_lr:
     class: MultiStepMultiGammaLR

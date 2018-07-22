@@ -58,6 +58,9 @@ class Quantizer(object):
 
     Args:
         model (torch.nn.Module): The model to be quantized
+        optimizer (torch.optim.Optimizer): An optimizer instance, required in cases where the quantizer is going
+            to perform changes to existing model parameters and/or add new ones.
+            Specifically, when train_with_fp_copy is True, this cannot be None.
         bits_activations/weights (int): Default number of bits to use when quantizing each tensor type.
             Value of None means do not quantize.
         bits_overrides (OrderedDict): Dictionary mapping regular expressions of layer name patterns to dictionary with
@@ -77,15 +80,18 @@ class Quantizer(object):
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
     """
-    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
                  quantize_bias=False, train_with_fp_copy=False):
         if not isinstance(bits_overrides, OrderedDict):
             raise TypeError('bits_overrides must be an instance of collections.OrderedDict')
+        if train_with_fp_copy and optimizer is None:
+            raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights)
         self.quantize_bias = quantize_bias
 
         self.model = model
+        self.optimizer = optimizer
 
         # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
         self.model.quantizer_metadata = {'type': type(self),
@@ -166,6 +172,12 @@ class Quantizer(object):
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
 
+        # If an optimizer was passed, assume we need to update it
+        if self.optimizer:
+            optimizer_type = type(self.optimizer)
+            new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
+            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_process_container(self, container, prefix=):
@@ -191,6 +203,20 @@ class Quantizer(object):
             if distiller.has_children(module):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
+
+    def _get_updated_optimizer_params_groups(self):
+        """
+        Returns a list of model parameter groups and optimizer hyper-parameter overrides,
+        as expected by the __init__ function of torch.optim.Optimizer.
+        This is called after all model changes were made in prepare_model, in case an Optimizer instance was
+        passed to __init__.
+
+        Subclasses which add parameters to the model should override as needed.
+
+        :return: List of parameter groups
+        """
+        # Default implementation - just return all model parameters as one group
+        return [{'params': self.model.parameters()}]
 
     def quantize_params(self):
         """

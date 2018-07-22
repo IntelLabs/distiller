@@ -312,8 +312,11 @@ def main():
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress)
+        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
+        model.cuda()
 
     best_epoch = start_epoch
+
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
         msglogger.info('\n')

@@ -95,9 +95,9 @@ def dummy_quantize_params(param, num_bits):
 
 
 class DummyQuantizer(Quantizer):
-    def __init__(self, model, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
                  quantize_bias=False, train_with_fp_copy=False):
-        super(DummyQuantizer, self).__init__(model, bits_activations, bits_weights, bits_overrides, quantize_bias,
+        super(DummyQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_overrides, quantize_bias,
                                              train_with_fp_copy)
 
         self.replacement_factory[nn.Conv2d] = lambda module, name, qbits_map: DummyWrapperLayer(module, qbits_map[name])
@@ -141,6 +141,12 @@ def get_expected_qbits(model, qbits, expected_overrides):
 @pytest.fixture(name='model')
 def fixture_model():
     return DummyModel()
+
+
+# TODO: Test optimizer modifications in 'test_model_prep'
+@pytest.fixture(name='optimizer')
+def fixture_optimizer(model):
+    return torch.optim.SGD(model.parameters(), lr=0.1)
 
 
 @pytest.fixture(name='train_with_fp_copy', params=[False, True], ids=['fp_copy_off', 'fp_copy_on'])
@@ -213,7 +219,7 @@ def test_overrides_ordered_dict(model):
                                             #             never actually matched
     ]
 )
-def test_model_prep(model, qbits, bits_overrides, explicit_expected_overrides,
+def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_overrides,
                     train_with_fp_copy, quantize_bias, parallel):
     if parallel:
         model = torch.nn.DataParallel(model)
@@ -223,7 +229,7 @@ def test_model_prep(model, qbits, bits_overrides, explicit_expected_overrides,
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
 
     # Initialize Quantizer
-    q = DummyQuantizer(model, bits_activations=qbits.acts, bits_weights=qbits.wts,
+    q = DummyQuantizer(model, optimizer=optimizer, bits_activations=qbits.acts, bits_weights=qbits.wts,
                        bits_overrides=deepcopy(bits_overrides), train_with_fp_copy=train_with_fp_copy,
                        quantize_bias=quantize_bias)
 
@@ -290,12 +296,12 @@ def test_model_prep(model, qbits, bits_overrides, explicit_expected_overrides,
           'sub1.conv1': QBits(8, 4), 'sub1.conv2': QBits(4, 4), 'sub2.conv1': QBits(8, 4), 'sub2.conv2': QBits(4, 4)}),
     ]
 )
-def test_param_quantization(model, qbits, bits_overrides, explicit_expected_overrides,
+def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_expected_overrides,
                             train_with_fp_copy, quantize_bias):
     # Build expected QBits
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
 
-    q = DummyQuantizer(model, bits_activations=qbits.acts, bits_weights=qbits.wts,
+    q = DummyQuantizer(model, optimizer=optimizer, bits_activations=qbits.acts, bits_weights=qbits.wts,
                        bits_overrides=deepcopy(bits_overrides), train_with_fp_copy=train_with_fp_copy,
                        quantize_bias=quantize_bias)
     q.prepare_model()

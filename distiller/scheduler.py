@@ -148,9 +148,6 @@ class CompressionScheduler(object):
                     name_parts[-1] = name_parts[-1].replace(FP_BKP_PREFIX, , 1)
                     name = '.'.join(name_parts)
                     self.zeros_mask_dict[name].apply_mask(param)
-                else:
-                    raise
-
 
     def state_dict(self):
         """Returns the state of the scheduler as a :class:`dict`.
