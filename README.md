@@ -17,7 +17,7 @@
       Getting Started
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/algorithms/index.html">
+    <a href="https://nervanasystems.github.io/distiller/algo_pruning/index.html">
       Algorithms
     </a>
     <span> | </span>
