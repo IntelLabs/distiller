@@ -29,6 +29,14 @@ This method requires training the model with quantization, as discussed [here](q
 - Gradients quantization as proposed in the paper is not supported yet.
 - The paper defines special handling for binary weights which isn't supported in Distiller yet.
 
+## PACT
+
+(As proposed in [PACT: Parameterized Clipping Activation for Quantized Neural Networks](https://arxiv.org/abs/1805.06085))
+
+This method is similar to DoReFa, but the upper clipping values, \(\alpha\), of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, \(\alpha\) is shared per layer.
+
+This method requires training the model with quantization, as discussed [here](quantization/#training-with-quantization). Use the `PACTQuantizer` class to transform an existing model to a model suitable for training with quantization using PACT.
+
 ## WRPN
 
 (As proposed in [WRPN: Wide Reduced-Precision Networks](https://arxiv.org/abs/1709.01134))  
