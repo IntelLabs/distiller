@@ -1,0 +1,12 @@
+lr_schedulers:
+  training_lr:
+    class: StepLR
+    step_size: 25 #15
+    gamma: 0.10
+
+policies:
+  - lr_scheduler:
+      instance_name: training_lr
+    starting_epoch: 0
+    ending_epoch: 300
+    frequency: 1
