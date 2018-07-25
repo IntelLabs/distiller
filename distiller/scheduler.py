@@ -53,6 +53,15 @@ class ParameterMasker(object):
         return tensor
 
 
+def create_model_masks_dict(model):
+    """A convinience function to create a dictionary of paramter maskers for a model"""
+    zeros_mask_dict = {}
+    for name, param in model.named_parameters():
+        masker = ParameterMasker(name)
+        zeros_mask_dict[name] = masker
+    return zeros_mask_dict
+
+
 class CompressionScheduler(object):
     """Responsible for scheduling pruning and masking parameters.
 
