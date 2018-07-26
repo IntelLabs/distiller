@@ -213,7 +213,7 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
 
     if args.earlyexit_thresholds:
-        args.num_exits = len(args.earlyexit_thresholds)
+        args.num_exits = len(args.earlyexit_thresholds) + 1
         args.loss_exits = [0] * args.num_exits
         args.losses_exits = []
         args.exiterrors = []
