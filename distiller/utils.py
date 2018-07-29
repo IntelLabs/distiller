@@ -229,6 +229,16 @@ def density_rows(tensor):
     return 1 - sparsity_rows(tensor)
 
 
+def model_numel(model, param_dims=[2, 4]):
+    """Count the number elements in a model's parameter tensors"""
+    total_numel = 0
+    for name, param in model.state_dict().items():
+        # Extract just the actual parameter's name, which in this context we treat as its "type"
+        if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
+            total_numel += torch.numel(param)
+    return total_numel
+
+
 def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total_steps, log_freq, loggers):
     """Log information about the training progress, and the distribution of the weight tensors.
 
@@ -266,6 +276,14 @@ def log_weights_sparsity(model, epoch, loggers):
         logger.log_weights_sparsity(model, epoch)
 
 
+def has_children(module):
+    try:
+        next(module.children())
+        return True
+    except StopIteration:
+        return False
+
+
 class DoNothingModuleWrapper(nn.Module):
     """Implement a nn.Module which wraps another nn.Module.
 
@@ -294,15 +312,15 @@ def make_non_parallel_copy(model):
             full_name = prefix + name
             if isinstance(module, nn.DataParallel):
                 # msglogger.debug('Replacing module {}'.format(full_name))
-                container._modules[name] = DoNothingModuleWrapper(module.module)
-            if len(module._modules) > 0:
+                setattr(container, name, DoNothingModuleWrapper(module.module))
+            if has_children(module):
                 # For a container we call recursively
                 replace_data_parallel(module, full_name + '.')
 
     # Make a copy of the model, because we're going to change it
     new_model = deepcopy(model)
     if isinstance(new_model, nn.DataParallel):
-        #new_model = new_model.module #
+        # new_model = new_model.module #
         new_model = DoNothingModuleWrapper(new_model.module)
 
     replace_data_parallel(new_model)

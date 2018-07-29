@@ -267,17 +267,37 @@ quantizers:
 
 - The specific quantization method we're instantiating here is `DorefaQuantizer`.
 - Then we define the default bit-widths for activations and weights, in this case 8 and 4-bits, respectively. 
-- Then, we define the `bits_overrides` mapping. In this case, we choose not to quantize the first and last layer of the model. In the case of `DorefaQuantizer`, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters `conv1`, the first activation layer `relu1`, the last activation layer `final_relu` and the last layer with parameters `fc`.
+- Then, we define the `bits_overrides` mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of `DorefaQuantizer`, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters `conv1`, the first activation layer `relu1`, the last activation layer `final_relu` and the last layer with parameters `fc`.
 - Specifying `null` means "do not quantize".
 - Note that for quantizers, we reference names of modules, not names of parameters as we do for pruners and regularizers.
-- We can also reference **groups of layers** in the `bits_overrides` mapping. This is done using regular expressions. Suppose we have a sub-module in our model named `block1`, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named `conv1`, `conv2` and so on. In that case we would define the following:
+
+### Defining overrides for **groups of layers** using regular expressions
+
+Suppose we have a sub-module in our model named `block1`, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named `conv1`, `conv2` and so on. In that case we would define the following:
 
 ```
 bits_overrides:
-  block1.conv*:
+  'block1\.conv*':
     wts: 2
     acts: null
 ```
+        
+- **RegEx Note**: Remember that the dot (`.`) is a meta-character (i.e. a reserved character) in regular expressions. So, to match the actual dot characters which separate sub-modules in PyTorch module names, we need to escape it: `\.`
+    
+**Overlapping patterns** are also possible, which allows to define some override for a groups of layers and also "single-out" specific layers for different overrides. For example, let's take the last example and configure a different override for `block1.conv1`:
+
+```
+bits_overrides:
+  'block1\.conv1':
+    wts: 4
+    acts: null
+  'block1\.conv*':
+    wts: 2
+    acts: null
+```
+      
+- **Important Note**: The patterns are evaluated eagerly - first match wins. So, to properly quantize a model using "broad" patterns and more "specific" patterns as just shown, make sure the specific pattern is listed **before** the broad one.
+
 
 The `QuantizationPolicy`, which controls the quantization procedure during training, is actually quite simplistic. All it does is call the `prepare_model()` function of the `Quantizer` when it's initialized, followed by the first call to `quantize_params()`. Then, at the end of each epoch, after the float copy of the weights has been updated, it calls the `quantize_params()` function again. 
 

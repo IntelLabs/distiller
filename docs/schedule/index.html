@@ -427,17 +427,34 @@ Let's see an example:</p>
 <ul>
 <li>The specific quantization method we're instantiating here is <code>DorefaQuantizer</code>.</li>
 <li>Then we define the default bit-widths for activations and weights, in this case 8 and 4-bits, respectively. </li>
-<li>Then, we define the <code>bits_overrides</code> mapping. In this case, we choose not to quantize the first and last layer of the model. In the case of <code>DorefaQuantizer</code>, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters <code>conv1</code>, the first activation layer <code>relu1</code>, the last activation layer <code>final_relu</code> and the last layer with parameters <code>fc</code>.</li>
+<li>Then, we define the <code>bits_overrides</code> mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of <code>DorefaQuantizer</code>, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters <code>conv1</code>, the first activation layer <code>relu1</code>, the last activation layer <code>final_relu</code> and the last layer with parameters <code>fc</code>.</li>
 <li>Specifying <code>null</code> means "do not quantize".</li>
 <li>Note that for quantizers, we reference names of modules, not names of parameters as we do for pruners and regularizers.</li>
-<li>We can also reference <strong>groups of layers</strong> in the <code>bits_overrides</code> mapping. This is done using regular expressions. Suppose we have a sub-module in our model named <code>block1</code>, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named <code>conv1</code>, <code>conv2</code> and so on. In that case we would define the following:</li>
 </ul>
+<h3 id="defining-overrides-for-groups-of-layers-using-regular-expressions">Defining overrides for <strong>groups of layers</strong> using regular expressions</h3>
+<p>Suppose we have a sub-module in our model named <code>block1</code>, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named <code>conv1</code>, <code>conv2</code> and so on. In that case we would define the following:</p>
 <pre><code>bits_overrides:
-  block1.conv*:
+  'block1\.conv*':
     wts: 2
     acts: null
 </code></pre>
 
+<ul>
+<li><strong>RegEx Note</strong>: Remember that the dot (<code>.</code>) is a meta-character (i.e. a reserved character) in regular expressions. So, to match the actual dot characters which separate sub-modules in PyTorch module names, we need to escape it: <code>\.</code></li>
+</ul>
+<p><strong>Overlapping patterns</strong> are also possible, which allows to define some override for a groups of layers and also "single-out" specific layers for different overrides. For example, let's take the last example and configure a different override for <code>block1.conv1</code>:</p>
+<pre><code>bits_overrides:
+  'block1\.conv1':
+    wts: 4
+    acts: null
+  'block1\.conv*':
+    wts: 2
+    acts: null
+</code></pre>
+
+<ul>
+<li><strong>Important Note</strong>: The patterns are evaluated eagerly - first match wins. So, to properly quantize a model using "broad" patterns and more "specific" patterns as just shown, make sure the specific pattern is listed <strong>before</strong> the broad one.</li>
+</ul>
 <p>The <code>QuantizationPolicy</code>, which controls the quantization procedure during training, is actually quite simplistic. All it does is call the <code>prepare_model()</code> function of the <code>Quantizer</code> when it's initialized, followed by the first call to <code>quantize_params()</code>. Then, at the end of each epoch, after the float copy of the weights has been updated, it calls the <code>quantize_params()</code> function again. </p>
 <pre><code>policies:
     - quantizer:

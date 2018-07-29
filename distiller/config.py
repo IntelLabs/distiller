@@ -56,7 +56,7 @@ def dict_config(model, optimizer, sched_dict):
 
     pruners = __factory('pruners', model, sched_dict)
     regularizers = __factory('regularizers', model, sched_dict)
-    quantizers = __factory('quantizers', model, sched_dict)
+    quantizers = __factory('quantizers', model, sched_dict, optimizer=optimizer)
     if len(quantizers) > 1:
         print("\nError: Multiple Quantizers not supported")
         exit(1)
@@ -91,12 +91,6 @@ def dict_config(model, optimizer, sched_dict):
                 assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
                 quantizer = quantizers[instance_name]
                 policy = distiller.QuantizationPolicy(quantizer)
-
-                # Quantizers for training modify the models parameters, need to update the optimizer
-                if quantizer.train_with_fp_copy:
-                    optimizer_type = type(optimizer)
-                    new_optimizer = optimizer_type(model.parameters(), **optimizer.defaults)
-                    optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
             elif 'lr_scheduler' in policy_def:
                 # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
