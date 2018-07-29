@@ -143,6 +143,8 @@ parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
 parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
+parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
+parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true', help='Display the confusion matrix')
 parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None, help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None, help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 
@@ -448,7 +450,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 stats = ('Peformance/Training/', stats_dict)
 
             distiller.log_training_progress(stats,
-                                            model.named_parameters() if args.log_params_histograms else None,
+                                            params,
                                             epoch, steps_completed,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
@@ -505,6 +507,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 # measure accuracy and record loss
                 losses['objective_loss'].add(loss.item())
                 classerr.add(output.data, target)
+                if args.display_confusion:
+                    confusion.add(output.data, target)
             else:
                 # If using Early Exit, then compute outputs at all exits - output is now a list of all exits
                 # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
