@@ -1,0 +1,57 @@
+
+# time python3 compress_classifier.py -a preact_resnet20_cifar --lr 0.1 -p 50 -b 128 ../../../data.cifar10/ -j 1
+# --epochs 200 --compress=../quantization/preact_resnet20_cifar_pact.yaml --out-dir="logs/" --wd=0.0002 --vs=0
+
+
+#2018-07-18 17:28:56,710 - --- validate (epoch=199)-----------
+#2018-07-18 17:28:56,710 - 10000 samples (128 per mini-batch)
+#2018-07-18 17:28:58,070 - Epoch: [199][   50/   78]    Loss 0.349229    Top1 91.140625    Top5 99.671875
+#2018-07-18 17:28:58,670 - ==> Top1: 91.440    Top5: 99.680    Loss: 0.348
+#
+#2018-07-18 17:28:58,671 - ==> Best validation Top1: 91.860   Epoch: 147
+#2018-07-18 17:28:58,672 - Saving checkpoint to: logs/checkpoint.pth.tar
+#2018-07-18 17:28:58,687 - --- test ---------------------
+#2018-07-18 17:28:58,687 - 10000 samples (128 per mini-batch)
+#2018-07-18 17:29:00,006 - Test: [   50/   78]    Loss 0.349229    Top1 91.140625    Top5 99.671875
+#2018-07-18 17:29:00,560 - ==> Top1: 91.440    Top5: 99.680    Loss: 0.348
+
+
+quantizers:
+  pact_quantizer:
+    class: PACTQuantizer
+    act_clip_init_val: 8.0
+    bits_activations: 4
+    bits_weights: 3
+    bits_overrides:
+    # Don't quantize first and last layers
+      conv1:
+        wts: null
+        acts: null
+      layer1.0.pre_relu:
+        wts: null
+        acts: null
+      final_relu:
+        wts: null
+        acts: null
+      fc:
+        wts: null
+        acts: null
+
+lr_schedulers:
+  training_lr:
+    class: MultiStepLR
+    milestones: [60, 120]
+    gammas: 0.1
+
+policies:
+    - quantizer:
+        instance_name: pact_quantizer
+      starting_epoch: 0
+      ending_epoch: 200
+      frequency: 1
+
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 121
+      frequency: 1

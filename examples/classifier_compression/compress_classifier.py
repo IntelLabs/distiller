@@ -213,6 +213,7 @@ def main():
 
     # Infer the dataset from the model name
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
+    args.num_classes = 10 if args.dataset == 'cifar10' else 1000
 
     if args.earlyexit_thresholds:
         args.num_exits = len(args.earlyexit_thresholds) + 1
@@ -246,30 +247,11 @@ def main():
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.ADC:
-        HAVE_GYM_INSTALLED = False
-        if not HAVE_GYM_INSTALLED:
-            raise ValueError("ADC is currently experimental and uses non-public Coach features")
-
-        import examples.automated_deep_compression.ADC as ADC
-        train_loader, val_loader, test_loader, _ = apputils.load_data(
-            args.dataset, os.path.expanduser(args.data), args.batch_size,
-            args.workers, args.validation_size, args.deterministic)
-
-        validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
-                              loggers=[pylogger], print_freq=args.print_freq)
-
-        save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, name='adc')
-        ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn, save_checkpoint_fn)
-        exit()
+        return automated_deep_compression(model, criterion, pylogger, args)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
-        which_summary = args.summary
-        if which_summary.startswith('png'):
-            apputils.draw_img_classifier_to_file(model, 'model.png', args.dataset, which_summary == 'png_w_params')
-        else:
-            distiller.model_summary(model, which_summary, args.dataset)
-        exit()
+        return summarize_model(model, args.dataset, which_summary=args.summary)
 
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
@@ -288,44 +270,17 @@ def main():
         activations_sparsity = ActivationSparsityCollector(model)
 
     if args.sensitivity is not None:
-        # This sample application can be invoked to execute Sensitivity Analysis on your
-        # model.  The ouptut is saved to CSV and PNG.
-        msglogger.info("Running sensitivity tests")
-        test_fnc = partial(test, test_loader=test_loader, criterion=criterion,
-                           loggers=[pylogger], print_freq=args.print_freq)
-        which_params = [param_name for param_name, _ in model.named_parameters()]
-        sensitivity = distiller.perform_sensitivity_analysis(model,
-                                                             net_params=which_params,
-                                                             sparsities=np.arange(0.0, 0.95, 0.05),
-                                                             test_func=test_fnc,
-                                                             group=args.sensitivity)
-        distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
-        distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
-        exit()
+        return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
 
     if args.evaluate:
-        # This sample application can be invoked to evaluate the accuracy of your model on
-        # the test dataset.
-        # You can optionally quantize the model to 8-bit integer before evaluation.
-        # For example:
-        # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --resume=checkpoint.pth.tar --evaluate
-        if args.quantize:
-            model.cpu()
-            quantizer = quantization.SymmetricLinearQuantizer(model, 8, 8)
-            quantizer.prepare_model()
-            model.cuda()
-        top1, _, _ = test(test_loader, model, criterion, [pylogger], args.print_freq)
-        if args.quantize:
-            checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
-                                     name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
-                                     dir=msglogger.logdir)
-        exit()
+        return evaluate_model(model, criterion, test_loader, pylogger, args)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress)
+        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
+        model.cuda()
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -354,7 +309,10 @@ def main():
 
         # remember best top1 and save checkpoint
         is_best = top1 > best_top1
-        best_top1 = max(top1, best_top1)
+        if is_best:
+            best_epoch = epoch
+            best_top1 = top1
+        msglogger.info('==> Best validation Top1: %.3f   Epoch: %d', best_top1, best_epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
                                  args.name, msglogger.logdir)
 
@@ -449,6 +407,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                     stats_dict[t5] = args.exiterrors[exitnum].value(5)
                 stats = ('Peformance/Training/', stats_dict)
 
+            params = model.named_parameters() if args.log_params_histograms else None
             distiller.log_training_progress(stats,
                                             params,
                                             epoch, steps_completed,
@@ -486,6 +445,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
     batch_size = data_loader.batch_size
+    if args.display_confusion:
+        confusion = tnt.ConfusionMeter(args.num_classes)
     total_steps = total_samples / batch_size
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
@@ -546,6 +507,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
+        
+        if args.display_confusion:
+            msglogger.info('==> Confusion:\n%s', str(confusion.value()))
         return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
     elif args.earlyexit_thresholds and args.num_exits == 2:
         #print some interesting summary stats for number of data points that could exit early
@@ -583,7 +547,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             validate_return[1] += args.exiterrors[2].value(5)
             validate_return[2] += args.losses_exits[2].mean
         return validate_return[0], validate_return[1], validate_return[2]
-
 
 
 class PytorchNoGrad(object):
@@ -643,6 +606,79 @@ def earlyexit_validate_loss(output, target_var, criterion, args):
                 args.exiterrors[args.num_exits-1].add(torch.tensor(np.array(output[args.num_exits-1].data[batchnum], ndmin=2)),
                         torch.full([1], target_var[batchnum], dtype=torch.long))
                 args.exitstats[args.num_exits-1] += 1
+
+
+def evaluate_model(model, criterion, test_loader, loggers, args):
+    # This sample application can be invoked to evaluate the accuracy of your model on
+    # the test dataset.
+    # You can optionally quantize the model to 8-bit integer before evaluation.
+    # For example:
+    # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --resume=checkpoint.pth.tar --evaluate
+
+    if not isinstance(loggers, list):
+        loggers = [loggers]
+
+    if args.quantize:
+        model.cpu()
+        quantizer = quantization.SymmetricLinearQuantizer(model, 8, 8)
+        quantizer.prepare_model()
+        model.cuda()
+    top1, _, _ = test(test_loader, model, criterion, loggers, args=args)
+    if args.quantize:
+        checkpoint_name = 'quantized'
+        apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+                                 name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                 dir=msglogger.logdir)
+
+
+def summarize_model(model, dataset, which_summary):
+    if which_summary.startswith('png'):
+        apputils.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
+    else:
+        distiller.model_summary(model, which_summary, dataset)
+
+
+def sensitivity_analysis(model, criterion, data_loader, loggers, args):
+    # This sample application can be invoked to execute Sensitivity Analysis on your
+    # model.  The ouptut is saved to CSV and PNG.
+    msglogger.info("Running sensitivity tests")
+    if not isinstance(loggers, list):
+        loggers = [loggers]
+    test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
+                       loggers=loggers, args=args)
+    which_params = [param_name for param_name, _ in model.named_parameters()]
+    sensitivity = distiller.perform_sensitivity_analysis(model,
+                                                         net_params=which_params,
+                                                         sparsities=np.arange(0.0, 0.95, 0.05),
+                                                         test_func=test_fnc,
+                                                         group=args.sensitivity)
+    distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
+    distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
+
+
+def automated_deep_compression(model, criterion, loggers, args):
+    import examples.automated_deep_compression.ADC as ADC
+    HAVE_COACH_INSTALLED = True
+    if not HAVE_COACH_INSTALLED:
+        raise ValueError("ADC is currently experimental and uses non-public Coach features")
+
+    if not isinstance(loggers, list):
+        loggers = [loggers]
+
+    train_loader, val_loader, test_loader, _ = apputils.load_data(
+        args.dataset, os.path.expanduser(args.data), args.batch_size,
+        args.workers, args.validation_size, args.deterministic)
+
+    args.display_confusion = True
+    validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
+                          loggers=loggers, args=args)
+
+    if args.ADC_params is not None:
+        ADC.summarize_experiment(args.ADC_params, args.dataset, args.arch, validate_fn)
+        exit()
+
+    save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
+    ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn, save_checkpoint_fn)
 
 
 if __name__ == '__main__':

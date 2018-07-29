@@ -17,7 +17,7 @@
       Getting Started
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/algorithms/index.html">
+    <a href="https://nervanasystems.github.io/distiller/algo_pruning/index.html">
       Algorithms
     </a>
     <span> | </span>
@@ -138,7 +138,7 @@ Finally, install Distiller's dependency packages using ```pip3```:
 ```
 $ pip3 install -r requirements.txt
 ```
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 3.1 for CUDA 8.0.  This is the setup we've used for testing Distiller.
+PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 0.4.0 for CUDA 8.0.  This is the setup we've used for testing Distiller.
 
 ## Getting Started
 

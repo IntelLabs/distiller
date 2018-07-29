@@ -106,6 +106,8 @@
         
             <li><a class="toctree-l4" href="#dorefa">DoReFa</a></li>
         
+            <li><a class="toctree-l4" href="#pact">PACT</a></li>
+        
             <li><a class="toctree-l4" href="#wrpn">WRPN</a></li>
         
             <li><a class="toctree-l4" href="#symmetric-linear-quantization">Symmetric Linear Quantization</a></li>
@@ -195,6 +197,10 @@
 <li>Gradients quantization as proposed in the paper is not supported yet.</li>
 <li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>
 </ul>
+<h2 id="pact">PACT</h2>
+<p>(As proposed in <a href="https://arxiv.org/abs/1805.06085">PACT: Parameterized Clipping Activation for Quantized Neural Networks</a>)</p>
+<p>This method is similar to DoReFa, but the upper clipping values, <script type="math/tex">\alpha</script>, of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, <script type="math/tex">\alpha</script> is shared per layer.</p>
+<p>This method requires training the model with quantization, as discussed <a href="../quantization/#training-with-quantization">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
 <h2 id="wrpn">WRPN</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1709.01134">WRPN: Wide Reduced-Precision Networks</a>)  </p>
 <p>In this method, activations are clipped to <script type="math/tex">[0, 1]</script> and quantized as follows (<script type="math/tex">k</script> is the number of bits used for quantization):</p>

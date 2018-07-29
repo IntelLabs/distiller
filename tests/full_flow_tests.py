@@ -105,6 +105,9 @@ test_configs = [
     TestConfig('-a resnet20_cifar --resume {0} --quantize --evaluate'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
                DS_CIFAR, accuracy_checker, [91.620, 99.630]),
+    TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
+               format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
+               DS_CIFAR, accuracy_checker, [48.290, 94.460])
 ]
 
 

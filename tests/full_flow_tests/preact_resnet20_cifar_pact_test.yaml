@@ -1,0 +1,39 @@
+quantizers:
+  pact_quantizer:
+    class: PACTQuantizer
+    act_clip_init_val: 8.0
+    bits_activations: 4
+    bits_weights: 3
+    bits_overrides:
+    # Don't quantize first and last layers
+      conv1:
+        wts: null
+        acts: null
+      layer1.0.pre_relu:
+        wts: null
+        acts: null
+      final_relu:
+        wts: null
+        acts: null
+      fc:
+        wts: null
+        acts: null
+
+lr_schedulers:
+  training_lr:
+    class: MultiStepLR
+    milestones: [60, 120]
+    gammas: 0.1
+
+policies:
+    - quantizer:
+        instance_name: pact_quantizer
+      starting_epoch: 0
+      ending_epoch: 200
+      frequency: 1
+
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 121
+      frequency: 1
