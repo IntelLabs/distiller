@@ -333,6 +333,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
     if args.earlyexit_lossweights:
+        args.exiterrors = []
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
 
@@ -437,6 +438,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
     if args.earlyexit_thresholds:
+        args.exiterrors = []
+        args.losses_exits = []
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
             args.losses_exits.append(tnt.AverageValueMeter())
