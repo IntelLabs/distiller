@@ -56,16 +56,6 @@ def conv3x3(in_planes, out_planes, stride=1):
 class ResNetCifarEarlyExit(ResNetCifar):
 
     def __init__(self, block, layers, num_classes=NUM_CLASSES):
-        self.nlayers = 0
-        # Each layer manages its own gates
-        self.layer_gates = []
-        for layer in range(3):
-            # For each of the 3 layers, create block gates: each block has two layers
-            self.layer_gates.append([])  # [True, True] * layers[layer])
-            for blk in range(layers[layer]):
-                self.layer_gates[layer].append([True, True])
-
-        self.inplanes = 16  # 64
         super(ResNetCifarEarlyExit, self).__init__(block, layers, num_classes)
 
         # Define early exit layers

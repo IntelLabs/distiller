@@ -8,18 +8,6 @@ from torchvision.models.resnet import BasicBlock
 
 __all__ = ['resnet18_earlyexit', 'resnet34_earlyexit', 'resnet50_earlyexit', 'resnet101_earlyexit', 'resnet152_earlyexit']
 
-# The following URLs represent pretrained models without exits and can't be used
-# directly for preloading as the topology is slightly altered to account
-# for the exits. We'll be providing publically pretrained models for examples
-# with exits in future releases.
-model_urls = {
-    'resnet18_earlyexit': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34_earlyexit': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50_earlyexit': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101_earlyexit': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152_earlyexit': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-}
-
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -30,7 +18,6 @@ def conv3x3(in_planes, out_planes, stride=1):
 class ResNetEarlyExit(models.ResNet):
 
     def __init__(self, block, layers, num_classes=1000):
-        self.inplanes = 64
         super(ResNetEarlyExit, self).__init__(block, layers, num_classes)
 
         # Define early exit layers
@@ -79,61 +66,36 @@ class ResNetEarlyExit(models.ResNet):
         return output
 
 
-def resnet18_earlyexit(pretrained=False, **kwargs):
+def resnet18_earlyexit(**kwargs):
     """Constructs a ResNet-18 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetEarlyExit(BasicBlock, [2, 2, 2, 2], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet18_earlyexit']))
     return model
 
 
-def resnet34_earlyexit(pretrained=False, **kwargs):
+def resnet34_earlyexit(**kwargs):
     """Constructs a ResNet-34 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetEarlyExit(BasicBlock, [3, 4, 6, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34_earlyexit']))
     return model
 
 
-def resnet50_earlyexit(pretrained=False, **kwargs):
+def resnet50_earlyexit(**kwargs):
     """Constructs a ResNet-50 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetEarlyExit(Bottleneck, [3, 4, 6, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50_earlyexit']), strict=False)
     return model
 
 
-def resnet101_earlyexit(pretrained=False, **kwargs):
+def resnet101_earlyexit(**kwargs):
     """Constructs a ResNet-101 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetEarlyExit(Bottleneck, [3, 4, 23, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101_earlyexit']))
     return model
 
 
-def resnet152_earlyexit(pretrained=False, **kwargs):
+def resnet152_earlyexit(**kwargs):
     """Constructs a ResNet-152 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetEarlyExit(Bottleneck, [3, 8, 36, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152_earlyexit']))
     return model
