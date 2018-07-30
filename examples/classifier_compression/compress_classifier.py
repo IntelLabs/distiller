@@ -406,6 +406,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
                     t5 = 'Top5_exit' + str(exitnum)
                     stats_dict[t1] = args.exiterrors[exitnum].value(1)
                     stats_dict[t5] = args.exiterrors[exitnum].value(5)
+                stats_dict['LR'] = lr
+                stats_dict['Time'] = batch_time.mean
                 stats = ('Peformance/Training/', stats_dict)
 
             params = model.named_parameters() if args.log_params_histograms else None
@@ -514,42 +516,25 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         if args.display_confusion:
             msglogger.info('==> Confusion:\n%s', str(confusion.value()))
         return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
-    elif args.earlyexit_thresholds and args.num_exits == 2:
+    else:
         #print some interesting summary stats for number of data points that could exit early
-        msglogger.info("Exit 0: %d", args.exitstats[0])
-        msglogger.info("Exit N: %d", args.exitstats[1])
-        msglogger.info("Percent Early Exit #0: %.3f", (args.exitstats[0]*100.0) / (args.exitstats[0]+args.exitstats[1]))
-        validate_return = [0, 0, 0]
-        if args.exitstats[0]:
-            validate_return[0] += args.exiterrors[0].value(1)
-            validate_return[1] += args.exiterrors[0].value(5)
-            validate_return[2] += args.losses_exits[0].mean
-        if args.exitstats[1]:
-            validate_return[0] += args.exiterrors[1].value(1)
-            validate_return[1] += args.exiterrors[1].value(5)
-            validate_return[2] += args.losses_exits[1].mean
-        return validate_return[0], validate_return[1], validate_return[2]
-    else:    # EarlyExit & imagenet
-        #print some interesting summary stats for number of data points that could exit early
-        msglogger.info("Exit 0: %d", args.exitstats[0])
-        msglogger.info("Exit 1: %d", args.exitstats[1])
-        msglogger.info("Exit N: %d", args.exitstats[2])
-        msglogger.info("Percent Early Exit #0: %.3f", (args.exitstats[0]*100.0) / (args.exitstats[0]+args.exitstats[1]+args.exitstats[2]))
-        msglogger.info("Percent Early Exit #1: %.3f", (args.exitstats[1]*100.0) / (args.exitstats[0]+args.exitstats[1]+args.exitstats[2]))
-        validate_return = [0, 0, 0]
-        if args.exitstats[0]:
-            validate_return[0] += args.exiterrors[0].value(1)
-            validate_return[1] += args.exiterrors[0].value(5)
-            validate_return[2] += args.losses_exits[0].mean
-        if args.exitstats[1]:
-            validate_return[0] += args.exiterrors[1].value(1)
-            validate_return[1] += args.exiterrors[1].value(5)
-            validate_return[2] += args.losses_exits[1].mean
-        if args.exitstats[2]:
-            validate_return[0] += args.exiterrors[2].value(1)
-            validate_return[1] += args.exiterrors[2].value(5)
-            validate_return[2] += args.losses_exits[2].mean
-        return validate_return[0], validate_return[1], validate_return[2]
+        top1k_stats = [0] * args.num_exits
+        top5k_stats = [0] * args.num_exits
+        losses_exits_stats = [0] * args.num_exits
+        sum_exit_stats = 0
+        for exitnum in range(args.num_exits):
+            if args.exitstats[exitnum]:
+                sum_exit_stats += args.exitstats[exitnum]
+                msglogger.info("Exit %d: %d", exitnum, args.exitstats[exitnum])
+                top1k_stats[exitnum] += args.exiterrors[exitnum].value(1)
+                top5k_stats[exitnum] += args.exiterrors[exitnum].value(5)
+                losses_exits_stats[exitnum] += args.losses_exits[exitnum].mean
+        for exitnum in range(args.num_exits):
+            if args.exitstats[exitnum]:
+                msglogger.info("Percent Early Exit %d: %.3f", exitnum, (args.exitstats[exitnum]*100.0) / sum_exit_stats)
+
+
+        return top1k_stats[args.num_exits-1], top5k_stats[args.num_exits-1], losses_exits_stats[args.num_exits-1]
 
 
 class PytorchNoGrad(object):
