@@ -145,6 +145,8 @@ parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
 parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
 parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true', help='Display the confusion matrix')
+parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None, help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None, help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 
 
 def check_pytorch_version():
@@ -213,6 +215,12 @@ def main():
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
     args.num_classes = 10 if args.dataset == 'cifar10' else 1000
 
+    if args.earlyexit_thresholds:
+        args.num_exits = len(args.earlyexit_thresholds) + 1
+        args.loss_exits = [0] * args.num_exits
+        args.losses_exits = []
+        args.exiterrors = []
+
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
     compression_scheduler = None
@@ -220,6 +228,10 @@ def main():
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
     tflogger = TensorBoardLogger(msglogger.logdir)
     pylogger = PythonLogger(msglogger)
+
+    # capture thresholds for early-exit training
+    if args.earlyexit_thresholds:
+        msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
     # We can optionally resume from a checkpoint
     if args.resume:
@@ -290,8 +302,7 @@ def main():
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
-        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1,
-                                        log_freq=1, loggers=[tflogger])
+        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1, loggers=[tflogger])
 
         if compression_scheduler:
             compression_scheduler.on_epoch_end(epoch, optimizer)
@@ -321,6 +332,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
+    # For Early Exit, we define statistics for each exit - so exiterrors is analogous to classerr for the non-Early Exit case
+    if args.earlyexit_lossweights:
+        args.exiterrors = []
+        for exitnum in range(args.num_exits):
+            args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
 
     total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
@@ -342,11 +358,16 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
-        output = model(input_var)
-        loss = criterion(output, target_var)
 
-        # Measure accuracy and record loss
-        classerr.add(output.data, target)
+        output = model(input_var)
+        if not args.earlyexit_lossweights:
+            loss = criterion(output, target_var)
+            # Measure accuracy and record loss
+            classerr.add(output.data, target)
+        else:
+            # Measure accuracy and record loss
+            loss = earlyexit_loss(output, target_var, criterion, args)
+
         losses['objective_loss'].add(loss.item())
 
         if compression_scheduler:
@@ -369,14 +390,27 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % args.print_freq == 0:
             # Log some statistics
             lr = optimizer.param_groups[0]['lr']
-            stats = ('Peformance/Training/',
-                     OrderedDict([
-                         ('Loss', losses['objective_loss'].mean),
-                         ('Reg Loss', losses['regularizer_loss'].mean),
-                         ('Top1', classerr.value(1)),
-                         ('Top5', classerr.value(5)),
-                         ('LR', lr),
-                         ('Time', batch_time.mean)]))
+            if not args.earlyexit_lossweights:
+                stats = ('Peformance/Training/',
+                         OrderedDict([
+                             ('Loss', losses['objective_loss'].mean),
+                             ('Reg Loss', losses['regularizer_loss'].mean),
+                             ('Top1', classerr.value(1)),
+                             ('Top5', classerr.value(5)),
+                             ('LR', lr),
+                             ('Time', batch_time.mean)]))
+            else:
+                # for Early Exit case, the Top1 and Top5 stats are computed for each exit.
+                stats_dict = OrderedDict()
+                stats_dict['Objective Loss'] = losses['objective_loss'].mean
+                for exitnum in range(args.num_exits):
+                    t1 = 'Top1_exit' + str(exitnum)
+                    t5 = 'Top5_exit' + str(exitnum)
+                    stats_dict[t1] = args.exiterrors[exitnum].value(1)
+                    stats_dict[t5] = args.exiterrors[exitnum].value(5)
+                stats_dict['LR'] = lr
+                stats_dict['Time'] = batch_time.mean
+                stats = ('Peformance/Training/', stats_dict)
 
             params = model.named_parameters() if args.log_params_histograms else None
             distiller.log_training_progress(stats,
@@ -406,6 +440,16 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     """Execute the validation/test loop."""
     losses = {'objective_loss': tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
+
+    if args.earlyexit_thresholds:
+        # for Early Exit, we have a list of errors and losses for each of the exits.
+        args.exiterrors = []
+        args.losses_exits = []
+        for exitnum in range(args.num_exits):
+            args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
+            args.losses_exits.append(tnt.AverageValueMeter())
+        args.exit_taken = [0] * args.num_exits
+    
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
     batch_size = data_loader.batch_size
@@ -423,16 +467,21 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             target = target.cuda(async=True)
             input_var = get_inference_var(inputs)
             target_var = get_inference_var(target)
-
-            # compute output
+            # compute output from model
             output = model(input_var)
-            loss = criterion(output, target_var)
 
-            # measure accuracy and record loss
-            losses['objective_loss'].add(loss.item())
-            classerr.add(output.data, target)
-            if args.display_confusion:
-                confusion.add(output.data, target)
+            if not args.earlyexit_thresholds:
+                # compute loss
+                loss = criterion(output, target_var)
+                # measure accuracy and record loss
+                losses['objective_loss'].add(loss.item())
+                classerr.add(output.data, target)
+                if args.display_confusion:
+                    confusion.add(output.data, target)
+            else:
+                # If using Early Exit, then compute outputs at all exits - output is now a list of all exits
+                # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+                earlyexit_validate_loss(output, target_var, criterion, args)
 
             # measure elapsed time
             batch_time.add(time.time() - end)
@@ -440,19 +489,55 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
             steps_completed = (validation_step+1)
             if steps_completed % args.print_freq == 0:
-                stats = ('',
+                if not args.earlyexit_thresholds:
+                    stats = ('',
                          OrderedDict([('Loss', losses['objective_loss'].mean),
                                       ('Top1', classerr.value(1)),
                                       ('Top5', classerr.value(5))]))
+                else:
+                    stats_dict = OrderedDict()
+                    stats_dict['Test'] = validation_step
+                    for exitnum in range(args.num_exits):
+                        la_string = 'LossAvg' + str(exitnum)
+                        stats_dict[la_string] = args.losses_exits[exitnum].mean
+                        # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch,
+                        # then accessing the value(k) will cause a divide by zero. So we'll build the OrderedDict
+                        # accordingly and we will not print for an exit error when that exit is never taken.
+                        if args.exit_taken[exitnum]:
+                            t1 = 'Top1_exit' + str(exitnum)
+                            t5 = 'Top5_exit' + str(exitnum)
+                            stats_dict[t1] = args.exiterrors[exitnum].value(1)
+                            stats_dict[t5] = args.exiterrors[exitnum].value(5)
+                    stats = ('Performance/Validation/', stats_dict)
+
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
+    if not args.earlyexit_thresholds:
+        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
+                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
+        
+        if args.display_confusion:
+            msglogger.info('==> Confusion:\n%s', str(confusion.value()))
+        return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
+    else:
+        #print some interesting summary stats for number of data points that could exit early
+        top1k_stats = [0] * args.num_exits
+        top5k_stats = [0] * args.num_exits
+        losses_exits_stats = [0] * args.num_exits
+        sum_exit_stats = 0
+        for exitnum in range(args.num_exits):
+            if args.exit_taken[exitnum]:
+                sum_exit_stats += args.exit_taken[exitnum]
+                msglogger.info("Exit %d: %d", exitnum, args.exit_taken[exitnum])
+                top1k_stats[exitnum] += args.exiterrors[exitnum].value(1)
+                top5k_stats[exitnum] += args.exiterrors[exitnum].value(5)
+                losses_exits_stats[exitnum] += args.losses_exits[exitnum].mean
+        for exitnum in range(args.num_exits):
+            if args.exit_taken[exitnum]:
+                msglogger.info("Percent Early Exit %d: %.3f", exitnum, (args.exit_taken[exitnum]*100.0) / sum_exit_stats)
 
-    msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
-                   classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
 
-    if args.display_confusion:
-        msglogger.info('==> Confusion:\n%s', str(confusion.value()))
-    return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
+        return top1k_stats[args.num_exits-1], top5k_stats[args.num_exits-1], losses_exits_stats[args.num_exits-1]
 
 
 class PytorchNoGrad(object):
@@ -477,6 +562,41 @@ def get_inference_var(tensor):
     if torch.__version__ >= '0.4':
         return torch.autograd.Variable(tensor)
     return torch.autograd.Variable(tensor, volatile=True)
+
+def earlyexit_loss(output, target_var, criterion, args):
+    loss = 0
+    sum_lossweights = 0
+    for exitnum in range(args.num_exits-1):
+        loss += (args.earlyexit_lossweights[exitnum] * criterion(output[exitnum], target_var))
+        sum_lossweights += args.earlyexit_lossweights[exitnum]
+        args.exiterrors[exitnum].add(output[exitnum].data, target_var)
+    # handle final exit
+    loss += (1.0 - sum_lossweights) * criterion(output[args.num_exits-1], target_var)
+    args.exiterrors[args.num_exits-1].add(output[args.num_exits-1].data, target_var)
+    return loss
+
+def earlyexit_validate_loss(output, target_var, criterion, args):
+    for exitnum in range(args.num_exits):
+        args.loss_exits[exitnum] = criterion(output[exitnum], target_var)
+        args.losses_exits[exitnum].add(args.loss_exits[exitnum].item())
+
+    # We need to go through this batch itself - this is now a vector of losses through the batch.
+    # Collecting stats on which exit early can be done across the batch at this time.
+    # Note that we can't use batch_size as last batch might be smaller
+    this_batch_size = target_var.size()[0]
+    for batchnum in range(this_batch_size):
+        # take the exit using CrossEntropyLoss as confidence measure (lower is more confident)
+        for exitnum in range(args.num_exits-1):
+            if args.loss_exits[exitnum].item() < args.earlyexit_thresholds[exitnum]:
+                # take the results from early exit since lower than threshold
+                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batchnum], ndmin=2)),
+                        torch.full([1], target_var[batchnum], dtype=torch.long))
+                args.exit_taken[exitnum] += 1
+            else:
+                # skip the early exits and include results from end of net
+                args.exiterrors[args.num_exits-1].add(torch.tensor(np.array(output[args.num_exits-1].data[batchnum], ndmin=2)),
+                        torch.full([1], target_var[batchnum], dtype=torch.long))
+                args.exit_taken[args.num_exits-1] += 1
 
 
 def evaluate_model(model, criterion, test_loader, loggers, args):
