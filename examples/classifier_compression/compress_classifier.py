@@ -332,6 +332,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
+    # For Early Exit, we define statistics for each exit - so exiterrors is analogous to classerr for the non-Early Exit case
     if args.earlyexit_lossweights:
         args.exiterrors = []
         for exitnum in range(args.num_exits):
@@ -399,6 +400,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                              ('LR', lr),
                              ('Time', batch_time.mean)]))
             else:
+                # for Early Exit case, the Top1 and Top5 stats are computed for each exit.
                 stats_dict = OrderedDict()
                 stats_dict['Objective Loss'] = losses['objective_loss'].mean
                 for exitnum in range(args.num_exits):
@@ -440,6 +442,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
     if args.earlyexit_thresholds:
+        # for Early Exit, we have a list of errors and losses for each of the exits.
         args.exiterrors = []
         args.losses_exits = []
         for exitnum in range(args.num_exits):

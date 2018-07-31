@@ -13,22 +13,26 @@ Both CIFAR10 and Imagenet code comes directly from publically available examples
 
 Deeper networks can benefit from multiple exits. Our examples illustrate both a single and a pair of early exits for CIFAR10 and Imagenet, respectively.
 
+Note that this code does not actually take exits. What it does is to compute statistics of loss and accuracy assuming exits were taken when criteria are met. Actually implementing exits can be tricky and architecture dependent and we plan to address these issues.
+
 ### Heuristics
 The insertion of the exits are ad-hoc, but there are some heuristic principals guiding their placement and parameters. The earlier exits are placed, the more agressive the exit as it essentially prunes the rest of the network at a very early stage, thus saving a lot of work. However, a diminishing percentage of data will be directed through the exit if we are to preserve accuracy.
 
-### Early Exit Parameters
+There are other benefits to adding exits in that training the modified network now has backpropagation losses coming from the exits that affect the earlier layers more substantially than the last exit. This effect mitigates problems such as vanishing gradient.
+
+### Early Exit Hyperparameters
 There are two parameters that are required to enable early exit. Leave them undefined if you are not enabling Early Exit:
 
-1. **--earlyexit** defines the
-thresholds for each of the early exits. The output cross entropy must be less than these thresholds to take this exit, otherwise the data continues along the regular path.
+1. **--earlyexit_thresholds** defines the
+thresholds for each of the early exits. The cross entropy measure must be **less than** the specified threshold to take a specific exit, otherwise the data continues along the regular path. For example, you could specify "--earlyexit_thresholds 0.9 1.2" and this would imply two early exits with corresponding thresholds of 0.9 and 1.2, respectively to take that exit.
 
-2. **--lossweights** provide the weights for the linear combination of losses during training to compute a signle, overall loss.
+2. **--earlyexit_lossweights** provide the weights for the linear combination of losses during training to compute a signle, overall loss. We only specify weights for the early exits and assume that the sum of the weights (including final exit) are equal to 1.0. So an example of "--earlyexit_lossweights 0.2 0.3" implies two early exits weighted with values of 0.2 and 0.3, respectively and that the final exit has a value of 1.0-(0.2+0.3) = 0.5. Studies have shown that weighting the early exits more heavily will create more agressive early exits, but perhaps with a slight negative effect on accuracy.
 
 ### CIFAR10
 In the case of CIFAR10, we have inserted a single exit after the first full layer grouping. The layers on the exit path itself includes a convolutional layer and a fully connected layer. If you move the exit, be sure to match the proper sizes for inputs and outputs to the exit layers.
 
 ### Imagenet
-The imagenet subdirectory is taken directly from the torchvision source code. This supports training and inference of the imagenet dataset via several well known deep architectures. ResNet-50 is the architecture of interest in this study, however the exit is defined in the generic resnet code and could be used with other size resnets. There are two exits inserted in this example. Again, exit layers must have their sizes match properly.
+This supports training and inference of the imagenet dataset via several well known deep architectures. ResNet-50 is the architecture of interest in this study, however the exit is defined in the generic resnet code and could be used with other size resnets. There are two exits inserted in this example. Again, exit layers must have their sizes match properly.
 
 ## References
 <div id="panda"></div> **Priyadarshini Panda, Abhronil Sengupta, Kaushik Roy**.
