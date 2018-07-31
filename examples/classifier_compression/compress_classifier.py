@@ -448,7 +448,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
             args.losses_exits.append(tnt.AverageValueMeter())
-        args.exitstats = [0] * args.num_exits
+        args.exit_taken = [0] * args.num_exits
     
     batch_time = tnt.AverageValueMeter()
     total_samples = len(data_loader.sampler)
@@ -503,7 +503,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                         # Because of the nature of ClassErrorMeter, if an exit is never taken during the batch,
                         # then accessing the value(k) will cause a divide by zero. So we'll build the OrderedDict
                         # accordingly and we will not print for an exit error when that exit is never taken.
-                        if args.exitstats[exitnum]:
+                        if args.exit_taken[exitnum]:
                             t1 = 'Top1_exit' + str(exitnum)
                             t5 = 'Top5_exit' + str(exitnum)
                             stats_dict[t1] = args.exiterrors[exitnum].value(1)
@@ -526,15 +526,15 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         losses_exits_stats = [0] * args.num_exits
         sum_exit_stats = 0
         for exitnum in range(args.num_exits):
-            if args.exitstats[exitnum]:
-                sum_exit_stats += args.exitstats[exitnum]
-                msglogger.info("Exit %d: %d", exitnum, args.exitstats[exitnum])
+            if args.exit_taken[exitnum]:
+                sum_exit_stats += args.exit_taken[exitnum]
+                msglogger.info("Exit %d: %d", exitnum, args.exit_taken[exitnum])
                 top1k_stats[exitnum] += args.exiterrors[exitnum].value(1)
                 top5k_stats[exitnum] += args.exiterrors[exitnum].value(5)
                 losses_exits_stats[exitnum] += args.losses_exits[exitnum].mean
         for exitnum in range(args.num_exits):
-            if args.exitstats[exitnum]:
-                msglogger.info("Percent Early Exit %d: %.3f", exitnum, (args.exitstats[exitnum]*100.0) / sum_exit_stats)
+            if args.exit_taken[exitnum]:
+                msglogger.info("Percent Early Exit %d: %.3f", exitnum, (args.exit_taken[exitnum]*100.0) / sum_exit_stats)
 
 
         return top1k_stats[args.num_exits-1], top5k_stats[args.num_exits-1], losses_exits_stats[args.num_exits-1]
@@ -591,12 +591,12 @@ def earlyexit_validate_loss(output, target_var, criterion, args):
                 # take the results from early exit since lower than threshold
                 args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batchnum], ndmin=2)),
                         torch.full([1], target_var[batchnum], dtype=torch.long))
-                args.exitstats[exitnum] += 1
+                args.exit_taken[exitnum] += 1
             else:
                 # skip the early exits and include results from end of net
                 args.exiterrors[args.num_exits-1].add(torch.tensor(np.array(output[args.num_exits-1].data[batchnum], ndmin=2)),
                         torch.full([1], target_var[batchnum], dtype=torch.long))
-                args.exitstats[args.num_exits-1] += 1
+                args.exit_taken[args.num_exits-1] += 1
 
 
 def evaluate_model(model, criterion, test_loader, loggers, args):
