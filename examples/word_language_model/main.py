@@ -236,10 +236,11 @@ def train(epoch, optimizer, compression_scheduler=None):
         loss = criterion(output.view(-1, ntokens), targets)
 
         if compression_scheduler:
-            # Before running the backward phase, we add any regularization loss computed by the scheduler
-            regularizer_loss = compression_scheduler.before_backward_pass(epoch, minibatch_id=batch,
-                                                                          minibatches_per_epoch=steps_per_epoch, loss=loss)
-            loss += regularizer_loss
+            # Before running the backward phase, we allow the scheduler to modify the loss
+            # (e.g. add regularization loss)
+            loss = compression_scheduler.before_backward_pass(epoch, minibatch_id=batch,
+                                                              minibatches_per_epoch=steps_per_epoch, loss=loss,
+                                                              return_loss_components=False)
 
         optimizer.zero_grad()
         loss.backward()
