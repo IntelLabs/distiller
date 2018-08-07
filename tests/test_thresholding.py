@@ -22,7 +22,7 @@ def test_row_thresholding():
     assert torch.eq(mask, torch.tensor([[ 0.,  0.,  0.],
                                         [ 0.,  0.,  0.],
                                         [ 1.,  1.,  1.],
-                                        [ 1.,  1.,  1.]], device='cuda:0')).all()
+                                        [ 1.,  1.,  1.]], device=mask.device)).all()
     return mask
 
 
@@ -33,7 +33,7 @@ def test_col_thresholding():
     assert torch.eq(mask, torch.tensor([[ 0.,  0.,  1.],
                                         [ 0.,  0.,  1.],
                                         [ 0.,  0.,  1.],
-                                        [ 0.,  0.,  1.]], device='cuda:0')).all()
+                                        [ 0.,  0.,  1.]], device=mask.device)).all()
     return mask
 
 if __name__ == '__main__':
