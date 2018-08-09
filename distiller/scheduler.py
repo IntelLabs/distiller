@@ -22,6 +22,7 @@ from functools import partial
 import logging
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
+from .policy import PolicyLoss, LossComponent
 
 msglogger = logging.getLogger()
 
@@ -112,16 +113,24 @@ class CompressionScheduler(object):
                 policy.on_minibatch_begin(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                           self.zeros_mask_dict, optimizer)
 
-    def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss, optimizer=None):
-        # Last chance to compute the regularization loss, and optionally add it to the data loss
-        regularizer_loss = torch.tensor(0, dtype=torch.float, device=self.device)
-
+    def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss, optimizer=None,
+                             return_loss_components=False):
+        # We pass the loss to the policies, which may override it
+        overall_loss = loss
+        loss_components = []
         if epoch in self.policies:
             for policy in self.policies[epoch]:
-                # regularizer_loss is passed to policy objects which may increase it.
-                policy.before_backward_pass(self.model, epoch, minibatch_id, minibatches_per_epoch,
-                                            loss, regularizer_loss, self.zeros_mask_dict)
-        return regularizer_loss
+                policy_loss = policy.before_backward_pass(self.model, epoch, minibatch_id, minibatches_per_epoch,
+                                                          overall_loss, self.zeros_mask_dict)
+                if policy_loss is not None:
+                    curr_loss_components = self.verify_policy_loss(policy_loss)
+                    overall_loss = policy_loss.overall_loss
+                    loss_components += curr_loss_components
+
+        if return_loss_components:
+            return PolicyLoss(overall_loss, loss_components)
+
+        return overall_loss
 
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         # When we get to this point, the weights are no longer maksed.  This is because during the backward
@@ -161,7 +170,7 @@ class CompressionScheduler(object):
     def state_dict(self):
         """Returns the state of the scheduler as a :class:`dict`.
 
-        Curently it contains just the pruning mask.
+        Currently it contains just the pruning mask.
         """
         masks = {}
         for name, masker in self.zeros_mask_dict.items():
@@ -192,3 +201,16 @@ class CompressionScheduler(object):
         for name, mask in self.zeros_mask_dict.items():
             masker = self.zeros_mask_dict[name]
             masker.mask = loaded_masks[name]
+
+    @staticmethod
+    def verify_policy_loss(policy_loss):
+        if not isinstance(policy_loss, PolicyLoss):
+            raise TypeError("A Policy's before_backward_pass must return either None or an instance of " +
+                            PolicyLoss.__name__)
+        curr_loss_components = policy_loss.loss_components
+        if not isinstance(curr_loss_components, list):
+            curr_loss_components = [curr_loss_components]
+        if not all(isinstance(lc, LossComponent) for lc in curr_loss_components):
+            raise TypeError("Expected an instance of " + LossComponent.__name__ +
+                            " or a list of such instances")
+        return curr_loss_components
