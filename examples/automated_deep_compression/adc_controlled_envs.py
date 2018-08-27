@@ -1,15 +1,36 @@
 """This file contains a couple of environments used for debugging ADC reproduction.
 """
 import random
+import numpy as np
+from scipy.stats import truncnorm
 
 
 class RandomADCActionSpace(object):
-    def __init__(self, low, high):
-        self.low = low
-        self.high = high
+    def __init__(self, low, high, std):
+        self.clip_low = low
+        self.clip_high = high
+        self.layer = 0
+        self.num_layers = 13
+        #self.means = [high-low] * self.num_layers
+        self.means = [0.9, 0.9, 0.9, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.6, 0.6, 0.5, 0.5]
+        self.std = std
 
     def sample(self):
-        return random.uniform(self.low, self.high)
+        return random.uniform(self.clip_low, self.clip_high)
+        action_values_mean = self.means[self.layer]
+        action_values_std = self.std
+        normalized_low = (self.clip_low - action_values_mean) / action_values_std
+        normalized_high = (self.clip_high - action_values_mean) / action_values_std
+        distribution = truncnorm(normalized_low, normalized_high, loc=action_values_mean, scale=action_values_std)
+        action = distribution.rvs(1)
+        # action = np.random.normal(self.means[self.layer], self.std)
+        # action = min(self.clip_high, max(action, self.clip_low))
+        self.layer = (self.layer + 1) % self.num_layers
+        return action
+
+    def set_cfg(self, means, std):
+        self.means = [0.01*m for m in self.means] + [0.99*m for m in means]
+        self.std = std
 
 
 class PredictableADCActionSpace(object):
