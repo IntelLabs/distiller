@@ -106,6 +106,10 @@
 
     </ul>
                 </li>
+                <li class="">
+                    
+    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+                </li>
     </ul>
 	    </li>
           
@@ -227,7 +231,7 @@ As mentioned above, a scale factor is used to adapt the dynamic range of the ten
 <p>Naively quantizing a FP32 model to INT4 and lower usually incurs significant accuracy degradation. Many works have tried to mitigate this effect. They usually employ one or more of the following concepts in order to improve model accuracy:</p>
 <ul>
 <li><strong>Training / Re-Training</strong>: For INT4 and lower, training is required in order to obtain reasonable accuracy. The training loop is modified to take quantization into account. See details in the <a href="#training-with-quantization">next section</a>.<br />
-<a href="#zhou-et-al-2016">Zhou S et al., 2016</a> have shown that bootstrapping the quantized model with trained FP32 weights leads to higher accuracy, as opposed to training from scratch. Other methods <em>require</em> a trained FP32 model, either as a starting point (<a href="#zhou-et-al-2017">Zhou A et al., 2017</a>), or as a teacher network in a knowledge distillation training setup (<a href="#mishra-and-marr-2018">Mishra and Marr, 2018</a>).</li>
+<a href="#zhou-et-al-2016">Zhou S et al., 2016</a> have shown that bootstrapping the quantized model with trained FP32 weights leads to higher accuracy, as opposed to training from scratch. Other methods <em>require</em> a trained FP32 model, either as a starting point (<a href="#zhou-et-al-2017">Zhou A et al., 2017</a>), or as a teacher network in a knowledge distillation training setup (see <a href="../knowledge_distillation/index.html#combining">here</a>).</li>
 <li><strong>Replacing the activation function</strong>: The most common activation function in vision models is ReLU, which is unbounded. That is - its dynamic range is not limited for positive inputs. This is very problematic for INT4 and below due to the very limited range and resolution. Therefore, most methods replace ReLU with another function which is bounded. In some cases a clipping function with hard coded values is used (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>, <a href="#mishra-et-al-2018">Mishra et al., 2018</a>). Another method learns the clipping value per layer, with better results (<a href="#choi-et-al-2018">Choi et al., 2018</a>). Once the clipping value is set, the scale factor used for quantization is also set, and no further calibration steps are required (as opposed to INT8 methods described above).</li>
 <li><strong>Modifying network structure</strong>: <a href="#mishra-et-al-2018">Mishra et al., 2018</a> try to compensate for the loss of information due to quantization by using wider layers (more channels). <a href="#lin-et-al-2017">Lin et al., 2017</a> proposed a binary quantization method in which a single FP32 convolution is replaced with multiple binary convolutions, each scaled to represent a different "base", covering a larger dynamic range overall.</li>
 <li><strong>First and last layer</strong>: Many methods do not quantize the first and last layer of the model. It has been observed by <a href="#han-et-al-2015">Han et al., 2015</a> that the first convolutional layer is more sensitive to weights pruning, and some quantization works cite the same reason and show it empirically (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>, <a href="#choi-et-al-2018">Choi et al., 2018</a>). Some works also note that these layers usually constitute a very small portion of the overall computation within the model, further reducing the motivation to quantize them (<a href="#rastegari-et-al-2016">Rastegari et al., 2016</a>). Most methods keep the first and last layers at FP32. However, <a href="#choi-et-al-2018">Choi et al., 2018</a> showed that "conservative" quantization of these layers, e.g. to INT8, does not reduce accuracy.</li>
@@ -262,9 +266,6 @@ In the diagram we show "layer N" as the conv + batch-norm + activation combinati
 <div id="zhou-et-al-2017"></div>
 
 <p><strong>Aojun Zhou, Anbang Yao, Yiwen Guo, Lin Xu and Yurong Chen</strong>. Incremental Network Quantization: Towards Lossless CNNs with Low-precision Weights. <a href="https://arxiv.org/abs/1702.03044">ICLR, 2017</a></p>
-<div id="mishra-and-marr-2018"></div>
-
-<p><strong>Asit Mishra and Debbie Marr</strong>. Apprentice: Using Knowledge Distillation Techniques To Improve Low-Precision Network Accuracy. <a href="https://openreview.net/forum?id=B1ae1lZRb">ICLR, 2018</a></p>
 <div id="mishra-et-al-2018"></div>
 
 <p><strong>Asit Mishra, Eriko Nurvitadhi, Jeffrey J Cook and Debbie Marr</strong>. WRPN: Wide Reduced-Precision Networks. <a href="https://openreview.net/forum?id=B1ZvaaeAZ">ICLR, 2018</a></p>
@@ -296,7 +297,7 @@ In the diagram we show "layer N" as the conv + batch-norm + activation combinati
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../algo_pruning/index.html" class="btn btn-neutral float-right" title="Pruning">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../knowledge_distillation/index.html" class="btn btn-neutral float-right" title="Knowledge Distillation">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
         <a href="../regularization/index.html" class="btn btn-neutral" title="Regularization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
@@ -328,7 +329,7 @@ In the diagram we show "layer N" as the conv + batch-norm + activation combinati
         <span><a href="../regularization/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../algo_pruning/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="../knowledge_distillation/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

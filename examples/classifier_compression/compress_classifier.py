@@ -151,6 +151,7 @@ parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earl
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
                     help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 
+distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 
 def check_pytorch_version():
     if torch.__version__ < '0.4.0':
@@ -180,6 +181,7 @@ def main():
 
     start_epoch = 0
     best_top1 = 0
+    best_epoch = 0
 
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -284,6 +286,25 @@ def main():
         compression_scheduler = distiller.file_config(model, optimizer, args.compress)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.cuda()
+    else:
+        compression_scheduler = distiller.CompressionScheduler(model)
+
+    args.kd_policy = None
+    if args.kd_teacher:
+        teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
+        if args.kd_resume:
+            teacher, _, _ = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)
+        dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
+        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
+        compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
+                                         frequency=1)
+
+        msglogger.info('\nStudent-Teacher knowledge distillation enabled:')
+        msglogger.info('\tTeacher Model: %s', args.kd_teacher)
+        msglogger.info('\tTemperature: %s', args.kd_temp)
+        msglogger.info('\tLoss Weights (distillation | student | teacher): %s',
+                       ' | '.join(['{:.2f}'.format(val) for val in dlw]))
+        msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -316,7 +337,7 @@ def main():
         if is_best:
             best_epoch = epoch
             best_top1 = top1
-        msglogger.info('==> Best validation Top1: %.3f   Epoch: %d', best_top1, best_epoch)
+        msglogger.info('==> Best Top1: %.3f   On Epoch: %d\n', best_top1, best_epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
                                  args.name, msglogger.logdir)
 
@@ -366,7 +387,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
-        output = model(input_var)
+        if args.kd_policy is None:
+            output = model(input_var)
+        else:
+            output = args.kd_policy.forward(input_var)
+
         if not args.earlyexit_lossweights:
             loss = criterion(output, target_var)
             # Measure accuracy and record loss
@@ -499,9 +524,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             if steps_completed % args.print_freq == 0:
                 if not args.earlyexit_thresholds:
                     stats = ('',
-                         OrderedDict([('Loss', losses['objective_loss'].mean),
-                                      ('Top1', classerr.value(1)),
-                                      ('Top5', classerr.value(5))]))
+                            OrderedDict([('Loss', losses['objective_loss'].mean),
+                                         ('Top1', classerr.value(1)),
+                                         ('Top5', classerr.value(5))]))
                 else:
                     stats_dict = OrderedDict()
                     stats_dict['Test'] = validation_step
@@ -525,7 +550,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
         
         if args.display_confusion:
-            msglogger.info('==> Confusion:\n%s', str(confusion.value()))
+            msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
         return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
     else:
         # Print some interesting summary stats for number of data points that could exit early
