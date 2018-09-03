@@ -10,7 +10,7 @@ Let's briefly discuss the main mechanisms and abstractions: A schedule specifica
 These define the **what** part of the schedule.  
 
 The Policies define the **when** part of the schedule: at which epoch to start applying the Pruner/Regularizer/Quantizer/LR-decay, the epoch to end, and how often to invoke the policy (frequency of application).  A policy also defines the instance of Pruner/Regularizer/Quantizer/LR-decay it is managing.  
-The CompressionScheduler is configured from a YAML file or from a dictionary, but you can also manually create Policies, Pruners, Regularizers and Quantizers from code.
+The `CompressionScheduler` is configured from a YAML file or from a dictionary, but you can also manually create Policies, Pruners, Regularizers and Quantizers from code.
 
 ## Syntax through example
 We'll use ```alexnet.schedule_agp.yaml``` to explain some of the YAML syntax for configuring Sensitivity Pruning of Alexnet.
@@ -311,3 +311,74 @@ policies:
 ```
 
 **Important Note**: As mentioned [here](design.md#training-with-quantization), since the quantizer modifies the model's parameters (assuming training with quantization in the loop is used), the call to `prepare_model()` must be performed before an optimizer is called. Therefore, currently, the starting epoch for a quantization policy must be 0, otherwise the quantization process will not work as expected. If one wishes to do a "warm-startup" (or "boot-strapping"), training for a few epochs with full precision and only then starting to quantize, the only way to do this right now is to execute a separate run to generate the boot-strapped weights, and execute a second which will resume the checkpoint with the boot-strapped weights.
+
+## Knowledge Distillation
+
+Knowledge distillation (see [here](knowledge_distillation.md)) is also implemented as a `Policy`, which should be added to the scheduler. However, with the current implementation, it cannot be defined within the YAML file like the rest of the policies described above.
+
+To make the integration of this method into applications a bit easier, a helper function can be used that will add a set of command-line arguments related to knowledge distillation:
+
+```
+import argparse
+import distiller
+
+parser = argparse.ArgumentParser()
+distiller.knowledge_distillation.add_distillation_args(parser)
+```
+
+(The `add_distillation_args` function accepts some optional arguments, see its implementation at `distiller/knowledge_distillation.py` for details)
+
+These are the command line arguments exposed by this function:
+
+```
+Knowledge Distillation Training Arguments:
+  --kd-teacher ARCH     Model architecture for teacher model
+  --kd-pretrained       Use pre-trained model for teacher
+  --kd-resume PATH      Path to checkpoint from which to load teacher weights
+  --kd-temperature TEMP, --kd-temp TEMP
+                        Knowledge distillation softmax temperature
+  --kd-distill-wt WEIGHT, --kd-dw WEIGHT
+                        Weight for distillation loss (student vs. teacher soft
+                        targets)
+  --kd-student-wt WEIGHT, --kd-sw WEIGHT
+                        Weight for student vs. labels loss
+  --kd-teacher-wt WEIGHT, --kd-tw WEIGHT
+                        Weight for teacher vs. labels loss
+  --kd-start-epoch EPOCH_NUM
+                        Epoch from which to enable distillation
+
+```
+
+Once arguments have been parsed, some initialization code is required, similar to the following:
+
+```
+# Assuming:
+# "args" variable holds command line arguments
+# "model" variable holds the model we're going to train, that is - the student model
+# "compression_scheduler" variable holds a CompressionScheduler instance
+
+args.kd_policy = None
+if args.kd_teacher:
+    # Create teacher model - replace this with your model creation code
+    teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
+    if args.kd_resume:
+        teacher, _, _ = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)
+
+    # Create policy and add to scheduler
+    dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
+    args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
+    compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
+                                     frequency=1)
+```
+
+Finally, during the training loop, we need to perform forward propagation through the teacher model as well. The `KnowledgeDistillationPolicy` class keeps a reference to both the student and teacher models, and exposes a `forward` function that performs forward propagation on both of them. Since this is not one of the standard policy callbacks, we need to call this function manually from our training loop, as follows:
+
+```
+if args.kd_policy is None:
+    # Revert to a "normal" forward-prop call if no knowledge distillation policy is present
+    output = model(input_var)
+else:
+    output = args.kd_policy.forward(input_var)
+```
+
+To see this integration in action, take a look at the image classification sample at `examples/classifier_compression/compress_classifier.py`.

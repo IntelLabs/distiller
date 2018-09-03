@@ -188,6 +188,11 @@ def preact_resnet110_cifar(**kwargs):
     return model
 
 
+def preact_resnet182_cifar(**kwargs):
+    model = PreactResNetCifar(PreactBasicBlock, [30, 30, 30], **kwargs)
+    return model
+
+
 def preact_resnet20_cifar_conv_ds(**kwargs):
     return preact_resnet20_cifar(conv_downsample=True)
 
@@ -206,3 +211,7 @@ def preact_resnet56_cifar_conv_ds(**kwargs):
 
 def preact_resnet110_cifar_conv_ds(**kwargs):
     return preact_resnet110_cifar(conv_downsample=True)
+
+
+def preact_resnet182_cifar_conv_ds(**kwargs):
+    return preact_resnet182_cifar(conv_downsample=True)
