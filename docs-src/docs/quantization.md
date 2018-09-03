@@ -90,9 +90,6 @@ An important question in this context is how to back-propagate through the quant
 <div id="zhou-et-al-2017"></div>
 **Aojun Zhou, Anbang Yao, Yiwen Guo, Lin Xu and Yurong Chen**. Incremental Network Quantization: Towards Lossless CNNs with Low-precision Weights. [ICLR, 2017](https://arxiv.org/abs/1702.03044)
 
-<div id="mishra-and-marr-2018"></div>
-**Asit Mishra and Debbie Marr**. Apprentice: Using Knowledge Distillation Techniques To Improve Low-Precision Network Accuracy. [ICLR, 2018](https://openreview.net/forum?id=B1ae1lZRb)
-
 <div id="mishra-et-al-2018"></div>
 **Asit Mishra, Eriko Nurvitadhi, Jeffrey J Cook and Debbie Marr**. WRPN: Wide Reduced-Precision Networks. [ICLR, 2018](https://openreview.net/forum?id=B1ZvaaeAZ)
 
