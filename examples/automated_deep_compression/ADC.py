@@ -19,6 +19,7 @@ import copy
 import logging
 import numpy as np
 import torch
+import json
 import gym
 from gym import spaces
 import distiller
@@ -27,15 +28,15 @@ from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
 
-from base_parameters import TaskParameters
+from rl_coach.base_parameters import TaskParameters
 
 # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
 # Coach to create and use our CNNEnvironment environment.
 # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
 from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
 # Coach imports
-from schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
-from core_types import EnvironmentSteps
+from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
+from rl_coach.core_types import EnvironmentSteps
 
 
 msglogger = logging.getLogger()
@@ -44,6 +45,26 @@ Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k',
 ALMOST_ONE = 0.9999
 USE_COACH = True
 PERFORM_THINNING = True
+
+#reward = -1 * (1-top1/100) * math.log(total_macs/self.dense_model_macs)
+#
+#reward = -1 * (1-top1/100) + math.log(total_macs/self.dense_model_macs)
+#reward = 4*top1/100 - math.log(total_macs)
+#reward = reward * total_macs/213201664
+#reward = reward - 5 * total_macs/213201664
+#reward = -1 * vloss * math.sqrt(math.log(total_macs))
+#reward = top1 / math.log(total_macs)
+#alpha = 0.9
+#reward = -1 * ( (1-alpha)*(top1/100) + 10*alpha*(total_macs/self.dense_model_macs) )
+
+#alpha = 0.99
+#reward = -1 * ( (1-alpha)*(top1/100) + alpha*(total_macs/self.dense_model_macs) )
+
+#reward = vloss * math.log(total_macs)
+#reward = -1 * vloss * (total_macs / self.dense_model_macs)
+#reward = top1 * (self.dense_model_macs / total_macs)
+#reward = -1 * math.log(total_macs)
+#reward =  -1 * vloss
 
 
 def do_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
@@ -63,7 +84,10 @@ def coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn
 
     # Create a dictionary of parameters that Coach will handover to CNNEnvironment
     # Once it creates it.
-    if False:
+    if True:
+        exploration_noise = 0.5
+        #exploration_noise = 0.25
+        exploitation_decay = 0.996
         graph_manager.env_params.additional_simulator_parameters = {
             'model': model,
             'dataset': dataset,
@@ -71,33 +95,41 @@ def coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn
             'data_loader': data_loader,
             'validate_fn': validate_fn,
             'save_checkpoint_fn': save_checkpoint_fn,
-            'exploration_noise': 0.5,
-            'exploitation_decay': 0.996,
+            #'action_range': (0.10, 0.95),
+            'action_range': (0.70, 0.95),
+            'onehot_encoding': False,
+            'normalize_obs': True,
+            'desired_reduction': None,
+            'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top5/100) * math.log(total_macs)
+            #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs)
+            #'reward_fn': lambda top1, total_macs: -1 * max(1-top1/100, 0.25) * math.log(total_macs)
+            #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs/100000)
+            #'reward_fn': lambda top1, total_macs:  top1/100 * total_macs/self.dense_model_macs
+        }
+    else:
+        exploration_noise = 0.5
+        #exploration_noise = 0.25
+        exploitation_decay = 0.996
+        graph_manager.env_params.additional_simulator_parameters = {
+            'model': model,
+            'dataset': dataset,
+            'arch': arch,
+            'data_loader': data_loader,
+            'validate_fn': validate_fn,
+            'save_checkpoint_fn': save_checkpoint_fn,
             'action_range': (0.10, 0.95),
             'onehot_encoding': False,
             'normalize_obs': True,
-            'desired_reduction': None
-        }
-    else:
-        graph_manager.env_params.additional_simulator_parameters = {
-            'model': model,
-            'dataset': dataset,
-            'arch': arch,
-            'data_loader': data_loader,
-            'validate_fn': validate_fn,
-            'save_checkpoint_fn': save_checkpoint_fn,
-            'exploration_noise': 0.5,
-            'exploitation_decay': 0.996,
-            'action_range': (0.10, 0.95),
-            'onehot_encoding': True,
-            'normalize_obs': True,
-            'desired_reduction': 2.0e8  #  1.5e8
+            'desired_reduction': 1.5e8,
+            'reward_fn': lambda top1, total_macs: top1/100
+            #'reward_fn': lambda top1, total_macs: min(top1/100, 0.75)
         }
 
+    #msglogger.debug('Experiment configuarion:\n' + json.dumps(graph_manager.env_params.additional_simulator_parameters, indent=2))
     steps_per_episode = 13
-    agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([(ConstantSchedule(0.5),
+    agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([(ConstantSchedule(exploration_noise),
                                                                              EnvironmentSteps(100*steps_per_episode)),
-                                                                            (ExponentialSchedule(0.5, 0, 0.996),
+                                                                            (ExponentialSchedule(exploration_noise, 0, exploitation_decay),
                                                                              EnvironmentSteps(300*steps_per_episode))])
     graph_manager.create_graph(task_parameters)
     graph_manager.improve()
@@ -107,8 +139,8 @@ class CNNEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn,
-                 exploration_noise, exploitation_decay, action_range,
-                 onehot_encoding, normalize_obs, desired_reduction):
+                 action_range, onehot_encoding, normalize_obs, desired_reduction,
+                 reward_fn):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
 
@@ -121,6 +153,7 @@ class CNNEnvironment(gym.Env):
         self.onehot_encoding = onehot_encoding
         self.normalize_obs = normalize_obs
         self.max_reward = -1000
+        self.reward_fn = reward_fn
 
         self.conv_layers, self.dense_model_macs, self.dense_model_size = collect_conv_details(model, dataset)
         self.reset(init_only=True)
@@ -131,8 +164,6 @@ class CNNEnvironment(gym.Env):
         self.debug_stats = {'episode': 0}
         self.action_low = action_range[0]
         self.action_high = action_range[1]
-        self.exploitation_decay = exploitation_decay
-        self.exploration_noise = exploration_noise
         # Gym
         # spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
@@ -289,7 +320,7 @@ class CNNEnvironment(gym.Env):
                 self.max_reward = reward
                 self.save_checkpoint(is_best=True)
                 msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.debug_stats['episode'], top1))
-
+            self.save_checkpoint(is_best=False)
         else:
             observation = self._get_obs(next_layer_macs)
             if True:
@@ -428,30 +459,8 @@ class CNNEnvironment(gym.Env):
         msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
 
         top1, top5, vloss = self.validate_fn(model=self.model, epoch=self.debug_stats['episode'])
-        #reward = -1 * (1 - top1/100)
-        if self.desired_reduction is not None:
-            reward = top1/100
-        else:
-            reward = -1 * (1-top1/100) * math.log(total_macs)
-        #reward = -1 * (1-top1/100) * math.log(total_macs/self.dense_model_macs)
-        #
-        #reward = -1 * (1-top1/100) + math.log(total_macs/self.dense_model_macs)
-        #reward = 4*top1/100 - math.log(total_macs)
-        #reward = reward * total_macs/213201664
-        #reward = reward - 5 * total_macs/213201664
-        #reward = -1 * vloss * math.sqrt(math.log(total_macs))
-        #reward = top1 / math.log(total_macs)
-        #alpha = 0.9
-        #reward = -1 * ( (1-alpha)*(top1/100) + 10*alpha*(total_macs/self.dense_model_macs) )
+        reward = self.reward_fn(top1, top5, vloss, total_macs)
 
-        #alpha = 0.99
-        #reward = -1 * ( (1-alpha)*(top1/100) + alpha*(total_macs/self.dense_model_macs) )
-
-        #reward = vloss * math.log(total_macs)
-        #reward = -1 * vloss * (total_macs / self.dense_model_macs)
-        #reward = top1 * (self.dense_model_macs / total_macs)
-        #reward = -1 * math.log(total_macs)
-        #reward =  -1 * vloss
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
@@ -509,19 +518,22 @@ def collect_conv_details(model, dataset):
             conv.name = name
             conv.id = id
             conv_layers[len(conv_layers)] = conv
-
     return conv_layers, total_macs, total_nnz
 
 
+from examples.automated_deep_compression.adc_controlled_envs import *
 def random_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
     """Random ADC agent"""
     action_range = (0.0, 1.0)
     env = CNNEnvironment(model, dataset, arch, data_loader,
-                         validate_fn, save_checkpoint_fn, action_range)
+                         validate_fn, save_checkpoint_fn, action_range,
+                         onehot_encoding=False, normalize_obs=False, desired_reduction=None,
+                         reward_fn=lambda top1, total_macs: top1/100)
 
-    best = [-1000, None]
-    env.action_space = RandomADCActionSpace(action_range[0], action_range[1])
-    for ep in range(100):
+    best_episode = [-1000, None]
+    update_rate = 5
+    env.action_space = RandomADCActionSpace(action_range[0], action_range[1], std=0.35)
+    for ep in range(1000):
         observation = env.reset()
         action_config = []
         for t in range(100):
@@ -531,14 +543,17 @@ def random_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_f
             action = env.action_space.sample()
             action_config.append(action)
             observation, reward, done, info = env.step(action)
-            if reward > best[0]:
-                best[0] = reward
-                best[1] = action_config
-                msglogger.info("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-                msglogger.info("New solution found: episode={} reward={} config={}".format(ep, reward, action_config))
             if done:
                 msglogger.info("Episode finished after {} timesteps".format(t+1))
+                msglogger.info("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+                msglogger.info("New solution found: episode={} reward={} config={}".format(ep, reward, action_config))
                 break
+        if reward > best_episode[0]:
+            best_episode[0] = reward
+            best_episode[1] = action_config
+        if ep % update_rate == 0:
+            env.action_space.set_cfg(means=best_episode[1], std=0.4)
+            best_episode = [-1000, None]
 
 
 import os

@@ -54,15 +54,17 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     if dataset == 'imagenet':
         str_pretrained = 'pretrained ' if pretrained else ''
         msglogger.info("=> using %s%s model for ImageNet" % (str_pretrained, arch))
-        assert arch in torch_models.__dict__ or arch in imagenet_extra_models.__dict__, "Model %s is not supported for dataset %s" % (arch, 'ImageNet')
+        assert arch in torch_models.__dict__ or arch in imagenet_extra_models.__dict__, \
+            "Model %s is not supported for dataset %s" % (arch, 'ImageNet')
         if arch in torch_models.__dict__:
             model = torch_models.__dict__[arch](pretrained=pretrained)
         else:
+            assert not pretrained, "Model %s (ImageNet) does not have a pretrained model" % arch
             model = imagenet_extra_models.__dict__[arch]()
     elif dataset == 'cifar10':
         msglogger.info("=> creating %s model for CIFAR10" % arch)
-        assert not pretrained, "Model %s (CIFAR10) does not have a pretrained model" % arch
         assert arch in cifar10_models.__dict__, "Model %s is not supported for dataset CIFAR10" % arch
+        assert not pretrained, "Model %s (CIFAR10) does not have a pretrained model" % arch
         model = cifar10_models.__dict__[arch]()
     else:
         print("FATAL ERROR: create_model does not support models for dataset %s" % dataset)

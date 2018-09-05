@@ -73,7 +73,7 @@ class GroupThresholdMixin(object):
         elif group_type == 'Cols':
             assert param.dim() == 2, "This regularization is only supported for 2D weights"
             thresholds = torch.Tensor([threshold] * param.size(1)).cuda()
-            binary_map = self.threshold_policy(param, thresholds, threshold_criteria)
+            binary_map = self.threshold_policy(param, thresholds, threshold_criteria, dim=0)
             return binary_map.expand(param.size(0), param.size(1))
 
         elif group_type == '3D':
@@ -115,12 +115,12 @@ class GroupThresholdMixin(object):
             return d.view(param.size(0), param.size(1), param.size(2), param.size(3))
 
 
-    def threshold_policy(self, weights, thresholds, threshold_criteria):
+    def threshold_policy(self, weights, thresholds, threshold_criteria, dim=1):
         """
         """
         if threshold_criteria == 'Mean_Abs':
-            return weights.data.abs().mean(dim=1).gt(thresholds).type(weights.type())
+            return weights.data.abs().mean(dim=dim).gt(thresholds).type(weights.type())
         elif threshold_criteria == 'Max':
-            maxv, _ = weights.data.abs().max(dim=1)
+            maxv, _ = weights.data.abs().max(dim=dim)
             return maxv.gt(thresholds).type(weights.type())
         exit("Invalid threshold_criteria {}".format(threshold_criteria))
