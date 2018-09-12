@@ -104,6 +104,13 @@ class ResNeXtEarlyExit(nn.Module):
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        # Define early exit layers
+        self.conv1_exit0 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
+        self.conv2_exit0 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
+        self.conv1_exit1 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
+        self.fc_exit0 = nn.Linear(147 * block.expansion, num_classes)
+        self.fc_exit1 = nn.Linear(192 * block.expansion, num_classes)
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -137,11 +144,21 @@ class ResNeXtEarlyExit(nn.Module):
 
         x = self.layer1(x)
 
-
+        # Add early exit layers
+        exit0 = self.avgpool(x)
+        exit0 = self.conv1_exit0(exit0)
+        exit0 = self.conv2_exit0(exit0)
+        exit0 = self.avgpool(exit0)
+        exit0 = exit0.view(exit0.size(0), -1)
+        exit0 = self.fc_exit0(exit0)
 
         x = self.layer2(x)
 
-
+        # Add early exit layers
+        exit1 = self.conv1_exit1(x)
+        exit1 = self.avgpool(exit1)
+        exit1 = exit1.view(exit1.size(0), -1)
+        exit1 = self.fc_exit1(exit1)
 
         x = self.layer3(x)
         x = self.layer4(x)
@@ -150,39 +167,44 @@ class ResNeXtEarlyExit(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return x
+        # return a list of probabilities
+        output = []
+        output.append(exit0)
+        output.append(exit1)
+        output.append(x)
+        return output
 
 
 def resnext18_earlyexit( **kwargs):
     """Constructs a ResNeXt-18 model.
     """
-    model = ResNeXt(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model = ResNeXtEarlyExit(BasicBlock, [2, 2, 2, 2], **kwargs)
     return model
 
 
 def resnext34_earlyexit(**kwargs):
     """Constructs a ResNeXt-34 model.
     """
-    model = ResNeXt(BasicBlock, [3, 4, 6, 3], **kwargs)
+    model = ResNeXtEarlyExit(BasicBlock, [3, 4, 6, 3], **kwargs)
     return model
 
 
 def resnext50_earlyexit(**kwargs):
     """Constructs a ResNeXt-50 model.
     """
-    model = ResNeXt(Bottleneck, [3, 4, 6, 3], **kwargs)
+    model = ResNeXtEarlyExit(Bottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
 
 def resnext101_earlyexit(**kwargs):
     """Constructs a ResNeXt-101 model.
     """
-    model = ResNeXt(Bottleneck, [3, 4, 23, 3], **kwargs)
+    model = ResNeXtEarlyExit(Bottleneck, [3, 4, 23, 3], **kwargs)
     return model
 
 
 def resnext152_earlyexit(**kwargs):
     """Constructs a ResNeXt-152 model.
     """
-    model = ResNeXt(Bottleneck, [3, 8, 36, 3], **kwargs)
+    model = ResNeXtEarlyExit(Bottleneck, [3, 8, 36, 3], **kwargs)
     return model
