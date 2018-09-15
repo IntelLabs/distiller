@@ -494,7 +494,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     end = time.time()
     for validation_step, (inputs, target) in enumerate(data_loader):
         with torch.no_grad():
-            target = target.to('cuda')
+            inputs, target = inputs.to('cuda'), target.to('cuda')
             # compute output from model
             output = model(inputs)
 
