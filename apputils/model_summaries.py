@@ -56,6 +56,7 @@ def onnx_name_2_pytorch_name(name, op_type):
     # In this case, to have a meaningful name, we use the op type
     new_name = ('.'.join(name_parts) if len(name_parts) > 0 else op_type) + instance
 
+    msglogger.debug("new sgraph node {} {} {}".format(name, op_type, new_name))
     return new_name
 
 

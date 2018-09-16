@@ -285,9 +285,10 @@ All of this is performed by distiller.ResnetCifarFilterRemover which is also sch
 ```
 extensions:
   net_thinner:
-      class: 'ResnetCifarFilterRemover'
-      thinning_func_str: resnet_cifar_remove_filters
-
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'resnet56_cifar'
+      dataset: 'cifar10'
 ```
 
 Network thinning requires us to understand the layer connectivity and data-dependency of the DNN, and we are working on a robust method to perform this.  On networks with topologies similar to ResNet (residuals) and GoogLeNet (inception), which have several inputs and outputs to/from Convolution layers, there is extra details to consider.  

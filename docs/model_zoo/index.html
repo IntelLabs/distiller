@@ -433,9 +433,10 @@ In contrast to pruning weights, this approach does not result in sparse connecti
 <p>All of this is performed by distiller.ResnetCifarFilterRemover which is also scheduled at epoch 180.  We call this process "network thinning".</p>
 <pre><code>extensions:
   net_thinner:
-      class: 'ResnetCifarFilterRemover'
-      thinning_func_str: resnet_cifar_remove_filters
-
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'resnet56_cifar'
+      dataset: 'cifar10'
 </code></pre>
 
 <p>Network thinning requires us to understand the layer connectivity and data-dependency of the DNN, and we are working on a robust method to perform this.  On networks with topologies similar to ResNet (residuals) and GoogLeNet (inception), which have several inputs and outputs to/from Convolution layers, there is extra details to consider.<br />
