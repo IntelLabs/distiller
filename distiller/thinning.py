@@ -281,7 +281,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
     should be changed in order to remove the filters.
     """
     msglogger.info("Invoking create_thinning_recipe_filters")
-    msglogger.info(sgraph.ops.keys())
+    msglogger.debug(sgraph.ops.keys())
 
     thinning_recipe = ThinningRecipe(modules={}, parameters={})
     layers = {mod_name: m for mod_name, m in model.named_modules()}
@@ -321,7 +321,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             append_param_directive(thinning_recipe, layer_name+'.bias', (0, indices))
 
         # Find all instances of Convolution or FC (GEMM) layers that immediately follow this layer
-        msglogger.info("{} => {}".format(layer_name, normalize_module_name(layer_name)))
+        msglogger.debug("{} => {}".format(layer_name, normalize_module_name(layer_name)))
         successors = sgraph.successors_f(normalize_module_name(layer_name), ['Conv', 'Gemm'])
         # Convert the layers names to PyTorch's convoluted naming scheme (when DataParallel is used)
         successors = [denormalize_module_name(model, successor) for successor in successors]
