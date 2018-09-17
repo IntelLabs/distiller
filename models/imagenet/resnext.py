@@ -137,12 +137,7 @@ class ResNeXt(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        # return a list of probabilities
-        output = []
-        output.append(exit0)
-        output.append(exit1)
-        output.append(x)
-        return output
+        return x
 
 
 def resnext18( **kwargs):
