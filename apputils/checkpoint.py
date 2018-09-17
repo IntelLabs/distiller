@@ -66,24 +66,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    saved = False
-    fail_count = 0
-    while not saved:
-        try:
-            torch.save(checkpoint, fullpath)
-            saved = True
-        except:
-            fail_count += 1
-            print('Could not save, retrying...')
-            fl = os.popen('ls {}'.format(directory)).read()
-            print(fl)
-            if fail_count == 1:
-                with open(os.path.join(directory, "failed_save_ls.txt"), "w") as fh:
-                    fh.write(fl)
-            time.sleep(4)
-            if fail_count >= 25:
-                raise RuntimeError("Could not save {} times in a row. Failing.".format(fail_count))
-
+    torch.save(checkpoint, fullpath)
     if is_best:
         shutil.copyfile(fullpath, fullpath_best)
 
