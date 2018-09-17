@@ -14,10 +14,9 @@
 # limitations under the License.
 #
 
-import logging
+import logging 
 import os
 import sys
-import pytest
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -33,8 +32,4 @@ def test_load():
     model, compression_scheduler, start_epoch = load_checkpoint(model, '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
-
-def test_load_negative():
-    with pytest.raises(FileNotFoundError):
-        model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, start_epoch = load_checkpoint(model, 'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
+    return True
