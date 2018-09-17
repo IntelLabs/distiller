@@ -1,9 +1,3 @@
-'''
-New for ResNeXt:
-1. Wider bottleneck
-2. Add group for conv2
-'''
-
 import torch.nn as nn
 import math
 
@@ -11,7 +5,6 @@ __all__ = ['resnext18_earlyexit', 'resnext34_earlyexit', 'resnext50_earlyexit', 
            'resnext152_earlyexit']
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
@@ -19,13 +12,14 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, num_group=32):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=32):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes*2, stride)
-        self.bn1 = nn.BatchNorm2d(planes*2)
+        d = planes*2
+        self.conv1 = conv3x3(inplanes, d, stride)
+        self.bn1 = nn.BatchNorm2d(d)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes*2, planes*2, groups=num_group)
-        self.bn2 = nn.BatchNorm2d(planes*2)
+        self.conv2 = conv3x3(d, d, groups=cardinality)
+        self.bn2 = nn.BatchNorm2d(d)
         self.downsample = downsample
         self.stride = stride
 
@@ -47,19 +41,19 @@ class BasicBlock(nn.Module):
 
         return out
 
-
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, num_group=32):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=32):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes*2, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes*2)
-        self.conv2 = nn.Conv2d(planes*2, planes*2, kernel_size=3, stride=stride,
-                               padding=1, bias=False, groups=num_group)
-        self.bn2 = nn.BatchNorm2d(planes*2)
-        self.conv3 = nn.Conv2d(planes*2, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+        d = planes*2
+        self.conv1 = nn.Conv2d(inplanes, d, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(d)
+        self.conv2 = nn.Conv2d(d, d, kernel_size=3, stride=stride,
+                               padding=1, bias=False, groups=cardinality)
+        self.bn2 = nn.BatchNorm2d(d)
+        self.conv3 = nn.Conv2d(d, d*2, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(d*2)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -89,7 +83,7 @@ class Bottleneck(nn.Module):
 
 class ResNeXtEarlyExit(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, num_group=32):
+    def __init__(self, block, layers, num_classes=1000, cardinality=32):
         self.inplanes = 64
         super(ResNeXtEarlyExit, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -97,10 +91,10 @@ class ResNeXtEarlyExit(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], num_group)
-        self.layer2 = self._make_layer(block, 128, layers[1], num_group, stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], num_group, stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], num_group, stride=2)
+        self.layer1 = self._make_layer(block, 64, layers[0], cardinality)
+        self.layer2 = self._make_layer(block, 128, layers[1], cardinality, stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], cardinality, stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], cardinality, stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -119,7 +113,7 @@ class ResNeXtEarlyExit(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, block, planes, blocks, num_group, stride=1):
+    def _make_layer(self, block, planes, blocks, cardinality, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -129,10 +123,10 @@ class ResNeXtEarlyExit(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, num_group=num_group))
+        layers.append(block(self.inplanes, planes, stride, downsample, cardinality=cardinality))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, num_group=num_group))
+            layers.append(block(self.inplanes, planes, cardinality=cardinality))
 
         return nn.Sequential(*layers)
 
