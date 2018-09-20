@@ -609,14 +609,13 @@ def export_img_classifier_to_onnx(model, onnx_fname, dataset):
     """Export a PyTorch image classifier to ONNX.
 
     """
-    dummy_input = dataset_dummy_input(dataset)
+    dummy_input = dataset_dummy_input(dataset).to('cuda')
 
-    #model.eval()
     with torch.onnx.set_training(model, False):
         # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
-        torch.onnx.export(model, dummy_input.to('cuda'), onnx_fname, verbose=False)
+        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=True)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
 
 
