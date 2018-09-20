@@ -162,10 +162,10 @@ class SymmetricLinearQuantizer(Quantizer):
         model (torch.nn.Module): Model to be quantized
         bits_activations/parameters: Number of bits to be used when quantizing each tensor type
     """
-    def __init__(self, model, bits_activations=8, bits_parameters=8):
+    def __init__(self, model, bits_activations=8, bits_weights=8, **kw):
         super(SymmetricLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
-                                                       bits_weights=bits_parameters,
-                                                       train_with_fp_copy=False)
+                                                       bits_weights=bits_weights,
+                                                       train_with_fp_copy=False, **kw)
 
         def replace_fn(module, name, qbits_map):
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts)
