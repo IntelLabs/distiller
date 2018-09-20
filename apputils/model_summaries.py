@@ -20,6 +20,7 @@ This code is proven to work on CNN image classification models using PyTorch 04.
 RNNs are currently not working well.
 """
 
+import os
 import re
 import numpy as np
 import collections
@@ -583,14 +584,7 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
                                    'style': 'rounded, filled'}
     """
     try:
-        if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
-        elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(1, 3, 32, 32))
-        else:
-            print("Unsupported dataset (%s) - aborting draw operation" % dataset)
-            return
-
+        dummy_input = dataset_dummy_input(dataset)
         model = distiller.make_non_parallel_copy(model)
         g = SummaryGraph(model, dummy_input)
         draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
@@ -599,6 +593,32 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
         print("An error has occured while generating the network PNG image.")
         print("Please check that you have graphviz installed.")
         print("\t$ sudo apt-get install graphviz")
+
+
+def dataset_dummy_input(dataset):
+    if dataset == 'imagenet':
+        dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
+    elif dataset == 'cifar10':
+        dummy_input = Variable(torch.randn(1, 3, 32, 32))
+    else:
+        raise ValueError("Unsupported dataset (%s) - aborting draw operation" % dataset)
+    return dummy_input
+
+
+def export_img_classifier_to_onnx(model, onnx_fname, dataset):
+    """Export a PyTorch image classifier to ONNX.
+
+    """
+    dummy_input = dataset_dummy_input(dataset)
+
+    #model.eval()
+    with torch.onnx.set_training(model, False):
+        # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
+        if isinstance(model, torch.nn.DataParallel):
+            model = model.module
+        torch.onnx.export(model, dummy_input.to('cuda'), onnx_fname, verbose=False)
+        msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
+
 
 
 def data_node_has_parent(g, id):
