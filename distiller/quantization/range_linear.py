@@ -166,7 +166,11 @@ class SymmetricLinearQuantizer(Quantizer):
         super(SymmetricLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters,
                                                        train_with_fp_copy=False)
-
+        
+        self.model.quantizer_metadata = {'type': type(self),
+                                         'params': {'bits_activations': bits_activations,
+                                                    'bits_parameters': bits_parameters}}
+        
         def replace_fn(module, name, qbits_map):
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts)
 
