@@ -1,0 +1,53 @@
+# SSL: Filter regularization
+
+
+lr_schedulers:
+  training_lr:
+    class: StepLR
+    step_size: 45
+    gamma: 0.10
+
+regularizers:
+  Filters_groups_regularizer:
+    class: GroupLassoRegularizer
+    reg_regims:
+      module.layer1.0.conv1.weight: [0.0008, Filters]
+      module.layer1.1.conv1.weight: [0.0008, Filters]
+      module.layer1.2.conv1.weight: [0.0006, Filters]
+      module.layer2.0.conv1.weight: [0.0008, Filters]
+
+      module.layer2.1.conv1.weight: [0.0002, Filters]
+
+      module.layer2.2.conv1.weight: [0.0008, Filters]
+      module.layer3.0.conv1.weight: [0.0012, Filters]
+      module.layer3.1.conv1.weight: [0.0010, Filters]
+      module.layer3.2.conv1.weight: [0.0002, Filters]
+    threshold_criteria: Mean_Abs
+
+
+extensions:
+  net_thinner:
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'resnet20_cifar'
+      dataset: 'cifar10'
+
+policies:
+  - lr_scheduler:
+      instance_name: training_lr
+    starting_epoch: 45
+    ending_epoch: 300
+    frequency: 1
+
+# After completeing the regularization, we perform network thinning and exit.
+  - extension:
+      instance_name: net_thinner
+    epochs: [179]
+
+  - regularizer:
+      instance_name: Filters_groups_regularizer
+      args:
+        keep_mask: True
+    starting_epoch: 0
+    ending_epoch: 180
+    frequency: 1
