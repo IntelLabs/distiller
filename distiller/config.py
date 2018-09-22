@@ -41,7 +41,7 @@ from torch.optim.lr_scheduler import *
 import distiller
 from distiller.thinning import *
 from distiller.pruning import *
-from distiller.regularization import L1Regularizer, GroupLassoRegularizer
+from distiller.regularization import *
 from distiller.learning_rate import *
 from distiller.quantization import *
 
@@ -148,7 +148,7 @@ def file_config(model, optimizer, filename):
             sched_dict = yaml_ordered_load(stream)
             return dict_config(model, optimizer, sched_dict)
         except yaml.YAMLError as exc:
-            print("\nFATAL Parsing error while parsing the pruning schedule configuration file %s" % filename)
+            print("\nFATAL parsing error while parsing the schedule configuration file %s" % filename)
             exit(1)
 
 

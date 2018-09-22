@@ -76,7 +76,7 @@ class GroupThresholdMixin(object):
             binary_map = self.threshold_policy(param, thresholds, threshold_criteria, dim=0)
             return binary_map.expand(param.size(0), param.size(1))
 
-        elif group_type == '3D':
+        elif group_type == '3D' or group_type == 'Filters':
             assert param.dim() == 4, "This thresholding is only supported for 4D weights"
             view_filters = param.view(param.size(0), -1)
             thresholds = torch.Tensor([threshold] * param.size(0)).cuda()
