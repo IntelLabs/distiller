@@ -75,7 +75,7 @@ except ImportError:
     sys.path.append(module_path)
     import distiller
 import apputils
-from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
+from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector, collector_context
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
@@ -118,7 +118,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', action='store_true', default=False,
+parser.add_argument('--act-stats', dest='activation_stats', nargs=2, default=[None, None], type=str,
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
@@ -153,6 +153,7 @@ parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='early
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 
+
 def check_pytorch_version():
     if torch.__version__ < '0.4.0':
         print("\nNOTICE:")
@@ -164,6 +165,20 @@ def check_pytorch_version():
               "  2. Install the new environment\n"
               "  3. Activate the new environment")
         exit(1)
+
+
+def create_activation_collector(model, args):
+    # If your model has ReLU layers, then those layers have sparse activations.
+    # ActivationSparsityCollector will collect information about this sparsity.
+    # WARNING! Enabling activation sparsity collection will significantly slow down training!
+    train_activations_sparsity, valid_activations_sparsity = None, None
+    activations_sparsity = ActivationSparsityCollector(model, distiller.utils.sparsity)
+    if args.activation_stats[0] == "valid":
+        valid_activations_sparsity = activations_sparsity
+    if args.activation_stats[0] == "train":
+        train_activations_sparsity = activations_sparsity
+
+    return train_activations_sparsity, valid_activations_sparsity
 
 
 def main():
@@ -267,12 +282,7 @@ def main():
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
-    activations_sparsity = None
-    if args.activation_stats:
-        # If your model has ReLU layers, then those layers have sparse activations.
-        # ActivationSparsityCollector will collect information about this sparsity.
-        # WARNING! Enabling activation sparsity collection will significantly slow down training!
-        activations_sparsity = ActivationSparsityCollector(model)
+    train_activations_sparsity, valid_activations_sparsity = create_activation_collector(model, args)
 
     if args.sensitivity is not None:
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
@@ -313,15 +323,19 @@ def main():
             compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-              loggers=[tflogger, pylogger], args=args)
-        distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-        if args.activation_stats:
+        with collector_context(train_activations_sparsity):
+            train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
+                  loggers=[tflogger, pylogger], args=args)
+            distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
-                                              collector=activations_sparsity)
+                                              collector=train_activations_sparsity)
 
         # evaluate on validation set
-        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
+        with collector_context(valid_activations_sparsity):
+            top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
+            distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
+                                              collector=valid_activations_sparsity)
+
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),

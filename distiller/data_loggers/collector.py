@@ -14,13 +14,13 @@
 # limitations under the License.
 #
 
+from contextlib import contextmanager
 import torch
-from distiller.utils import sparsity
 from torchnet.meter import AverageValueMeter
 import logging
 msglogger = logging.getLogger()
 
-__all__ = ['ActivationSparsityCollector']
+__all__ = ['ActivationSparsityCollector', 'collector_context']
 
 class DataCollector(object):
     def __init__(self):
@@ -48,54 +48,86 @@ class ActivationSparsityCollector(DataCollector):
     The layer names are mangled, because torch.Modules don't have names and we need to invent
     a unique name per layer.
     """
-    def __init__(self, model, classes=[torch.nn.ReLU]):
+    def __init__(self, model, sparsity_fn, classes=[torch.nn.ReLU]):
         """Since only specific layers produce sparse feature-maps, the
         ActivationSparsityCollector constructor accepts an optional list of layers to log."""
 
         super(ActivationSparsityCollector, self).__init__()
         self.model = model
         self.classes = classes
-        self._init_activations_sparsity(model)
+        self.hook_handles = []
+        self.sparsity_calculator = sparsity_fn
+        #self.__start(model)
 
     def value(self):
         """Return a dictionary containing {layer_name: mean sparsity}"""
         activation_sparsity = {}
-        _collect_activations_sparsity(self.model, activation_sparsity)
+        self.__collect_activations_sparsity(self.model, activation_sparsity)
         return activation_sparsity
 
-
-    def _init_activations_sparsity(self, module, name=''):
+    def __start(self, module, name=''):
         def __activation_sparsity_cb(module, input, output):
             """Record the activation sparsity of 'module'
 
             This is a callback from the forward() of 'module'.
             """
-            module.sparsity.add(sparsity(output.data))
+            module.sparsity.add(self.sparsity_calculator(output.data))
 
-        has_children = False
+        is_leaf_node = True
         for name, sub_module in module._modules.items():
-            self._init_activations_sparsity(sub_module, name)
-            has_children = True
-        if not has_children:
+            self.__start(sub_module, name)
+            is_leaf_node = False
+
+        if is_leaf_node:
             if type(module) in self.classes:
-                module.register_forward_hook(__activation_sparsity_cb)
-                module.sparsity = AverageValueMeter()
-                if hasattr(module, 'ref_name'):
-                    module.sparsity.name = 'sparsity_' + module.ref_name
-                else:
-                    module.sparsity.name = 'sparsity_' + name + '_' + module.__class__.__name__ + '_' + str(id(module))
+                self.hook_handles.append(module.register_forward_hook(__activation_sparsity_cb))
+                if not hasattr(module, 'sparsity'):
+                    module.sparsity = AverageValueMeter()
+                    if hasattr(module, 'ref_name'):
+                        module.sparsity.name = 'sparsity_' + module.ref_name
+                    else:
+                        module.sparsity.name = 'sparsity_' + name + '_' + \
+                                               module.__class__.__name__ + '_' + str(id(module))
+
+    def start(self):
+        assert len(self.hook_handles) == 0
+        self.__start(self.model)
+
+    def stop(self):
+        for handle in self.hook_handles:
+            handle.remove()
+        self.hook_handles = []
+
+    def reset(self):
+        self.__reset(self.model)
+        return self
+
+    def __reset(self, mod):
+        for name, module in mod._modules.items():
+            self.__reset(module)
+        if hasattr(mod, 'sparsity'):
+            mod.sparsity.reset()
 
     @staticmethod
-    def _collect_activations_sparsity(model, activation_sparsity, name=''):
+    def __collect_activations_sparsity(model, activation_sparsity, name=''):
         for name, module in model._modules.items():
-            _collect_activations_sparsity(module, activation_sparsity, name)
+            ActivationSparsityCollector.__collect_activations_sparsity(module, activation_sparsity, name)
 
         if hasattr(model, 'sparsity'):
             activation_sparsity[model.sparsity.name] = model.sparsity.mean
 
 
+@contextmanager
+def collector_context(collector):
+    if collector is not None:
+        collector.reset().start()
+    yield collector
+    if collector is not None:
+        collector.stop()
+
+
 class TrainingProgressCollector(DataCollector):
-    def __init__(self, stats = {}):
+    def __init__(self, stats={}):
         super(TrainingProgressCollector, self).__init__()
         object.__setattr__(self, '_stats', stats)
 
