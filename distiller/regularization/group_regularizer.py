@@ -35,12 +35,13 @@ group and individual feature levels"
 [2] Jenatton, Rodolphe; Audibert, Jean-Yves; Bach, Francis (2009). "Structured Variable Selection with
     Sparsity-Inducing Norms". Journal of Machine Learning Research. 12 (2011): 2777–2824. arXiv:0904.3523
 
-[3] J. Friedman, T. Hastie, and R. Tibshirani, “A note on the group lassoand a sparse group lasso,”
+[3] J. Friedman, T. Hastie, and R. Tibshirani, “A note on the group lasso and a sparse group lasso,”
     arXiv preprint arXiv:1001.0736, 2010
 """
 
 from .regularizer import _Regularizer, EPSILON
 import distiller
+
 
 class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
     def __init__(self, name, model, reg_regims, threshold_criteria=None):
@@ -66,8 +67,10 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
                 regularizer_loss += GroupLassoRegularizer.__2d_rowwise_reg(param, strength)
                 regularizer_loss += GroupLassoRegularizer.__2d_colwise_reg(param, strength)
             elif group_type == 'Channels':
-                regularizer_loss += GroupLassoRegularizer.__3d_channelwise_reg(param, strength)
-            elif group_type == '3D':
+                # This is also known as "input channels"
+                regularizer_loss += GroupLassoRegularizer._3d_channelwise_reg(param, strength)
+            elif group_type == 'Filters' or group_type == '3D':
+                # This is also known as "output channels"
                 regularizer_loss += GroupLassoRegularizer.__3d_filterwise_reg(param, strength)
             elif group_type == '4D':
                 regularizer_loss += GroupLassoRegularizer.__4d_layerwise_reg(param, strength)
@@ -75,8 +78,7 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
                 regularizer_loss += GroupLassoRegularizer.__3d_channelwise_reg(param, strength)
                 regularizer_loss += GroupLassoRegularizer.__4d_layerwise_reg(param, strength)
             else:
-                print("FATAL ERROR: Unknown parameter grouping: %s" % group_type)
-                exit(1)
+                raise ValueError('Unknown parameter grouping: ' + group_type)
 
         return regularizer_loss
 
@@ -94,7 +96,7 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
         if dim == -1:
             # We only have single group
             return groups.norm(2) * strength
-        return groups.pow(2).sum(dim=dim).add(EPSILON).pow(1/2.).sum().mul_(strength)
+        return groups.norm(2, dim=dim).sum().mul_(strength)
 
     @staticmethod
     def __4d_layerwise_reg(layer_weights, strength, dim=0):
@@ -110,8 +112,46 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
         assert layer_weights.dim() == 4, "This regularization is only supported for 4D weights"
 
         # create a filter structure
-        filters_view = layer_weights.view(-1, layer_weights.size(1) * layer_weights.size(2) * layer_weights.size(3))
+        filters_view = layer_weights.view(layer_weights.size(0), -1)
         return GroupLassoRegularizer.__grouplasso_reg(filters_view, strength, dim=1)
+
+    @staticmethod
+    def _3d_channelwise_reg(layer_weights, strength):
+        """Group Lasso with group = 3D input channel
+        """
+        assert layer_weights.dim() == 4, "This regularization is only supported for 4D weights"
+
+        # Sum of all channel L2s * regulization_strength
+        layer_channels_l2 = GroupLassoRegularizer._channels_l2(layer_weights).sum().mul_(strength)
+        return layer_channels_l2
+
+    @staticmethod
+    def _channels_l2(layer_weights):
+        """Compute the L2-norm of convolution input channels weights.
+
+        A weights input channel is composed of all the kernels that are applied to the
+        same activation input channel.  Each kernel belongs to a different weights filter. 
+        """
+        # Now, for each group, we want to select a specific channel from all of the filters
+        num_filters = layer_weights.size(0)
+        num_kernels_per_filter = layer_weights.size(1)
+
+        # First, reshape the weights tensor such that each channel (kernel) in the original
+        # tensor, is now a row in the 2D tensor.
+        view_2d = layer_weights.view(-1, layer_weights.size(2) * layer_weights.size(3))
+        # Next, compute the sum of the squares (of the elements in each row/kernel)
+        k_sq_sums = view_2d.pow(2).sum(dim=1)
+        # Now we have a long vector in which the first num_kernels_per_filter elements
+        # hold the sum-of-squares of channels 1..num_kernels_per_filter of the 1st filter,
+        # the second num_kernels_per_filter hold the sum-of-squares of channels
+        # 1..num_kernels_per_filter of the 2nd filter, and so on.
+        # Let's reshape this vector into a matrix, in which each row holds
+        # the sum-of-squares of the channels of some filter
+        k_sq_sums_mat = k_sq_sums.view(num_filters, num_kernels_per_filter).t()
+
+        # Now it's easy, just do Group Lasso on groups=rows
+        channels_l2 = k_sq_sums_mat.sum(dim=1).add(EPSILON).pow(1/2.)
+        return channels_l2
 
     @staticmethod
     def __2d_rowwise_reg(layer_weights, strength):
@@ -134,30 +174,29 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
         view_2d = layer_weights.view(-1, layer_weights.size(2) * layer_weights.size(3))
         return GroupLassoRegularizer.__grouplasso_reg(view_2d, strength, dim=1)
 
-    @staticmethod
-    def __3d_channelwise_reg(layer_weights, strength):
-        """Group Lasso with one of:
-        """
-        assert layer_weights.dim() == 4, "This regularization is only supported for 4D weights"
 
-        # Now, for each group, we want to select a specific channel from all of the filters
-        num_filters = layer_weights.size(0)
-        num_kernels_per_filter = layer_weights.size(1)
+class GroupVarianceRegularizer(GroupLassoRegularizer):
+    """Group variance regularization.
 
-        # First, reshape the weights tensor such that each channel (kernel) in the original
-        # tensor, is now a row in the 2D tensor.
-        view_2d = layer_weights.view(-1, layer_weights.size(2) * layer_weights.size(3))
-        # Next, compute the sum of the squares (of the elements in each row/kernel)
-        k_sq_sums = view_2d.pow(2).sum(dim=1)
-        # Now we have a long vector in which the first num_kernels_per_filter elements
-        # hold the sum-of-squares of channels 1..num_kernels_per_filter of the 1st filter,
-        # the second num_kernels_per_filter hold the sum-of-squares of channels
-        # 1..num_kernels_per_filter of the 2nd filter, and so on.
-        # Let's reshape this vector into a matrix, in which each row holds
-        # the sum-of-squares of the channels of some filter
-        k_sq_sums_mat = k_sq_sums.view(num_filters, num_kernels_per_filter).t()
+    As described in [4].
 
-        # Now it's easy, just do Group Lasso on groups=rows
-        #groups_loss = k_sq_sums_mat.sum(dim=0).add(EPSILON).pow(1/2.).sum().mul_(strength)
-        groups_loss = k_sq_sums_mat.sum(dim=1).add(EPSILON).pow(1/2.).sum().mul_(strength)
-        return groups_loss
+    [4] Amirsina Torfi, Rouzbeh A. Shirvani, Sobhan Soleymani, Nasser M. Nasrabadi,
+        “Attention-Based Guided Structured Sparsity of Deep Neural Networks,”
+        arXiv preprint arXiv:1802.09902, ICLR 2018
+    """
+    def __init__(self, name, model, reg_regims):
+        super(GroupVarianceRegularizer, self).__init__(name, model, reg_regims)
+
+    def loss(self, param, param_name, regularizer_loss, zeros_mask_dict):
+        if param_name in self.reg_regims.keys():
+            group_type = self.reg_regims[param_name][1]
+            strength = self.reg_regims[param_name][0]
+
+            if group_type == 'Channels':
+                channels_l2 = GroupLassoRegularizer._channels_l2(param)
+                var = channels_l2.var()
+                var_loss = 1 / var
+                regularizer_loss += strength * var_loss
+            else:
+                raise ValueError('Unknown parameter grouping: ' + group_type)
+        return regularizer_loss
