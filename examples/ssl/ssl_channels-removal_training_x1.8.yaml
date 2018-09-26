@@ -9,6 +9,9 @@
 #
 # time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../ssl/ssl_channels-removal_training_x1.8.yaml -j=1 --deterministic
 #
+# To fine-tune:
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.2 --epochs=98 --compress=../ssl/ssl_channels-removal_finetuning.yaml -j=1 --deterministic --resume=...
+#
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
 # |    | Name                                | Shape          |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
@@ -89,7 +92,7 @@ extensions:
   net_thinner:
       class: 'ChannelRemover'
       thinning_func_str: remove_channels
-      arch: 'resnet56_cifar'
+      arch: 'resnet20_cifar'
       dataset: 'cifar10'
 
 policies:
