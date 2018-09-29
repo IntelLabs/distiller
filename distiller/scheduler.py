@@ -133,16 +133,8 @@ class CompressionScheduler(object):
         return overall_loss
 
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
-        # When we get to this point, the weights are no longer maksed.  This is because during the backward
-        # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
-        # component is being called-back.
-        weights_are_masked = False
-
         if epoch in self.policies:
             for policy in self.policies[epoch]:
-                if not weights_are_masked:
-                    self.apply_mask()
-                    weights_are_masked = True
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict, optimizer)
 
