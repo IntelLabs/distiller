@@ -143,42 +143,6 @@ def test_simplenet():
     assert len(preds) == 1
 
 
-def test_simplenet():
-    g = create_graph('cifar10', 'simplenet_cifar')
-    assert g is not None
-    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
-    assert len(preds) == 0
-
-    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
-    assert len(preds) == 1
-
-
-def test_simplenet():
-    g = create_graph('cifar10', 'simplenet_cifar')
-    assert g is not None
-    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
-    assert len(preds) == 0
-
-    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
-    assert len(preds) == 1
-
-
-def test_simplenet():
-    g = create_graph('cifar10', 'simplenet_cifar')
-    assert g is not None
-    preds = g.predecessors_f(normalize_module_name('module.conv1'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv1 = {}".format(preds))
-    assert len(preds) == 0
-
-    preds = g.predecessors_f(normalize_module_name('module.conv2'), 'Conv')
-    logging.debug("[simplenet_cifar]: preds of module.conv2 = {}".format(preds))
-    assert len(preds) == 1
-
-
 def name_test(dataset, arch):
     model = create_model(False, dataset, arch, parallel=False)
     modelp = create_model(False, dataset, arch, parallel=True)
