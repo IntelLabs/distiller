@@ -3,7 +3,7 @@ numpy==1.14.3
 torchvision==0.2.1
 scipy==1.1.0
 gitpython
-git+https://github.com/pytorch/tnt.git@master
+torchnet==0.0.4
 tensorflow==1.7.0
 pydot==1.2.4
 tabulate==0.8.2
