@@ -57,7 +57,7 @@ import os
 import sys
 import random
 import traceback
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import partial
 import numpy as np
 import torch
@@ -75,7 +75,7 @@ except ImportError:
     sys.path.append(module_path)
     import distiller
 import apputils
-from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector, collector_context
+from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationStatsCollector, collectors_context
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
@@ -118,7 +118,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', nargs=2, default=[None, None], type=str,
+parser.add_argument('--act-stats', dest='activation_stats', choices=["valid", "train"], default=None,
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
@@ -167,18 +167,40 @@ def check_pytorch_version():
         exit(1)
 
 
-def create_activation_collector(model, args):
-    # If your model has ReLU layers, then those layers have sparse activations.
-    # ActivationSparsityCollector will collect information about this sparsity.
-    # WARNING! Enabling activation sparsity collection will significantly slow down training!
-    train_activations_sparsity, valid_activations_sparsity = None, None
-    activations_sparsity = ActivationSparsityCollector(model, distiller.utils.sparsity)
-    if args.activation_stats[0] == "valid":
-        valid_activations_sparsity = activations_sparsity
-    if args.activation_stats[0] == "train":
-        train_activations_sparsity = activations_sparsity
+def l1_channels_mean(t):
+    # activation shape: (batch, channel, h, w)
+    return t.view(t.size(0), -1).norm(p=1, dim=1).cpu().mean()
 
-    return train_activations_sparsity, valid_activations_sparsity
+
+def create_activation_stats_collectors(model, collection_phase):
+    """Create objects that collect activation statistics.
+
+    This is a utility function that creates two collectors:
+    1. Fine-grade sparsity levels of the activations
+    2. L1-magnitude of each of the activation channels
+
+    Args:
+        model - the model on which we want to collect statistics
+        phase - the statistics collection phase which is either "train" (for training),
+                or "valid" (for validation)
+
+    WARNING! Enabling activation statsitics collection will significantly slow down training!
+    """
+    class missingdict(dict):
+        def __missing__(self, key):
+            return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
+
+    train_activations_collectors, valid_activations_collectors = missingdict(), missingdict()
+    collectors = missingdict()
+    collectors["sparsity"] = ActivationStatsCollector(model, {"sparsity": distiller.utils.sparsity})
+    collectors["l1_channels"] = ActivationStatsCollector(model,
+                                                         {"l1_channels": distiller.utils.activation_channels_l1})
+
+    if collection_phase == "valid":
+        valid_activations_collectors = collectors
+    elif collection_phase == "train":
+        train_activations_collectors = collectors
+    return train_activations_collectors, valid_activations_collectors
 
 
 def main():
@@ -282,7 +304,8 @@ def main():
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
-    train_activations_sparsity, valid_activations_sparsity = create_activation_collector(model, args)
+    train_activations_collectors, valid_activations_collectors = \
+        create_activation_stats_collectors(model, collection_phase=args.activation_stats)
 
     if args.sensitivity is not None:
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
@@ -323,18 +346,18 @@ def main():
             compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
-        with collector_context(train_activations_sparsity):
+        with collectors_context(train_activations_collectors):
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-            distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
-                                              collector=train_activations_sparsity)
+            distiller.log_activation_sparsity(epoch, "train", loggers=[tflogger, pylogger],
+                                              collector=train_activations_collectors['sparsity'])
 
         # evaluate on validation set
-        with collector_context(valid_activations_sparsity):
+        with collectors_context(valid_activations_collectors):
             top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
-            distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
-                                              collector=valid_activations_sparsity)
+            distiller.log_activation_sparsity(epoch, "valid", loggers=[tflogger, pylogger],
+                                              collector=valid_activations_collectors['sparsity'])
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),

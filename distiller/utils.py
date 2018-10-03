@@ -21,7 +21,6 @@ with some random helper functions.
 """
 import numpy as np
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 from copy import deepcopy
 
@@ -399,23 +398,6 @@ def has_children(module):
         return True
     except StopIteration:
         return False
-
-
-class DoNothingModuleWrapper(nn.Module):
-    """Implement a nn.Module which wraps another nn.Module.
-
-    The DoNothingModuleWrapper wrapper does nothing but forward
-    to the wrapped module.
-    One use-case for this class, is for replacing nn.DataParallel
-    by a module that does nothing :-).  This is a trick we use
-    to transform data-parallel to serialized models.
-    """
-    def __init__(self, module):
-        super(DoNothingModuleWrapper, self).__init__()
-        self.module = module
-
-    def forward(self, *inputs, **kwargs):
-        return self.module(*inputs, **kwargs)
 
 
 def make_non_parallel_copy(model):
