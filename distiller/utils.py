@@ -30,12 +30,6 @@ def to_np(var):
     return var.data.cpu().numpy()
 
 
-def to_var(tensor, cuda=True):
-    if cuda and torch.cuda.is_available():
-        tensor = tensor.cuda()
-    return Variable(tensor)
-
-
 def size2str(torch_size):
     if isinstance(torch_size, torch.Size):
         return size_to_str(torch_size)
