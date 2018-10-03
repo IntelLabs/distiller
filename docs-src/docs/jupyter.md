@@ -22,7 +22,7 @@ $ jupyter nbextension enable --py --sys-prefix qgrid
 There are all kinds of options to use when launching Jupyter which you can use.  The example below tells the server to listen to connections from any IP address, and not to launch the browser window, but of course, you are free to launch Jupyter any way you want.<br>
 Consult the [user's guide](http://jupyter.readthedocs.io/en/latest/running.html) for more details.
 ```
-$ jupyter-notebook --ip=* --no-browser
+$ jupyter-notebook --ip=0.0.0.0 --no-browser
 ```
 
 ## Using the Distiller notebooks
