@@ -95,8 +95,8 @@ class ActivationStatsCollector(object):
                 for stat_name, stat_fn in self.statistics_dict.items():
                     if not hasattr(module, stat_name):
                         setattr(module, stat_name, AverageValueMeter())
-                        if hasattr(module, 'ref_name'):
-                            getattr(module, stat_name).name = stat_name + '_' + module.ref_name
+                        if hasattr(module, 'distiller_name'):
+                            getattr(module, stat_name).name = stat_name + '_' + module.distiller_name
                         else:
                             getattr(module, stat_name).name = stat_name + '_' + name + '_' + \
                                                    module.__class__.__name__ + '_' + str(id(module))
@@ -153,11 +153,11 @@ def collector_context(collector):
 def collectors_context(collectors_dict):
     """A context manager for a dictionary of collectors"""
     if len(collectors_dict) == 0:
-        yield None
+        yield collectors_dict
         return
     for collector in collectors_dict.values():
         collector.reset().start()
-    yield None
+    yield collectors_dict
     for collector in collectors_dict.values():
         collector.stop()
 

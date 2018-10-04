@@ -118,7 +118,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', choices=["valid", "train"], default=None,
+parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "valid", "test"], default=None,
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
@@ -190,17 +190,16 @@ def create_activation_stats_collectors(model, collection_phase):
         def __missing__(self, key):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
-    train_activations_collectors, valid_activations_collectors = missingdict(), missingdict()
+    distiller.utils.assign_layer_names(model)
+
+    activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
     collectors = missingdict()
     collectors["sparsity"] = ActivationStatsCollector(model, {"sparsity": distiller.utils.sparsity})
     collectors["l1_channels"] = ActivationStatsCollector(model,
                                                          {"l1_channels": distiller.utils.activation_channels_l1})
 
-    if collection_phase == "valid":
-        valid_activations_collectors = collectors
-    elif collection_phase == "train":
-        train_activations_collectors = collectors
-    return train_activations_collectors, valid_activations_collectors
+    activations_collectors[collection_phase] = collectors
+    return activations_collectors
 
 
 def main():
@@ -304,8 +303,7 @@ def main():
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
-    train_activations_collectors, valid_activations_collectors = \
-        create_activation_stats_collectors(model, collection_phase=args.activation_stats)
+    activations_collectors = create_activation_stats_collectors(model, collection_phase=args.activation_stats)
 
     if args.sensitivity is not None:
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
@@ -346,18 +344,18 @@ def main():
             compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
-        with collectors_context(train_activations_collectors):
+        with collectors_context(activations_collectors["train"]) as collectors:
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_sparsity(epoch, "train", loggers=[tflogger, pylogger],
-                                              collector=train_activations_collectors['sparsity'])
+                                                  collector=collectors['sparsity'])
 
         # evaluate on validation set
-        with collectors_context(valid_activations_collectors):
+        with collectors_context(activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
             distiller.log_activation_sparsity(epoch, "valid", loggers=[tflogger, pylogger],
-                                              collector=valid_activations_collectors['sparsity'])
+                                              collector=collectors['sparsity'])
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
@@ -379,7 +377,10 @@ def main():
                                  args.name, msglogger.logdir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], args=args)
+    with collectors_context(activations_collectors["test"]) as collectors:
+        test(test_loader, model, criterion, [pylogger], args=args)
+        distiller.log_activation_sparsity(epoch, "test", loggers=[tflogger, pylogger],
+                                          collector=collectors['sparsity'])
 
 
 OVERALL_LOSS_KEY = 'Overall Loss'
