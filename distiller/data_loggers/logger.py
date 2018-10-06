@@ -53,7 +53,7 @@ class DataLogger(object):
     def log_training_progress(self, model, epoch, i, set_size, batch_time, data_time, classerr, losses, print_freq, collectors):
         raise NotImplementedError
 
-    def log_activation_sparsity(self, phase, activation_sparsity, logcontext):
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
         raise NotImplementedError
 
     def log_weights_sparsity(self, model, epoch):
@@ -81,12 +81,11 @@ class PythonLogger(DataLogger):
                 log = log + '{name} {val:.6f}    '.format(name=name, val=val)
         self.pylogger.info(log)
 
-
-    def log_activation_sparsity(self, phase, activation_sparsity, logcontext):
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
         data = []
-        for layer, sparsity in activation_sparsity.items():
-            data.append([layer, sparsity*100])
-        t = tabulate.tabulate(data, headers=['Layer', 'sparsity (%)'], tablefmt='psql', floatfmt=".1f")
+        for layer, statistic in activation_stats.items():
+            data.append([layer, statistic])
+        t = tabulate.tabulate(data, headers=['Layer', stat_name], tablefmt='psql', floatfmt=".2f")
         msglogger.info('\n' + t)
 
     def log_weights_sparsity(self, model, epoch):
@@ -119,9 +118,9 @@ class TensorBoardLogger(DataLogger):
             self.tblogger.scalar_summary(prefix+tag, value, total_steps(total, epoch, completed))
         self.tblogger.sync_to_file()
 
-    def log_activation_sparsity(self, phase, activation_sparsity, epoch):
-        group = 'sparsity/activations/' + phase + "/"
-        for tag, value in activation_sparsity.items():
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
+        group = stat_name + '/activations/' + phase + "/"
+        for tag, value in activation_stats.items():
             self.tblogger.scalar_summary(group+tag, value, epoch)
         self.tblogger.sync_to_file()
 

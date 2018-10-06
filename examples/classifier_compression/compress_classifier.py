@@ -75,7 +75,8 @@ except ImportError:
     sys.path.append(module_path)
     import distiller
 import apputils
-from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationStatsCollector, collectors_context
+from distiller.data_loggers import (TensorBoardLogger, PythonLogger, RecordsActivationStatsCollector,
+                                    SummaryActivationStatsCollector, collectors_context)
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
@@ -167,11 +168,6 @@ def check_pytorch_version():
         exit(1)
 
 
-def l1_channels_mean(t):
-    # activation shape: (batch, channel, h, w)
-    return t.view(t.size(0), -1).norm(p=1, dim=1).cpu().mean()
-
-
 def create_activation_stats_collectors(model, collection_phase):
     """Create objects that collect activation statistics.
 
@@ -187,6 +183,7 @@ def create_activation_stats_collectors(model, collection_phase):
     WARNING! Enabling activation statsitics collection will significantly slow down training!
     """
     class missingdict(dict):
+        """This is a little trick to prevent KeyError"""
         def __missing__(self, key):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
@@ -194,10 +191,10 @@ def create_activation_stats_collectors(model, collection_phase):
 
     activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
     collectors = missingdict()
-    collectors["sparsity"] = ActivationStatsCollector(model, {"sparsity": distiller.utils.sparsity})
-    collectors["l1_channels"] = ActivationStatsCollector(model,
-                                                         {"l1_channels": distiller.utils.activation_channels_l1})
-
+    collectors["sparsity"] = SummaryActivationStatsCollector(model, "sparsity", distiller.utils.sparsity)
+    collectors["l1_channels"] = SummaryActivationStatsCollector(model, "l1_channels",
+                                                                distiller.utils.activation_channels_l1)
+    collectors["records"] = RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
@@ -309,7 +306,7 @@ def main():
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
 
     if args.evaluate:
-        return evaluate_model(model, criterion, test_loader, pylogger, args)
+        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
@@ -348,14 +345,19 @@ def main():
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-            distiller.log_activation_sparsity(epoch, "train", loggers=[tflogger, pylogger],
-                                                  collector=collectors['sparsity'])
+            distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger, pylogger],
+                                                collector=collectors["sparsity"])
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
-            distiller.log_activation_sparsity(epoch, "valid", loggers=[tflogger, pylogger],
-                                              collector=collectors['sparsity'])
+            distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger, pylogger],
+                                                collector=collectors["sparsity"])
+            if collectors["l1_channels"]:
+                #msglogger.info(collectors["l1_channels"].value())
+                collectors["l1_channels"].to_xlsx(os.path.join(msglogger.logdir, "l1_channels"))
+            if collectors["records"] is not None:
+                collectors["records"].to_xlsx(os.path.join(msglogger.logdir, "activations"))
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
@@ -377,10 +379,7 @@ def main():
                                  args.name, msglogger.logdir)
 
     # Finally run results on the test set
-    with collectors_context(activations_collectors["test"]) as collectors:
-        test(test_loader, model, criterion, [pylogger], args=args)
-        distiller.log_activation_sparsity(epoch, "test", loggers=[tflogger, pylogger],
-                                          collector=collectors['sparsity'])
+    test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
 
 
 OVERALL_LOSS_KEY = 'Overall Loss'
@@ -498,10 +497,15 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     return _validate(val_loader, model, criterion, loggers, args, epoch)
 
 
-def test(test_loader, model, criterion, loggers, args):
+def test(test_loader, model, criterion, loggers, activations_collectors, args):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    return _validate(test_loader, model, criterion, loggers, args)
+
+    with collectors_context(activations_collectors["test"]) as collectors:
+        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
+        distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
+
+    return top1, top5, lossses
 
 
 def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
@@ -644,7 +648,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
                 args.exit_taken[args.num_exits-1] += 1
 
 
-def evaluate_model(model, criterion, test_loader, loggers, args):
+def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
@@ -659,7 +663,9 @@ def evaluate_model(model, criterion, test_loader, loggers, args):
         quantizer = quantization.SymmetricLinearQuantizer(model, 8, 8)
         quantizer.prepare_model()
         model.cuda()
-    top1, _, _ = test(test_loader, model, criterion, loggers, args=args)
+
+    top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
+
     if args.quantize:
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
