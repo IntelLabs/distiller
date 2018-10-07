@@ -196,8 +196,9 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         with xlsxwriter.Workbook(fname) as workbook:
             worksheet = workbook.add_worksheet(self.stat_name)
             col_names = []
-
             for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
+                if not isinstance(module_summary_data, list):
+                    module_summary_data = [module_summary_data]
                 worksheet.write_column(1, col, module_summary_data)
                 col_names.append(module_name)
             worksheet.write_row(0, 0, col_names)

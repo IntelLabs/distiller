@@ -75,8 +75,7 @@ except ImportError:
     sys.path.append(module_path)
     import distiller
 import apputils
-from distiller.data_loggers import (TensorBoardLogger, PythonLogger, RecordsActivationStatsCollector,
-                                    SummaryActivationStatsCollector, collectors_context)
+from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
@@ -198,6 +197,22 @@ def create_activation_stats_collectors(model, collection_phase):
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
+
+def save_collectors_data(collectors, directory):
+    """
+
+
+    """
+    for name, collector in collectors.items():
+        #msglogger.info(collector.value())
+        collector.to_xlsx(os.path.join(directory, name))
+
+    # if collectors["l1_channels"]:
+    #     #msglogger.info(collectors["l1_channels"].value())
+    #     collectors["l1_channels"].to_xlsx(os.path.join(msglogger.logdir, "l1_channels"))
+    #     collectors["sparsity"].to_xlsx(os.path.join(msglogger.logdir, "sparsity"))
+    # if collectors["records"] is not None:
+    #     collectors["records"].to_xlsx(os.path.join(msglogger.logdir, "activations"))
 
 def main():
     global msglogger
@@ -353,11 +368,7 @@ def main():
             top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
             distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger, pylogger],
                                                 collector=collectors["sparsity"])
-            if collectors["l1_channels"]:
-                #msglogger.info(collectors["l1_channels"].value())
-                collectors["l1_channels"].to_xlsx(os.path.join(msglogger.logdir, "l1_channels"))
-            if collectors["records"] is not None:
-                collectors["records"].to_xlsx(os.path.join(msglogger.logdir, "activations"))
+            save_collectors_data(collectors, msglogger.logdir)
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),

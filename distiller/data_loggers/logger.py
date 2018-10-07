@@ -28,7 +28,7 @@ import torch
 import numpy as np
 import tabulate
 import distiller
-from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np, activation_channels_l1, norm_filters
+from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np, norm_filters
 # TensorBoard logger
 from .tbbackend import TBBackend
 # Visdom logger
