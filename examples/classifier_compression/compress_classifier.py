@@ -134,8 +134,6 @@ parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
 parser.add_argument('--deterministic', '--det', action='store_true',
                     help='Ensure deterministic execution for re-producible results.')
-parser.add_argument('--quantize', action='store_true',
-                    help='Apply 8-bit quantization to model before evaluation')
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
@@ -151,7 +149,25 @@ parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earl
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
                     help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 
+quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
+                                        '("post-training quantization)')
+quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
+                         help='Apply linear-symmetric quantization to model before evaluation. Applicable only if'
+                              '--evaluate is also set')
+quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
+                         help='Number of bits for quantization of activations')
+quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
+                         help='Number of bits for quantization of weights')
+quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
+                         help='Number of bits for quantization of the accumulator')
+quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
+                         help='Enable clipping of activations using max-abs-value averaging over batch')
+quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
+                         help='List of fully-qualified layer names for which not to clip activations. Applicable'
+                              'only if --qe-clip-acts is also set')
+
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
+
 
 def check_pytorch_version():
     if torch.__version__ < '0.4.0':
@@ -616,17 +632,21 @@ def evaluate_model(model, criterion, test_loader, loggers, args):
     if not isinstance(loggers, list):
         loggers = [loggers]
 
-    if args.quantize:
+    if args.quantize_eval:
         model.cpu()
-        quantizer = quantization.SymmetricLinearQuantizer(model, 8, 8)
+        quantizer = quantization.SymmetricLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
+                                                          args.qe_bits_accum, args.qe_clip_acts,
+                                                          args.qe_no_clip_layers)
         quantizer.prepare_model()
         model.cuda()
     top1, _, _ = test(test_loader, model, criterion, loggers, args=args)
-    if args.quantize:
+    if args.quantize_eval:
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
                                  name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
                                  dir=msglogger.logdir)
+    apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+                             name=args.name, dir=msglogger.logdir)
 
 
 def summarize_model(model, dataset, which_summary):

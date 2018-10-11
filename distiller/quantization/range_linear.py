@@ -32,12 +32,18 @@ class RangeLinearQuantWrapper(nn.Module):
         wrapped_module (torch.nn.Module): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
+        clip_acts (bool): If true, will clip activations instead of using absolute min/max. At the moment clipping is
+            done by averaging over the max absolute values of samples within a batch. More methods might be added in
+            the future.
     """
-    def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32):
+    def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, clip_acts=False):
         super(RangeLinearQuantWrapper, self).__init__()
 
         self.wrapped_module = wrapped_module
         self.num_bits_acts = num_bits_acts
+        self.num_bits_accum = num_bits_accum
+        self.clip_acts = clip_acts
+        self.acts_sat_val_func = get_tensor_avg_max_abs_across_batch if clip_acts else get_tensor_max_abs
 
         self.acts_min_q_val, self.acts_max_q_val = get_quantized_range(num_bits_acts, signed=True)
         self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True)
@@ -95,11 +101,13 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
     Args:
         wrapped_module (torch.nn.Module): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
-        num_bits_acts (int): Number of bits used for parameters (weights and bias) quantization
+        num_bits_params (int): Number of bits used for parameters (weights and bias) quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
+        clip_acts (bool): See RangeLinearQuantWrapper
     """
-    def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32):
-        super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum)
+    def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32, clip_acts=False):
+        super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts,
+                                                                num_bits_accum, clip_acts)
 
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D and Linear modules')
@@ -129,7 +137,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         super(RangeLinearQuantParamLayerWrapper, self).forward(input)
 
     def pre_quantized_forward(self, input):
-        in_scale = symmetric_linear_quantization_scale_factor(self.num_bits_acts, get_tensor_max_abs(input))
+        in_scale = symmetric_linear_quantization_scale_factor(self.num_bits_acts,
+                                                              self.acts_sat_val_func(input))
         self.current_accum_scale = in_scale * self.w_scale
         if self.has_bias:
             # Re-quantize bias to match x * w scale: b_q' = (in_scale * w_scale / b_scale) * b_q
@@ -138,18 +147,18 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         return [in_scale]
 
     def post_quantized_forward(self, accumulator):
-        accum_max_abs = get_tensor_max_abs(accumulator)
+        accum_max_abs = self.acts_sat_val_func(accumulator)
         y_f_max_abs = accum_max_abs / self.current_accum_scale
         out_scale = symmetric_linear_quantization_scale_factor(self.num_bits_acts, y_f_max_abs)
         requant_scale = out_scale / self.current_accum_scale
         return requant_scale, out_scale
 
-    def __repr__(self):
-        tmpstr = self.__class__.__name__ + '(\n'
-        tmpstr += '  (wrapped_module): ' + self.wrapped_module.__repr__() + '\n'
-        tmpstr += '  num_bits_activations={0}, num_bits_parameters={1}'.format(self.num_bits_acts,
-                                                                               self.num_bits_params) + '\n'
-        tmpstr += ')'
+    def extra_repr(self):
+        tmpstr = 'wrapped_module: ' + self.wrapped_module.__repr__() + '\n'
+        tmpstr += 'num_bits_acts={0}, num_bits_params={1}, num_bits_accum={2}'.format(self.num_bits_acts,
+                                                                                      self.num_bits_params,
+                                                                                      self.num_bits_accum) + '\n'
+        tmpstr += 'clip_acts={0}'.format(self.clip_acts)
         return tmpstr
 
 
@@ -160,19 +169,28 @@ class SymmetricLinearQuantizer(Quantizer):
 
     Args:
         model (torch.nn.Module): Model to be quantized
-        bits_activations/parameters: Number of bits to be used when quantizing each tensor type
+        bits_activations/parameters/accum (int): Number of bits to be used when quantizing each tensor type
+        clip_acts (bool): See RangeLinearQuantWrapper
+        no_clip_layers (list): List of fully-qualified layer names for which activations clipping should not be done.
+            A common practice is to not clip the activations of the last layer before softmax.
+            Applicable only if clip_acts is True.
     """
-    def __init__(self, model, bits_activations=8, bits_parameters=8):
+    def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
+                 clip_acts=False, no_clip_layers=[]):
         super(SymmetricLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
-                                                       bits_weights=bits_parameters,
-                                                       train_with_fp_copy=False)
+                                                       bits_weights=bits_parameters, train_with_fp_copy=False)
         
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_parameters': bits_parameters}}
         
         def replace_fn(module, name, qbits_map):
-            return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts)
+            clip = self.clip_acts and name not in no_clip_layers
+            return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
+                                                     num_bits_accum=self.bits_accum, clip_acts=clip)
 
+        self.clip_acts = clip_acts
+        self.no_clip_layers = no_clip_layers
+        self.bits_accum = bits_accum
         self.replacement_factory[nn.Conv2d] = replace_fn
         self.replacement_factory[nn.Linear] = replace_fn
