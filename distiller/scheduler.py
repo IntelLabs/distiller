@@ -133,16 +133,16 @@ class CompressionScheduler(object):
         return overall_loss
 
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
-        # When we get to this point, the weights are no longer maksed.  This is because during the backward
-        # pass, the weights are updated.  So we choose to lazily apply the pruning mask, only if some
-        # component is being called-back.
-        weights_are_masked = False
-
+        # When we get to this point, the weights are no longer masked.  This is because during the backward
+        # pass, the weights may have been updated.  This is true even when the gradients are zero, for some
+        # optimization algorithms such as SGD with momentum.  See the Note in PyTorch's SGD documentation:
+        # https://pytorch.org/docs/stable/optim.html#torch.optim.SGD.
+        #
+        # Therefore we choose to always apply the pruning mask.  In the future we may optimize this by applying
+        # the mask only if the some policy is actually using the mask.
+        self.apply_mask()
         if epoch in self.policies:
             for policy in self.policies[epoch]:
-                if not weights_are_masked:
-                    self.apply_mask()
-                    weights_are_masked = True
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict, optimizer)
 
