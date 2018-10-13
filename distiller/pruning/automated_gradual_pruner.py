@@ -16,7 +16,11 @@
 
 from .pruner import _ParameterPruner
 from .level_pruner import SparsityLevelParameterPruner
+from .ranked_structures_pruner import L1RankedStructureParameterPruner
 from distiller.utils import *
+# import logging
+# msglogger = logging.getLogger()
+
 
 class AutomatedGradualPruner(_ParameterPruner):
     """Prune to an exact pruning level specification.
@@ -30,13 +34,18 @@ class AutomatedGradualPruner(_ParameterPruner):
     (https://arxiv.org/pdf/1710.01878.pdf)
     """
 
-    def __init__(self, name, initial_sparsity, final_sparsity, weights):
+    def __init__(self, name, initial_sparsity, final_sparsity, weights,
+                 pruning_fn=None):
         super(AutomatedGradualPruner, self).__init__(name)
         self.initial_sparsity = initial_sparsity
         self.final_sparsity = final_sparsity
         assert final_sparsity > initial_sparsity
         self.params_names = weights
         assert self.params_names
+        if pruning_fn is None:
+            self.pruning_fn = self.prune_to_target_sparsity
+        else:
+            self.pruning_fn = pruning_fn
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.params_names:
@@ -52,6 +61,28 @@ class AutomatedGradualPruner(_ParameterPruner):
         target_sparsity = (self.final_sparsity +
                            (self.initial_sparsity-self.final_sparsity) *
                            (1.0 - ((current_epoch-starting_epoch)/span))**3)
+        self.pruning_fn(param, param_name, zeros_mask_dict, target_sparsity)
 
-        SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict,
-                                                 target_sparsity)
+    @staticmethod
+    def prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity):
+        return SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
+
+
+class StructuredAutomatedGradualPruner(AutomatedGradualPruner):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        self.reg_regims = reg_regims
+        weights = [weight for weight in reg_regims.keys()]
+        if not all([group in ['3D', 'Filters', 'Channels'] for group in reg_regims.values()]):
+            raise ValueError("Currently only filter (3D) and channel pruning is supported")
+        super(StructuredAutomatedGradualPruner, self).__init__(name, initial_sparsity,
+                                                               final_sparsity, weights,
+                                                               pruning_fn=self.prune_to_target_sparsity)
+
+    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity):
+        if self.reg_regims[param_name] in ['3D', 'Filters']:
+            L1RankedStructureParameterPruner.rank_prune_filters(target_sparsity, param,
+                                                                param_name, zeros_mask_dict)
+        else:
+            if self.reg_regims[param_name] == 'Channels':
+                L1RankedStructureParameterPruner.rank_prune_channels(target_sparsity, param,
+                                                                     param_name, zeros_mask_dict)

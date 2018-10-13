@@ -58,8 +58,7 @@ def dict_config(model, optimizer, sched_dict):
     regularizers = __factory('regularizers', model, sched_dict)
     quantizers = __factory('quantizers', model, sched_dict, optimizer=optimizer)
     if len(quantizers) > 1:
-        print("\nError: Multiple Quantizers not supported")
-        exit(1)
+        raise ValueError("\nError: Multiple Quantizers not supported")
     extensions = __factory('extensions', model, sched_dict)
 
     try:
@@ -72,7 +71,7 @@ def dict_config(model, optimizer, sched_dict):
                 except TypeError as e:
                     print('\n\nFatal Error: a policy is defined with a null pruner')
                     print('Here\'s the policy definition for your reference:\n{}'.format(json.dumps(policy_def, indent=1)))
-                    exit(1)
+                    raise
                 assert instance_name in pruners, "Pruner {} was not defined in the list of pruners".format(instance_name)
                 pruner = pruners[instance_name]
                 policy = distiller.PruningPolicy(pruner, args)
@@ -105,8 +104,7 @@ def dict_config(model, optimizer, sched_dict):
                 policy = extension
 
             else:
-                print("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]" % policy_def)
-                exit(1)
+                raise ValueError("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]".format(policy_def))
 
             add_policy_to_scheduler(policy, policy_def, schedule)
 
@@ -126,8 +124,7 @@ def dict_config(model, optimizer, sched_dict):
     except Exception as exception:
         print("\nFATAL Parsing error!\n%s" % json.dumps(policy_def, indent=1))
         print("Exception: %s %s" % (type(exception), exception))
-        exit(1)
-
+        raise
     return schedule
 
 
@@ -149,7 +146,7 @@ def file_config(model, optimizer, filename):
             return dict_config(model, optimizer, sched_dict)
         except yaml.YAMLError as exc:
             print("\nFATAL parsing error while parsing the schedule configuration file %s" % filename)
-            exit(1)
+            raise
 
 
 def __factory(container_type, model, sched_dict, **kwargs):
@@ -164,14 +161,17 @@ def __factory(container_type, model, sched_dict, **kwargs):
                     cfg_kwargs['name'] = name
                     class_ = globals()[cfg_kwargs['class']]
                     container[name] = class_(**__filter_kwargs(cfg_kwargs, class_.__init__))
+                except NameError as error:
+                    print("\nFatal error while parsing [section:%s] [item:%s]" % (container_type, name))
+                    raise
                 except Exception as exception:
                     print("\nFatal error while parsing [section:%s] [item:%s]" % (container_type, name))
                     print("Exception: %s %s" % (type(exception), exception))
-                    exit(1)
+                    raise
         except Exception as exception:
             print("\nFatal while creating %s" % container_type)
             print("Exception: %s %s" % (type(exception), exception))
-            exit(1)
+            raise
 
     return container
 
