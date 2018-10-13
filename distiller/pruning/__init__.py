@@ -19,7 +19,7 @@
 """
 
 from .magnitude_pruner import MagnitudeParameterPruner
-from .automated_gradual_pruner import AutomatedGradualPruner
+from .automated_gradual_pruner import AutomatedGradualPruner, StructuredAutomatedGradualPruner
 from .level_pruner import SparsityLevelParameterPruner
 from .sensitivity_pruner import SensitivityPruner
 from .structure_pruner import StructureParameterPruner

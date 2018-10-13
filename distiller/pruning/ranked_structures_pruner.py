@@ -40,13 +40,13 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
         if fraction_to_prune == 0:
             return
 
-        if group_type not in ['3D', 'Channels']:
-            raise ValueError("Currently only filter (3D) and channel ranking is supported")
-        if group_type == "3D":
+        if group_type in ['3D', 'Filters']:
             return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict)
-        elif group_type == "Channels":
+        elif group_type == 'Channels':
             return self.rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict)
-
+        else:
+            raise ValueError("Currently only filter (3D) and channel ranking is supported")
+            
     @staticmethod
     def rank_channels(fraction_to_prune, param):
         num_filters = param.size(0)
@@ -64,15 +64,15 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
         k = int(fraction_to_prune * channel_mags.size(0))
         if k == 0:
             msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
-                            num_channels, 100*fraction_to_prune)
+                           num_channels, 100*fraction_to_prune)
             return None, None
 
         bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
         return bottomk, channel_mags
 
-
-    def rank_prune_channels(self, fraction_to_prune, param, param_name, zeros_mask_dict):
-        bottomk_channels, channel_mags = self.rank_channels(fraction_to_prune, param)
+    @staticmethod
+    def rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict):
+        bottomk_channels, channel_mags = L1RankedStructureParameterPruner.rank_channels(fraction_to_prune, param)
         if bottomk_channels is None:
             # Empty list means that fraction_to_prune is too low to prune anything
             return
@@ -91,8 +91,8 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
                        distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, len(bottomk_channels), num_channels)
 
-
-    def rank_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict):
+    @staticmethod
+    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         view_filters = param.view(param.size(0), -1)
         filter_mags = view_filters.data.norm(1, dim=1)  # same as view_filters.data.abs().sum(dim=1)

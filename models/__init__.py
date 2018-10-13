@@ -74,5 +74,10 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
     elif parallel:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
+
+    # explicitly add a softmax layer, because it is useful when exporting to ONNX
+    model.original_forward = model.forward
+    softmax = torch.nn.Softmax(dim=1)
+    model.forward = lambda input: softmax(model.original_forward(input))
     model.cuda()
     return model

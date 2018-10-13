@@ -1,0 +1,119 @@
+# Baseline results:
+# Top1: 91.780    Top5: 99.710    Loss: 0.376
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.1 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar
+#
+# 
+# Parameters:
+# +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+# |    | Name                                | Shape          |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
+# |----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------|
+# |  0 | module.conv1.weight                 | (16, 3, 3, 3)  |           432 |            432 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.39196 | -0.00533 |    0.27677 |
+# |  1 | module.layer1.0.conv1.weight        | (10, 16, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.17516 | -0.01627 |    0.12761 |
+# |  2 | module.layer1.0.conv2.weight        | (16, 10, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.17375 |  0.00208 |    0.12753 |
+# |  3 | module.layer1.1.conv1.weight        | (10, 16, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.14753 | -0.02355 |    0.11205 |
+# |  4 | module.layer1.1.conv2.weight        | (16, 10, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.13242 | -0.00280 |    0.10184 |
+# |  5 | module.layer1.2.conv1.weight        | (10, 16, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.18848 | -0.00708 |    0.13828 |
+# |  6 | module.layer1.2.conv2.weight        | (16, 10, 3, 3) |          1440 |           1440 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.15502 | -0.00528 |    0.11709 |
+# |  7 | module.layer2.0.conv1.weight        | (20, 16, 3, 3) |          2880 |           2880 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.15266 | -0.00169 |    0.11773 |
+# |  8 | module.layer2.0.conv2.weight        | (32, 20, 3, 3) |          5760 |           5760 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.13070 | -0.00823 |    0.10204 |
+# |  9 | module.layer2.0.downsample.0.weight | (32, 16, 1, 1) |           512 |            512 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.25380 | -0.01324 |    0.17815 |
+# | 10 | module.layer2.1.conv1.weight        | (20, 32, 3, 3) |          5760 |           5760 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.11349 | -0.00928 |    0.08977 |
+# | 11 | module.layer2.1.conv2.weight        | (32, 20, 3, 3) |          5760 |           5760 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.09904 | -0.00621 |    0.07856 |
+# | 12 | module.layer2.2.conv1.weight        | (20, 32, 3, 3) |          5760 |           5760 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.11538 | -0.01280 |    0.09106 |
+# | 13 | module.layer2.2.conv2.weight        | (32, 20, 3, 3) |          5760 |           5760 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.09239 |  0.00091 |    0.07236 |
+# | 14 | module.layer3.0.conv1.weight        | (64, 32, 3, 3) |         18432 |          18432 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.09853 | -0.00671 |    0.07821 |
+# | 15 | module.layer3.0.conv2.weight        | (64, 64, 3, 3) |         36864 |          36864 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.09391 | -0.00407 |    0.07466 |
+# | 16 | module.layer3.0.downsample.0.weight | (64, 32, 1, 1) |          2048 |           2048 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.12660 | -0.00968 |    0.10101 |
+# | 17 | module.layer3.1.conv1.weight        | (64, 64, 3, 3) |         36864 |          11060 |    0.00000 |    0.00000 |  0.00000 |  6.56738 |  0.00000 |   69.99783 | 0.07488 | -0.00414 |    0.03739 |
+# | 18 | module.layer3.1.conv2.weight        | (64, 64, 3, 3) |         36864 |          11060 |    0.00000 |    0.00000 |  0.00000 |  7.69043 |  0.00000 |   69.99783 | 0.06839 | -0.00472 |    0.03404 |
+# | 19 | module.layer3.2.conv1.weight        | (64, 64, 3, 3) |         36864 |          11060 |    0.00000 |    0.00000 |  0.00000 |  9.47266 |  0.00000 |   69.99783 | 0.06867 | -0.00485 |    0.03450 |
+# | 20 | module.layer3.2.conv2.weight        | (64, 64, 3, 3) |         36864 |          11060 |    0.00000 |    0.00000 |  0.00000 | 26.41602 |  0.00000 |   69.99783 | 0.03915 |  0.00033 |    0.01970 |
+# | 21 | module.fc.weight                    | (10, 64)       |           640 |            640 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.56522 | -0.00002 |    0.49040 |
+# | 22 | Total sparsity:                     | -              |        246704 |         143488 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |   41.83799 | 0.00000 |  0.00000 |    0.00000 |
+# +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+# Total sparsity: 41.84
+#
+# --- validate (epoch=359)-----------
+# 5000 samples (256 per mini-batch)
+# ==> Top1: 92.540    Top5: 99.960    Loss: 0.246
+#
+# ==> Best Top1: 93.580   On Epoch: 328
+#
+# Saving checkpoint to: logs/2018.10.09-200709/checkpoint.pth.tar
+# --- test ---------------------
+# 10000 samples (256 per mini-batch)
+# ==> Top1: 91.190    Top5: 99.660    Loss: 0.372
+#
+#
+# Log file for this run: /home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/classifier_compression/logs/2018.10.09-200709/2018.10.09-200709.log
+#
+# real    32m23.439s
+# user    74m59.073s
+# sys     9m7.764s
+
+version: 1
+pruners:
+  low_pruner:
+    class: StructuredAutomatedGradualPruner
+    initial_sparsity : 0.10
+    final_sparsity: 0.40
+    reg_regims:
+      module.layer1.0.conv1.weight: Filters
+      module.layer1.1.conv1.weight: Filters
+      module.layer1.2.conv1.weight: Filters
+      module.layer2.0.conv1.weight: Filters
+      module.layer2.1.conv1.weight: Filters
+      module.layer2.2.conv1.weight: Filters
+
+  fine_pruner:
+    class:  AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.70
+    weights: [module.layer3.1.conv1.weight,  module.layer3.1.conv2.weight,
+              module.layer3.2.conv1.weight,  module.layer3.2.conv2.weight]
+
+lr_schedulers:
+  pruning_lr:
+    class: StepLR
+    step_size: 50
+    gamma: 0.10
+
+
+extensions:
+  net_thinner:
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'resnet20_cifar'
+      dataset: 'cifar10'
+
+policies:
+  - pruner:
+      instance_name : low_pruner
+    starting_epoch: 180
+    ending_epoch: 200
+    frequency: 2
+
+  - pruner:
+      instance_name : fine_pruner
+    starting_epoch: 200
+    ending_epoch: 220
+    frequency: 2
+  # Currently the thinner is disabled until the end, because it interacts with the sparsity
+  # goals of the StructuredAutomatedGradualPruner.
+  # This can be fixed rather easily.
+  # - extension:
+  #     instance_name: net_thinner
+  #   starting_epoch: 0
+  #   ending_epoch: 20
+  #   frequency: 2
+
+# After completeing the pruning, we perform network thinning and continue fine-tuning.
+  - extension:
+      instance_name: net_thinner
+    epochs: [202]
+
+  - lr_scheduler:
+      instance_name: pruning_lr
+    starting_epoch: 0
+    ending_epoch: 400
+    frequency: 1
