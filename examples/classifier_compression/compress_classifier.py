@@ -186,33 +186,26 @@ def create_activation_stats_collectors(model, collection_phase):
         def __missing__(self, key):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
-    distiller.utils.assign_layer_names(model)
+    distiller.utils.assign_layer_fq_names(model)
 
     activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
     collectors = missingdict()
     collectors["sparsity"] = SummaryActivationStatsCollector(model, "sparsity", distiller.utils.sparsity)
     collectors["l1_channels"] = SummaryActivationStatsCollector(model, "l1_channels",
                                                                 distiller.utils.activation_channels_l1)
+    collectors["apoz_channels"] = SummaryActivationStatsCollector(model, "apoz_channels",
+                                                                  distiller.utils.activation_channels_apoz)
     collectors["records"] = RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
 
 def save_collectors_data(collectors, directory):
-    """
-
-
+    """Utility function that saves all activation statistics to Excel workbooks
     """
     for name, collector in collectors.items():
-        #msglogger.info(collector.value())
         collector.to_xlsx(os.path.join(directory, name))
 
-    # if collectors["l1_channels"]:
-    #     #msglogger.info(collectors["l1_channels"].value())
-    #     collectors["l1_channels"].to_xlsx(os.path.join(msglogger.logdir, "l1_channels"))
-    #     collectors["sparsity"].to_xlsx(os.path.join(msglogger.logdir, "sparsity"))
-    # if collectors["records"] is not None:
-    #     collectors["records"].to_xlsx(os.path.join(msglogger.logdir, "activations"))
 
 def main():
     global msglogger

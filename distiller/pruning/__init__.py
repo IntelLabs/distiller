@@ -23,7 +23,7 @@ from .automated_gradual_pruner import AutomatedGradualPruner, StructuredAutomate
 from .level_pruner import SparsityLevelParameterPruner
 from .sensitivity_pruner import SensitivityPruner
 from .structure_pruner import StructureParameterPruner
-from .ranked_structures_pruner import L1RankedStructureParameterPruner
+from .ranked_structures_pruner import L1RankedStructureParameterPruner, ActivationAPoZRankedStructureParameterPruner
 from .baidu_rnn_pruner import BaiduRNNPruner
 
 del magnitude_pruner

@@ -72,7 +72,7 @@ class StructuredAutomatedGradualPruner(AutomatedGradualPruner):
     def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
         self.reg_regims = reg_regims
         weights = [weight for weight in reg_regims.keys()]
-        if not all([group in ['3D', 'Filters', 'Channels'] for group in reg_regims.values()]):
+        if not all([group in ['3D', 'Filters', 'Channels', 'Rows'] for group in reg_regims.values()]):
             raise ValueError("Currently only filter (3D) and channel pruning is supported")
         super(StructuredAutomatedGradualPruner, self).__init__(name, initial_sparsity,
                                                                final_sparsity, weights,
@@ -82,7 +82,20 @@ class StructuredAutomatedGradualPruner(AutomatedGradualPruner):
         if self.reg_regims[param_name] in ['3D', 'Filters']:
             L1RankedStructureParameterPruner.rank_prune_filters(target_sparsity, param,
                                                                 param_name, zeros_mask_dict)
-        else:
-            if self.reg_regims[param_name] == 'Channels':
+        elif self.reg_regims[param_name] == 'Channels':
                 L1RankedStructureParameterPruner.rank_prune_channels(target_sparsity, param,
                                                                      param_name, zeros_mask_dict)
+        elif self.reg_regims[param_name] == 'Rows':
+                L1RankedStructureParameterPruner.rank_prune_rows(target_sparsity, param,
+                                                                 param_name, zeros_mask_dict)
+
+
+class CriterionParameterizedAGP(AutomatedGradualPruner):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        self.reg_regims = reg_regims
+        weights = [weight for weight in reg_regims.keys()]
+        if not all([group in ['3D', 'Filters', 'Channels', 'Rows'] for group in reg_regims.values()]):
+            raise ValueError("Currently only filter (3D) and channel pruning is supported")
+        super(CriterionParameterizedAGP, self).__init__(name, initial_sparsity,
+                                                        final_sparsity, weights,
+                                                        pruning_fn=self.prune_to_target_sparsity)

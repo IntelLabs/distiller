@@ -49,7 +49,7 @@ class ActivationStatsCollector(object):
     a unique name per layer.  To assign human-readable names, it is advisable to invoke the following
     before starting the statistics collection:
 
-        distiller.utils.assign_layer_names(model)
+        distiller.utils.assign_layer_fq_names(model)
     """
     def __init__(self, model, stat_name, classes):
         """
