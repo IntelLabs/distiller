@@ -161,12 +161,18 @@ class ActivationAPoZRankedStructureParameterPruner(_ParameterPruner):
         if fraction_to_prune == 0:
             return
 
-        if group_type not in ['3D', 'Filters']:
+        if group_type in ['3D', 'Filters']:
+            return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, meta['model'])
+        else:
             raise ValueError("Currently only filter (3D) ranking is supported")
+
+    @staticmethod
+    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+        assert param.dim() == 4, "This thresholding is only supported for 4D weights"
 
         # Use the parameter name to locate the module that has the activation sparsity statistics
         fq_name = param_name.replace(".conv", ".relu")[:-len(".weight")]
-        module = distiller.find_module_by_fq_name(meta['model'], fq_name)
+        module = distiller.find_module_by_fq_name(model, fq_name)
         if module is None:
             raise ValueError("Could not find a layer named %s in the model."
                              "\nMake sure to use assign_layer_fq_names()" % fq_name)
@@ -189,5 +195,9 @@ class ActivationAPoZRankedStructureParameterPruner(_ParameterPruner):
         expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
         zeros_mask_dict[param_name].mask = expanded.view(param.size(0), param.size(1), param.size(2), param.size(3))
 
-        msglogger.info("ActivationL1RankedStructureParameterPruner: {} ({})".format(fq_name, apoz))
-        msglogger.info("{}".format(filters_ordered_by_apoz))
+        #msglogger.info("ActivationL1RankedStructureParameterPruner: {} ({})".format(fq_name, apoz))
+        msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+                       param_name,
+                       distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
+                       fraction_to_prune, num_filters_to_prune, num_filters)
+        #msglogger.info("{}".format(filters_ordered_by_apoz))

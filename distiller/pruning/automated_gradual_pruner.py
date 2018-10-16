@@ -16,7 +16,7 @@
 
 from .pruner import _ParameterPruner
 from .level_pruner import SparsityLevelParameterPruner
-from .ranked_structures_pruner import L1RankedStructureParameterPruner
+from .ranked_structures_pruner import L1RankedStructureParameterPruner, ActivationAPoZRankedStructureParameterPruner
 from distiller.utils import *
 # import logging
 # msglogger = logging.getLogger()
@@ -61,10 +61,10 @@ class AutomatedGradualPruner(_ParameterPruner):
         target_sparsity = (self.final_sparsity +
                            (self.initial_sparsity-self.final_sparsity) *
                            (1.0 - ((current_epoch-starting_epoch)/span))**3)
-        self.pruning_fn(param, param_name, zeros_mask_dict, target_sparsity)
+        self.pruning_fn(param, param_name, zeros_mask_dict, target_sparsity, meta['model'])
 
     @staticmethod
-    def prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity):
+    def prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity, model=None):
         return SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
 
 
@@ -78,7 +78,7 @@ class StructuredAutomatedGradualPruner(AutomatedGradualPruner):
                                                                final_sparsity, weights,
                                                                pruning_fn=self.prune_to_target_sparsity)
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity):
+    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
         if self.reg_regims[param_name] in ['3D', 'Filters']:
             L1RankedStructureParameterPruner.rank_prune_filters(target_sparsity, param,
                                                                 param_name, zeros_mask_dict)
@@ -99,3 +99,8 @@ class CriterionParameterizedAGP(AutomatedGradualPruner):
         super(CriterionParameterizedAGP, self).__init__(name, initial_sparsity,
                                                         final_sparsity, weights,
                                                         pruning_fn=self.prune_to_target_sparsity)
+
+    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
+        if self.reg_regims[param_name] in ['3D', 'Filters']:
+            ActivationAPoZRankedStructureParameterPruner.rank_prune_filters(target_sparsity, param,
+                                                                            param_name, zeros_mask_dict, model)

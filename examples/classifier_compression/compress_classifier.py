@@ -353,13 +353,13 @@ def main():
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-            distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger, pylogger],
+            distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
                                                 collector=collectors["sparsity"])
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
-            distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger, pylogger],
+            distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger],
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
 
