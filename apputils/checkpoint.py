@@ -22,7 +22,6 @@ a pruning session, or for querying the pruning schedule of a sparse model.
 
 import os
 import shutil
-from errno import ENOENT
 import logging
 import torch
 import distiller
@@ -45,8 +44,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         dir: directory in which to save the checkpoint
     """
     if not os.path.isdir(dir):
-        raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
-
+        msglogger.info("Error: Directory to save checkpoint doesn't exist - {0}".format(os.path.abspath(dir)))
+        exit(1)
     filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
     fullpath = os.path.join(dir, filename)
     msglogger.info("Saving checkpoint to: %s" % fullpath)
@@ -121,4 +120,5 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         model.load_state_dict(checkpoint['state_dict'])
         return model, compression_scheduler, start_epoch
     else:
-        raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
+        msglogger.info("Error: no checkpoint found at %s", chkpt_file)
+        exit(1)

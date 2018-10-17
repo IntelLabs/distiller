@@ -20,3 +20,5 @@ from .mobilenet import *
 from .preresnet_imagenet import *
 from .alexnet_batchnorm import *
 from .resnet_earlyexit import *
+from .resnext import *
+from .resnext_earlyexit import *
