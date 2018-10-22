@@ -106,7 +106,7 @@ pruners:
 #       'module.layer1.0.conv1.weight': Filters
 
   # filter_pruner:
-  #   class: CriterionParameterizedAGP
+  #   class: ActivationAPoZRankedFilterPruner_AGP
   #   initial_sparsity : 0.10
   #   final_sparsity: 0.6
   #   reg_regims:
@@ -114,7 +114,7 @@ pruners:
 
   filter_pruner_60:
     #class: StructuredAutomatedGradualPruner
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.6
     reg_regims:
@@ -130,7 +130,7 @@ pruners:
 
   filter_pruner_50:
     #class: StructuredAutomatedGradualPruner
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.5
     reg_regims:
@@ -143,7 +143,7 @@ pruners:
 
   filter_pruner_10:
     #class: StructuredAutomatedGradualPruner
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0
     final_sparsity: 0.1
     reg_regims:
@@ -151,7 +151,7 @@ pruners:
 
   filter_pruner_30:
     #class: StructuredAutomatedGradualPruner
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.3
     reg_regims:

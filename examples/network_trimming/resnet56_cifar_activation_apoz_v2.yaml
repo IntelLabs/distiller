@@ -14,7 +14,7 @@
 #     Total MACs: 67,797,632
 #
 #
-# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../network_trimming/resnet56_cifar_activation_apoz.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic --act-stats=valid
+# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../network_trimming/resnet56_cifar_activation_apoz_v2.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic --act-stats=valid
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -103,7 +103,7 @@
 version: 1
 pruners:
   filter_pruner_60:
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.7
     reg_regims:
@@ -118,7 +118,7 @@ pruners:
       module.layer1.8.conv1.weight: Filters
 
   filter_pruner_50:
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.6
     reg_regims:
@@ -130,14 +130,14 @@ pruners:
       module.layer2.7.conv1.weight: Filters
 
   filter_pruner_10:
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0
     final_sparsity: 0.2
     reg_regims:
       module.layer3.1.conv1.weight: Filters
 
   filter_pruner_30:
-    class: CriterionParameterizedAGP
+    class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.4
     reg_regims:

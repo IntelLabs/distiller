@@ -23,13 +23,19 @@ msglogger = logging.getLogger()
 
 
 # TODO: support different policies for ranking structures
-class L1RankedStructureParameterPruner(_ParameterPruner):
+class RankedStructureParameterPruner(_ParameterPruner):
     """Uses mean L1-norm to rank structures and prune a specified percentage of structures
     """
     def __init__(self, name, reg_regims):
-        super(L1RankedStructureParameterPruner, self).__init__(name)
-        self.name = name
+        super(RankedStructureParameterPruner, self).__init__(name)
         self.reg_regims = reg_regims
+
+
+class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
+    """Uses mean L1-norm to rank structures and prune a specified percentage of structures
+    """
+    def __init__(self, name, reg_regims):
+        super(L1RankedStructureParameterPruner, self).__init__(name, reg_regims)
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.reg_regims.keys():
@@ -73,7 +79,7 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
         return bottomk, channel_mags
 
     @staticmethod
-    def rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict):
+    def rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
         bottomk_channels, channel_mags = L1RankedStructureParameterPruner.rank_channels(fraction_to_prune, param)
         if bottomk_channels is None:
             # Empty list means that fraction_to_prune is too low to prune anything
@@ -94,7 +100,7 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
                        fraction_to_prune, len(bottomk_channels), num_channels)
 
     @staticmethod
-    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict):
+    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         # First we rank the filters
         view_filters = param.view(param.size(0), -1)
@@ -112,7 +118,7 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
                        fraction_to_prune, topk_filters, filter_mags.size(0))
 
     @staticmethod
-    def rank_prune_rows(fraction_to_prune, param, param_name, zeros_mask_dict):
+    def rank_prune_rows(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
         """Prune the rows of a matrix, based on ranked L1-norms of the matrix rows.
 
         PyTorch stores the weights matrices in a transposed format.  I.e. before performing GEMM, a matrix is
@@ -139,18 +145,11 @@ class L1RankedStructureParameterPruner(_ParameterPruner):
                        fraction_to_prune, num_rows_to_prune, rows_mags.size(0))
 
 
-class ActivationAPoZRankedStructureParameterPruner(_ParameterPruner):
-    """Uses mean APoZ (average percentage of zeros) activation channels to rank structures
-    and prune a specified percentage of structures.
-
-    "Network Trimming: A Data-Driven Neuron Pruning Approach towards Efficient Deep Architectures",
-    Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang, ICLR 2016
-    https://arxiv.org/abs/1607.03250
+class RankedFiltersParameterPruner(RankedStructureParameterPruner):
+    """Base class for the special (but often-used) case of ranking filters
     """
     def __init__(self, name, reg_regims):
-        super(ActivationAPoZRankedStructureParameterPruner, self).__init__(name)
-        self.name = name
-        self.reg_regims = reg_regims
+        super(RankedFiltersParameterPruner, self).__init__(name, reg_regims)
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.reg_regims.keys():
@@ -165,6 +164,26 @@ class ActivationAPoZRankedStructureParameterPruner(_ParameterPruner):
             return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, meta['model'])
         else:
             raise ValueError("Currently only filter (3D) ranking is supported")
+
+    @staticmethod
+    def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters):
+        binary_map = torch.zeros(num_filters).cuda()
+        binary_map[filters_ordered_by_criterion] = 1
+        #msglogger.info("binary_map: {}".format(binary_map))
+        expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
+        return expanded.view(param.shape)
+
+
+class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
+    """Uses mean APoZ (average percentage of zeros) activation channels to rank structures
+    and prune a specified percentage of structures.
+
+    "Network Trimming: A Data-Driven Neuron Pruning Approach towards Efficient Deep Architectures",
+    Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang, ICLR 2016
+    https://arxiv.org/abs/1607.03250
+    """
+    def __init__(self, name, reg_regims):
+        super(ActivationAPoZRankedFilterParameterPruner, self).__init__(name, reg_regims)
 
     @staticmethod
     def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
@@ -189,15 +208,69 @@ class ActivationAPoZRankedStructureParameterPruner(_ParameterPruner):
 
         # Sort from high to low, and remove the bottom 'num_filters_to_prune' filters
         filters_ordered_by_apoz = np.argsort(-apoz)[:-num_filters_to_prune]
+        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_by_apoz,
+                                                                                               param, num_filters)
 
-        binary_map = torch.zeros(num_filters).cuda()
-        binary_map[filters_ordered_by_apoz] = 1
-        expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
-        zeros_mask_dict[param_name].mask = expanded.view(param.size(0), param.size(1), param.size(2), param.size(3))
-
-        #msglogger.info("ActivationL1RankedStructureParameterPruner: {} ({})".format(fq_name, apoz))
         msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
                        distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_filters_to_prune, num_filters)
-        #msglogger.info("{}".format(filters_ordered_by_apoz))
+
+
+class RandomRankedFilterPruner(RankedFiltersParameterPruner):
+    """A Random raanking of filters.
+
+    This is used for sanity testing of other algorithms.
+    """
+    def __init__(self, name, reg_regims):
+        super(RandomRankedFilterPruner, self).__init__(name, reg_regims)
+
+    @staticmethod
+    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+        assert param.dim() == 4, "This thresholding is only supported for 4D weights"
+        num_filters = param.size(0)
+        num_filters_to_prune = int(fraction_to_prune * num_filters)
+
+        if num_filters_to_prune == 0:
+            msglogger.info("Too few filters - can't prune %.1f%% filters", 100*fraction_to_prune)
+            return
+
+        filters_ordered_randomly = np.random.permutation(num_filters)[:-num_filters_to_prune]
+        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_randomly,
+                                                                                               param, num_filters)
+
+        msglogger.info("RandomRankedFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+                       param_name,
+                       distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
+                       fraction_to_prune, num_filters_to_prune, num_filters)
+
+
+class GradientRankedFilterPruner(RankedFiltersParameterPruner):
+    """
+    """
+    def __init__(self, name, reg_regims):
+        super(RandomRankedFilterPruner, self).__init__(name, reg_regims)
+
+    @staticmethod
+    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+        assert param.dim() == 4, "This thresholding is only supported for 4D weights"
+        num_filters = param.size(0)
+        num_filters_to_prune = int(fraction_to_prune * num_filters)
+        if num_filters_to_prune == 0:
+            msglogger.info("Too few filters - can't prune %.1f%% filters", 100*fraction_to_prune)
+            return
+
+        # Compute the multiplicatipn of the filters times the filter_gradienrs
+        view_filters = param.view(param.size(0), -1)
+        view_filter_grads = param.grad.view(param.size(0), -1)
+        weighted_gradients = view_filter_grads * view_filters
+        weighted_gradients = weighted_gradients.sum(dim=1)
+
+        # Sort from high to low, and remove the bottom 'num_filters_to_prune' filters
+        filters_ordered_by_gradient = np.argsort(-weighted_gradients.detach().cpu().numpy())[:-num_filters_to_prune]
+        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_by_gradient,
+                                                                                               param, num_filters)
+        msglogger.info("GradientRankedFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+                       param_name,
+                       distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
+                       fraction_to_prune, num_filters_to_prune, num_filters)
