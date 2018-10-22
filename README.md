@@ -35,6 +35,29 @@
 
 Network compression can reduce the memory footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low-precision arithmetic.
 
+<details><summary><b>What's New in October?</b></summary>
+<p>
+We've added collection of activation statistics! 
+
+Activation statistics can be leveraged to make pruning and quantization decisions, and so
+we added support to collect these data.
+Two types of activation statistics are supported: summary statistics, and detailed records 
+per activation.
+Currently we support the following summaries: 
+- Average activation sparsity, per layer
+- Average L1-norm for each activation channel, per layer
+- Average sparsity for each activation channel, per layer
+
+For the detailed records we collect some statistics per activation and store it in a record.  
+Using this collection method generates more detailed data, but consumes more time, so
+Beware.
+
+* You can collect activation data for the different training phases: training/validation/test.
+* You can access the data directly from each module that you chose to collect stats for.  
+* You can also create an Excel workbook with the stats.
+</p>
+</details>
+
 ## Table of Contents
 
 * [Feature set](#feature-set)
