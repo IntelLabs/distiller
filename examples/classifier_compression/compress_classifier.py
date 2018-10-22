@@ -189,6 +189,8 @@ def create_activation_stats_collectors(model, collection_phase):
     distiller.utils.assign_layer_fq_names(model)
 
     activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
+    if collection_phase is None:
+        return activations_collectors
     collectors = missingdict()
     collectors["sparsity"] = SummaryActivationStatsCollector(model, "sparsity", distiller.utils.sparsity)
     collectors["l1_channels"] = SummaryActivationStatsCollector(model, "l1_channels",
@@ -693,7 +695,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args):
     if not isinstance(loggers, list):
         loggers = [loggers]
     test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
-                       loggers=loggers, args=args)
+                       loggers=loggers, args=args,
+                       activations_collectors=create_activation_stats_collectors(model, None))
     which_params = [param_name for param_name, _ in model.named_parameters()]
     sensitivity = distiller.perform_sensitivity_analysis(model,
                                                          net_params=which_params,
