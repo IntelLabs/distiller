@@ -16,3 +16,4 @@ ipywidgets==7.1.2
 bqplot==0.10.5
 pyyaml
 pytest==3.5.1
+xlsxwriter==1.1.1

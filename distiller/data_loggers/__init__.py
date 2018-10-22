@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-from .collector import ActivationSparsityCollector
+from .collector import *
 from .logger import PythonLogger, TensorBoardLogger, CsvLogger
 
 del logger

@@ -28,7 +28,7 @@ import torch
 import numpy as np
 import tabulate
 import distiller
-from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np
+from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np, norm_filters
 # TensorBoard logger
 from .tbbackend import TBBackend
 # Visdom logger
@@ -53,7 +53,7 @@ class DataLogger(object):
     def log_training_progress(self, model, epoch, i, set_size, batch_time, data_time, classerr, losses, print_freq, collectors):
         raise NotImplementedError
 
-    def log_activation_sparsity(self, activation_sparsity, logcontext):
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
         raise NotImplementedError
 
     def log_weights_sparsity(self, model, epoch):
@@ -81,12 +81,11 @@ class PythonLogger(DataLogger):
                 log = log + '{name} {val:.6f}    '.format(name=name, val=val)
         self.pylogger.info(log)
 
-
-    def log_activation_sparsity(self, activation_sparsity, logcontext):
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
         data = []
-        for layer, sparsity in activation_sparsity.items():
-            data.append([layer, sparsity*100])
-        t = tabulate.tabulate(data, headers=['Layer', 'sparsity (%)'], tablefmt='psql', floatfmt=".1f")
+        for layer, statistic in activation_stats.items():
+            data.append([layer, statistic])
+        t = tabulate.tabulate(data, headers=['Layer', stat_name], tablefmt='psql', floatfmt=".2f")
         msglogger.info('\n' + t)
 
     def log_weights_sparsity(self, model, epoch):
@@ -119,9 +118,9 @@ class TensorBoardLogger(DataLogger):
             self.tblogger.scalar_summary(prefix+tag, value, total_steps(total, epoch, completed))
         self.tblogger.sync_to_file()
 
-    def log_activation_sparsity(self, activation_sparsity, epoch):
-        group = 'sparsity/activations/'
-        for tag, value in activation_sparsity.items():
+    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
+        group = stat_name + '/activations/' + phase + "/"
+        for tag, value in activation_stats.items():
             self.tblogger.scalar_summary(group+tag, value, epoch)
         self.tblogger.sync_to_file()
 
@@ -140,6 +139,15 @@ class TensorBoardLogger(DataLogger):
                                              sparsity_2D(param)*100, epoch)
 
         self.tblogger.scalar_summary("sprasity/weights/total", 100*(1 - sparse_params_size/params_size), epoch)
+        self.tblogger.sync_to_file()
+
+    def log_weights_filter_magnitude(self, model, epoch, multi_graphs=False):
+        """Log the L1-magnitude of the weights tensors.
+        """
+        for name, param in model.state_dict().items():
+            if param.dim() in [4]:
+                self.tblogger.list_summary('magnitude/filters/' + name,
+                                           list(to_np(norm_filters(param))), epoch, multi_graphs)
         self.tblogger.sync_to_file()
 
     def log_weights_distribution(self, named_params, steps_completed):
@@ -174,6 +182,6 @@ class CsvLogger(DataLogger):
                     params_size += torch.numel(param)
                     sparse_params_size += param.numel() * _density
                     writer.writerow([name, size_to_str(param.size()),
-                                       torch.numel(param),
-                                       int(_density * param.numel()),
-                                       (1-_density)*100])
+                                     torch.numel(param),
+                                     int(_density * param.numel()),
+                                     (1-_density)*100])

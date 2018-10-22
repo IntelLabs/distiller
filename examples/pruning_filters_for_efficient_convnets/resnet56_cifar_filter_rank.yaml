@@ -1,8 +1,8 @@
-#
 # This schedule performs filter ranking and removal, for the convolution layers in ResNet56-CIFAR, as described in
-# Pruning Filters for Efficient Convnets.
-# Filters are ranked and pruned accordingly.
+# Pruning Filters for Efficient Convnets, H. Li, A. Kadav, I. Durdanovic, H. Samet, and H. P. Graf.
+# ICLR 2017, arXiv:1608.087
 #
+# Filters are ranked and pruned accordingly.
 # This is followed by network thinning which removes the filters entirely from the model, and changes the convolution
 # layers' dimensions accordingly.  Convolution layers that follow have their respective channels removed as well, as do
 # Batch normailization layers.
@@ -17,6 +17,14 @@
 # time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic
 #
 # Results: 62.7% of the original convolution MACs (when calculated using direct convolution)
+#
+# Baseline results:
+#     Top1: 92.850    Top5: 99.780    Loss: 0.464
+#     Total MACs: 125,747,840
+#
+# Results:
+#     Top1: 92.830    Top5: 99.760    Loss: 0.489
+#     Total MACs: 78,856,832
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -79,19 +87,19 @@
 # | 54 | module.layer3.7.conv2.weight        | (64, 45, 3, 3) |         25920 |          25920 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02753 |  0.00051 |    0.02028 |
 # | 55 | module.layer3.8.conv1.weight        | (45, 64, 3, 3) |         25920 |          25920 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02897 | -0.00308 |    0.02240 |
 # | 56 | module.layer3.8.conv2.weight        | (64, 45, 3, 3) |         25920 |          25920 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02130 | -0.00061 |    0.01556 |
-# | 57 | module.fc.weight                    | (10, 64)       |           640 |            640 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.47902 | -0.00002 |    0.37518 |
+# | 57 | module.fc.weight                    | (10, 64)       |           640 |            640 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.47902 | -0.00002 |    0.47518 |
 # | 58 | Total sparsity:                     | -              |        634640 |         634640 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.00000 |  0.00000 |    0.00000 |
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
 # Total sparsity: 0.00
 #
 # --- validate (epoch=249)-----------
 # 5000 samples (256 per mini-batch)
-# ==> Top1: 92.640    Top5: 99.820    Loss: 0.353
+# ==> Top1: 92.640    Top5: 99.820    Loss: 0.453
 #
 # Saving checkpoint
 # --- test ---------------------
 # 10000 samples (256 per mini-batch)
-# ==> Top1: 92.830    Top5: 99.760    Loss: 0.389
+# ==> Top1: 92.830    Top5: 99.760    Loss: 0.489
 #
 #
 # Log file for this run: /home/cvds_lab/nzmora/pytorch_workspace/private-distiller/examples/classifier_compression/logs/2018.04.17-005852/2018.04.17-005852.log

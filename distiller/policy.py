@@ -90,6 +90,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
         if self.levels is not None:
             self.pruner.levels = self.levels
 
+        meta['model'] = model
         for param_name, param in model.named_parameters():
             self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
 
