@@ -61,7 +61,7 @@ def test_connectivity():
     assert g is not None
 
     op_names = [op['name'] for op in g.ops.values()]
-    assert 74 == len(op_names)
+    assert 73 == len(op_names)
 
     edges = g.edges
     assert edges[0].src == '0' and edges[0].dst == 'conv1'
@@ -180,10 +180,10 @@ def test_connectivity_summary():
     assert g is not None
 
     summary = connectivity_summary(g)
-    assert len(summary) == 74
+    assert len(summary) == 73
 
     verbose_summary = connectivity_summary_verbose(g)
-    assert len(verbose_summary) == 74
+    assert len(verbose_summary) == 73
 
 
 if __name__ == '__main__':
