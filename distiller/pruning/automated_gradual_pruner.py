@@ -16,7 +16,7 @@
 
 from .pruner import _ParameterPruner
 from .level_pruner import SparsityLevelParameterPruner
-from .ranked_structures_pruner import L1RankedStructureParameterPruner
+from .ranked_structures_pruner import *
 from distiller.utils import *
 # import logging
 # msglogger = logging.getLogger()
@@ -61,28 +61,56 @@ class AutomatedGradualPruner(_ParameterPruner):
         target_sparsity = (self.final_sparsity +
                            (self.initial_sparsity-self.final_sparsity) *
                            (1.0 - ((current_epoch-starting_epoch)/span))**3)
-        self.pruning_fn(param, param_name, zeros_mask_dict, target_sparsity)
+        self.pruning_fn(param, param_name, zeros_mask_dict, target_sparsity, meta['model'])
 
     @staticmethod
-    def prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity):
+    def prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity, model=None):
         return SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
 
 
-class StructuredAutomatedGradualPruner(AutomatedGradualPruner):
+class CriterionParameterizedAGP(AutomatedGradualPruner):
     def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
         self.reg_regims = reg_regims
         weights = [weight for weight in reg_regims.keys()]
-        if not all([group in ['3D', 'Filters', 'Channels'] for group in reg_regims.values()]):
-            raise ValueError("Currently only filter (3D) and channel pruning is supported")
-        super(StructuredAutomatedGradualPruner, self).__init__(name, initial_sparsity,
-                                                               final_sparsity, weights,
-                                                               pruning_fn=self.prune_to_target_sparsity)
+        if not all([group in ['3D', 'Filters', 'Channels', 'Rows'] for group in reg_regims.values()]):
+            raise ValueError("Unsupported group structure")
+        super(CriterionParameterizedAGP, self).__init__(name, initial_sparsity,
+                                                        final_sparsity, weights,
+                                                        pruning_fn=self.prune_to_target_sparsity)
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity):
+    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
         if self.reg_regims[param_name] in ['3D', 'Filters']:
-            L1RankedStructureParameterPruner.rank_prune_filters(target_sparsity, param,
-                                                                param_name, zeros_mask_dict)
-        else:
-            if self.reg_regims[param_name] == 'Channels':
-                L1RankedStructureParameterPruner.rank_prune_channels(target_sparsity, param,
-                                                                     param_name, zeros_mask_dict)
+            self.filters_ranking_fn(target_sparsity, param, param_name, zeros_mask_dict, model)
+        elif self.reg_regims[param_name] == 'Channels':
+            self.channels_ranking_fn(target_sparsity, param, param_name, zeros_mask_dict, model)
+        elif self.reg_regims[param_name] == 'Rows':
+            self.rows_ranking_fn(target_sparsity, param, param_name, zeros_mask_dict, model)
+
+
+# TODO: this class parameterization is cumbersome: the ranking functions (per structure)
+# should come from the YAML schedule
+
+class L1RankedStructureParameterPruner_AGP(CriterionParameterizedAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        super(L1RankedStructureParameterPruner_AGP, self).__init__(name, initial_sparsity, final_sparsity, reg_regims)
+        self.filters_ranking_fn = L1RankedStructureParameterPruner.rank_prune_filters
+        self.channels_ranking_fn = L1RankedStructureParameterPruner.rank_prune_channels
+        self.rows_ranking_fn = L1RankedStructureParameterPruner.rank_prune_rows
+
+
+class ActivationAPoZRankedFilterPruner_AGP(CriterionParameterizedAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        super(ActivationAPoZRankedFilterPruner_AGP, self).__init__(name, initial_sparsity, final_sparsity, reg_regims)
+        self.filters_ranking_fn = ActivationAPoZRankedFilterPruner.rank_prune_filters
+
+
+class GradientRankedFilterPruner_AGP(CriterionParameterizedAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        super(GradientRankedFilterPruner_AGP, self).__init__(name, initial_sparsity, final_sparsity, reg_regims)
+        self.filters_ranking_fn = GradientRankedFilterPruner.rank_prune_filters
+
+
+class RandomRankedFilterPruner_AGP(CriterionParameterizedAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, reg_regims):
+        super(RandomRankedFilterPruner_AGP, self).__init__(name, initial_sparsity, final_sparsity, reg_regims)
+        self.filters_ranking_fn = RandomRankedFilterPruner.rank_prune_filters

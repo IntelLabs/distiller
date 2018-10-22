@@ -183,7 +183,7 @@ def test_connectivity_summary():
     assert len(summary) == 73
 
     verbose_summary = connectivity_summary_verbose(g)
-    assert len(verbose_summary  ) == 73
+    assert len(verbose_summary) == 73
 
 
 if __name__ == '__main__':
