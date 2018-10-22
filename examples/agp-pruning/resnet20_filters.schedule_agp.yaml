@@ -64,9 +64,10 @@
 
 
 version: 1
+
 pruners:
   low_pruner:
-    class: StructuredAutomatedGradualPruner
+    class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.40
     reg_regims:
@@ -82,7 +83,7 @@ pruners:
               module.layer3.2.conv1.weight,  module.layer3.2.conv2.weight]
 
   fc_pruner:
-    class: StructuredAutomatedGradualPruner
+    class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.05
     final_sparsity: 0.50
     reg_regims:
@@ -121,8 +122,8 @@ policies:
     ending_epoch: 220
     frequency: 2
 
-  # Currently the thinner is disabled until the end, because it interacts with the sparsity
-  # goals of the StructuredAutomatedGradualPruner.
+  # Currently the thinner is disabled until the the structure pruner is done, because it interacts
+  # with the sparsity goals of the L1RankedStructureParameterPruner_AGP.
   # This can be fixed rather easily.
   # - extension:
   #     instance_name: net_thinner

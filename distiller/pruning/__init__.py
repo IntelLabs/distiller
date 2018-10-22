@@ -19,11 +19,14 @@
 """
 
 from .magnitude_pruner import MagnitudeParameterPruner
-from .automated_gradual_pruner import AutomatedGradualPruner, StructuredAutomatedGradualPruner, CriterionParameterizedAGP
+from .automated_gradual_pruner import AutomatedGradualPruner, L1RankedStructureParameterPruner_AGP, \
+                                      ActivationAPoZRankedFilterPruner_AGP, GradientRankedFilterPruner_AGP, \
+                                      RandomRankedFilterPruner_AGP
 from .level_pruner import SparsityLevelParameterPruner
 from .sensitivity_pruner import SensitivityPruner
 from .structure_pruner import StructureParameterPruner
-from .ranked_structures_pruner import L1RankedStructureParameterPruner, ActivationAPoZRankedStructureParameterPruner
+from .ranked_structures_pruner import L1RankedStructureParameterPruner, ActivationAPoZRankedFilterPruner, \
+                                      RandomRankedFilterPruner, GradientRankedFilterPruner
 from .baidu_rnn_pruner import BaiduRNNPruner
 
 del magnitude_pruner
