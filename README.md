@@ -37,13 +37,21 @@ Network compression can reduce the memory footprint of a neural network, increas
 
 <details><summary><b>What's New in October?</b></summary>
 <p>
-We've added collection of activation statistics! 
+<b><i>We've added two new Jupyter notebooks:</i></b>
+
+- The [first notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/what_are_you_looking_at.ipynb) contrasts what sparse and dense versions of ResNet50 "look at".
+<center> <img src="imgs/sparse_dense_cmaps.png"></center>
+
+- The [second notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/truncated_svd.ipynb) shows a simple application of Truncated SVD to the linear layer in ResNet50.
+</p>
+<p>
+<b>We've added collection of activation statistics!</b>
 
 Activation statistics can be leveraged to make pruning and quantization decisions, and so
 we added support to collect these data.
-Two types of activation statistics are supported: summary statistics, and detailed records 
+Two types of activation statistics are supported: summary statistics, and detailed records
 per activation.
-Currently we support the following summaries: 
+Currently we support the following summaries:
 - Average activation sparsity, per layer
 - Average L1-norm for each activation channel, per layer
 - Average sparsity for each activation channel, per layer
