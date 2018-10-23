@@ -28,7 +28,7 @@ import logging
 import logging.config
 import numpy as np
 import torch
-from git import Repo
+from git import Repo, InvalidGitRepositoryError
 HAVE_LSB = True
 try:
     import lsb_release
@@ -53,11 +53,15 @@ def log_execution_env_state(app_args, gitroot='.'):
 
         It is useful to know what git tag we're using, and if we have outstanding code.
         """
-        repo = Repo(gitroot)
-        assert not repo.bare
+        try:
+            repo = Repo(gitroot)
+            assert not repo.bare
+        except InvalidGitRepositoryError:
+            logger.debug("Cannot find a Git repository.  You probably downloaded an archive of Distiller.")
+            return
 
         if repo.is_dirty():
-            logger.debug("Git is dirty")
+           logger.debug("Git is dirty")
         try:
             branch_name = repo.active_branch.name
         except TypeError:
