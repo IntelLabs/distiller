@@ -34,18 +34,10 @@ class ParameterMasker(object):
         self.param_name = param_name    # For debug/logging purposes
         self.is_regularization_mask = False
 
-    def apply_mask(self, tensor, in_backward_cb=False):
-        """Apply a mask on the tensor.
-
-        The tensor is either a gradients tensor (when apply_mask is invoked from the
-        backward hook of the variable owning the gradient); or a weights tensor
-        (when apply_mask is invoked by the scheduler).
-        """
+    def apply_mask(self, tensor):
+        """Apply a mask on the weights tensor."""
         if self.mask is None:
             msglogger.debug('No mask for parameter {0}'.format(self.param_name))
-            return
-        if in_backward_cb and self.is_regularization_mask:
-            # We don't want to mask gradients when a regularizer generated the mask.
             return
         msglogger.debug('Masking parameter {0}'.format(self.param_name))
         tensor.data.mul_(self.mask)
@@ -77,7 +69,6 @@ class CompressionScheduler(object):
         for name, param in self.model.named_parameters():
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
-            param.register_hook(partial(masker.apply_mask, in_backward_cb=True))
 
     def add_policy(self, policy, epochs=None, starting_epoch=None, ending_epoch=None, frequency=None):
         """Add a new policy to the schedule.
