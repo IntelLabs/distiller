@@ -489,7 +489,7 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', s
         pydot_graph.add_node(pydot.Node(op_node[0], **style, label="\n".join(op_node)))
 
     for data_node in data_nodes:
-        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node)))
+        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node[1:])))
 
     node_style = {'shape': 'oval',
                   'fillcolor': 'gray',
@@ -497,7 +497,7 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', s
 
     if param_nodes is not None:
         for param_node in param_nodes:
-            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node)))
+            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node[1:])))
 
     for edge in edges:
         pydot_graph.add_edge(pydot.Edge(edge[0], edge[1]))
@@ -525,7 +525,7 @@ def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
     data_nodes = []
     param_nodes = []
     for id, param in sgraph.params.items():
-        n_data = (id, str(param['shape']))
+        n_data = (id, str(distiller.volume(param['shape'])), str(param['shape']))
         if data_node_has_parent(sgraph, id):
             data_nodes.append(n_data)
         else:
