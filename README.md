@@ -184,7 +184,7 @@ For more details, there are some other resources you can refer to:
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule/index.html)
 + [Usage](https://nervanasystems.github.io/usage/index.html)
-
++ [Tutorial: Using Distiller to prune a PyTorch language model]()
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)
