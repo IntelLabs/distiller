@@ -136,15 +136,12 @@ def masks_sparsity_summary(model, scheduler, param_dims=[2, 4]):
         if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
             mask = scheduler.zeros_mask_dict[name].mask
             if mask is None:
-                _density = 100
+                _density = 1
             else:
                 _density = distiller.density(mask)
             params_size += torch.numel(param)
             sparse_params_size += param.numel() * _density
-            df.loc[len(df.index)] = ([
-                name,
-                distiller.sparsity(mask) * 100
-            ])
+            df.loc[len(df.index)] = ([name, (1-_density)*100])
 
     assert params_size != 0
     total_sparsity = (1 - sparse_params_size/params_size)*100
