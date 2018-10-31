@@ -46,7 +46,8 @@ class ScheduledTrainingPolicy(object):
         """A new epcoh is about to begin"""
         pass
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer=None):
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch,
+                           zeros_mask_dict, meta, optimizer=None):
         """The forward-pass of a new mini-batch is about to begin"""
         pass
 
@@ -79,24 +80,58 @@ class PruningPolicy(ScheduledTrainingPolicy):
     each epoch.  This can be easily changed.
     """
     def __init__(self, pruner, pruner_args, classes=None, layers=None):
+        """
+        """
         super(PruningPolicy, self).__init__(classes, layers)
         self.pruner = pruner
         self.levels = None
-        if pruner_args is not None and 'levels' in pruner_args:
-            self.levels = pruner_args['levels']
+        self.keep_mask = False
+        self.mini_batch_pruning_frequency = 0
+        self.mask_on_forward_only = False
+        if pruner_args is not None:
+            if 'levels' in pruner_args:
+                self.levels = pruner_args['levels']
+            self.keep_mask = pruner_args.get('keep_mask', False)
+            self.mini_batch_pruning_frequency = pruner_args.get('mini_batch_pruning_frequency', 0)
+            self.mask_on_forward_only = pruner_args.get('mask_on_forward_only', False)
+        self.is_last_epoch = False
+        self.mini_batch_id = 0          # The ID of the mini_batch within the present epoch
+        self.global_mini_batch_id = 0   # The ID of the mini_batch within the present training session
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
         msglogger.debug("Pruner {} is about to prune".format(self.pruner.name))
+        self.mini_batch_id = 0
+        self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
+        self.is_first_epoch = meta['current_epoch'] == meta['starting_epoch']
         if self.levels is not None:
             self.pruner.levels = self.levels
 
         meta['model'] = model
         for param_name, param in model.named_parameters():
+            if self.mask_on_forward_only and self.is_first_epoch:
+                zeros_mask_dict[param_name].use_double_copies = True
+                self.global_mini_batch_id = 0
             self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
 
-    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer=None):
+    def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch,
+                           zeros_mask_dict, meta, optimizer=None):
+        self.mini_batch_id += 1
+        self.global_mini_batch_id += 1
+        if (self.mini_batch_pruning_frequency != 0 and
+           self.global_mini_batch_id % self.mini_batch_pruning_frequency == 0):
+            for param_name, param in model.named_parameters():
+                self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
+
         for param_name, param in model.named_parameters():
             zeros_mask_dict[param_name].apply_mask(param)
+
+    def on_epoch_end(self, model, zeros_mask_dict, meta):
+        """The current epoch has ended"""
+        is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
+        if self.keep_mask and is_last_epoch:
+            for param_name, param in model.named_parameters():
+                zeros_mask_dict[param_name].use_double_copies = False
+                zeros_mask_dict[param_name].apply_mask(param)
 
 
 class RegularizationPolicy(ScheduledTrainingPolicy):
