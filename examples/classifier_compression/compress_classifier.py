@@ -120,6 +120,8 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "valid", "test"], default=None,
                     help='collect activation statistics (WARNING: this slows down training)')
+parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
+                    help='print masks sparsity table at end of each epoch')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
@@ -238,8 +240,9 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_top1 = 0
-    best_epoch = 0
+    best_epoch = distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
+    #best_top1 = 0
+    #best_epoch = 0
 
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -372,6 +375,8 @@ def main():
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
                                                 collector=collectors["sparsity"])
+            if args.masks_sparsity:
+                msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
@@ -391,13 +396,16 @@ def main():
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # remember best top1 and save checkpoint
-        is_best = top1 > best_top1
+        #sparsity = distiller.model_sparsity(model)
+        is_best = top1 > best_epoch.top1
         if is_best:
-            best_epoch = epoch
-            best_top1 = top1
-        msglogger.info('==> Best Top1: %.3f   On Epoch: %d\n', best_top1, best_epoch)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
-                                 args.name, msglogger.logdir)
+            best_epoch.epoch = epoch
+            best_epoch.top1 = top1
+            #best_epoch.sparsity = sparsity
+        msglogger.info('==> Best Top1: %.3f (%.1f sparsity) on Epoch: %d\n',
+                       best_epoch.top1, best_epoch.sparsity, best_epoch.epoch)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
+                                 best_epoch.top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
@@ -525,7 +533,6 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
-
     return top1, top5, lossses
 
 
