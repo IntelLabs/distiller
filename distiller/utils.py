@@ -108,9 +108,11 @@ def denormalize_module_name(parallel_model, normalized_name):
         return normalized_name   # Did not find a module with the name <normalized_name>
 
 
-def volume(tensor):
+def volume(tensor_desc):
     """return the volume of a pytorch tensor"""
-    return np.prod(tensor.shape)
+    if isinstance(tensor_desc, tuple):
+        return np.prod(tensor_desc)
+    return np.prod(tensor_desc.shape)
 
 
 def density(tensor):
