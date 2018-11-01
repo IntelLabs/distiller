@@ -58,6 +58,14 @@ def get_tensor_max_abs(tensor):
     return max(abs(tensor.max().item()), abs(tensor.min().item()))
 
 
+def get_tensor_avg_max_abs_across_batch(tensor):
+    # Assume batch is at dim 0
+    tv = tensor.view(tensor.size()[0], -1)
+    avg_max = tv.max(dim=1)[0].mean().item()
+    avg_min = tv.min(dim=1)[0].mean().item()
+    return max(abs(avg_max), abs(avg_min))
+
+
 def get_quantized_range(num_bits, signed=True):
     if signed:
         n = 2 ** (num_bits - 1)
