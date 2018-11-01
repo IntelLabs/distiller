@@ -24,6 +24,7 @@ import os
 import re
 import numpy as np
 import collections
+from copy import deepcopy
 import torch
 import torchvision
 from torch.autograd import Variable
@@ -488,7 +489,7 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', s
         pydot_graph.add_node(pydot.Node(op_node[0], **style, label="\n".join(op_node)))
 
     for data_node in data_nodes:
-        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node)))
+        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node[1:])))
 
     node_style = {'shape': 'oval',
                   'fillcolor': 'gray',
@@ -496,7 +497,7 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', s
 
     if param_nodes is not None:
         for param_node in param_nodes:
-            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node)))
+            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node[1:])))
 
     for edge in edges:
         pydot_graph.add_edge(pydot.Edge(edge[0], edge[1]))
@@ -524,7 +525,7 @@ def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
     data_nodes = []
     param_nodes = []
     for id, param in sgraph.params.items():
-        n_data = (id, str(param['shape']))
+        n_data = (id, str(distiller.volume(param['shape'])), str(param['shape']))
         if data_node_has_parent(sgraph, id):
             data_nodes.append(n_data)
         else:
@@ -605,22 +606,26 @@ def dataset_dummy_input(dataset):
     return dummy_input
 
 
-def export_img_classifier_to_onnx(model, onnx_fname, dataset):
+def export_img_classifier_to_onnx(model, onnx_fname, dataset, export_params=True, add_softmax=True):
     """Export a PyTorch image classifier to ONNX.
 
     """
     dummy_input = dataset_dummy_input(dataset).to('cuda')
+    # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
+    model = distiller.make_non_parallel_copy(model)
 
     with torch.onnx.set_training(model, False):
-        # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
-        if isinstance(model, torch.nn.DataParallel):
-            model = model.module
-        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=True)
+        if add_softmax:
+            # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
+            model.original_forward = model.forward
+            softmax = torch.nn.Softmax(dim=1)
+            model.forward = lambda input: softmax(model.original_forward(input))
+        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=export_params)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
-
 
 
 def data_node_has_parent(g, id):
     for edge in g.edges:
-        if edge.dst == id: return True
+        if edge.dst == id:
+            return True
     return False

@@ -35,6 +35,37 @@
 
 Network compression can reduce the memory footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low-precision arithmetic.
 
+<details><summary><b>What's New in October?</b></summary>
+<p>
+<b><i>We've added two new Jupyter notebooks:</i></b>
+
+- The [first notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/what_are_you_looking_at.ipynb) contrasts what sparse and dense versions of ResNet50 "look at".
+<center> <img src="imgs/sparse_dense_cmaps.png"></center>
+
+- The [second notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/truncated_svd.ipynb) shows a simple application of Truncated SVD to the linear layer in ResNet50.
+</p>
+<p>
+<b>We've added collection of activation statistics!</b>
+
+Activation statistics can be leveraged to make pruning and quantization decisions, and so
+we added support to collect these data.
+Two types of activation statistics are supported: summary statistics, and detailed records
+per activation.
+Currently we support the following summaries:
+- Average activation sparsity, per layer
+- Average L1-norm for each activation channel, per layer
+- Average sparsity for each activation channel, per layer
+
+For the detailed records we collect some statistics per activation and store it in a record.  
+Using this collection method generates more detailed data, but consumes more time, so
+Beware.
+
+* You can collect activation data for the different training phases: training/validation/test.
+* You can access the data directly from each module that you chose to collect stats for.  
+* You can also create an Excel workbook with the stats.
+</p>
+</details>
+
 ## Table of Contents
 
 * [Feature set](#feature-set)
@@ -153,7 +184,7 @@ For more details, there are some other resources you can refer to:
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule/index.html)
 + [Usage](https://nervanasystems.github.io/usage/index.html)
-
++ [Tutorial: Using Distiller to prune a PyTorch language model](https://github.com/NervanaSystems/distiller/wiki/Tutorial:-Using-Distiller-to-prune-a-PyTorch-language-model)
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)

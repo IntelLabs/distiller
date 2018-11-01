@@ -18,13 +18,16 @@
 Writes logs to a file using a Google's TensorBoard protobuf format.
 See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
 """
+import os
 import tensorflow as tf
 import numpy as np
 
-class TBBackend(object):
 
+class TBBackend(object):
     def __init__(self, log_dir):
-        self.writer = tf.summary.FileWriter(log_dir)
+        self.writers = []
+        self.log_dir = log_dir
+        self.writers.append(tf.summary.FileWriter(log_dir))
 
     def scalar_summary(self, tag, scalar, step):
         """From TF documentation:
@@ -32,7 +35,26 @@ class TBBackend(object):
             value: value associated with the tag (a float).
         """
         summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=scalar)])
-        self.writer.add_summary(summary, step)
+        self.writers[0].add_summary(summary, step)
+
+    def list_summary(self, tag, list, step, multi_graphs):
+        """Log a relatively small list of scalars.
+
+        We want to track the progress of multiple scalar parameters in a single graph.
+        The list provides a single value for each of the parameters we are tracking.
+        
+        NOTE: There are two ways to log multiple values in TB and neither one is optimal.
+        1. Use a single writer: in this case all of the parameters use the same color, and
+           distinguishing between them is difficult.
+        2. Use multiple writers: in this case each parameter has its own color which helps
+           to visually separate the parameters.  However, each writer logs to a different
+           file and this creates a lot of files which slow down the TB load.
+        """
+        for i, scalar in enumerate(list):
+            if multi_graphs and (i+1 > len(self.writers)):
+                self.writers.append(tf.summary.FileWriter(os.path.join(self.log_dir, str(i))))
+            summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=scalar)])
+            self.writers[0 if not multi_graphs else i].add_summary(summary, step)
 
     def histogram_summary(self, tag, tensor, step):
         """
@@ -49,11 +71,11 @@ class TBBackend(object):
         """
         hist, edges = np.histogram(tensor, bins=200)
         tfhist = tf.HistogramProto(
-            min = np.min(tensor),
-            max = np.max(tensor),
-            num = int(np.prod(tensor.shape)),
-            sum = np.sum(tensor),
-            sum_squares = np.sum(np.square(tensor)))
+            min=np.min(tensor),
+            max=np.max(tensor),
+            num=int(np.prod(tensor.shape)),
+            sum=np.sum(tensor),
+            sum_squares=np.sum(np.square(tensor)))
 
         # From the TF documentation:
         #   Parallel arrays encoding the bucket boundaries and the bucket values.
@@ -64,7 +86,8 @@ class TBBackend(object):
         tfhist.bucket.extend(hist)
 
         summary = tf.Summary(value=[tf.Summary.Value(tag=tag, histo=tfhist)])
-        self.writer.add_summary(summary, step)
+        self.writers[0].add_summary(summary, step)
 
     def sync_to_file(self):
-        self.writer.flush()
+        for writer in self.writers:
+            writer.flush()

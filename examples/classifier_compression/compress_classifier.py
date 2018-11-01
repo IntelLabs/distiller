@@ -57,7 +57,7 @@ import os
 import sys
 import random
 import traceback
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import partial
 import numpy as np
 import torch
@@ -75,7 +75,7 @@ except ImportError:
     sys.path.append(module_path)
     import distiller
 import apputils
-from distiller.data_loggers import TensorBoardLogger, PythonLogger, ActivationSparsityCollector
+from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 
@@ -118,7 +118,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', action='store_true', default=False,
+parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "valid", "test"], default=None,
                     help='collect activation statistics (WARNING: this slows down training)')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
@@ -180,6 +180,48 @@ def check_pytorch_version():
               "  2. Install the new environment\n"
               "  3. Activate the new environment")
         exit(1)
+
+
+def create_activation_stats_collectors(model, collection_phase):
+    """Create objects that collect activation statistics.
+
+    This is a utility function that creates two collectors:
+    1. Fine-grade sparsity levels of the activations
+    2. L1-magnitude of each of the activation channels
+
+    Args:
+        model - the model on which we want to collect statistics
+        phase - the statistics collection phase which is either "train" (for training),
+                or "valid" (for validation)
+
+    WARNING! Enabling activation statsitics collection will significantly slow down training!
+    """
+    class missingdict(dict):
+        """This is a little trick to prevent KeyError"""
+        def __missing__(self, key):
+            return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
+
+    distiller.utils.assign_layer_fq_names(model)
+
+    activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
+    if collection_phase is None:
+        return activations_collectors
+    collectors = missingdict()
+    collectors["sparsity"] = SummaryActivationStatsCollector(model, "sparsity", distiller.utils.sparsity)
+    collectors["l1_channels"] = SummaryActivationStatsCollector(model, "l1_channels",
+                                                                distiller.utils.activation_channels_l1)
+    collectors["apoz_channels"] = SummaryActivationStatsCollector(model, "apoz_channels",
+                                                                  distiller.utils.activation_channels_apoz)
+    collectors["records"] = RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
+    activations_collectors[collection_phase] = collectors
+    return activations_collectors
+
+
+def save_collectors_data(collectors, directory):
+    """Utility function that saves all activation statistics to Excel workbooks
+    """
+    for name, collector in collectors.items():
+        collector.to_xlsx(os.path.join(directory, name))
 
 
 def main():
@@ -283,18 +325,13 @@ def main():
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
-    activations_sparsity = None
-    if args.activation_stats:
-        # If your model has ReLU layers, then those layers have sparse activations.
-        # ActivationSparsityCollector will collect information about this sparsity.
-        # WARNING! Enabling activation sparsity collection will significantly slow down training!
-        activations_sparsity = ActivationSparsityCollector(model)
+    activations_collectors = create_activation_stats_collectors(model, collection_phase=args.activation_stats)
 
     if args.sensitivity is not None:
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
 
     if args.evaluate:
-        return evaluate_model(model, criterion, test_loader, pylogger, args)
+        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
@@ -329,15 +366,20 @@ def main():
             compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-              loggers=[tflogger, pylogger], args=args)
-        distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-        if args.activation_stats:
-            distiller.log_activation_sparsity(epoch, loggers=[tflogger, pylogger],
-                                              collector=activations_sparsity)
+        with collectors_context(activations_collectors["train"]) as collectors:
+            train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
+                  loggers=[tflogger, pylogger], args=args)
+            distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
+            distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
+                                                collector=collectors["sparsity"])
 
         # evaluate on validation set
-        top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
+        with collectors_context(activations_collectors["valid"]) as collectors:
+            top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
+            distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger],
+                                                collector=collectors["sparsity"])
+            save_collectors_data(collectors, msglogger.logdir)
+
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
@@ -358,7 +400,7 @@ def main():
                                  args.name, msglogger.logdir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], args=args)
+    test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
 
 
 OVERALL_LOSS_KEY = 'Overall Loss'
@@ -476,10 +518,15 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     return _validate(val_loader, model, criterion, loggers, args, epoch)
 
 
-def test(test_loader, model, criterion, loggers, args):
+def test(test_loader, model, criterion, loggers, activations_collectors, args):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    return _validate(test_loader, model, criterion, loggers, args)
+
+    with collectors_context(activations_collectors["test"]) as collectors:
+        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
+        distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
+
+    return top1, top5, lossses
 
 
 def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
@@ -622,7 +669,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
                 args.exit_taken[args.num_exits-1] += 1
 
 
-def evaluate_model(model, criterion, test_loader, loggers, args):
+def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
@@ -639,14 +686,14 @@ def evaluate_model(model, criterion, test_loader, loggers, args):
                                                           args.qe_no_clip_layers)
         quantizer.prepare_model()
         model.cuda()
-    top1, _, _ = test(test_loader, model, criterion, loggers, args=args)
+
+    top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
+
     if args.quantize_eval:
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
                                  name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
                                  dir=msglogger.logdir)
-    apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
-                             name=args.name, dir=msglogger.logdir)
 
 
 def summarize_model(model, dataset, which_summary):
@@ -665,7 +712,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args):
     if not isinstance(loggers, list):
         loggers = [loggers]
     test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
-                       loggers=loggers, args=args)
+                       loggers=loggers, args=args,
+                       activations_collectors=create_activation_stats_collectors(model, None))
     which_params = [param_name for param_name, _ in model.named_parameters()]
     sensitivity = distiller.perform_sensitivity_analysis(model,
                                                          net_params=which_params,

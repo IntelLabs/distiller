@@ -15,7 +15,7 @@
 #
 
 from .utils import *
-from .thresholding import GroupThresholdMixin, threshold_mask
+from .thresholding import GroupThresholdMixin, threshold_mask, group_threshold_mask
 from .config import file_config, dict_config
 from .model_summaries import *
 from .scheduler import *
@@ -25,18 +25,13 @@ from .policy import *
 from .thinning import *
 from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLossWeights
 
-#del utils
+
 del dict_config
 del thinning
-#del model_summaries
-#del scheduler
-#del sensitivity
-#del directives
-#del thresholding
-#del policy
 
 # Distiller version
 __version__ = "0.3.0-pre"
+
 
 def model_find_param_name(model, param_to_find):
     """Look up the name of a model parameter.
@@ -68,6 +63,7 @@ def model_find_module_name(model, module_to_find):
         if m == module_to_find:
             return name
     return None
+
 
 def model_find_param(model, param_to_find_name):
     """Look a model parameter by its name
