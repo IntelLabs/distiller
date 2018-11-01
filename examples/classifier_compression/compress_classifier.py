@@ -150,6 +150,8 @@ parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earl
                     help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
                     help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type=int,
+                    help='number of best scores to track and report (default: 1)')
 
 quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
                                         '("post-training quantization)')
@@ -240,9 +242,8 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_epoch = distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
-    #best_top1 = 0
-    #best_epoch = 0
+    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
+                   for i in range(args.num_best_scores)]
 
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -397,15 +398,17 @@ def main():
 
         # remember best top1 and save checkpoint
         #sparsity = distiller.model_sparsity(model)
-        is_best = top1 > best_epoch.top1
+        is_best = top1 > best_epochs[0].top1
         if is_best:
-            best_epoch.epoch = epoch
-            best_epoch.top1 = top1
+            best_epochs[0].epoch = epoch
+            best_epochs[0].top1 = top1
             #best_epoch.sparsity = sparsity
-        msglogger.info('==> Best Top1: %.3f (%.1f sparsity) on Epoch: %d\n',
-                       best_epoch.top1, best_epoch.sparsity, best_epoch.epoch)
+            best_epochs = sorted(best_epochs, key=lambda score: score.top1)
+        for score in reversed(best_epochs):
+            if score.top1 > 0:
+                msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
-                                 best_epoch.top1, is_best, args.name, msglogger.logdir)
+                                 best_epochs[0].top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
