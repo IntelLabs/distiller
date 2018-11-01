@@ -102,7 +102,7 @@ TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker
 
 test_configs = [
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [48.340, 92.630]),
-    TestConfig('-a resnet20_cifar --resume {0} --quantize --evaluate'.
+    TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
                DS_CIFAR, accuracy_checker, [91.620, 99.630]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
