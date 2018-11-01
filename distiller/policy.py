@@ -75,12 +75,27 @@ class ScheduledTrainingPolicy(object):
 
 class PruningPolicy(ScheduledTrainingPolicy):
     """Base class for pruning policies.
-
-    The current implementation restricts the pruning step to the beginning of
-    each epoch.  This can be easily changed.
     """
     def __init__(self, pruner, pruner_args, classes=None, layers=None):
         """
+        Arguments:
+            mask_on_forward_only: controls what we do after the weights are updated by the backward pass.
+            In issue #53 (https://github.com/NervanaSystems/distiller/issues/53) we explain why in some
+            cases masked weights will be updated to a non-zero value, even if their gradients are masked
+            (e.g. when using SGD with momentum). Therefore, to circumvent this weights-update performed by
+            the backward pass, we usually mask the weights again - right after the backward pass.  To
+            disable this masking set:
+                pruner_args['mask_on_forward_only'] = False
+
+            use_double_copies: when set to 'True', two sets of weights are used. In the forward-pass we use
+            masked weights to compute the loss, but in the backward-pass we update the unmasked weights (using
+            gradients computed from the masked-weights loss).
+
+            mini_batch_pruning_frequency: this controls pruning scheduling at the mini-batch granularity.  Every
+            mini_batch_pruning_frequency training steps (i.e. mini_batches) we perform pruning.  This provides more
+            fine-grained control over pruning than that provided by CompressionScheduler (epoch granularity).
+            When setting 'mini_batch_pruning_frequency' to a value other than zero, make sure to configure the policy's
+            schedule to once-every-epoch.
         """
         super(PruningPolicy, self).__init__(classes, layers)
         self.pruner = pruner
@@ -88,12 +103,14 @@ class PruningPolicy(ScheduledTrainingPolicy):
         self.keep_mask = False
         self.mini_batch_pruning_frequency = 0
         self.mask_on_forward_only = False
+        self.use_double_copies = False
         if pruner_args is not None:
             if 'levels' in pruner_args:
                 self.levels = pruner_args['levels']
             self.keep_mask = pruner_args.get('keep_mask', False)
             self.mini_batch_pruning_frequency = pruner_args.get('mini_batch_pruning_frequency', 0)
             self.mask_on_forward_only = pruner_args.get('mask_on_forward_only', False)
+            self.use_double_copies = pruner_args.get('use_double_copies', False)
         self.is_last_epoch = False
         self.mini_batch_id = 0          # The ID of the mini_batch within the present epoch
         self.global_mini_batch_id = 0   # The ID of the mini_batch within the present training session
@@ -106,11 +123,14 @@ class PruningPolicy(ScheduledTrainingPolicy):
         if self.levels is not None:
             self.pruner.levels = self.levels
 
+        if self.is_first_epoch:
+            self.global_mini_batch_id = 0
+
         meta['model'] = model
         for param_name, param in model.named_parameters():
             if self.mask_on_forward_only and self.is_first_epoch:
-                zeros_mask_dict[param_name].use_double_copies = True
-                self.global_mini_batch_id = 0
+                zeros_mask_dict[param_name].use_double_copies = self.use_double_copies
+                zeros_mask_dict[param_name].mask_on_forward_only = self.mask_on_forward_only
             self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
 
     def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch,
@@ -125,12 +145,17 @@ class PruningPolicy(ScheduledTrainingPolicy):
         for param_name, param in model.named_parameters():
             zeros_mask_dict[param_name].apply_mask(param)
 
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
+        for param_name, param in model.named_parameters():
+            zeros_mask_dict[param_name].remove_mask(param)
+
     def on_epoch_end(self, model, zeros_mask_dict, meta):
         """The current epoch has ended"""
         is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
         if self.keep_mask and is_last_epoch:
             for param_name, param in model.named_parameters():
                 zeros_mask_dict[param_name].use_double_copies = False
+                zeros_mask_dict[param_name].mask_on_forward_only = False
                 zeros_mask_dict[param_name].apply_mask(param)
 
 

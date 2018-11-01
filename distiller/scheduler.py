@@ -34,6 +34,8 @@ class ParameterMasker(object):
         self.param_name = param_name    # For debug/logging purposes
         self.is_regularization_mask = False
         self.use_double_copies = False
+        self.mask_on_forward_only = False
+        self.unmasked_copy = None
 
     def apply_mask(self, tensor):
         """Apply a mask on the weights tensor."""
@@ -42,26 +44,20 @@ class ParameterMasker(object):
             return
         msglogger.debug('Masking parameter {0}'.format(self.param_name))
         if self.use_double_copies:
-            self.tensor_copy = tensor.clone()
-            tensor.data = tensor.data * self.mask
-        else:
-            tensor.data.mul_(self.mask)
+            self.unmasked_copy = tensor.clone()
+        tensor.data.mul_(self.mask)
         if self.is_regularization_mask:
             self.mask = None
         return tensor
 
-    # def remove_mask(self, tensor):
-    #     if self.mask is None:
-    #         msglogger.debug('No mask for parameter {0}'.format(self.param_name))
-    #         return
-    #     if not self.use_double_copies:
-    #         msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
-    #         return
-    #
-    #     tensor.data = self.tensor_copy.data
-    #     if self.is_regularization_mask:
-    #         self.mask = None
-    #     return tensor
+    def remove_mask(self, tensor):
+        if self.mask is None:
+            msglogger.debug('No mask for parameter {0}'.format(self.param_name))
+            return
+        if not self.use_double_copies:
+            msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
+            return
+        tensor.data = self.unmasked_copy.data
 
 
 def create_model_masks_dict(model):
@@ -150,7 +146,7 @@ class CompressionScheduler(object):
         #
         # Therefore we choose to always apply the pruning mask.  In the future we may optimize this by applying
         # the mask only if the some policy is actually using the mask.
-        self.apply_mask()
+        self.apply_mask(is_forward=False)
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
@@ -164,12 +160,12 @@ class CompressionScheduler(object):
                 meta['optimizer'] = optimizer
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
-    def apply_mask(self):
+    def apply_mask(self, is_forward=True):
         for name, param in self.model.named_parameters():
             try:
-                if not self.zeros_mask_dict[name].use_double_copies:
-                    # If we use two copies of the weights (one for forward, which masked;
-                    # and one for backward, which is unmasked), then we do not want to mask
+                if is_forward or not self.zeros_mask_dict[name].mask_on_forward_only:
+                    # When we mask on forward-pass only, we allow the gradients to change
+                    # the weights.
                     self.zeros_mask_dict[name].apply_mask(param)
             except KeyError:
                 # Quantizers for training modify some model parameters by adding a prefix
