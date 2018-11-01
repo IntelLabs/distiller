@@ -2,6 +2,24 @@
 #   Dynamic Network Surgery for Efficient DNNs, Yiwen Guo, Anbang Yao, Yurong Chen.
 #   NIPS 2016, https://arxiv.org/abs/1600.504493.
 #
+# We have not been able to see great results with our implementation of the paper, as we understood it.  In the paper
+# two sets of weights are used: in the forward-pass Guo et. al use masked weights to compute the loss, but in the
+# backward-pass they update the unmasked weights (using gradients computed from the masked-weights loss).
+# To replicate this behavior set in the SplicingPruner policy:
+#   use_double_copies: True
+#   mask_on_forward_only: True
+#
+# We found that using two copies of weights reduces the accuracy results, and so we disable this configuration in the
+# example schedule below.
+#
+# The "mask_on_forward_only" configuration controls what we do after the weights are updated by the backward pass.
+# In issue #53 (https://github.com/NervanaSystems/distiller/issues/53) we explain why in some cases masked weights
+# will be updated to a non-zero value, even if their gradients are masked (e.g. when using SGD with momentum).
+# Therefore, to circumvent this weights-update performed by the backward pass, we usually mask the weights again -
+# right after the backward pass.  To disable this masking set:
+#   mask_on_forward_only: False
+#
+#
 # Baseline results:
 #     Top1: 91.780    Top5: 99.710    Loss: 0.376
 #     Total MACs: 40,813,184
@@ -13,7 +31,7 @@
 #     Total sparsity: 64.3%
 #     # of parameters: 97,176
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.01 --epochs=180 --compress=../network_surgery/resnet20.network_surgery.yaml -j=1 --deterministic  --validation-size=0 --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar --masks-sparsity
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.01 --epochs=180 --compress=../network_surgery/resnet20.network_surgery.yaml -j=1 --deterministic  --validation-size=0 --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar --masks-sparsity --num-best-scores=10
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -102,11 +120,12 @@ lr_schedulers:
 
 policies:
   - pruner:
-      instance_name : pruner1
+      instance_name: pruner1
       args:
         keep_mask: True
-        mini_batch_pruning_frequency: 4
+        mini_batch_pruning_frequency: 1
         mask_on_forward_only: True
+        #use_double_copies: True
     starting_epoch: 180
     ending_epoch: 280
     frequency: 1
