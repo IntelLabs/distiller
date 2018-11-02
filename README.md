@@ -34,7 +34,11 @@
 **Distiller** is an open-source Python package for neural network compression research.
 
 Network compression can reduce the memory footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low-precision arithmetic.
-
+<details><summary><b>What's New in November?</b></summary>
+<p>
+   <a href="https://bizwebcast.intel.cn/aidc/index_en.aspx?utm_source=other">Come see us in AIDC 2018 Beijing!</a>
+</p>
+</details>
 <details><summary><b>What's New in October?</b></summary>
 <p>
 <b><i>We've added two new Jupyter notebooks:</i></b>
@@ -85,35 +89,45 @@ Beware.
 * [Acknowledgments](#acknowledgments)
 * [Disclaimer](#disclaimer)
 
-## Feature set
+## Highlighted features
 
-Highlighted features:
-* Element-wise pruning (defined per layer) using magnitude thresholding, sensitivity thresholding, and target sparsity level.
-* Structured pruning:
+* **Weight pruning**
+  - Element-wise pruning using magnitude thresholding, sensitivity thresholding, target sparsity level, and activation statistics 
+* **Structured pruning**
   - Convolution: 2D (kernel-wise), 3D (filter-wise), 4D (layer-wise), and channel-wise structured pruning.  
   - Fully-connected: column-wise and row-wise structured pruning.
-  - Filter-ranking and pruning is implemented, and can be easily extended to support ranking of channels or other structures.
-  - Distiller is designed to be extended to support new structures (e.g. block pruning).
-* Pruned elements are automatically disconnected from the network and do not participate in both forward and backward passes.
-* Model thinning (removal of layers, filters, and channels) is partially supported and will be extended with future PyTorch versions.  You can export thinned models to inference frameworks using ONNX export.
-* L1-norm element-wise regularization, and Group Lasso regularization for all of the pruning structures (2D, 3D, etc.).     
-* Flexible scheduling of pruning, regularization, and learning rate decay (compression scheduling).
+  - Structure groups (e.g. structures of 4 filters).
+  - Structure-ranking with using weights or activations criteria (Lp-norm, APoZ, gradients, random, etc.).
+  - Support for new structures (e.g. block pruning)
+* **Control**
+  - Soft (mask on forward-pass only) and hard pruning (permanently disconnect neurons)
+  - Dual weight copies (compute loss on masked weights, but update unmasked weights)  
+  - Model thinning (AKA "network garbage removal") to permanently remove pruned neurons and connections.
+* **Schedule**
+  - Flexible scheduling of pruning, regularization, and learning rate decay (compression scheduling)
   - One-shot and iterative pruning (and fine-tuning) are supported.
-  - Automatic gradual pruning schedule is supported for element-wise pruning, and can be extended to support structures.
+  - Easily control what is performed each training step (e.g. greedy layer by layer pruning to full model pruning). 
+  - Automatic gradual schedule (AGP) for pruning individual connections and complete structures.
   - The compression schedule is expressed in a YAML file so that a single file captures the details of experiments.  This [dependency injection](https://en.wikipedia.org/wiki/Dependency_injection) design decouples the Distiller scheduler and library from future extensions of algorithms.
-* Quantization:
+* Element-wise and filter-wise pruning **sensitivity analysis** (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb).
+* **Regularization**
+  - L1-norm element-wise regularization
+  - Group Lasso an group variance regularization   
+* **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
   - Support for [training with quantization](https://nervanasystems.github.io/distiller/quantization/index.html#training-with-quantization) in the loop
   - One-shot 8-bit quantization of trained full-precision models
-* Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
+* **Knowledge distillation**
+  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
+* **Conditional computation**
+  - Sample implementation of Early Exit, with more to come
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
   + [This notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
 * Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html).
-* Element-wise and filter-wise pruning sensitivity analysis (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb).
 * Logging to the console, text file and TensorBoard-formatted file.
-
+* Export to **ONNX** (export of quantized models pending ONNX standardization)
 
 ## Installation
 
