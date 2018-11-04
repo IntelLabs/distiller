@@ -14,8 +14,8 @@
 # limitations under the License.
 #
 
+
 from .pruner import _ParameterPruner
-import distiller
 import torch
 import logging
 msglogger = logging.getLogger()
@@ -30,6 +30,8 @@ class SplicingPruner(_ParameterPruner):
         NIPS 2016, https://arxiv.org/abs/1608.04493.
 
     A SplicingPruner works best with a Dynamic Network Surgery schedule.
+    The original Caffe code from the authors of the paper is available here:
+    https://github.com/yiwenguo/Dynamic-Network-Surgery/blob/master/src/caffe/layers/compress_conv_layer.cpp
     """
 
     def __init__(self, name, sensitivities, low_thresh_mult, hi_thresh_mult, sensitivity_multiplier=0):
@@ -50,24 +52,37 @@ class SplicingPruner(_ParameterPruner):
         else:
             sensitivity = self.sensitivities[param_name]
 
+        if not hasattr(param, '_std'):
+            # Compute the mean and standard-deviation once, and cache them.
+            param._std = torch.std(param.abs()).item()
+            param._mean = torch.mean(param.abs()).item()
+
         if self.sensitivity_multiplier > 0:
             # Linearly growing sensitivity - for now this is hard-coded
             starting_epoch = meta['starting_epoch']
             current_epoch = meta['current_epoch']
             sensitivity *= (current_epoch - starting_epoch) * self.sensitivity_multiplier + 1
 
+        threshold_low = (param._mean + param._std * sensitivity) * self.low_thresh_mult
+        threshold_hi = (param._mean + param._std * sensitivity) * self.hi_thresh_mult
+
         if zeros_mask_dict[param_name].mask is None:
             zeros_mask_dict[param_name].mask = torch.ones_like(param)
-        masked_weights = param.mul(zeros_mask_dict[param_name].mask)
-        mean = torch.mean(masked_weights).item()
-        std = torch.std(masked_weights).item()
 
-        # After computing the threshold, we can create the mask
-        threshold_low = (mean + std * sensitivity) * 0.9
-        threshold_hi = (mean + std * sensitivity) * 1.1
-        a = distiller.threshold_mask(param.data, threshold_low)
-        b = a.mul_(zeros_mask_dict[param_name].mask)
+        # This code performs the code in equation (3) of the "Dynamic Network Surgery" paper:
+        #
+        #           0    if a  > |W|
+        # h(W) =    mask if a <= |W| < b
+        #           1    if b <= |W|
+        #
+        # h(W) is the so-called "network surgery function".
+        # mask is the mask used in the previous iteration.
+        # a and b are the low and high thresholds, respectively.
+        # We followed the example implementation from Yiwen Guo in Caffe, and used the
+        # weight tensor's starting mean and std.
+        # This is very similar to the initialization performed by distiller.SensitivityPruner.
 
-        #msglogger.info("{}: to threshold={} : {}  mean={}  std={}".format(param_name, threshold_low, threshold_hi, mean, std))
-        zeros_mask_dict[param_name].mask = torch.clamp(b + distiller.threshold_mask(param.data, threshold_hi), 0, 1)
-        #msglogger.info("sparsity of {}  = {}".format(param_name, distiller.sparsity(zeros_mask_dict[param_name].mask)))
+        masked_weights = param.mul(zeros_mask_dict[param_name].mask).abs()
+        a = masked_weights.ge(threshold_low)
+        b = a & zeros_mask_dict[param_name].mask.type(torch.cuda.ByteTensor)
+        zeros_mask_dict[param_name].mask = (b | masked_weights.ge(threshold_hi)).type(torch.cuda.FloatTensor)
