@@ -22,7 +22,7 @@ msglogger = logging.getLogger()
 
 
 class SplicingPruner(_ParameterPruner):
-    """A pruner that allows both prunes and splices connections
+    """A pruner that both prunes and splices connections.
 
     The idea of pruning and splicing working in tandem was first proposed in the following
     NIPS paper from Intel Labs China in 2016:
