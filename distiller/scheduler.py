@@ -33,6 +33,9 @@ class ParameterMasker(object):
         self.mask = None                # Mask lazily initialized by pruners
         self.param_name = param_name    # For debug/logging purposes
         self.is_regularization_mask = False
+        self.use_double_copies = False
+        self.mask_on_forward_only = False
+        self.unmasked_copy = None
 
     def apply_mask(self, tensor):
         """Apply a mask on the weights tensor."""
@@ -40,10 +43,21 @@ class ParameterMasker(object):
             msglogger.debug('No mask for parameter {0}'.format(self.param_name))
             return
         msglogger.debug('Masking parameter {0}'.format(self.param_name))
+        if self.use_double_copies:
+            self.unmasked_copy = tensor.clone()
         tensor.data.mul_(self.mask)
         if self.is_regularization_mask:
             self.mask = None
         return tensor
+
+    def remove_mask(self, tensor):
+        if self.mask is None:
+            msglogger.debug('No mask for parameter {0}'.format(self.param_name))
+            return
+        if not self.use_double_copies:
+            msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
+            return
+        tensor.data = self.unmasked_copy.data
 
 
 def create_model_masks_dict(model):
@@ -64,7 +78,6 @@ class CompressionScheduler(object):
         self.device = device
         self.policies = {}
         self.sched_metadata = {}
-
         self.zeros_mask_dict = {}
         for name, param in self.model.named_parameters():
             masker = ParameterMasker(name)
@@ -101,8 +114,10 @@ class CompressionScheduler(object):
     def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         if epoch in self.policies:
             for policy in self.policies[epoch]:
+                meta = self.sched_metadata[policy]
+                meta['current_epoch'] = epoch
                 policy.on_minibatch_begin(self.model, epoch, minibatch_id, minibatches_per_epoch,
-                                          self.zeros_mask_dict, optimizer)
+                                          self.zeros_mask_dict, meta, optimizer)
 
     def before_backward_pass(self, epoch, minibatch_id, minibatches_per_epoch, loss, optimizer=None,
                              return_loss_components=False):
@@ -131,7 +146,7 @@ class CompressionScheduler(object):
         #
         # Therefore we choose to always apply the pruning mask.  In the future we may optimize this by applying
         # the mask only if the some policy is actually using the mask.
-        self.apply_mask()
+        self.apply_mask(is_forward=False)
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
@@ -145,10 +160,13 @@ class CompressionScheduler(object):
                 meta['optimizer'] = optimizer
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
-    def apply_mask(self):
+    def apply_mask(self, is_forward=True):
         for name, param in self.model.named_parameters():
             try:
-                self.zeros_mask_dict[name].apply_mask(param)
+                if is_forward or not self.zeros_mask_dict[name].mask_on_forward_only:
+                    # When we mask on forward-pass only, we allow the gradients to change
+                    # the weights.
+                    self.zeros_mask_dict[name].apply_mask(param)
             except KeyError:
                 # Quantizers for training modify some model parameters by adding a prefix
                 # If this is the source of the error, workaround and move on
