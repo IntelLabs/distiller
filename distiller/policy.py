@@ -210,7 +210,7 @@ class LRPolicy(ScheduledTrainingPolicy):
         self.lr_scheduler = lr_scheduler
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
-        self.lr_scheduler.step()
+        self.lr_scheduler.step(meta['current_epoch'])
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):
