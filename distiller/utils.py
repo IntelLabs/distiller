@@ -49,6 +49,21 @@ def pretty_int(i):
     return "{:,}".format(i)
 
 
+class MutableNamedTuple(dict):
+    def __init__(self, init_dict):
+        for k, v in init_dict.items():
+            self[k] = v
+
+    def __getattr__(self, key):
+        return self[key]
+
+    def __setattr__(self, key, val):
+        if key in self.__dict__:
+            self.__dict__[key] = val
+        else:
+            self[key] = val
+
+
 def assign_layer_fq_names(container, name=None):
     """Assign human-readable names to the modules (layers).
 
@@ -108,11 +123,13 @@ def denormalize_module_name(parallel_model, normalized_name):
         return normalized_name   # Did not find a module with the name <normalized_name>
 
 
-def volume(tensor_desc):
+def volume(tensor):
     """return the volume of a pytorch tensor"""
-    if isinstance(tensor_desc, tuple):
-        return np.prod(tensor_desc)
-    return np.prod(tensor_desc.shape)
+    if isinstance(tensor, torch.FloatTensor) or isinstance(tensor, torch.cuda.FloatTensor):
+        return np.prod(tensor.shape)
+    if isinstance(tensor, tuple):
+        return np.prod(tensor)
+    raise ValueError
 
 
 def density(tensor):
@@ -267,6 +284,18 @@ def sparsity_rows(tensor, trasposed=True):
 def density_rows(tensor, transposed=True):
     """Row-wise density for 2D tensors"""
     return 1 - sparsity_rows(tensor, transposed)
+
+
+def model_sparsity(model, param_dims=[2, 4]):
+    params_size = 0
+    sparse_params_size = 0
+    for name, param in model.state_dict().items():
+        if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
+            _density = density(param)
+            params_size += torch.numel(param)
+            sparse_params_size += param.numel() * _density
+    total_sparsity = (1 - sparse_params_size/params_size)*100
+    return total_sparsity
 
 
 def norm_filters(weights, p=1):

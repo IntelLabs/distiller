@@ -24,6 +24,7 @@ from .automated_gradual_pruner import AutomatedGradualPruner, L1RankedStructureP
                                       RandomRankedFilterPruner_AGP
 from .level_pruner import SparsityLevelParameterPruner
 from .sensitivity_pruner import SensitivityPruner
+from .splicing_pruner import SplicingPruner
 from .structure_pruner import StructureParameterPruner
 from .ranked_structures_pruner import L1RankedStructureParameterPruner, ActivationAPoZRankedFilterPruner, \
                                       RandomRankedFilterPruner, GradientRankedFilterPruner
