@@ -570,9 +570,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 if args.display_confusion:
                     confusion.add(output.data, target)
             else:
-                # If using Early Exit, then compute outputs at all exits
-                # output is now a list of all exit probabilities from
-                # exit0 through exitN (i.e. [exit0, exit1, ... exitN])
                 earlyexit_validate_loss(output, target, criterion, args)
 
             # measure elapsed time
