@@ -580,8 +580,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 if args.display_confusion:
                     confusion.add(output.data, target)
             else:
-                # If using Early Exit, then compute outputs at all exits - output is now a list of all exits
-                # from exit0 through exitN (i.e. [exit0, exit1, ... exitN])
                 earlyexit_validate_loss(output, target, criterion, args)
 
             # measure elapsed time
@@ -637,8 +635,14 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             if args.exit_taken[exitnum]:
                 msglogger.info("Percent Early Exit %d: %.3f", exitnum,
                                (args.exit_taken[exitnum]*100.0) / sum_exit_stats)
-
-        return top1k_stats[args.num_exits-1], top5k_stats[args.num_exits-1], losses_exits_stats[args.num_exits-1]
+        total_top1 = 0
+        total_top5 = 0
+        for exitnum in range(args.num_exits):
+            total_top1 += (top1k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
+            total_top5 += (top5k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
+            msglogger.info("Accuracy Stats for exit %d: top1 = %.3f, top5 = %.3f", exitnum, top1k_stats[exitnum], top5k_stats[exitnum])
+        msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
+        return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
 
 
 def earlyexit_loss(output, target, criterion, args):
@@ -655,28 +659,35 @@ def earlyexit_loss(output, target, criterion, args):
 
 
 def earlyexit_validate_loss(output, target, criterion, args):
-    for exitnum in range(args.num_exits):
-        args.loss_exits[exitnum] = criterion(output[exitnum], target)
-        args.losses_exits[exitnum].add(args.loss_exits[exitnum].item())
-
-    # We need to go through this batch itself - this is now a vector of losses through the batch.
-    # Collecting stats on which exit early can be done across the batch at this time.
-    # Note that we can't use batch_size as last batch might be smaller
+    # We need to go through each sample in the batch itself - in other words, we are
+    # not doing batch processing for exit criteria - we do this as though it were batchsize of 1
+    # but with a grouping of samples equal to the batch size.
+    # Note that final group might not be a full batch - so determine actual size.
     this_batch_size = target.size()[0]
-    for batchnum in range(this_batch_size):
+    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
+    for exitnum in range(args.num_exits):
+        # calculate losses at each sample separately in the minibatch. 
+        args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
+        # for batch_size > 1, we need to reduce this down to an average over the batch
+        args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]))
+
+    for batch_index in range(this_batch_size):
+        earlyexit_taken = False
         # take the exit using CrossEntropyLoss as confidence measure (lower is more confident)
-        for exitnum in range(args.num_exits-1):
-            if args.loss_exits[exitnum].item() < args.earlyexit_thresholds[exitnum]:
+        for exitnum in range(args.num_exits - 1):
+            if args.loss_exits[exitnum][batch_index] < args.earlyexit_thresholds[exitnum]:
                 # take the results from early exit since lower than threshold
-                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batchnum], ndmin=2)),
-                        torch.full([1], target[batchnum], dtype=torch.long))
+                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
+                        torch.full([1], target[batch_index], dtype=torch.long))
                 args.exit_taken[exitnum] += 1
-            else:
-                # skip the early exits and include results from end of net
-                args.exiterrors[args.num_exits-1].add(torch.tensor(np.array(output[args.num_exits-1].data[batchnum],
-                                                                            ndmin=2)),
-                        torch.full([1], target[batchnum], dtype=torch.long))
-                args.exit_taken[args.num_exits-1] += 1
+                earlyexit_taken = True
+                break                    # since exit was taken, do not affect the stats of subsequent exits
+        # this sample does not exit early and therefore continues until final exit
+        if not earlyexit_taken:
+            exitnum = args.num_exits - 1
+            args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
+                    torch.full([1], target[batch_index], dtype=torch.long))
+            args.exit_taken[exitnum] += 1
 
 
 def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args):
