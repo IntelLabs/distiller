@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Conditional Computation - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../css/highlight.css">
+  <link href="../extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Conditional Computation";
+    var mkdocs_page_input_path = "conditional_computation.md";
+    var mkdocs_page_url = "/conditional_computation/index.html";
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js"></script>
+  <script src="../js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../install/index.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../usage/index.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../schedule/index.html">Compression scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../regularization/index.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../quantization/index.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="index.html">Conditional Computation</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#conditional-computation">Conditional Computation</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#references">References</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../algo_pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_quantization/index.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../jupyter/index.html">Jupyter notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../design/index.html">Design</a>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Compressing models &raquo;</li>
+        
+      
+    
+    <li>Conditional Computation</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="conditional-computation">Conditional Computation</h1>
+<p>Conditional Computation refers to a class of algorithms in which each input sample uses a different part of the model, such that on average the compute, latency or power (depending on our objective) is reduced.
+To quote <a href="#bengio">Bengio et. al</a></p>
+<blockquote>
+<p>"Conditional computation refers to activating only some of the units in a network, in an input-dependent fashion. For example, if we think we’re looking at a car, we only need to compute the activations of the vehicle detecting units, not of all features that a network could possible compute. The immediate effect of activating fewer units is that propagating information through the network will be faster, both at training as well as at test time. However, one needs to be able to decide in an intelligent fashion which units to turn on and off, depending on the input data. This is typically achieved with some form of gating structure, learned in parallel with the original network."</p>
+</blockquote>
+<p>As usual, there are several approaches to implement Conditional Computation:</p>
+<ul>
+<li><a href="#sun">Sun et. al</a> use several expert CNN, each trained on a different task, and combine them to one large network.</li>
+<li><a href="#zheng">Zheng et. al</a> use cascading, an idea which may be familiar to you from Viola-Jones face detection.</li>
+<li><a href="#theodorakopoulos">Theodorakopoulos et. al</a> add small layers that learn which filters to use per input sample, and then enforce that during inference (LKAM module).</li>
+<li><a href="#ioannou">Ioannou et. al</a> introduce Conditional Networks: that "can be thought of as: i) decision trees augmented with data transformation
+operators, or ii) CNNs, with block-diagonal sparse weight matrices, and explicit data routing functions"</li>
+<li><a href="#bolukbasi">Bolukbasi et. al</a> "learn a system to adaptively choose the components of a deep network to be evaluated for each example. By allowing examples correctly classified using early layers of the system to exit, we avoid the computational time associated with full evaluation of the network. We extend this to learn a network selection system that adaptively selects the network to be evaluated for each example."</li>
+</ul>
+<p>Conditional Computation is especially useful for real-time, latency-sensitive applicative.<br>
+In Distiller we currently have implemented a variant of Early Exit.</p>
+<h2 id="references">References</h2>
+<p><div id="bengio"></div> <strong>Emmanuel Bengio, Pierre-Luc Bacon, Joelle Pineau, Doina Precup.</strong>
+    <a href="https://arxiv.org/abs/1511.06297"><em>Conditional Deep Learning for Energy-Efficient and Enhanced Pattern Recognition</em></a>, arXiv:1511.06297v2, 2016.</p>
+<div id="sun"></div>
+
+<p><strong>Y. Sun, X.Wang, and X. Tang.</strong>
+    <em>Deep Convolutional Network Cascade for Facial Point Detection</em>. In Proc. IEEE Conf. Computer Vision and Pattern Recognition (CVPR), 2014</p>
+<div id="zheng"></div>
+
+<p><strong>X. Zheng, W.Ouyang, and X.Wang.</strong> <em>Multi-Stage Contextual Deep Learning for Pedestrian Detection.</em> In Proc. IEEE Intl Conf. on Computer Vision (ICCV), 2014.</p>
+<div id="theodorakopoulos"></div>
+
+<p><strong>I. Theodorakopoulos, V. Pothos, D. Kastaniotis and N. Fragoulis1.</strong> <em>Parsimonious Inference on Convolutional Neural Networks: Learning and applying on-line kernel activation rules.</em> Irida Labs S.A, January 2017</p>
+<div id="bolukbasi"></div>
+
+<p><strong>Tolga Bolukbasi, Joseph Wang, Ofer Dekel, Venkatesh Saligrama</strong> <a href="http://proceedings.mlr.press/v70/bolukbasi17a/bolukbasi17a.pdf"><em>Adaptive Neural Networks for Efficient Inference</em></a>.  Proceedings of the 34th International Conference on Machine Learning, PMLR 70:527-536, 2017.</p>
+<div id="ioannou"></div>
+
+<p><strong>Yani Ioannou, Duncan Robertson, Darko Zikic, Peter Kontschieder, Jamie Shotton, Matthew Brown, Antonio Criminisi</strong>.
+    <a href="https://arxiv.org/abs/1511.06297"><em>Decision Forests, Convolutional Networks and the Models in-Between</em></a>, arXiv:1511.06297v2, 2016.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../algo_pruning/index.html" class="btn btn-neutral float-right" title="Pruning">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="../knowledge_distillation/index.html" class="btn btn-neutral" title="Knowledge Distillation"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="../knowledge_distillation/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="../algo_pruning/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '..';</script>
+    <script src="../js/theme.js"></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+      <script src="../search/require.js"></script>
+      <script src="../search/search.js"></script>
+
+</body>
+</html>

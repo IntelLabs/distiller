@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Early Exit - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../css/highlight.css">
+  <link href="../extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Early Exit";
+    var mkdocs_page_input_path = "algo_earlyexit.md";
+    var mkdocs_page_url = "/algo_earlyexit/index.html";
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js"></script>
+  <script src="../js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../install/index.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../usage/index.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../schedule/index.html">Compression scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../regularization/index.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../quantization/index.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../algo_pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_quantization/index.html">Quantization</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="index.html">Early Exit</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#early-exit-inference">Early Exit Inference</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#why-does-early-exit-work">Why Does Early Exit Work?</a></li>
+        
+            <li><a class="toctree-l4" href="#example-code-for-early-exit">Example code for Early Exit</a></li>
+        
+            <li><a class="toctree-l4" href="#references">References</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../jupyter/index.html">Jupyter notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../design/index.html">Design</a>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Algorithms &raquo;</li>
+        
+      
+    
+    <li>Early Exit</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="early-exit-inference">Early Exit Inference</h1>
+<p>While Deep Neural Networks benefit from a large number of layers, it's often the case that many data points in classification tasks can be classified accurately with much less work. There have been several studies recently regarding the idea of exiting before the normal endpoint of the neural network. Panda et al in <a href="#panda">Conditional Deep Learning for Energy-Efficient and Enhanced Pattern Recognition</a> points out that a lot of data points can be classified easily and require less processing than some more difficult points and they view this in terms of power savings. Surat et al in <a href="#branchynet">BranchyNet: Fast Inference via Early Exiting from Deep Neural Networks</a> look at a selective approach to exit placement and criteria for exiting early.</p>
+<h2 id="why-does-early-exit-work">Why Does Early Exit Work?</h2>
+<p>Early Exit is a strategy with a straightforward and easy to understand concept Figure #fig(boundaries) shows a simple example in a 2-D feature space. While deep networks can represent more complex and expressive boundaries between classes (assuming we’re confident of avoiding over-fitting the data), it’s also clear that much of the data can be properly classified with even the simplest of classification boundaries.</p>
+<p><img alt="Figure !fig(boundaries): Simple and more expressive classification boundaries" src="../imgs/decision_boundary.png" /></p>
+<p>Data points far from the boundary can be considered "easy to classify" and achieve a high degree of confidence quicker than do data points close to the boundary. In fact, we can think of the area between the outer straight lines as being the region that is "difficult to classify" and require the full expressiveness of the neural network to accurately classify it.</p>
+<h2 id="example-code-for-early-exit">Example code for Early Exit</h2>
+<p>Both CIFAR10 and ImageNet code comes directly from publically available examples from Pytorch. The only edits are the exits that are inserted in a methodology similar to BranchyNet work.</p>
+<p>Deeper networks can benefit from multiple exits. Our examples illustrate both a single and a pair of early exits for CIFAR10 and ImageNet, respectively.</p>
+<p>Note that this code does not actually take exits. What it does is to compute statistics of loss and accuracy assuming exits were taken when criteria are met. Actually implementing exits can be tricky and architecture dependent and we plan to address these issues.</p>
+<h3 id="heuristics">Heuristics</h3>
+<p>The insertion of the exits are ad-hoc, but there are some heuristic principals guiding their placement and parameters. The earlier exits are placed, the more agressive the exit as it essentially prunes the rest of the network at a very early stage, thus saving a lot of work. However, a diminishing percentage of data will be directed through the exit if we are to preserve accuracy.</p>
+<p>There are other benefits to adding exits in that training the modified network now has backpropagation losses coming from the exits that affect the earlier layers more substantially than the last exit. This effect mitigates problems such as vanishing gradient.</p>
+<h3 id="early-exit-hyperparameters">Early Exit Hyperparameters</h3>
+<p>There are two parameters that are required to enable early exit. Leave them undefined if you are not enabling Early Exit:</p>
+<ol>
+<li>
+<p><strong>--earlyexit_thresholds</strong> defines the
+thresholds for each of the early exits. The cross entropy measure must be <strong>less than</strong> the specified threshold to take a specific exit, otherwise the data continues along the regular path. For example, you could specify "--earlyexit_thresholds 0.9 1.2" and this implies two early exits with corresponding thresholds of 0.9 and 1.2, respectively to take those exits.</p>
+</li>
+<li>
+<p><strong>--earlyexit_lossweights</strong> provide the weights for the linear combination of losses during training to compute a signle, overall loss. We only specify weights for the early exits and assume that the sum of the weights (including final exit) are equal to 1.0. So an example of "--earlyexit_lossweights 0.2 0.3" implies two early exits weighted with values of 0.2 and 0.3, respectively and that the final exit has a value of 1.0-(0.2+0.3) = 0.5. Studies have shown that weighting the early exits more heavily will create more agressive early exits, but perhaps with a slight negative effect on accuracy.</p>
+</li>
+</ol>
+<h3 id="cifar10">CIFAR10</h3>
+<p>In the case of CIFAR10, we have inserted a single exit after the first full layer grouping. The layers on the exit path itself includes a convolutional layer and a fully connected layer. If you move the exit, be sure to match the proper sizes for inputs and outputs to the exit layers.</p>
+<h3 id="imagenet">ImageNet</h3>
+<p>This supports training and inference of the ImageNet dataset via several well known deep architectures. ResNet-50 is the architecture of interest in this study, however the exit is defined in the generic resnet code and could be used with other size resnets. There are two exits inserted in this example. Again, exit layers must have their sizes match properly.</p>
+<h2 id="references">References</h2>
+<p><div id="panda"></div> <strong>Priyadarshini Panda, Abhronil Sengupta, Kaushik Roy</strong>.
+    <a href="https://arxiv.org/abs/1509.08971v6"><em>Conditional Deep Learning for Energy-Efficient and Enhanced Pattern Recognition</em></a>, arXiv:1509.08971v6, 2017.</p>
+<div id="branchynet"></div>
+
+<p><strong>Surat Teerapittayanon, Bradley McDanel, H. T. Kung</strong>.
+    <a href="http://arxiv.org/abs/1709.01686"><em>BranchyNet: Fast Inference via Early Exiting from Deep Neural Networks</em></a>, arXiv:1709.01686, 2017.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../model_zoo/index.html" class="btn btn-neutral float-right" title="Model Zoo">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="../algo_quantization/index.html" class="btn btn-neutral" title="Quantization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="../algo_quantization/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="../model_zoo/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '..';</script>
+    <script src="../js/theme.js"></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+      <script src="../search/require.js"></script>
+      <script src="../search/search.js"></script>
+
+</body>
+</html>
