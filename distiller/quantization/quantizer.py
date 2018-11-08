@@ -176,6 +176,10 @@ class Quantizer(object):
         if self.optimizer:
             optimizer_type = type(self.optimizer)
             new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
+            # we need explicitly add the initial_lr attribute to new_optimizer if optimizer is resumed from checkpoint
+            for group, new_group in zip(self.optimizer.param_groups, new_optimizer.param_groups):
+                if 'initial_lr' in group.keys():
+                    new_group.setdefault('initial_lr', group['initial_lr'])
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))

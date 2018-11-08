@@ -110,6 +110,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
                                               compression_scheduler.zeros_mask_dict,
                                               model.thinning_recipes)
 
+        if 'optimizer' in checkpoint:
+            msglogger.info('Loaded optimizer from the checkpoint')
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            
         if 'quantizer_metadata' in checkpoint:
             msglogger.info('Loaded quantizer metadata from the checkpoint')
             qmd = checkpoint['quantizer_metadata']

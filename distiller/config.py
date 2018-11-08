@@ -49,7 +49,7 @@ msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
 
 
-def dict_config(model, optimizer, sched_dict):
+def dict_config(model, optimizer, start_epoch, sched_dict):
     app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
     schedule = distiller.CompressionScheduler(model)
@@ -109,7 +109,7 @@ def dict_config(model, optimizer, sched_dict):
             add_policy_to_scheduler(policy, policy_def, schedule)
 
         # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
-        lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
+        lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer, last_epoch=start_epoch-1)
         for policy_def in lr_policies:
             instance_name, args = __policy_params(policy_def, 'lr_scheduler')
             assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(
@@ -137,13 +137,13 @@ def add_policy_to_scheduler(policy, policy_def, schedule):
                             frequency=policy_def['frequency'])
 
 
-def file_config(model, optimizer, filename):
+def file_config(model, optimizer, start_epoch, filename):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
         msglogger.info('Reading compression schedule from: %s', filename)
         try:
             sched_dict = yaml_ordered_load(stream)
-            return dict_config(model, optimizer, sched_dict)
+            return dict_config(model, optimizer, start_epoch, sched_dict)
         except yaml.YAMLError as exc:
             print("\nFATAL parsing error while parsing the schedule configuration file %s" % filename)
             raise
