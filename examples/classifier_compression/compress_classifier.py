@@ -120,6 +120,8 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "valid", "test"], default=None,
                     help='collect activation statistics (WARNING: this slows down training)')
+parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
+                    help='print masks sparsity table at end of each epoch')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                     help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
@@ -148,7 +150,11 @@ parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earl
                     help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
                     help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
-
+parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type=int,
+                    help='number of best scores to track and report (default: 1)')
+parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
+                    help='Load a model without DataParallel wrapping it')
+                    
 quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
                                         '("post-training quantization)')
 quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
@@ -238,8 +244,8 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_top1 = 0
-    best_epoch = 0
+    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
+                   for i in range(args.num_best_scores)]
 
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -285,7 +291,8 @@ def main():
         args.exiterrors = []
 
     # Create the model
-    model = create_model(args.pretrained, args.dataset, args.arch, device_ids=args.gpus)
+    model = create_model(args.pretrained, args.dataset, args.arch,
+                         parallel=not args.load_serialized, device_ids=args.gpus)
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -372,6 +379,8 @@ def main():
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
                                                 collector=collectors["sparsity"])
+            if args.masks_sparsity:
+                msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
@@ -391,13 +400,18 @@ def main():
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # remember best top1 and save checkpoint
-        is_best = top1 > best_top1
+        #sparsity = distiller.model_sparsity(model)
+        is_best = top1 > best_epochs[0].top1
         if is_best:
-            best_epoch = epoch
-            best_top1 = top1
-        msglogger.info('==> Best Top1: %.3f   On Epoch: %d\n', best_top1, best_epoch)
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler, best_top1, is_best,
-                                 args.name, msglogger.logdir)
+            best_epochs[0].epoch = epoch
+            best_epochs[0].top1 = top1
+            #best_epoch.sparsity = sparsity
+            best_epochs = sorted(best_epochs, key=lambda score: score.top1)
+        for score in reversed(best_epochs):
+            if score.top1 > 0:
+                msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
+        apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
+                                 best_epochs[0].top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
@@ -525,7 +539,6 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
-
     return top1, top5, lossses
 
 
@@ -570,9 +583,12 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 if args.display_confusion:
                     confusion.add(output.data, target)
             else:
+<<<<<<< HEAD
                 # If using Early Exit, then compute outputs at all exits
                 # output is now a list of all exit probabilities from
                 # exit0 through exitN (i.e. [exit0, exit1, ... exitN])
+=======
+>>>>>>> upstream/master
                 earlyexit_validate_loss(output, target, criterion, args)
 
             # measure elapsed time
@@ -659,7 +675,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
     this_batch_size = target.size()[0]
     earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
     for exitnum in range(args.num_exits):
-        # calculate losses at each sample separately in the minibatch. 
+        # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
         # for batch_size > 1, we need to reduce this down to an average over the batch
         args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]))

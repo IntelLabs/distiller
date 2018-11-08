@@ -18,13 +18,15 @@ pages:
   - Usage: usage.md
   - Compression scheduling: schedule.md
   - Compressing models:
-    - 'Pruning': 'pruning.md'
-    - 'Regularization': 'regularization.md'
-    - 'Quantization': 'quantization.md'
-    - 'Knowledge Distillation': 'knowledge_distillation.md'
+    - Pruning: pruning.md
+    - Regularization: regularization.md
+    - Quantization: quantization.md
+    - Knowledge Distillation: knowledge_distillation.md
+    - Conditional Computation: conditional_computation.md
   - Algorithms:
     - Pruning: algo_pruning.md
     - Quantization: algo_quantization.md
+    - Early Exit: algo_earlyexit.md
   - Model Zoo: model_zoo.md
   - Jupyter notebooks: jupyter.md
   - Design: design.md
