@@ -110,7 +110,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
                                               compression_scheduler.zeros_mask_dict,
                                               model.thinning_recipes)
 
-        if 'optimizer' in checkpoint:
+        if 'optimizer' in checkpoint and optimizer is not None:
             msglogger.info('Loaded optimizer from the checkpoint')
             optimizer.load_state_dict(checkpoint['optimizer'])
             
