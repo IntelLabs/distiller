@@ -716,7 +716,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     if args.quantize_eval:
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
-                                 name='_'.split(args.name, checkpoint_name) if args.name else checkpoint_name,
+                                 name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
                                  dir=msglogger.logdir)
 
 
