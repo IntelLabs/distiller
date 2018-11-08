@@ -49,7 +49,7 @@ msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
 
 
-def dict_config(model, optimizer, sched_dict, start_epoch=0):
+def dict_config(model, optimizer, sched_dict, start_epoch):
     app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
     schedule = distiller.CompressionScheduler(model)
@@ -137,7 +137,7 @@ def add_policy_to_scheduler(policy, policy_def, schedule):
                             frequency=policy_def['frequency'])
 
 
-def file_config(model, optimizer, start_epoch, filename):
+def file_config(model, optimizer,filename, start_epoch=0):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
         msglogger.info('Reading compression schedule from: %s', filename)
