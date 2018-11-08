@@ -68,8 +68,6 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria):
         # 3. Apply the threshold filter
         binary_map = threshold_policy(view_2d, thresholds, threshold_criteria)
 
-We need to stash this and then use it!!
-
         # 3. Finally, expand the thresholds and view as a 4D tensor
         a = binary_map.expand(param.size(2) * param.size(3),
                               param.size(0) * param.size(1)).t()
