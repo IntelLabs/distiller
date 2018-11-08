@@ -49,7 +49,7 @@ msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
 
 
-def dict_config(model, optimizer, sched_dict, start_epoch):
+def dict_config(model, optimizer, sched_dict, start_epoch=0):
     app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
     schedule = distiller.CompressionScheduler(model)
@@ -137,13 +137,13 @@ def add_policy_to_scheduler(policy, policy_def, schedule):
                             frequency=policy_def['frequency'])
 
 
-def file_config(model, optimizer,filename, start_epoch=0):
+def file_config(model, optimizer, filename, start_epoch):
     """Read the schedule from file"""
     with open(filename, 'r') as stream:
         msglogger.info('Reading compression schedule from: %s', filename)
         try:
             sched_dict = yaml_ordered_load(stream)
-            return dict_config(model, optimizer, start_epoch, sched_dict)
+            return dict_config(model, optimizer, sched_dict, start_epoch)
         except yaml.YAMLError as exc:
             print("\nFATAL parsing error while parsing the schedule configuration file %s" % filename)
             raise
