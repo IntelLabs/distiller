@@ -179,7 +179,8 @@ class Quantizer(object):
             # we need explicitly add the initial_lr attribute to new_optimizer
             for group, new_group in zip(self.optimizer.param_groups, new_optimizer.param_groups):
                 if 'initial_lr' in group.keys():
-                    new_group.setdefault('initial_lr', group['initial_lr'])
+                    new_group['initial_lr'] = group['initial_lr']
+                new_group['lr]=group['lr]
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
