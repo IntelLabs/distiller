@@ -583,12 +583,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 if args.display_confusion:
                     confusion.add(output.data, target)
             else:
-<<<<<<< HEAD
-                # If using Early Exit, then compute outputs at all exits
-                # output is now a list of all exit probabilities from
-                # exit0 through exitN (i.e. [exit0, exit1, ... exitN])
-=======
->>>>>>> upstream/master
                 earlyexit_validate_loss(output, target, criterion, args)
 
             # measure elapsed time
@@ -628,29 +622,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
         return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
     else:
-        # Print some interesting summary stats for number of data points that could exit early
-        top1k_stats = [0] * args.num_exits
-        top5k_stats = [0] * args.num_exits
-        losses_exits_stats = [0] * args.num_exits
-        sum_exit_stats = 0
-        for exitnum in range(args.num_exits):
-            if args.exit_taken[exitnum]:
-                sum_exit_stats += args.exit_taken[exitnum]
-                msglogger.info("Exit %d: %d", exitnum, args.exit_taken[exitnum])
-                top1k_stats[exitnum] += args.exiterrors[exitnum].value(1)
-                top5k_stats[exitnum] += args.exiterrors[exitnum].value(5)
-                losses_exits_stats[exitnum] += args.losses_exits[exitnum].mean
-        for exitnum in range(args.num_exits):
-            if args.exit_taken[exitnum]:
-                msglogger.info("Percent Early Exit %d: %.3f", exitnum,
-                               (args.exit_taken[exitnum]*100.0) / sum_exit_stats)
-        total_top1 = 0
-        total_top5 = 0
-        for exitnum in range(args.num_exits):
-            total_top1 += (top1k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
-            total_top5 += (top5k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
-            msglogger.info("Accuracy Stats for exit %d: top1 = %.3f, top5 = %.3f", exitnum, top1k_stats[exitnum], top5k_stats[exitnum])
-        msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
+        total_top1, total_top5, losses_exits_stats = earlyexit_validate_stats(args)
         return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
 
 
@@ -698,6 +670,31 @@ def earlyexit_validate_loss(output, target, criterion, args):
                     torch.full([1], target[batch_index], dtype=torch.long))
             args.exit_taken[exitnum] += 1
 
+def earlyexit_validate_stats(args):
+    # Print some interesting summary stats for number of data points that could exit early
+    top1k_stats = [0] * args.num_exits
+    top5k_stats = [0] * args.num_exits
+    losses_exits_stats = [0] * args.num_exits
+    sum_exit_stats = 0
+    for exitnum in range(args.num_exits):
+        if args.exit_taken[exitnum]:
+            sum_exit_stats += args.exit_taken[exitnum]
+            msglogger.info("Exit %d: %d", exitnum, args.exit_taken[exitnum])
+            top1k_stats[exitnum] += args.exiterrors[exitnum].value(1)
+            top5k_stats[exitnum] += args.exiterrors[exitnum].value(5)
+            losses_exits_stats[exitnum] += args.losses_exits[exitnum].mean
+    for exitnum in range(args.num_exits):
+        if args.exit_taken[exitnum]:
+            msglogger.info("Percent Early Exit %d: %.3f", exitnum,
+                           (args.exit_taken[exitnum]*100.0) / sum_exit_stats)
+    total_top1 = 0
+    total_top5 = 0
+    for exitnum in range(args.num_exits):
+        total_top1 += (top1k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
+        total_top5 += (top5k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
+        msglogger.info("Accuracy Stats for exit %d: top1 = %.3f, top5 = %.3f", exitnum, top1k_stats[exitnum], top5k_stats[exitnum])
+    msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
+    return(total_top1, total_top5, losses_exits_stats)
 
 def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args):
     # This sample application can be invoked to evaluate the accuracy of your model on
