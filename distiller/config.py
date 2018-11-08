@@ -49,7 +49,7 @@ msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
 
 
-def dict_config(model, optimizer, start_epoch, sched_dict):
+def dict_config(model, optimizer, sched_dict, start_epoch=0):
     app_cfg_logger.debug('Schedule contents:\n' + json.dumps(sched_dict, indent=2))
 
     schedule = distiller.CompressionScheduler(model)
