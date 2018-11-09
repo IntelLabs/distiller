@@ -154,7 +154,7 @@ parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type
                     help='number of best scores to track and report (default: 1)')
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                     help='Load a model without DataParallel wrapping it')
-                    
+
 quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
                                         '("post-training quantization)')
 quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
@@ -411,7 +411,7 @@ def main():
             if score.top1 > 0:
                 msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
-                                 best_epochs[0].top1, is_best, args.name, msglogger.logdir)
+                                 best_epochs[-1].top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
