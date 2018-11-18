@@ -31,6 +31,12 @@ thresholds for each of the early exits. The cross entropy measure must be **less
 ### Output Stats
 The example code outputs various statistics regarding the loss and accuracy at each of the exits. During training, the Top1 and Top5 stats represent the accuracy should all of the data be forced out that exit (in order to compute the loss at that exit). During inference (i.e. validation and test stages), the Top1 and Top5 stats represent the accuracy for those data points that could exit because the calculated entropy at that exit was lower than the specified threshold for that exit.
 
+### Example Command Line
+The file compress_classifier.py has Early Exit options and there is a model for Resnet that has static code for Early Exit. An example command line is shown below for Early Exit on Imagenet using a resnet50 and 2 early exits inserted (remember to replace the ALL CAPS parameters with your specific path and filenames):
+```bash
+python -u compress_classifier.py --arch=resnet50_earlyexit -b 256 --epochs 120  --lr=0.01  --earlyexit_thresholds 1.4 1.8 --earlyexit_lossweights 0.2 0.3 -j 60 --out-dir PATH_TO_OUTPUT_DIRECTORY -n earlyexit PATH_TO_IMAGENET_FILES 2>&1 | tee -a PATH_TO_LOGFILE &
+```
+
 ### CIFAR10
 In the case of CIFAR10, we have inserted a single exit after the first full layer grouping. The layers on the exit path itself includes a convolutional layer and a fully connected layer. If you move the exit, be sure to match the proper sizes for inputs and outputs to the exit layers.
 
