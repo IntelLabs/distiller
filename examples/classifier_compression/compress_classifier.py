@@ -159,11 +159,26 @@ parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                     help='Load a model without DataParallel wrapping it')
 
+str_to_quant_mode_map = {'sym': quantization.LinearQuantMode.SYMMETRIC,
+                         'asym_s': quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
+                         'asym_u': quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED}
+
+
+def linear_quant_mode_str(val_str):
+    try:
+        return str_to_quant_mode_map[val_str]
+    except KeyError:
+        raise argparse.ArgumentError('Must be one of {0} (received {1})'.format(list(str_to_quant_mode_map.keys()),
+                                                                                val_str))
+
+
 quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
                                         '("post-training quantization)')
 quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
-                         help='Apply linear-symmetric quantization to model before evaluation. Applicable only if'
+                         help='Apply linear quantization to model before evaluation. Applicable only if'
                               '--evaluate is also set')
+quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
+                         help='Linear quantization mode')
 quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
                          help='Number of bits for quantization of activations')
 quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
@@ -716,8 +731,8 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         model.cpu()
-        quantizer = quantization.SymmetricLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, args.qe_clip_acts,
+        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
+                                                          args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
                                                           args.qe_no_clip_layers)
         quantizer.prepare_model()
         model.cuda()
