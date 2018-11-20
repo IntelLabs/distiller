@@ -29,18 +29,18 @@ msglogger = logging.getLogger()
 
 class LinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, scale_factor, dequantize, inplace):
+    def forward(ctx, input, scale, zero_point, dequantize, inplace):
         if inplace:
             ctx.mark_dirty(input)
-        output = linear_quantize(input, scale_factor, inplace)
+        output = linear_quantize(input, scale, zero_point, inplace)
         if dequantize:
-            output = linear_dequantize(output, scale_factor, inplace)
+            output = linear_dequantize(output, scale, zero_point, inplace)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
         # Straight-through estimator
-        return grad_output, None, None, None
+        return grad_output, None, None, None, None
 
 
 class LearnedClippedLinearQuantizeSTE(torch.autograd.Function):
@@ -49,11 +49,11 @@ class LearnedClippedLinearQuantizeSTE(torch.autograd.Function):
         ctx.save_for_backward(input, clip_val)
         if inplace:
             ctx.mark_dirty(input)
-        scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, clip_val.data[0])
+        scale, zero_point = asymmetric_linear_quantization_params(num_bits, 0, clip_val.data[0], signed=False)
         output = clamp(input, 0, clip_val.data[0], inplace)
-        output = linear_quantize(output, scale_factor, inplace)
+        output = linear_quantize(output, scale, zero_point, inplace)
         if dequantize:
-            output = linear_dequantize(output, scale_factor, inplace)
+            output = linear_dequantize(output, scale, zero_point, inplace)
         return output
 
     @staticmethod
@@ -76,13 +76,13 @@ class ClippedLinearQuantization(nn.Module):
         super(ClippedLinearQuantization, self).__init__()
         self.num_bits = num_bits
         self.clip_val = clip_val
-        self.scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, clip_val)
+        self.scale, self.zero_point = asymmetric_linear_quantization_params(num_bits, 0, clip_val, signed=False)
         self.dequantize = dequantize
         self.inplace = inplace
 
     def forward(self, input):
         input = clamp(input, 0, self.clip_val, self.inplace)
-        input = LinearQuantizeSTE.apply(input, self.scale_factor, self.dequantize, self.inplace)
+        input = LinearQuantizeSTE.apply(input, self.scale, self.zero_point, self.dequantize, self.inplace)
         return input
 
     def __repr__(self):
@@ -100,7 +100,8 @@ class LearnedClippedLinearQuantization(nn.Module):
         self.inplace = inplace
 
     def forward(self, input):
-        input = LearnedClippedLinearQuantizeSTE.apply(input, self.clip_val, self.num_bits, self.dequantize, self.inplace)
+        input = LearnedClippedLinearQuantizeSTE.apply(input, self.clip_val, self.num_bits,
+                                                      self.dequantize, self.inplace)
         return input
 
     def __repr__(self):
@@ -125,9 +126,9 @@ class WRPNQuantizer(Quantizer):
                                             train_with_fp_copy=True, quantize_bias=quantize_bias)
 
         def wrpn_quantize_param(param_fp, num_bits):
-            scale_factor = symmetric_linear_quantization_scale_factor(num_bits, 1)
+            scale, zero_point = symmetric_linear_quantization_params(num_bits, 1)
             out = param_fp.clamp(-1, 1)
-            out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
+            out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)
             return out
 
         def relu_replace_fn(module, name, qbits_map):
@@ -142,10 +143,10 @@ class WRPNQuantizer(Quantizer):
 
 
 def dorefa_quantize_param(param_fp, num_bits):
-    scale_factor = asymmetric_linear_quantization_scale_factor(num_bits, 0, 1)
+    scale, zero_point = asymmetric_linear_quantization_params(num_bits, 0, 1, signed=False)
     out = param_fp.tanh()
     out = out / (2 * out.abs().max()) + 0.5
-    out = LinearQuantizeSTE.apply(out, scale_factor, True, False)
+    out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)
     out = 2 * out - 1
     return out
 
