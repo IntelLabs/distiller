@@ -212,13 +212,14 @@ def create_activation_stats_collectors(model, collection_phase):
     activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
     if collection_phase is None:
         return activations_collectors
-    collectors = missingdict()
-    collectors["sparsity"] = SummaryActivationStatsCollector(model, "sparsity", distiller.utils.sparsity)
-    collectors["l1_channels"] = SummaryActivationStatsCollector(model, "l1_channels",
-                                                                distiller.utils.activation_channels_l1)
-    collectors["apoz_channels"] = SummaryActivationStatsCollector(model, "apoz_channels",
-                                                                  distiller.utils.activation_channels_apoz)
-    collectors["records"] = RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
+    collectors = missingdict({
+        "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
+                                                         lambda t: 100 * distiller.utils.sparsity(t)),
+        "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",
+                                                         distiller.utils.activation_channels_l1),
+        "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
+                                                         distiller.utils.activation_channels_apoz),
+        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])})
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
@@ -227,7 +228,9 @@ def save_collectors_data(collectors, directory):
     """Utility function that saves all activation statistics to Excel workbooks
     """
     for name, collector in collectors.items():
-        collector.to_xlsx(os.path.join(directory, name))
+        workbook = os.path.join(directory, name)
+        msglogger.info("Generating {}".format(workbook))
+        collector.to_xlsx(workbook)
 
 
 def main():
@@ -538,6 +541,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
+        save_collectors_data(collectors, msglogger.logdir)
     return top1, top5, lossses
 
 
