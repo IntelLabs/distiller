@@ -145,7 +145,16 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
         This is a callback from the forward() of 'module'.
         """
-        getattr(module, self.stat_name).add(self.summary_fn(output.data))
+        try:
+            getattr(module, self.stat_name).add(self.summary_fn(output.data))
+        except RuntimeError:
+            raise ValueError("ActivationStatsCollector: a module was encountered twice during model.apply().\n"
+                             "This is an indication that your model is using the same module instance, "
+                             "in multiple nodes in the graph.  This usually occurs with ReLU modules: \n"
+                             "For example in TorchVision's ResNet model, self.relu = nn.ReLU(inplace=True) is "
+                             "instantiated once, but used multiple times.  This is not permissible when using "
+                             "instances of ActivationStatsCollector.")
+
 
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):
