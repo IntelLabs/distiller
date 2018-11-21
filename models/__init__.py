@@ -24,6 +24,12 @@ import models.imagenet as imagenet_extra_models
 import logging
 msglogger = logging.getLogger()
 
+# ResNet special treatment: we have our own version of ResNet, so we need to over-ride
+# TorchVision's version.
+RESNET_SYMS = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+for sym in RESNET_SYMS:
+    torch_models.__dict__.pop(sym)
+
 IMAGENET_MODEL_NAMES = sorted(name for name in torch_models.__dict__
                               if name.islower() and not name.startswith("__")
                               and callable(torch_models.__dict__[name]))
@@ -59,8 +65,11 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         if arch in torch_models.__dict__:
             model = torch_models.__dict__[arch](pretrained=pretrained)
         else:
-            assert not pretrained, "Model %s (ImageNet) does not have a pretrained model" % arch
-            model = imagenet_extra_models.__dict__[arch]()
+            if arch in RESNET_SYMS:
+                model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
+            else:
+                assert not pretrained, "Model %s (ImageNet) does not have a pretrained model" % arch
+                model = imagenet_extra_models.__dict__[arch]()
     elif dataset == 'cifar10':
         msglogger.info("=> creating %s model for CIFAR10" % arch)
         assert arch in cifar10_models.__dict__, "Model %s is not supported for dataset CIFAR10" % arch
