@@ -4,7 +4,7 @@
     
     <url>
      <loc>/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -12,7 +12,7 @@
     
     <url>
      <loc>/install/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -20,7 +20,7 @@
     
     <url>
      <loc>/usage/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -28,7 +28,7 @@
     
     <url>
      <loc>/schedule/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -37,31 +37,31 @@
         
     <url>
      <loc>/pruning/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/regularization/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/quantization/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/knowledge_distillation/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/conditional_computation/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
@@ -71,19 +71,19 @@
         
     <url>
      <loc>/algo_pruning/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/algo_quantization/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
     <url>
      <loc>/algo_earlyexit/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
         
@@ -92,7 +92,7 @@
     
     <url>
      <loc>/model_zoo/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -100,7 +100,7 @@
     
     <url>
      <loc>/jupyter/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -108,7 +108,7 @@
     
     <url>
      <loc>/design/index.html</loc>
-     <lastmod>2018-11-07</lastmod>
+     <lastmod>2018-11-21</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
