@@ -95,6 +95,20 @@ def accuracy_checker(log, expected_top1, expected_top5):
     return compare_values('Top-5', expected_top5, float(tops[-1][1]))
 
 
+def collateral_checker(log, *collateral_list):
+    """Test that the test produced the expected collaterals.
+
+    A collateral_list is a list of tuples, where tuple elements are:
+        0: file name
+        1: expected file size
+    """
+    for collateral in collateral_list:
+        statinfo = os.stat(collateral[0])
+        if statinfo.st_size != collateral[1]:
+            return False
+    return True
+
+
 ###########
 # Test Configurations
 ###########
@@ -107,7 +121,10 @@ test_configs = [
                DS_CIFAR, accuracy_checker, [91.620, 99.630]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
-               DS_CIFAR, accuracy_checker, [48.290, 94.460])
+               DS_CIFAR, accuracy_checker, [48.290, 94.460]),
+    TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
+               format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3188), ('sensitivity.png', 96158)])
 ]
 
 
