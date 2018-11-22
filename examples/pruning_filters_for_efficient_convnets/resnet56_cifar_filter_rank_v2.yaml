@@ -15,7 +15,7 @@
 # You may either train this model from scratch, or download it from the link below.
 # https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar
 #
-# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic
+# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank_v2.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic
 #
 # Results: 53.9% (1.85x) of the original convolution MACs (when calculated using direct convolution)
 #
@@ -25,8 +25,8 @@
 #     Total MACs: 125,747,840
 #
 # Results:
-#     Top1: 92.740    Top5: 99.640    Loss: 1.534
-#     Parameters: 570,704  (= 33% sparse )
+#     Top1: 92.910    Top5: 99.690    Loss: 0.376
+#     Parameters: 570,704  (=33% sparse)
 #     Total MACs: 67,797,632 (=1.85x less MACs)
 #
 # Parameters:
@@ -97,21 +97,20 @@
 #
 # --- validate (epoch=249)-----------
 # 5000 samples (256 per mini-batch)
-# ==> Top1: 92.180    Top5: 99.660    Loss: 1.540
+# ==> Top1: 92.720    Top5: 99.820    Loss: 0.358
 #
-# ==> Best Top1: 92.580   On Epoch: 238
-#
-# Saving checkpoint to: logs/2018.10.16-103816/checkpoint.pth.tar
+# ==> Best Top1: 93.160 on Epoch: 238
+# Saving checkpoint to: logs/2018.11.22-121053/checkpoint.pth.tar
 # --- test ---------------------
 # 10000 samples (256 per mini-batch)
-# ==> Top1: 92.740    Top5: 99.640    Loss: 1.534
+# ==> Top1: 92.910    Top5: 99.690    Loss: 0.376
 #
 #
-# Log file for this run: /home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/classifier_compression/logs/2018.10.16-103816/2018.10.16-103816.log
+# Log file for this run: /home/cvds_lab/nzmora/sandbox_5/distiller/examples/classifier_compression/logs/2018.11.22-121053/2018.11.22-121053.log
 #
-# real    29m38.833s
-# user    65m54.241s
-# sys     6m17.564s
+# real    31m6.775s
+# user    70m33.551s
+# sys     7m19.538s
 
 
 version: 1

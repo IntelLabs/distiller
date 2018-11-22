@@ -20,11 +20,13 @@
 #
 # Baseline results:
 #     Top1: 92.850    Top5: 99.780    Loss: 0.464
+#     Parameters: 851,504
 #     Total MACs: 125,747,840
 #
 # Results:
-#     Top1: 92.830    Top5: 99.760    Loss: 0.489
-#     Total MACs: 78,856,832
+#     Top1: 93.160    Top5: 99.770    Loss: 0.359
+#     Parameters: 634,640 (=25.5% sparse)
+#     Total MACs: 78,856,832  (=1.59x less MACs)
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -94,19 +96,20 @@
 #
 # --- validate (epoch=249)-----------
 # 5000 samples (256 per mini-batch)
-# ==> Top1: 92.640    Top5: 99.820    Loss: 0.453
+# ==> Top1: 92.680    Top5: 99.700    Loss: 0.354
 #
-# Saving checkpoint
+# ==> Best Top1: 93.080 on Epoch: 243
+# Saving checkpoint to: logs/2018.11.22-110009/checkpoint.pth.tar
 # --- test ---------------------
 # 10000 samples (256 per mini-batch)
-# ==> Top1: 92.830    Top5: 99.760    Loss: 0.489
+# ==> Top1: 93.160    Top5: 99.770    Loss: 0.359
 #
 #
-# Log file for this run: /home/cvds_lab/nzmora/pytorch_workspace/private-distiller/examples/classifier_compression/logs/2018.04.17-005852/2018.04.17-005852.log
+# Log file for this run: /home/cvds_lab/nzmora/sandbox_5/distiller/examples/classifier_compression/logs/2018.11.22-110009/2018.11.22-110009.log
 #
-# real    33m1.049s
-# user    66m15.927s
-# sys     7m19.050s
+# real    30m58.723s
+# user    70m7.727s
+# sys     7m16.697s
 
 version: 1
 pruners:

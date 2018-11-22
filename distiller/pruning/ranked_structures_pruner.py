@@ -27,7 +27,7 @@ class RankedStructureParameterPruner(_ParameterPruner):
     """Uses mean L1-norm to rank structures and prune a specified percentage of structures
     """
     def __init__(self, name, reg_regims):
-        super(RankedStructureParameterPruner, self).__init__(name)
+        super().__init__(name)
         self.reg_regims = reg_regims
 
 
@@ -35,7 +35,7 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
     """Uses mean L1-norm to rank structures and prune a specified percentage of structures
     """
     def __init__(self, name, reg_regims):
-        super(L1RankedStructureParameterPruner, self).__init__(name, reg_regims)
+        super().__init__(name, reg_regims)
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.reg_regims.keys():
@@ -149,7 +149,7 @@ class RankedFiltersParameterPruner(RankedStructureParameterPruner):
     """Base class for the special (but often-used) case of ranking filters
     """
     def __init__(self, name, reg_regims):
-        super(RankedFiltersParameterPruner, self).__init__(name, reg_regims)
+        super().__init__(name, reg_regims)
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         if param_name not in self.reg_regims.keys():
@@ -183,7 +183,7 @@ class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
     https://arxiv.org/abs/1607.03250
     """
     def __init__(self, name, reg_regims):
-        super(ActivationAPoZRankedFilterParameterPruner, self).__init__(name, reg_regims)
+        super().__init__(name, reg_regims)
 
     @staticmethod
     def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
@@ -223,7 +223,7 @@ class RandomRankedFilterPruner(RankedFiltersParameterPruner):
     This is used for sanity testing of other algorithms.
     """
     def __init__(self, name, reg_regims):
-        super(RandomRankedFilterPruner, self).__init__(name, reg_regims)
+        super().__init__(name, reg_regims)
 
     @staticmethod
     def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
@@ -249,7 +249,7 @@ class GradientRankedFilterPruner(RankedFiltersParameterPruner):
     """
     """
     def __init__(self, name, reg_regims):
-        super(RandomRankedFilterPruner, self).__init__(name, reg_regims)
+        super().__init__(name, reg_regims)
 
     @staticmethod
     def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
