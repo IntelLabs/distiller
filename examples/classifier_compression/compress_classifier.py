@@ -132,6 +132,9 @@ parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='
                     help='configuration file for pruning the model (default is to use hard-coded schedule)')
 parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
                     help='test the sensitivity of layers to pruning')
+parser.add_argument('--sense-range', dest='sensitivity_range', type=float, nargs=3, default=[0.0, 0.95, 0.05],
+                    help='an optional paramaeter for sensitivity testing providing the range of sparsities to test.\n'
+                    'This is equaivalent to creating sensitivities = np.arange(start, stop, step)')
 parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
 parser.add_argument('--deterministic', '--det', action='store_true',
@@ -338,7 +341,8 @@ def main():
     activations_collectors = create_activation_stats_collectors(model, collection_phase=args.activation_stats)
 
     if args.sensitivity is not None:
-        return sensitivity_analysis(model, criterion, test_loader, pylogger, args)
+        sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
+        return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
     if args.evaluate:
         return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args)
@@ -735,7 +739,7 @@ def summarize_model(model, dataset, which_summary):
         distiller.model_summary(model, which_summary, dataset)
 
 
-def sensitivity_analysis(model, criterion, data_loader, loggers, args):
+def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsities):
     # This sample application can be invoked to execute Sensitivity Analysis on your
     # model.  The ouptut is saved to CSV and PNG.
     msglogger.info("Running sensitivity tests")
@@ -747,7 +751,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args):
     which_params = [param_name for param_name, _ in model.named_parameters()]
     sensitivity = distiller.perform_sensitivity_analysis(model,
                                                          net_params=which_params,
-                                                         sparsities=np.arange(0.0, 0.95, 0.05),
+                                                         sparsities=sparsities,
                                                          test_func=test_fnc,
                                                          group=args.sensitivity)
     distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
