@@ -17,23 +17,58 @@
 import torch
 import os
 import sys
+import common
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 import distiller
 import models
 
+
 def test_sparsity():
-    zeros = torch.zeros(2,3,5,6)
+    zeros = torch.zeros(2, 3, 5, 6)
     print(distiller.sparsity(zeros))
     assert distiller.sparsity(zeros) == 1.0
     assert distiller.sparsity_3D(zeros) == 1.0
     assert distiller.density_3D(zeros) == 0.0
-
-
-    ones = torch.zeros(12,43,4,6)
-    ones.fill_(1)
+    ones = torch.ones(12, 43, 4, 6)
     assert distiller.sparsity(ones) == 0.0
+    x = torch.tensor([[1., 2., 0, 4., 0],
+                      [1., 2., 0, 4., 0]])
+    assert distiller.density(x) == 0.6
+    assert distiller.density_cols(x, transposed=False) == 0.6
+    assert distiller.sparsity_rows(x, transposed=False) == 0
+    x = torch.tensor([[0., 0., 0],
+                      [1., 4., 0],
+                      [1., 2., 0],
+                      [0., 0., 0]])
+    assert distiller.density(x) == 4/12
+    assert distiller.sparsity_rows(x, transposed=False) == 0.5
+    assert common.almost_equal(distiller.sparsity_cols(x, transposed=False), 1/3)
+    assert common.almost_equal(distiller.sparsity_rows(x), 1/3)
+
+
+def test_activations():
+    x = torch.tensor([[[[1.,  0.,  0.],
+                        [0.,  2.,  0.],
+                        [0.,  0.,  3.]],
+
+                       [[1.,  0.,  2.],
+                        [0.,  3.,  0.],
+                        [4.,  0.,  5.]]],
+
+
+                      [[[4.,  0.,  0.],
+                        [0.,  5.,  0.],
+                        [0.,  0.,  6.]],
+
+                       [[0.,  6.,  0.],
+                        [7.,  0.,  8.],
+                        [0.,  9.,  0.]]]])
+    assert all(distiller.activation_channels_l1(x) == torch.tensor([21/2,  45/2]))
+    assert all(distiller.activation_channels_apoz(x) == torch.tensor([6/18,  9/18]))
+    assert all(distiller.activation_channels_means(x) == torch.tensor([21/18,  45/18]))
+
 
 def test_utils():
     model = models.create_model(False, 'cifar10', 'resnet20_cifar', parallel=False)
