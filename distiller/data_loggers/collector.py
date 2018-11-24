@@ -147,14 +147,18 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         """
         try:
             getattr(module, self.stat_name).add(self.summary_fn(output.data))
-        except RuntimeError:
-            raise ValueError("ActivationStatsCollector: a module was encountered twice during model.apply().\n"
-                             "This is an indication that your model is using the same module instance, "
-                             "in multiple nodes in the graph.  This usually occurs with ReLU modules: \n"
-                             "For example in TorchVision's ResNet model, self.relu = nn.ReLU(inplace=True) is "
-                             "instantiated once, but used multiple times.  This is not permissible when using "
-                             "instances of ActivationStatsCollector.")
-
+        except RuntimeError as e:
+            if "The expanded size of the tensor" in e.args[0]:
+                raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
+                                 "This is an indication that your model is using the same module instance, "
+                                 "in multiple nodes in the graph.  This usually occurs with ReLU modules: \n"
+                                 "For example in TorchVision's ResNet model, self.relu = nn.ReLU(inplace=True) is "
+                                 "instantiated once, but used multiple times.  This is not permissible when using "
+                                 "instances of ActivationStatsCollector.".
+                                 format(module.distiller_name, type(module)))
+            else:
+                msglogger.info("Exception in _activation_stats_cb: {} {}".format(module.distiller_name, type(module)))
+                raise
 
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):

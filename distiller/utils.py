@@ -144,10 +144,10 @@ def density(tensor):
     Returns:
         density (float)
     """
-    nonzero = torch.nonzero(tensor)
-    if nonzero.dim() == 0:
-        return 0.0
-    return nonzero.size(0) / float(torch.numel(tensor))
+    # Using torch.nonzero(tensor) can lead to memory exhaustion on
+    # very large tensors, so we count zeros "manually".
+    nonzero = tensor.abs().gt(0).sum()
+    return float(nonzero.item()) / torch.numel(tensor)
 
 
 def sparsity(tensor):
@@ -252,14 +252,14 @@ def sparsity_matrix(tensor, dim):
     return 1 - nonzero_structs/num_structs
 
 
-def sparsity_cols(tensor, trasposed=True):
+def sparsity_cols(tensor, transposed=True):
     """Column-wise sparsity for 2D tensors
 
     PyTorch GEMM matrices are transposed before they are used in the GEMM operation.
     In other words the matrices are stored in memory transposed.  So by default we compute
     the sparsity of the transposed dimension.
     """
-    if trasposed:
+    if transposed:
         return sparsity_matrix(tensor, 0)
     return sparsity_matrix(tensor, 1)
 
@@ -269,14 +269,14 @@ def density_cols(tensor, transposed=True):
     return 1 - sparsity_cols(tensor, transposed)
 
 
-def sparsity_rows(tensor, trasposed=True):
+def sparsity_rows(tensor, transposed=True):
     """Row-wise sparsity for 2D matrices
 
     PyTorch GEMM matrices are transposed before they are used in the GEMM operation.
     In other words the matrices are stored in memory transposed.  So by default we compute
     the sparsity of the transposed dimension.
     """
-    if trasposed:
+    if transposed:
         return sparsity_matrix(tensor, 1)
     return sparsity_matrix(tensor, 0)
 
@@ -339,9 +339,14 @@ def activation_channels_l1(activation):
     Returns - for each channel: the batch-mean of its L1 magnitudes (i.e. over all of the
     activations in the mini-batch, compute the mean of the L! magnitude of each channel).
     """
-    view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channel) x (h*w)
-    featuremap_norms = view_2d.norm(p=1, dim=1)
-    featuremap_norms_mat = featuremap_norms.view(activation.size(0), activation.size(1))  # batch x channel
+    if activation.dim() == 4:
+        view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channels) x (h*w)
+        featuremap_norms = view_2d.norm(p=1, dim=1)  # (batch*channels) x 1
+        featuremap_norms_mat = featuremap_norms.view(activation.size(0), activation.size(1))  # batch x channels
+    elif activation.dim() == 2:
+        featuremap_norms_mat = activation.norm(p=1, dim=1)  # batch x 1
+    else:
+        raise ValueError("activation_channels_l1: Unsupported shape: ".format(activation.shape))
     # We need to move the results back to the CPU
     return featuremap_norms_mat.mean(dim=0).cpu()
 
@@ -357,9 +362,14 @@ def activation_channels_means(activation):
     Returns - for each channel: the batch-mean of its L1 magnitudes (i.e. over all of the
     activations in the mini-batch, compute the mean of the L1 magnitude of each channel).
     """
-    view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channel) x (h*w)
-    featuremap_means = sparsity_rows(view_2d)
-    featuremap_means_mat = featuremap_means.view(activation.size(0), activation.size(1))  # batch x channel
+    if activation.dim() == 4:
+        view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channels) x (h*w)
+        featuremap_means = view_2d.mean(dim=1)  # (batch*channels) x 1
+        featuremap_means_mat = featuremap_means.view(activation.size(0), activation.size(1))  # batch x channels
+    elif activation.dim() == 2:
+        featuremap_means_mat = activation.mean(dim=1)  # batch x 1
+    else:
+        raise ValueError("activation_channels_means: Unsupported shape: ".format(activation.shape))
     # We need to move the results back to the CPU
     return featuremap_means_mat.mean(dim=0).cpu()
 
@@ -377,11 +387,15 @@ def activation_channels_apoz(activation):
 
     Returns - for each channel: the batch-mean of its sparsity.
     """
-    view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channel) x (h*w)
-    featuremap_means = view_2d.mean(dim=1)  # global average pooling
-    featuremap_means_mat = featuremap_means.view(activation.size(0), activation.size(1))  # batch x channel
-    # We need to move the results back to the CPU
-    return featuremap_means_mat.mean(dim=0).cpu()
+    if activation.dim() == 4:
+        view_2d = activation.view(-1, activation.size(2) * activation.size(3))  # (batch*channels) x (h*w)
+        featuremap_apoz = view_2d.abs().gt(0).sum(dim=1).float() / (activation.size(2) * activation.size(3))  # (batch*channels) x 1
+        featuremap_apoz_mat = featuremap_apoz.view(activation.size(0), activation.size(1))  # batch x channels
+    elif activation.dim() == 2:
+        featuremap_apoz_mat = activation.abs().gt(0).sum(dim=1).float() / activation.size(1)  # batch x 1
+    else:
+        raise ValueError("activation_channels_apoz: Unsupported shape: ".format(activation.shape))
+    return featuremap_apoz_mat.mean(dim=0).cpu()
 
 
 def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total_steps, log_freq, loggers):
