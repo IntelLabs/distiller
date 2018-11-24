@@ -22,7 +22,7 @@ def symmetric_linear_quantization_params(num_bits, saturation_val):
     n = 2 ** (num_bits - 1) - 1
     scale = n / saturation_val
     if isinstance(scale, torch.Tensor):
-        zero_point = torch.tensor(0.0).to(saturation_val.device)
+        zero_point = torch.zeros_like(scale)
     else:
         zero_point = 0.0
     return scale, zero_point
@@ -35,7 +35,7 @@ def asymmetric_linear_quantization_params(num_bits, saturation_min, saturation_m
     zero_point = scale * saturation_min
     if integral_zero_point:
         if isinstance(zero_point, torch.Tensor):
-            zero_point.round_()
+            zero_point = zero_point.round()
         else:
             zero_point = float(round(zero_point))
     if signed:
@@ -69,26 +69,29 @@ def linear_dequantize(input, scale, zero_point, inplace=False):
     return (input + zero_point) / scale
 
 
-def get_tensor_min_max(t):
-    return t.min(), t.max()
+def get_tensor_min_max(t, per_dim=None):
+    if per_dim is None:
+        return t.min(), t.max()
+    if per_dim > t.dim():
+        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
+    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
+    tv = t.view(*view_dims)
+    return tv.min(dim=-1)[0], tv.max(dim=-1)[0]
 
 
-def get_tensor_avg_min_max_across_batch(t):
-    # Assume batch is at dim 0
-    tv = t.view(t.size()[0], -1)
-    avg_max = tv.max(dim=1)[0].mean()
-    avg_min = tv.min(dim=1)[0].mean()
-    return avg_min, avg_max
+def get_tensor_avg_min_max(t, across_dim=None):
+    min_per_dim, max_per_dim = get_tensor_min_max(t, per_dim=across_dim)
+    return min_per_dim.mean(), max_per_dim.mean()
 
 
-def get_tensor_max_abs(t):
-    min_val, max_val = get_tensor_min_max(t)
-    return max(abs(min_val), abs(max_val))
+def get_tensor_max_abs(t, per_dim=None):
+    min_val, max_val = get_tensor_min_max(t, per_dim=per_dim)
+    return torch.max(min_val.abs_(), max_val.abs_())
 
 
-def get_tensor_avg_max_abs_across_batch(t):
-    avg_min, avg_max = get_tensor_avg_min_max_across_batch(t)
-    return max(abs(avg_min), abs(avg_max))
+def get_tensor_avg_max_abs(t, across_dim=None):
+    avg_min, avg_max = get_tensor_avg_min_max(t, across_dim=across_dim)
+    return torch.max(avg_min.abs_(), avg_max.abs_())
 
 
 def get_quantized_range(num_bits, signed=True):
@@ -96,3 +99,19 @@ def get_quantized_range(num_bits, signed=True):
         n = 2 ** (num_bits - 1)
         return -n, n - 1
     return 0, 2 ** num_bits - 1
+
+
+class LinearQuantizeSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, scale, zero_point, dequantize, inplace):
+        if inplace:
+            ctx.mark_dirty(input)
+        output = linear_quantize(input, scale, zero_point, inplace)
+        if dequantize:
+            output = linear_dequantize(output, scale, zero_point, inplace)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight-through estimator
+        return grad_output, None, None, None, None

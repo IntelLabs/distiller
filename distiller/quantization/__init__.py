@@ -16,7 +16,7 @@
 
 from .quantizer import Quantizer
 from .range_linear import RangeLinearQuantWrapper, RangeLinearQuantParamLayerWrapper, PostTrainLinearQuantizer, \
-    LinearQuantMode
+    LinearQuantMode, QuantAwareTrainRangeLinearQuantizer
 from .clipped_linear import LinearQuantizeSTE, ClippedLinearQuantization, WRPNQuantizer, DorefaQuantizer, PACTQuantizer
 
 del quantizer

@@ -27,22 +27,6 @@ msglogger = logging.getLogger()
 ###
 
 
-class LinearQuantizeSTE(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, input, scale, zero_point, dequantize, inplace):
-        if inplace:
-            ctx.mark_dirty(input)
-        output = linear_quantize(input, scale, zero_point, inplace)
-        if dequantize:
-            output = linear_dequantize(output, scale, zero_point, inplace)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        # Straight-through estimator
-        return grad_output, None, None, None, None
-
-
 class LearnedClippedLinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, clip_val, num_bits, dequantize, inplace):
@@ -125,8 +109,8 @@ class WRPNQuantizer(Quantizer):
                                             bits_weights=bits_weights, bits_overrides=bits_overrides,
                                             train_with_fp_copy=True, quantize_bias=quantize_bias)
 
-        def wrpn_quantize_param(param_fp, num_bits):
-            scale, zero_point = symmetric_linear_quantization_params(num_bits, 1)
+        def wrpn_quantize_param(param_fp, param_meta):
+            scale, zero_point = symmetric_linear_quantization_params(param_meta.num_bits, 1)
             out = param_fp.clamp(-1, 1)
             out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)
             return out
@@ -142,8 +126,8 @@ class WRPNQuantizer(Quantizer):
         self.replacement_factory[nn.ReLU] = relu_replace_fn
 
 
-def dorefa_quantize_param(param_fp, num_bits):
-    scale, zero_point = asymmetric_linear_quantization_params(num_bits, 0, 1, signed=False)
+def dorefa_quantize_param(param_fp, param_meta):
+    scale, zero_point = asymmetric_linear_quantization_params(param_meta.num_bits, 0, 1, signed=False)
     out = param_fp.tanh()
     out = out / (2 * out.abs().max()) + 0.5
     out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)

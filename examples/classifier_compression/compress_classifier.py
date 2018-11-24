@@ -190,6 +190,8 @@ quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
 quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                          help='List of fully-qualified layer names for which not to clip activations. Applicable'
                               'only if --qe-clip-acts is also set')
+quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
+                         help='Enable per-channel quantization')
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 
@@ -329,6 +331,7 @@ def main():
     if args.resume:
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
+        model.cuda()
 
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -733,7 +736,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
         model.cpu()
         quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
                                                           args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers)
+                                                          args.qe_no_clip_layers, args.qe_per_channel)
         quantizer.prepare_model()
         model.cuda()
 
