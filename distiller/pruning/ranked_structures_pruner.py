@@ -206,8 +206,8 @@ class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
             msglogger.info("Too few filters - can't prune %.1f%% filters", 100*fraction_to_prune)
             return
 
-        # Sort from high to low, and remove the bottom 'num_filters_to_prune' filters
-        filters_ordered_by_apoz = np.argsort(-apoz)[:-num_filters_to_prune]
+        # Sort from low to high, and remove the bottom 'num_filters_to_prune' filters
+        filters_ordered_by_apoz = np.argsort(apoz)[:-num_filters_to_prune]
         zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_by_apoz,
                                                                                                param, num_filters)
 
