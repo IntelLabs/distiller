@@ -66,7 +66,7 @@ def test_activations():
                         [7.,  0.,  8.],
                         [0.,  9.,  0.]]]])
     assert all(distiller.activation_channels_l1(x) == torch.tensor([21/2,  45/2]))
-    assert all(distiller.activation_channels_apoz(x) == torch.tensor([6/18,  9/18]))
+    assert all(distiller.activation_channels_apoz(x) == torch.tensor([100*(6+6)/(9+9),  100*(4+5)/(9+9)]))
     assert all(distiller.activation_channels_means(x) == torch.tensor([21/18,  45/18]))
 
 
