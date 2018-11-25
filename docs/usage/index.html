@@ -424,21 +424,31 @@ For example:</p>
 <p>An instance of a subclass of <code>ActivationStatsCollector</code> can be used to collect activation statistics.  Currently, <code>ActivationStatsCollector</code> has two types of subclasses: <code>SummaryActivationStatsCollector</code> and <code>RecordsActivationStatsCollector</code>.<br>
 Instances of <code>SummaryActivationStatsCollector</code> compute the mean of some statistic of the activation.  It is rather
 light-weight and quicker than collecting a record per activation.  The statistic function is configured in the constructor.<br>
-In <code>compress_classifier.py</code> we create a dictionary of collectors.  For example, this collector collects statistics that is stored in each relevant module, in a variable named <code>sparsity</code>.  The lambda expression is invoked per activation encountered during forward passes, and the value it returns (in this case, the sparsity of the activation tensors) is stored in <code>module.sparsity</code> (<em>"sparsity"</em> is this collector's name).</p>
+In the sample compression application, <code>compress_classifier.py</code>, we create a dictionary of collectors.  For example:</p>
 <pre><code>SummaryActivationStatsCollector(model,
                                 &quot;sparsity&quot;,
                                 lambda t: 100 * distiller.utils.sparsity(t))
 </code></pre>
 
-<p>To access the statistics, you can invoke <code>collector.value()</code>, or you can access each module's data directly.<br>
-You can add other statistics collectors and use a different function to compute your new statistic.<br>
-Another type of collector is <code>RecordsActivationStatsCollector</code> which computes a hard-coded set of activations statistics and collects a
+<p>The lambda expression is invoked per activation encountered during forward passes, and the value it returns (in this case, the sparsity of the activation tensors, multiplied by 100) is stored in <code>module.sparsity</code> (<em>"sparsity"</em> is this collector's name).  To access the statistics, you can invoke <code>collector.value()</code>, or you can access each module's data directly.</p>
+<p>Another type of collector is <code>RecordsActivationStatsCollector</code> which computes a hard-coded set of activations statistics and collects a
 <em>record per activation</em>.  For obvious reasons, this is slower than instances of <code>SummaryActivationStatsCollector</code>.<br><code>ActivationStatsCollector</code> default to collecting activations statistics only on the output activations of ReLU layers, but we can choose any layer type we want.  In the example below we collect statistics from outputs of <code>torch.nn.Conv2d</code> layers.</p>
 <pre><code>RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
 </code></pre>
 
-<p>Collectors can write their data to Excel workbooks, by invoking <code>collector.to_xlsx(path_to_workbook)</code>, which are named using the collector's name.<br>
-You can use a utility function, <code>distiller.log_activation_statsitics</code>, to log the data of an <code>ActivationStatsCollector</code> instance to one of the loggers.  For an example, the code below logs the <em>"sparsity"</em> collector to a TensorBoard log file.</p>
+<p>Collectors can write their data to Excel workbooks (which are named using the collector's name), by invoking <code>collector.to_xlsx(path_to_workbook)</code>.  In <code>compress_classifier.py</code> we currently create four different collectors which you can selectively disable.  You can also add other statistics collectors and use a different function to compute your new statistic.</p>
+<pre><code>collectors = missingdict({
+    &quot;sparsity&quot;:      SummaryActivationStatsCollector(model, &quot;sparsity&quot;,
+                                                     lambda t: 100 * distiller.utils.sparsity(t)),
+    &quot;l1_channels&quot;:   SummaryActivationStatsCollector(model, &quot;l1_channels&quot;,
+                                                     distiller.utils.activation_channels_l1),
+    &quot;apoz_channels&quot;: SummaryActivationStatsCollector(model, &quot;apoz_channels&quot;,
+                                                     distiller.utils.activation_channels_apoz),
+    &quot;records&quot;:       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])})
+</code></pre>
+
+<p>By default, these Collectors write their data to files in the active log directory.</p>
+<p>You can use a utility function, <code>distiller.log_activation_statsitics</code>, to log the data of an <code>ActivationStatsCollector</code> instance to one of the backend-loggers.  For an example, the code below logs the <em>"sparsity"</em> collector to a TensorBoard log file.</p>
 <pre><code>distiller.log_activation_statsitics(epoch, &quot;train&quot;, loggers=[tflogger],
                                     collector=collectors[&quot;sparsity&quot;])
 </code></pre>
