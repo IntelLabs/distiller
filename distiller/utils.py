@@ -395,7 +395,7 @@ def activation_channels_apoz(activation):
         featuremap_apoz_mat = activation.abs().gt(0).sum(dim=1).float() / activation.size(1)  # batch x 1
     else:
         raise ValueError("activation_channels_apoz: Unsupported shape: ".format(activation.shape))
-    return featuremap_apoz_mat.mean(dim=0).cpu()
+    return 100 - featuremap_apoz_mat.mean(dim=0).mul(100).cpu()
 
 
 def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total_steps, log_freq, loggers):
