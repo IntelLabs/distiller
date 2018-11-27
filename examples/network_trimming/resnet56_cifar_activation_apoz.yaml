@@ -103,64 +103,67 @@ pruners:
 #   filter_pruner:
 #     class: 'ActivationAPoZRankedStructureParameterPruner'
 #     reg_regims:
-#       'module.layer1.0.conv1.weight': Filters
+#       'module.layer1.0.conv1.weight',
 
   # filter_pruner:
   #   class: ActivationAPoZRankedFilterPruner_AGP
   #   initial_sparsity : 0.10
   #   final_sparsity: 0.6
   #   reg_regims:
-  #     module.layer1.0.conv1.weight: Filters
+  #     module.layer1.0.conv1.weight,
 
   filter_pruner_60:
     #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.6
-    reg_regims:
-      module.layer1.0.conv1.weight: Filters
-      module.layer1.1.conv1.weight: Filters
-      module.layer1.2.conv1.weight: Filters
-      module.layer1.3.conv1.weight: Filters
-      module.layer1.4.conv1.weight: Filters
-      module.layer1.5.conv1.weight: Filters
-      module.layer1.6.conv1.weight: Filters
-      module.layer1.7.conv1.weight: Filters
-      module.layer1.8.conv1.weight: Filters
+    group_type: Filters
+    weights: [
+      module.layer1.0.conv1.weight,
+      module.layer1.1.conv1.weight,
+      module.layer1.2.conv1.weight,
+      module.layer1.3.conv1.weight,
+      module.layer1.4.conv1.weight,
+      module.layer1.5.conv1.weight,
+      module.layer1.6.conv1.weight,
+      module.layer1.7.conv1.weight,
+      module.layer1.8.conv1.weight]
 
   filter_pruner_50:
     #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.5
-    reg_regims:
-      module.layer2.1.conv1.weight: Filters
-      module.layer2.2.conv1.weight: Filters
-      module.layer2.3.conv1.weight: Filters
-      module.layer2.4.conv1.weight: Filters
-      module.layer2.6.conv1.weight: Filters
-      module.layer2.7.conv1.weight: Filters
+    group_type: Filters
+    weights: [
+      module.layer2.1.conv1.weight,
+      module.layer2.2.conv1.weight,
+      module.layer2.3.conv1.weight,
+      module.layer2.4.conv1.weight,
+      module.layer2.6.conv1.weight,
+      module.layer2.7.conv1.weight]
 
   filter_pruner_10:
     #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0
     final_sparsity: 0.1
-    reg_regims:
-      module.layer3.1.conv1.weight: Filters
+    group_type: Filters
+    weights: [module.layer3.1.conv1.weight]
 
   filter_pruner_30:
     #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.3
-    reg_regims:
-        module.layer3.2.conv1.weight: Filters
-        module.layer3.3.conv1.weight: Filters
-        module.layer3.5.conv1.weight: Filters
-        module.layer3.6.conv1.weight: Filters
-        module.layer3.7.conv1.weight: Filters
-        module.layer3.8.conv1.weight: Filters
+    group_type: Filters
+    weights: [
+      module.layer3.2.conv1.weight,
+      module.layer3.3.conv1.weight,
+      module.layer3.5.conv1.weight,
+      module.layer3.6.conv1.weight,
+      module.layer3.7.conv1.weight,
+      module.layer3.8.conv1.weight]
 
 
 extensions:
@@ -204,6 +207,7 @@ policies:
   - extension:
       instance_name: net_thinner
     epochs: [200]
+    #epochs: [181]
 
   - lr_scheduler:
       instance_name: exp_finetuning_lr
