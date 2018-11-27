@@ -6,11 +6,13 @@
 # Baseline results:
 #     Top1: 91.780    Top5: 99.710    Loss: 0.376
 #     Total MACs: 40,813,184
+#     # of parameters: 270,896
 #
 # Results:
 #     Top1: 91.200    Top5: 99.660    Loss: 1.551
 #     Total MACs: 30,638,720
 #     Total sparsity: 41.84
+#     # of parameters: 143,488 (=53% of the baseline parameters)
 #
 # time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.1 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar
 #

@@ -34,7 +34,7 @@ import distiller
 from distiller import normalize_module_name, denormalize_module_name
 from apputils import SummaryGraph
 from models import create_model
-msglogger = logging.getLogger()
+msglogger = logging.getLogger(__name__)
 
 ThinningRecipe = namedtuple('ThinningRecipe', ['modules', 'parameters'])
 """A ThinningRecipe is composed of two sets of instructions.
@@ -290,7 +290,7 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
             bn_thinning(thinning_recipe, layers, bn_layer_name,
                         len_thin_features=num_nnz_channels, thin_features=indices)
 
-    msglogger.info(thinning_recipe)   # TODO: remove this line
+    msglogger.debug(thinning_recipe)
     return thinning_recipe
 
 
@@ -304,7 +304,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
     should be changed in order to remove the filters.
     """
     msglogger.info("Invoking create_thinning_recipe_filters")
-    msglogger.info(sgraph.ops.keys())  # TODO: change to .debug
+    msglogger.debug(sgraph.ops.keys())
 
     thinning_recipe = ThinningRecipe(modules={}, parameters={})
     layers = {mod_name: m for mod_name, m in model.named_modules()}
@@ -323,7 +323,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             raise ValueError("Trying to set zero filters for parameter %s is not allowed" % param_name)
         # If there are non-zero filters in this tensor then continue to next tensor
         if num_filters <= num_nnz_filters:
-            msglogger.info("Skipping {} shape={}".format(param_name_2_layer_name(param_name), param.shape))  # TODO: change to .debug
+            msglogger.debug("Skipping {} shape={}".format(param_name_2_layer_name(param_name), param.shape))
             continue
 
         msglogger.info("In tensor %s found %d/%d zero filters", param_name,
@@ -344,7 +344,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             append_param_directive(thinning_recipe, layer_name+'.bias', (0, indices))
 
         # Find all instances of Convolution or FC (GEMM) layers that immediately follow this layer
-        msglogger.info("{} => {}".format(layer_name, normalize_module_name(layer_name)))  # TODO: change to .debug
+        msglogger.debug("{} => {}".format(layer_name, normalize_module_name(layer_name)))
         successors = sgraph.successors_f(normalize_module_name(layer_name), ['Conv', 'Gemm'])
         # Convert the layers names to PyTorch's convoluted naming scheme (when DataParallel is used)
         successors = [denormalize_module_name(model, successor) for successor in successors]
@@ -353,7 +353,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             if isinstance(layers[successor], torch.nn.modules.Conv2d):
                 # For each of the convolutional layers that follow, we have to reduce the number of input channels.
                 append_module_directive(model, thinning_recipe, successor, key='in_channels', val=num_nnz_filters)
-                msglogger.info("[recipe] {}: setting in_channels = {}".format(successor, num_nnz_filters))  # TODO: change to .debug
+                msglogger.debug("[recipe] {}: setting in_channels = {}".format(successor, num_nnz_filters))
 
                 # Now remove channels from the weights tensor of the successor conv
                 append_param_directive(thinning_recipe, denormalize_module_name(model, successor)+'.weight', (1, indices))
@@ -363,8 +363,9 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
                 fm_size = layers[successor].in_features // layers[layer_name].out_channels
                 in_features = fm_size * num_nnz_filters
                 append_module_directive(model, thinning_recipe, successor, key='in_features', val=in_features)
-                msglogger.info("[recipe] Linear {}: fm_size = {}  layers[{}].out_channels={}".format(successor, in_features, layer_name, layers[layer_name].out_channels))   # TODO: change to .debug
-                msglogger.info("[recipe] {}: setting in_features = {}".format(successor, in_features))   # TODO: change to .debug
+                msglogger.debug("[recipe] Linear {}: fm_size = {}  layers[{}].out_channels={}".format(
+                                successor, in_features, layer_name, layers[layer_name].out_channels))
+                msglogger.debug("[recipe] {}: setting in_features = {}".format(successor, in_features))
 
                 # Now remove channels from the weights tensor of the successor FC layer:
                 # This is a bit tricky:
@@ -432,7 +433,7 @@ def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
     # Invoke this function when you want to use a list of thinning recipes to convert a programmed model
     # to a thinned model. For example, this is invoked when loading a model from a checkpoint.
     for i, recipe in enumerate(recipe_list):
-        msglogger.info("Executing recipe %d:" % i)  # TODO: change to .debug
+        msglogger.debug("Executing recipe %d:" % i)
         execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer=None, loaded_from_file=True)
     msglogger.info("Executed %d recipes" % len(recipe_list))
 
@@ -460,7 +461,7 @@ def optimizer_thinning(optimizer, param, dim, indices, new_shape=None):
             if 'momentum_buffer' in param_state:
                 param_state['momentum_buffer'] = torch.index_select(param_state['momentum_buffer'], dim, indices)
                 if new_shape is not None:
-                    msglogger.info("optimizer_thinning: new shape {}".format(*new_shape))  # TODO: change to .debug
+                    msglogger.debug("optimizer_thinning: new shape {}".format(*new_shape))
                     param_state['momentum_buffer'] = param_state['momentum_buffer'].resize_(*new_shape)
                 return True
     return False
@@ -481,18 +482,18 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                 indices_to_select = val[1]
                 # Check if we're trying to trim a parameter that is already "thin"
                 if running.size(dim_to_trim) != indices_to_select.nelement():
-                    msglogger.info("[thinning] {}: setting {} to {}".
-                                   format(layer_name, attr, indices_to_select.nelement()))  # TODO: change to .debug
+                    msglogger.debug("[thinning] {}: setting {} to {}".
+                                   format(layer_name, attr, indices_to_select.nelement()))
                     setattr(layers[layer_name], attr,
                             torch.index_select(running, dim=dim_to_trim, index=indices_to_select))
             else:
-                msglogger.info("[thinning] {}: setting {} to {}".format(layer_name, attr, val))  # TODO: change to .debug
+                msglogger.debug("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
                 setattr(layers[layer_name], attr, val)
 
     assert len(recipe.parameters) > 0
 
     for param_name, param_directives in recipe.parameters.items():
-        msglogger.info("{} : {}".format(param_name, param_directives))  # TODO: change to .debug
+        msglogger.debug("{} : {}".format(param_name, param_directives))
         param = distiller.model_find_param(model, param_name)
         assert param is not None
         for directive in param_directives:
@@ -500,7 +501,7 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
             indices = directive[1]
             len_indices = indices.nelement()
             if len(directive) == 4:  # TODO: this code is hard to follow
-                msglogger.info("{}-{}-{}: SHAPE = {}".format(param_name, param.shape, id(param), list(directive[2])))  # TODO: change to .debug
+                msglogger.debug("{}-{}-{}: SHAPE = {}".format(param_name, param.shape, id(param), list(directive[2])))
                 selection_view = param.view(*directive[2])
                 # Check if we're trying to trim a parameter that is already "thin"
                 if param.data.size(dim) != len_indices:
@@ -511,8 +512,8 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                         if grad_selection_view.size(dim) != len_indices:
                             param.grad = torch.index_select(grad_selection_view, dim, indices)
                             if optimizer_thinning(optimizer, param, dim, indices, directive[3]):
-                                msglogger.info("Updated [4D] velocity buffer for {} (dim={},size={},shape={})".
-                                               format(param_name, dim, len_indices, directive[3]))  # TODO: change to .debug
+                                msglogger.debug("Updated [4D] velocity buffer for {} (dim={},size={},shape={})".
+                                                format(param_name, dim, len_indices, directive[3]))
 
                 param.data = param.view(*directive[3])
                 if param.grad is not None:
@@ -520,14 +521,14 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
             else:
                 if param.data.size(dim) != len_indices:
                     param.data = torch.index_select(param.data, dim, indices)
-                    msglogger.info("[thinning] changed param {} shape: {}".format(param_name, len_indices))  # TODO: change to .debug
+                    msglogger.debug("[thinning] changed param {} shape: {}".format(param_name, len_indices))
                 # We also need to change the dimensions of the gradient tensor.
                 # If have not done a backward-pass thus far, then the gradient will
                 # not exist, and therefore won't need to be re-dimensioned.
                 if param.grad is not None and param.grad.size(dim) != len_indices:
                     param.grad = torch.index_select(param.grad, dim, indices)
                     if optimizer_thinning(optimizer, param, dim, indices):
-                        msglogger.info("Updated velocity buffer %s" % param_name)  # TODO: change to .debug
+                        msglogger.debug("Updated velocity buffer %s" % param_name)
 
             if not loaded_from_file:
                 # If the masks are loaded from a checkpoint file, then we don't need to change

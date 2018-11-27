@@ -113,69 +113,51 @@
 
 version: 1
 pruners:
-  filter_pruner:
+  filter_pruner_60:
     class: 'L1RankedStructureParameterPruner'
-    reg_regims:
-      #'module.conv1.weight':          [0.2, '3D']
-      'module.layer1.0.conv1.weight': [0.6, '3D']
-      #'module.layer1.0.conv2.weight': [0.4, '3D']
-      'module.layer1.1.conv1.weight': [0.6, '3D']
-      #'module.layer1.1.conv2.weight': [0.6, '3D']
-      'module.layer1.2.conv1.weight': [0.6, '3D']
-      #'module.layer1.2.conv2.weight': [0.6, '3D']
-      'module.layer1.3.conv1.weight': [0.6, '3D']
-      #'module.layer1.3.conv2.weight': [0.6, '3D']
-      'module.layer1.4.conv1.weight': [0.6, '3D']
-      #'module.layer1.4.conv2.weight': [0.6, '3D']
-      'module.layer1.5.conv1.weight': [0.6, '3D']
-      #'module.layer1.5.conv2.weight': [0.6, '3D']
-      'module.layer1.6.conv1.weight': [0.6, '3D']
-      #'module.layer1.6.conv2.weight': [0.6, '3D']
-      'module.layer1.7.conv1.weight': [0.6, '3D']
-      #'module.layer1.7.conv2.weight': [0.6, '3D']
-      'module.layer1.8.conv1.weight': [0.6, '3D']
-      #'module.layer1.8.conv2.weight': [0.2, '3D']
+    group_type: Filters
+    desired_sparsity: 0.6
+    weights: [
+      module.layer1.0.conv1.weight,
+      module.layer1.1.conv1.weight,
+      module.layer1.2.conv1.weight,
+      module.layer1.3.conv1.weight,
+      module.layer1.4.conv1.weight,
+      module.layer1.5.conv1.weight,
+      module.layer1.6.conv1.weight,
+      module.layer1.7.conv1.weight,
+      module.layer1.8.conv1.weight]
 
-      ##'module.layer2.0.conv1.weight': [0.5, '3D']
-      #'module.layer2.0.conv2.weight': [0.3, '3D']
-      #'module.layer2.0.downsample.0.weight': [0.3, '3D']
-      'module.layer2.1.conv1.weight': [0.5, '3D']
-      #'module.layer2.1.conv2.weight': [0.3, '3D']
-      'module.layer2.2.conv1.weight': [0.5, '3D']
-      #'module.layer2.2.conv2.weight': [0.3, '3D']
-      'module.layer2.3.conv1.weight': [0.5, '3D']
-      #'module.layer2.3.conv2.weight': [0.3, '3D']
+  filter_pruner_50:
+    class: 'L1RankedStructureParameterPruner'
+    group_type: Filters
+    desired_sparsity: 0.5
+    weights: [
+      module.layer2.1.conv1.weight,
+      module.layer2.2.conv1.weight,
+      module.layer2.3.conv1.weight,
+      module.layer2.4.conv1.weight,
+      module.layer2.6.conv1.weight,
+      module.layer2.7.conv1.weight]
 
-      'module.layer2.4.conv1.weight': [0.5, '3D']
-      # 'module.layer2.4.conv2.weight': [0.3, '3D']
-      #'module.layer2.5.conv1.weight': [0.5, '3D']
-      # 'module.layer2.5.conv2.weight': [0.3, '3D']
-      'module.layer2.6.conv1.weight': [0.5, '3D']
-      # 'module.layer2.6.conv2.weight': [0.2, '3D']
-      'module.layer2.7.conv1.weight': [0.5, '3D']
-      # 'module.layer2.7.conv2.weight': [0.2, '3D']
-      ##'module.layer2.8.conv1.weight': [0.3, '3D']
-      # 'module.layer2.8.conv2.weight': [0.2, '3D']
+  filter_pruner_10:
+    class: 'L1RankedStructureParameterPruner'
+    group_type: Filters
+    desired_sparsity: 0.1
+    weights: [module.layer3.1.conv1.weight]
 
-      #'module.layer3.0.conv1.weight': [0.1, '3D']
-      # 'module.layer3.0.conv2.weight': [0.1, '3D']
-      # 'module.layer3.0.downsample.0.weight': [0.1, '3D']
-      'module.layer3.1.conv1.weight': [0.1, '3D']
-      # 'module.layer3.1.conv2.weight': [0.1, '3D']
-      'module.layer3.2.conv1.weight': [0.3, '3D']
-      # 'module.layer3.2.conv2.weight': [0.1, '3D']
-      'module.layer3.3.conv1.weight': [0.3, '3D']
-      # 'module.layer3.3.conv2.weight': [0.1, '3D']
-      #'module.layer3.4.conv1.weight': [0.1, '3D']
-      # 'module.layer3.4.conv2.weight': [0.1, '3D']
-      'module.layer3.5.conv1.weight': [0.3, '3D']
-      #'module.layer3.5.conv2.weight': [0.1, '3D']
-      'module.layer3.6.conv1.weight': [0.3, '3D']
-      # 'module.layer3.6.conv2.weight': [0.1, '3D']
-      'module.layer3.7.conv1.weight': [0.3, '3D']
-      # 'module.layer3.7.conv2.weight': [0.1, '3D']
-      'module.layer3.8.conv1.weight': [0.3, '3D']
-      # 'module.layer3.8.conv2.weight': [0.2, '3D']
+  filter_pruner_30:
+    class: 'L1RankedStructureParameterPruner'
+    group_type: Filters
+    desired_sparsity: 0.3
+    weights: [
+      module.layer3.2.conv1.weight,
+      module.layer3.3.conv1.weight,
+      module.layer3.5.conv1.weight,
+      module.layer3.6.conv1.weight,
+      module.layer3.7.conv1.weight,
+      module.layer3.8.conv1.weight]
+
 
 extensions:
   net_thinner:
@@ -192,7 +174,19 @@ lr_schedulers:
 
 policies:
   - pruner:
-      instance_name: filter_pruner
+      instance_name: filter_pruner_60
+    epochs: [180]
+
+  - pruner:
+      instance_name: filter_pruner_50
+    epochs: [180]
+
+  - pruner:
+      instance_name: filter_pruner_30
+    epochs: [180]
+
+  - pruner:
+      instance_name: filter_pruner_10
     epochs: [180]
 
   - extension:
