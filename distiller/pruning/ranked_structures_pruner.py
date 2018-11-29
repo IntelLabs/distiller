@@ -94,6 +94,7 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             raise ValueError("Structure {} was requested for {}:"
                              "Currently only filter (3D) and channel ranking is supported".
                              format(group_type, param_name))
+
         binary_map = group_pruning_fn(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
         return binary_map
 
@@ -121,26 +122,24 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
             return bottomk, channel_mags
 
+        num_filters = param.size(0)
+        num_channels = param.size(1)
         if binary_map is None:
             bottomk_channels, channel_mags = rank_channels(fraction_to_prune, param)
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
                 return
-
-            num_filters = param.size(0)
-            num_channels = param.size(1)
-
             threshold = bottomk_channels[-1]
             binary_map = channel_mags.gt(threshold).type(param.data.type())
 
-        a = binary_map.expand(num_filters, num_channels)
-        c = a.unsqueeze(-1)
-        d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
-        zeros_mask_dict[param_name].mask = d.view(num_filters, num_channels, param.size(2), param.size(3))
-
-        msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
-                       distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
-                       fraction_to_prune, len(bottomk_channels), num_channels)
+        if zeros_mask_dict is not None:
+            a = binary_map.expand(num_filters, num_channels)
+            c = a.unsqueeze(-1)
+            d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
+            zeros_mask_dict[param_name].mask = d.view(num_filters, num_channels, param.size(2), param.size(3))
+            msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
+                           distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
+                           fraction_to_prune, binary_map.sum().item(), num_channels)
         return binary_map
 
     def rank_and_prune_filters(self, fraction_to_prune, param, param_name,
