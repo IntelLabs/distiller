@@ -72,8 +72,12 @@ def assign_layer_fq_names(container, name=None):
     """
     is_leaf = True
     for key, module in container._modules.items():
-        is_leaf = False
-        assign_layer_fq_names(module, ".".join([name, key]) if name is not None else key)
+        try:
+            assign_layer_fq_names(module, ".".join([name, key]) if name is not None else key)
+            is_leaf = False
+        except AttributeError:
+            if module is not None:
+                raise
     if is_leaf:
         container.distiller_name = name
 
