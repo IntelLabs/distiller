@@ -66,6 +66,13 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         checkpoint['thinning_recipes'] = model.thinning_recipes
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
+        b_wts = 'bits_weights' if 'bits_weights' in model.quantizer_metadata['params'] else 'bits_parameters'
+        if  model.quantizer_metadata['params'][b_wts] <= 8:
+            msglogger.info("Storing low precision state_dict")
+            q_dict = {}
+            for k, v in model.state_dict().items():
+                q_dict[k]= v.clone().detach().type(torch.int8)
+            checkpoint['state_dict'] = q_dict
 
     torch.save(checkpoint, fullpath)
     if is_best:
