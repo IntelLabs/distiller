@@ -49,7 +49,11 @@ class RankedStructureParameterPruner(_ParameterPruner):
         if not self.is_supported(param_name):
             return
         fraction_to_prune = self.fraction_to_prune(param_name)
-        return self.prune_to_target_sparsity(param, param_name, zeros_mask_dict, fraction_to_prune, meta['model'])
+        try:
+            model = meta['model']
+        except TypeError:
+            model = None
+        return self.prune_to_target_sparsity(param, param_name, zeros_mask_dict, fraction_to_prune, model)
 
     def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
         if not self.is_supported(param_name):
@@ -80,6 +84,10 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
     """
     def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
+        if group_type not in ['3D', 'Filters', 'Channels', 'Rows']:
+            raise ValueError("Structure {} was requested but"
+                             "currently only filter (3D) and channel ranking is supported".
+                             format(group_type))
 
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
@@ -90,16 +98,13 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             group_pruning_fn = self.rank_and_prune_channels
         elif self.group_type == 'Rows':
             group_pruning_fn = self.rank_and_prune_rows
-        else:
-            raise ValueError("Structure {} was requested for {}:"
-                             "Currently only filter (3D) and channel ranking is supported".
-                             format(group_type, param_name))
 
         binary_map = group_pruning_fn(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
         return binary_map
 
-    def rank_and_prune_channels(self, fraction_to_prune, param, param_name,
-                                zeros_mask_dict, model=None, binary_map=None):
+    @staticmethod
+    def rank_and_prune_channels(fraction_to_prune, param, param_name=None,
+                                zeros_mask_dict=None, model=None, binary_map=None):
         def rank_channels(fraction_to_prune, param):
             num_filters = param.size(0)
             num_channels = param.size(1)
@@ -122,8 +127,14 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
             return bottomk, channel_mags
 
-        num_filters = param.size(0)
-        num_channels = param.size(1)
+        def binary_map_to_mask(binary_map, param):
+            num_filters = param.size(0)
+            num_channels = param.size(1)
+            a = binary_map.expand(num_filters, num_channels)
+            c = a.unsqueeze(-1)
+            d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
+            return d.view(num_filters, num_channels, param.size(2), param.size(3))
+
         if binary_map is None:
             bottomk_channels, channel_mags = rank_channels(fraction_to_prune, param)
             if bottomk_channels is None:
@@ -133,16 +144,14 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             binary_map = channel_mags.gt(threshold).type(param.data.type())
 
         if zeros_mask_dict is not None:
-            a = binary_map.expand(num_filters, num_channels)
-            c = a.unsqueeze(-1)
-            d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
-            zeros_mask_dict[param_name].mask = d.view(num_filters, num_channels, param.size(2), param.size(3))
+            zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
             msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
                            distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
-                           fraction_to_prune, binary_map.sum().item(), num_channels)
+                           fraction_to_prune, binary_map.sum().item(), param.size(1))
         return binary_map
 
-    def rank_and_prune_filters(self, fraction_to_prune, param, param_name,
+    @staticmethod
+    def rank_and_prune_filters(fraction_to_prune, param, param_name,
                                zeros_mask_dict, model=None, binary_map=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
 
@@ -170,7 +179,8 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
                        fraction_to_prune)
         return binary_map
 
-    def rank_and_prune_rows(self, fraction_to_prune, param, param_name,
+    @staticmethod
+    def rank_and_prune_rows(fraction_to_prune, param, param_name,
                             zeros_mask_dict, model=None, binary_map=None):
         """Prune the rows of a matrix, based on ranked L1-norms of the matrix rows.
 
