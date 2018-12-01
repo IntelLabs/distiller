@@ -37,6 +37,7 @@ from .scheduler import CompressionScheduler
 
 msglogger = logging.getLogger()
 
+
 def perform_sensitivity_analysis(model, net_params, sparsities, test_func, group):
     """Perform a sensitivity test for a model's weights parameters.
 
@@ -86,19 +87,23 @@ def perform_sensitivity_analysis(model, net_params, sparsities, test_func, group
             if group == 'element':
                 # Element-wise sparasity
                 sparsity_levels = {param_name: sparsity_level}
-                pruner = distiller.pruning.SparsityLevelParameterPruner(name='sensitivity', levels=sparsity_levels)
+                pruner = distiller.pruning.SparsityLevelParameterPruner(name="sensitivity", levels=sparsity_levels)
             elif group == 'filter':
                 # Filter ranking
                 if model.state_dict()[param_name].dim() != 4:
                     continue
-                regims = {param_name: [sparsity_level, '3D']}
-                pruner = distiller.pruning.L1RankedStructureParameterPruner(name='sensitivity', reg_regims=regims)
+                pruner = distiller.pruning.L1RankedStructureParameterPruner("sensitivity",
+                                                                            group_type="Filters",
+                                                                            desired_sparsity=sparsity_level,
+                                                                            weights=param_name)
             elif group == 'channel':
                 # Filter ranking
                 if model.state_dict()[param_name].dim() != 4:
                     continue
-                regims = {param_name: [sparsity_level, 'Channels']}
-                pruner = distiller.pruning.L1RankedStructureParameterPruner(name='sensitivity', reg_regims=regims)
+                pruner = distiller.pruning.L1RankedStructureParameterPruner("sensitivity",
+                                                                            group_type="Channels",
+                                                                            desired_sparsity=sparsity_level,
+                                                                            weights=param_name)
 
             policy = distiller.PruningPolicy(pruner, pruner_args=None)
             scheduler = CompressionScheduler(model_cpy)

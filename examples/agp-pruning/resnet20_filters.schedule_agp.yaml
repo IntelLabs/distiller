@@ -71,22 +71,11 @@ pruners:
     class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.50
-    reg_regims:
-      module.layer2.0.conv1.weight: Filters
-
-      module.layer2.0.conv2.weight: Filters
-      module.layer2.0.downsample.0.weight: Filters
-      module.layer2.1.conv2.weight: Filters
-      module.layer2.2.conv2.weight: Filters  # to balance the BN
-
-      module.layer2.1.conv1.weight: Filters
-      module.layer2.2.conv1.weight: Filters
-
-      #module.layer3.0.conv2.weight: Filters
-      #module.layer3.0.downsample.0.weight: Filters
-      #module.layer3.1.conv2.weight: Filters
-      #module.layer3.2.conv2.weight: Filters
-
+    group_type: Filters
+    weights: [module.layer2.0.conv1.weight, module.layer2.0.conv2.weight,
+              module.layer2.0.downsample.0.weight,
+              module.layer2.1.conv2.weight, module.layer2.2.conv2.weight,
+              module.layer2.1.conv1.weight, module.layer2.2.conv1.weight]
 
   fine_pruner:
     class:  AutomatedGradualPruner
@@ -99,8 +88,9 @@ pruners:
     class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.05
     final_sparsity: 0.50
-    reg_regims:
-      module.fc.weight: Rows
+    group_type: Rows
+    weights: [module.fc.weight]
+
 
 lr_schedulers:
   pruning_lr:
@@ -134,15 +124,6 @@ policies:
     starting_epoch: 210
     ending_epoch: 230
     frequency: 2
-
-  # Currently the thinner is disabled until the the structure pruner is done, because it interacts
-  # with the sparsity goals of the L1RankedStructureParameterPruner_AGP.
-  # This can be fixed rather easily.
-  # - extension:
-  #     instance_name: net_thinner
-  #   starting_epoch: 0
-  #   ending_epoch: 20
-  #   frequency: 2
 
 # After completeing the pruning, we perform network thinning and continue fine-tuning.
   - extension:

@@ -55,9 +55,8 @@ def test_ch_ranking():
                             [37,  38]]]])
 
     fraction_to_prune = 0.5
-    bottomk_channels, channel_mags = distiller.pruning.L1RankedStructureParameterPruner.rank_channels(fraction_to_prune, param)
-    logger.info("bottom {}% channels: {}".format(fraction_to_prune*100, bottomk_channels))
-    assert bottomk_channels == torch.tensor([90.])
+    binary_map = distiller.pruning.L1RankedStructureParameterPruner.rank_and_prune_channels(fraction_to_prune, param)
+    assert all(binary_map == torch.tensor([0.,  1.]))
 
 
 def test_ranked_channel_pruning():
@@ -71,8 +70,10 @@ def test_ranked_channel_pruning():
     assert distiller.sparsity_ch(conv1_p) == 0.0
 
     # # Create a channel-ranking pruner
-    reg_regims = {"layer1.0.conv1.weight": [0.1, "Channels"]}
-    pruner = distiller.pruning.L1RankedStructureParameterPruner("channel_pruner", reg_regims)
+    pruner = distiller.pruning.L1RankedStructureParameterPruner("channel_pruner",
+                                                                group_type="Channels",
+                                                                desired_sparsity=0.1,
+                                                                weights="layer1.0.conv1.weight")
     pruner.set_param_mask(conv1_p, "layer1.0.conv1.weight", zeros_mask_dict, meta=None)
 
     conv1 = common.find_module_by_name(model, "layer1.0.conv1")
