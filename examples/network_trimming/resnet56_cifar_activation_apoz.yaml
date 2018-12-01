@@ -100,20 +100,7 @@
 
 version: 1
 pruners:
-#   filter_pruner:
-#     class: 'ActivationAPoZRankedStructureParameterPruner'
-#     reg_regims:
-#       'module.layer1.0.conv1.weight',
-
-  # filter_pruner:
-  #   class: ActivationAPoZRankedFilterPruner_AGP
-  #   initial_sparsity : 0.10
-  #   final_sparsity: 0.6
-  #   reg_regims:
-  #     module.layer1.0.conv1.weight,
-
   filter_pruner_60:
-    #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.6
@@ -144,7 +131,6 @@ pruners:
       module.layer2.7.conv1.weight]
 
   filter_pruner_10:
-    #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0
     final_sparsity: 0.1
@@ -152,7 +138,6 @@ pruners:
     weights: [module.layer3.1.conv1.weight]
 
   filter_pruner_30:
-    #class: StructuredAutomatedGradualPruner
     class: ActivationAPoZRankedFilterPruner_AGP
     initial_sparsity : 0.10
     final_sparsity: 0.3

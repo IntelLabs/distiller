@@ -440,7 +440,7 @@ def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
 
 
 def optimizer_thinning(optimizer, param, dim, indices, new_shape=None):
-    """Adjust the size of the SGD vecolity-tracking tensors.
+    """Adjust the size of the SGD velocity-tracking tensors.
 
     The SGD momentum update (velocity) is dependent on the weights, and because during thinning we
     dynamically change the weights shapes, we need to make the apporpriate changes in the Optimizer,
