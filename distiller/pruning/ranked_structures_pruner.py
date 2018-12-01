@@ -22,103 +22,166 @@ from .pruner import _ParameterPruner
 msglogger = logging.getLogger()
 
 
-# TODO: support different policies for ranking structures
 class RankedStructureParameterPruner(_ParameterPruner):
-    """Uses mean L1-norm to rank structures and prune a specified percentage of structures
+    """Base class for pruning structures by ranking them.
     """
-    def __init__(self, name, reg_regims):
+    def __init__(self, name, group_type, desired_sparsity,  weights, group_dependency=None):
         super().__init__(name)
-        self.reg_regims = reg_regims
+        self.group_type = group_type
+        self.group_dependency = group_dependency
+        self.params_names = weights
+        assert self.params_names
+        self.leader_binary_map = None
+        self.last_target_sparsity = None
+        self.desired_sparsity = desired_sparsity
+
+    def leader(self):
+        # The "leader" is the first weights-tensor in the list
+        return self.params_names[0]
+
+    def is_supported(self, param_name):
+        return param_name in self.params_names
+
+    def fraction_to_prune(self, param_name):
+        return self.desired_sparsity
+
+    def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
+        if not self.is_supported(param_name):
+            return
+        fraction_to_prune = self.fraction_to_prune(param_name)
+        try:
+            model = meta['model']
+        except TypeError:
+            model = None
+        return self.prune_to_target_sparsity(param, param_name, zeros_mask_dict, fraction_to_prune, model)
+
+    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
+        if not self.is_supported(param_name):
+            return
+
+        binary_map = None
+        if self.group_dependency == "Leader":
+            if target_sparsity != self.last_target_sparsity:
+                # Each time we change the target sparsity we need to compute and cache the leader's binary-map.
+                # We don't have control over the order that this function is invoked, so the only indication that
+                # we need to compute a new leader binary-map is the change of the target_sparsity.
+                self.last_target_sparsity = target_sparsity
+                self.leader_binary_map = self.prune_group(target_sparsity, model.state_dict()[self.leader()],
+                                                          self.leader(), zeros_mask_dict=None)
+            assert self.leader_binary_map is not None
+            binary_map = self.leader_binary_map
+        # Delegate the actual pruning to a sub-class
+        self.prune_group(target_sparsity, param, param_name, zeros_mask_dict, model, binary_map)
+
+    def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
+        raise NotImplementedError
 
 
 class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
-    """Uses mean L1-norm to rank structures and prune a specified percentage of structures
+    """Uses mean L1-norm to rank and prune structures.
+
+    This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
-    def __init__(self, name, reg_regims):
-        super().__init__(name, reg_regims)
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
+        if group_type not in ['3D', 'Filters', 'Channels', 'Rows']:
+            raise ValueError("Structure {} was requested but"
+                             "currently only filter (3D) and channel ranking is supported".
+                             format(group_type))
 
-    def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
-        if param_name not in self.reg_regims.keys():
-            return
-
-        group_type = self.reg_regims[param_name][1]
-        fraction_to_prune = self.reg_regims[param_name][0]
+    def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
             return
+        if self.group_type in ['3D', 'Filters']:
+            group_pruning_fn = self.rank_and_prune_filters
+        elif self.group_type == 'Channels':
+            group_pruning_fn = self.rank_and_prune_channels
+        elif self.group_type == 'Rows':
+            group_pruning_fn = self.rank_and_prune_rows
 
-        if group_type in ['3D', 'Filters']:
-            return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict)
-        elif group_type == 'Channels':
-            return self.rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict)
-        elif group_type == 'Rows':
-            return self.rank_prune_rows(fraction_to_prune, param, param_name, zeros_mask_dict)
-        else:
-            raise ValueError("Currently only filter (3D) and channel ranking is supported")
-
-    @staticmethod
-    def rank_channels(fraction_to_prune, param):
-        num_filters = param.size(0)
-        num_channels = param.size(1)
-        kernel_size = param.size(2) * param.size(3)
-
-        # First, reshape the weights tensor such that each channel (kernel) in the original
-        # tensor, is now a row in the 2D tensor.
-        view_2d = param.view(-1, kernel_size)
-        # Next, compute the sums of each kernel
-        kernel_sums = view_2d.abs().sum(dim=1)
-        # Now group by channels
-        k_sums_mat = kernel_sums.view(num_filters, num_channels).t()
-        channel_mags = k_sums_mat.mean(dim=1)
-        k = int(fraction_to_prune * channel_mags.size(0))
-        if k == 0:
-            msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
-                           num_channels, 100*fraction_to_prune)
-            return None, None
-
-        bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
-        return bottomk, channel_mags
+        binary_map = group_pruning_fn(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
+        return binary_map
 
     @staticmethod
-    def rank_prune_channels(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
-        bottomk_channels, channel_mags = L1RankedStructureParameterPruner.rank_channels(fraction_to_prune, param)
-        if bottomk_channels is None:
-            # Empty list means that fraction_to_prune is too low to prune anything
-            return
+    def rank_and_prune_channels(fraction_to_prune, param, param_name=None,
+                                zeros_mask_dict=None, model=None, binary_map=None):
+        def rank_channels(fraction_to_prune, param):
+            num_filters = param.size(0)
+            num_channels = param.size(1)
+            kernel_size = param.size(2) * param.size(3)
 
-        num_filters = param.size(0)
-        num_channels = param.size(1)
+            # First, reshape the weights tensor such that each channel (kernel) in the original
+            # tensor, is now a row in the 2D tensor.
+            view_2d = param.view(-1, kernel_size)
+            # Next, compute the sums of each kernel
+            kernel_sums = view_2d.abs().sum(dim=1)
+            # Now group by channels
+            k_sums_mat = kernel_sums.view(num_filters, num_channels).t()
+            channel_mags = k_sums_mat.mean(dim=1)
+            k = int(fraction_to_prune * channel_mags.size(0))
+            if k == 0:
+                msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
+                               num_channels, 100*fraction_to_prune)
+                return None, None
 
-        threshold = bottomk_channels[-1]
-        binary_map = channel_mags.gt(threshold).type(param.data.type())
-        a = binary_map.expand(num_filters, num_channels)
-        c = a.unsqueeze(-1)
-        d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
-        zeros_mask_dict[param_name].mask = d.view(num_filters, num_channels, param.size(2), param.size(3))
+            bottomk, _ = torch.topk(channel_mags, k, largest=False, sorted=True)
+            return bottomk, channel_mags
 
-        msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
-                       distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
-                       fraction_to_prune, len(bottomk_channels), num_channels)
+        def binary_map_to_mask(binary_map, param):
+            num_filters = param.size(0)
+            num_channels = param.size(1)
+            a = binary_map.expand(num_filters, num_channels)
+            c = a.unsqueeze(-1)
+            d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
+            return d.view(num_filters, num_channels, param.size(2), param.size(3))
+
+        if binary_map is None:
+            bottomk_channels, channel_mags = rank_channels(fraction_to_prune, param)
+            if bottomk_channels is None:
+                # Empty list means that fraction_to_prune is too low to prune anything
+                return
+            threshold = bottomk_channels[-1]
+            binary_map = channel_mags.gt(threshold).type(param.data.type())
+
+        if zeros_mask_dict is not None:
+            zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
+            msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
+                           distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
+                           fraction_to_prune, binary_map.sum().item(), param.size(1))
+        return binary_map
 
     @staticmethod
-    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
+    def rank_and_prune_filters(fraction_to_prune, param, param_name,
+                               zeros_mask_dict, model=None, binary_map=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
-        # First we rank the filters
-        view_filters = param.view(param.size(0), -1)
-        filter_mags = view_filters.data.abs().mean(dim=1)
-        topk_filters = int(fraction_to_prune * filter_mags.size(0))
-        if topk_filters == 0:
-            msglogger.info("Too few filters - can't prune %.1f%% filters", 100*fraction_to_prune)
-            return
-        bottomk, _ = torch.topk(filter_mags, topk_filters, largest=False, sorted=True)
-        threshold = bottomk[-1]
+
+        threshold = None
+        if binary_map is None:
+            # First we rank the filters
+            view_filters = param.view(param.size(0), -1)
+            filter_mags = view_filters.data.abs().mean(dim=1)
+            topk_filters = int(fraction_to_prune * filter_mags.size(0))
+            if topk_filters == 0:
+                msglogger.info("Too few filters - can't prune %.1f%% filters", 100*fraction_to_prune)
+                return
+            bottomk, _ = torch.topk(filter_mags, topk_filters, largest=False, sorted=True)
+            threshold = bottomk[-1]
+            msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=(%d/%d)",
+                           param_name,
+                           topk_filters, filter_mags.size(0))
         # Then we threshold
-        zeros_mask_dict[param_name].mask = distiller.group_threshold_mask(param, 'Filters', threshold, 'Mean_Abs')
-        msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
-                       distiller.sparsity(zeros_mask_dict[param_name].mask),
-                       fraction_to_prune, topk_filters, filter_mags.size(0))
+        mask, binary_map = distiller.group_threshold_mask(param, 'Filters', threshold, 'Mean_Abs', binary_map)
+        if zeros_mask_dict is not None:
+            zeros_mask_dict[param_name].mask = mask
+        msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f",
+                       param_name,
+                       distiller.sparsity(mask),
+                       fraction_to_prune)
+        return binary_map
 
     @staticmethod
-    def rank_prune_rows(fraction_to_prune, param, param_name, zeros_mask_dict, model=None):
+    def rank_and_prune_rows(fraction_to_prune, param, param_name,
+                            zeros_mask_dict, model=None, binary_map=None):
         """Prune the rows of a matrix, based on ranked L1-norms of the matrix rows.
 
         PyTorch stores the weights matrices in a transposed format.  I.e. before performing GEMM, a matrix is
@@ -145,36 +208,15 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
                        fraction_to_prune, num_rows_to_prune, rows_mags.size(0))
 
 
-class RankedFiltersParameterPruner(RankedStructureParameterPruner):
-    """Base class for the special (but often-used) case of ranking filters
-    """
-    def __init__(self, name, reg_regims):
-        super().__init__(name, reg_regims)
-
-    def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
-        if param_name not in self.reg_regims.keys():
-            return
-
-        group_type = self.reg_regims[param_name][1]
-        fraction_to_prune = self.reg_regims[param_name][0]
-        if fraction_to_prune == 0:
-            return
-
-        if group_type in ['3D', 'Filters']:
-            return self.rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, meta['model'])
-        else:
-            raise ValueError("Currently only filter (3D) ranking is supported")
-
-    @staticmethod
-    def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters):
+def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, binary_map):
+    if binary_map is None:
         binary_map = torch.zeros(num_filters).cuda()
         binary_map[filters_ordered_by_criterion] = 1
-        #msglogger.info("binary_map: {}".format(binary_map))
-        expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
-        return expanded.view(param.shape)
+    expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
+    return expanded.view(param.shape), binary_map
 
 
-class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
+class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
     """Uses mean APoZ (average percentage of zeros) activation channels to rank structures
     and prune a specified percentage of structures.
 
@@ -182,11 +224,16 @@ class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
     Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang, ICLR 2016
     https://arxiv.org/abs/1607.03250
     """
-    def __init__(self, name, reg_regims):
-        super().__init__(name, reg_regims)
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
 
-    @staticmethod
-    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+    def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
+        if fraction_to_prune == 0:
+            return
+        binary_map = self.rank_and_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
+        return binary_map
+
+    def rank_and_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
 
         # Use the parameter name to locate the module that has the activation sparsity statistics
@@ -208,25 +255,31 @@ class ActivationAPoZRankedFilterPruner(RankedFiltersParameterPruner):
 
         # Sort from low to high, and remove the bottom 'num_filters_to_prune' filters
         filters_ordered_by_apoz = np.argsort(apoz)[:-num_filters_to_prune]
-        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_by_apoz,
-                                                                                               param, num_filters)
+        mask, binary_map = mask_from_filter_order(filters_ordered_by_apoz, param, num_filters, binary_map)
+        zeros_mask_dict[param_name].mask = mask
 
         msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
                        distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_filters_to_prune, num_filters)
+        return binary_map
 
 
-class RandomRankedFilterPruner(RankedFiltersParameterPruner):
+class RandomRankedFilterPruner(RankedStructureParameterPruner):
     """A Random raanking of filters.
 
     This is used for sanity testing of other algorithms.
     """
-    def __init__(self, name, reg_regims):
-        super().__init__(name, reg_regims)
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
 
-    @staticmethod
-    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+    def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
+        if fraction_to_prune == 0:
+            return
+        binary_map = self.rank_and_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
+        return binary_map
+
+    def rank_and_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         num_filters = param.size(0)
         num_filters_to_prune = int(fraction_to_prune * num_filters)
@@ -236,23 +289,29 @@ class RandomRankedFilterPruner(RankedFiltersParameterPruner):
             return
 
         filters_ordered_randomly = np.random.permutation(num_filters)[:-num_filters_to_prune]
-        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_randomly,
-                                                                                               param, num_filters)
+        mask, binary_map = mask_from_filter_order(filters_ordered_randomly, param, num_filters)
+        zeros_mask_dict[param_name].mask = mask
 
         msglogger.info("RandomRankedFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
                        distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_filters_to_prune, num_filters)
+        return binary_map
 
 
-class GradientRankedFilterPruner(RankedFiltersParameterPruner):
+class GradientRankedFilterPruner(RankedStructureParameterPruner):
     """
     """
-    def __init__(self, name, reg_regims):
-        super().__init__(name, reg_regims)
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
 
-    @staticmethod
-    def rank_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model):
+    def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
+        if fraction_to_prune == 0:
+            return
+        binary_map = self.rank_and_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
+        return binary_map
+
+    def rank_and_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map=None):
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         num_filters = param.size(0)
         num_filters_to_prune = int(fraction_to_prune * num_filters)
@@ -268,9 +327,11 @@ class GradientRankedFilterPruner(RankedFiltersParameterPruner):
 
         # Sort from high to low, and remove the bottom 'num_filters_to_prune' filters
         filters_ordered_by_gradient = np.argsort(-weighted_gradients.detach().cpu().numpy())[:-num_filters_to_prune]
-        zeros_mask_dict[param_name].mask = RankedFiltersParameterPruner.mask_from_filter_order(filters_ordered_by_gradient,
-                                                                                               param, num_filters)
+        mask, binary_map = mask_from_filter_order(filters_ordered_by_gradient, param, num_filters)
+        zeros_mask_dict[param_name].mask = mask
+
         msglogger.info("GradientRankedFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
                        distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_filters_to_prune, num_filters)
+        return binary_map

@@ -10,27 +10,30 @@ version: 1
 pruners:
   vgg_manual:
     class: 'L1RankedStructureParameterPruner'
-    reg_regims:
-#     'features.module.0.weight': [0.1, '3D']
-      'features.module.2.weight': [0.1, '3D']
-      'features.module.5.weight': [0.1, '3D']
-      'features.module.7.weight': [0.1, '3D']
-      'features.module.10.weight': [0.1, '3D']
-      'features.module.12.weight': [0.1, '3D']
-      'features.module.14.weight': [0.1, '3D']
-      'features.module.16.weight': [0.1, '3D']
-      'features.module.19.weight': [0.1, '3D']
+    group_type: Filters
+    desired_sparsity: 0.1
+    weights: [
+      features.module.2.weight,
+      features.module.5.weight,
+      features.module.7.weight,
+      features.module.10.weight,
+      features.module.12.weight,
+      features.module.14.weight,
+      features.module.16.weight,
+      features.module.19.weight]
 
   vgg_manual2:
     class: 'L1RankedStructureParameterPruner'
-    reg_regims:
-      'features.module.21.weight': [0.1, '3D']
-      'features.module.23.weight': [0.1, '3D']
-      'features.module.25.weight': [0.1, '3D']
-      'features.module.28.weight': [0.1, '3D']
-      'features.module.30.weight': [0.1, '3D']
-      'features.module.32.weight': [0.1, '3D']
-      'features.module.34.weight': [0.1, '3D']
+    group_type: Filters
+    desired_sparsity: 0.1
+    weights: [
+      features.module.21.weight,
+      features.module.23.weight,
+      features.module.25.weight,
+      features.module.28.weight,
+      features.module.30.weight,
+      features.module.32.weight,
+      features.module.34.weight]
 
 extensions:
   net_thinner:

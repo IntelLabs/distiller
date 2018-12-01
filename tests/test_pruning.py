@@ -138,8 +138,10 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
         assert distiller.sparsity_3D(conv1_p) == 0.0
 
         # Create a filter-ranking pruner
-        reg_regims = {pair[0] + ".weight": [ratio_to_prune, "3D"]}
-        pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner", reg_regims)
+        pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner",
+                                                                    group_type="Filters",
+                                                                    desired_sparsity=ratio_to_prune,
+                                                                    weights=pair[0] + ".weight")
         pruner.set_param_mask(conv1_p, pair[0] + ".weight", zeros_mask_dict, meta=None)
 
         conv1 = common.find_module_by_name(model, pair[0])
@@ -347,8 +349,10 @@ def test_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=Non
     assert conv_p.dim() == 4
 
     # Create a filter-ranking pruner
-    reg_regims = {conv_name + ".weight": [ratio_to_prune, "3D"]}
-    pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner", reg_regims)
+    pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner",
+                                                                group_type="Filters",
+                                                                desired_sparsity=ratio_to_prune,
+                                                                weights=conv_name + ".weight")
     pruner.set_param_mask(conv_p, conv_name + ".weight", zeros_mask_dict, meta=None)
 
     # Use the mask to prune
