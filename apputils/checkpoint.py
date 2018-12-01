@@ -30,7 +30,7 @@ msglogger = logging.getLogger()
 
 
 def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    best_top1=None, is_best=False, name=None, dir='.'):
+                    best_top1=None, is_best=False, name=None, dir='.', save_low_precision=False):
     """Save a pytorch training checkpoint
 
     Args:
@@ -67,15 +67,14 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
         b_wts = 'bits_weights' if 'bits_weights' in model.quantizer_metadata['params'] else 'bits_parameters'
-        if  model.quantizer_metadata['params'][b_wts] <= 8:
+        if  save_low_precision and model.quantizer_metadata['params'][b_wts] <= 8:
             msglogger.info("Storing low precision state_dict")
             q_dict = {}
             for k, v in model.state_dict().items():
-                q_dict[k] = v.clone().detach()
-                q_dict[k].type(torch.int8)
-                verify = q_dict[k].clone().detach()
-                verify.type(torch.float32)
-                assert verify.equal(v)
+                if 'wrapped_module.weight' in k:
+                    q_dict[k] = torch.CharTensor(v.cpu().data.numpy())
+                else: 
+                    q_dict[k] = v
             checkpoint['state_dict'] = q_dict
 
     torch.save(checkpoint, fullpath)

@@ -140,6 +140,8 @@ parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
 parser.add_argument('--deterministic', '--det', action='store_true',
                     help='Ensure deterministic execution for re-producible results.')
+parser.add_argument('--low-precision', '--lowp', action='store_true',
+                    help='Save quantized state_dict into low precision data type.')
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
@@ -746,7 +748,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
                                  name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
-                                 dir=msglogger.logdir)
+                                 dir=msglogger.logdir,save_low_precision=args.low_precision)
 
 
 def summarize_model(model, dataset, which_summary):
