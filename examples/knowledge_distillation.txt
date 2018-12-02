@@ -1,0 +1,3 @@
+For examples of knowledge distillation usage see:
+* quantization/preact_resnet_cifar_base_fp32.yaml
+* quantization/preact_resnet_cifar_dorefa.yaml
