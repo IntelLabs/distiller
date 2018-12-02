@@ -10,3 +10,4 @@ env/
 .idea/
 logs/
 .DS_Store
+.vscode/
