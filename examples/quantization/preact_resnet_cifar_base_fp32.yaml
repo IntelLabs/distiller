@@ -5,8 +5,8 @@
 # python compress_classifier.py -a preact_resnet20_cifar --lr 0.1 -p 50 -b 128 <path_to_cifar10_dataset> -j 1 --epochs 200 --compress=../quantization/preact_resnet_cifar_base_fp32.yaml --wd=0.0002 --vs=0 --gpus 0
 #
 # Notes:
-#  * Replace '-a preact_resnet20_cifar' with the required depth
-#  * '--wd-0.0002': Weight decay of 0.0002 is used
+#  * In '-a preact_resnet20_cifar', replace '20' with the required depth
+#  * '--wd=0.0002': Weight decay of 0.0002 is used
 #  * '--vs=0': We train on the entire training dataset, and validate using the test set
 #
 # Knowledge Distillation:
@@ -38,8 +38,8 @@ policies:
       ending_epoch: 200
       frequency: 1
 
-# The results listed here are based on 4 runs in each configuration:
-
+# The results listed here are based on 4 runs in each configuration. All results are Top-1:
+#
 # +-------+--------------+-------------------------+
 # |       |              |           FP32          |
 # +-------+--------------+-------------------------+
