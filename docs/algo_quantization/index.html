@@ -112,13 +112,13 @@
     
         <ul>
         
+            <li><a class="toctree-l4" href="#range-based-linear-quantization">Range-Based Linear Quantization</a></li>
+        
             <li><a class="toctree-l4" href="#dorefa">DoReFa</a></li>
         
             <li><a class="toctree-l4" href="#pact">PACT</a></li>
         
             <li><a class="toctree-l4" href="#wrpn">WRPN</a></li>
-        
-            <li><a class="toctree-l4" href="#symmetric-linear-quantization">Symmetric Linear Quantization</a></li>
         
         </ul>
     
@@ -184,7 +184,91 @@
             <div class="section">
               
                 <h1 id="quantization-algorithms">Quantization Algorithms</h1>
-<p>The following quantization methods are currently implemented in Distiller:</p>
+<p><strong>Note:</strong><br />
+For any of the methods below that require quantization-aware training, please see <a href="../schedule/index.html#quantization">here</a> for details on how to invoke it using Distiller's scheduling mechanism.</p>
+<h2 id="range-based-linear-quantization">Range-Based Linear Quantization</h2>
+<p>Let's break down the terminology we use here:</p>
+<ul>
+<li><strong>Linear:</strong> Means a float value is quantized by multiplying with a numeric constant (the <strong>scale factor</strong>).</li>
+<li><strong>Range-Based:</strong>: Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call <strong>clipping-based</strong>, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).</li>
+</ul>
+<h3 id="asymmetric-vs-symmetric">Asymmetric vs. Symmetric</h3>
+<p>In this method we can use two modes - <strong>asymmetric</strong> and <strong>symmetric</strong>.</p>
+<h4 id="asymmetric-mode">Asymmetric Mode</h4>
+<p align="center">
+    <img src="../imgs/quant_asym.png"/>
+</p>
+
+<p>In <strong>asymmetric</strong> mode, we map the min/max in the float range to the min/max of the integer range. This is done by using a <strong>zero-point</strong> (also called <em>quantization bias</em>, or <em>offset</em>) in addition to the scale factor.</p>
+<p>Let us denote the original floating-point tensor by <script type="math/tex">x_f</script>, the quantized tensor by <script type="math/tex">x_q</script>, the scale factor by <script type="math/tex">q_x</script>, the zero-point by <script type="math/tex">zp_x</script> and the number of bits used for quantization by <script type="math/tex">n</script>. Then, we get:</p>
+<p>
+<script type="math/tex; mode=display">x_q = round\left ((x_f - min_{x_f})\underbrace{\frac{2^n - 1}{max_{x_f} - min_{x_f}}}_{q_x} \right) = round(q_x x_f - \underbrace{min_{x_f}q_x)}_{zp_x} = round(q_x x_f - zp_x)</script>
+</p>
+<p>In practice, we actaully use <script type="math/tex">zp_x = round(min_{x_f}q_x)</script>. This means that 0 is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of 0.</p>
+<p>Note that in the derivation above we use unsigned integer to represent the quantized range. That is, <script type="math/tex">x_q \in [0, 2^n-1]</script>. One could use signed integer if necessary (perhaps due to HW considerations). This can be achieved by subtracting <script type="math/tex">2^{n-1}</script>.</p>
+<p>Let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized in asymmetric mode: (we denote input, output, weights and bias with  <script type="math/tex">x, y, w</script> and <script type="math/tex">b</script> respectively)</p>
+<p>
+<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q + zp_x}{q_x} \frac{w_q + zp_w}{q_w}} + \frac{b_q + zp_b}{q_b} =</script>
+<script type="math/tex; mode=display"> = \frac{1}{q_x q_w} \left( \sum { (x_q + zp_x) (w_q + zp_w) + \frac{q_x q_w}{q_b}(b_q + zp_b) } \right)</script>
+</p>
+<p>Therefore:</p>
+<p>
+<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { (x_q+zp_x) (w_q+zp_w) + \frac{q_x q_w}{q_b}(b_q+zp_b) } \right) \right) </script>
+</p>
+<p>Notes:</p>
+<ul>
+<li>We can see that the bias has to be re-scaled to match the scale of the summation.</li>
+<li>In a proper integer-only HW pipeline, we would like our main accumulation term to simply be <script type="math/tex">\sum{x_q w_q}</script>. In order to achieve this, one needs to further develop the expression we derived above. For further details please refer to the <a href="https://github.com/google/gemmlowp/blob/master/doc/quantization.md#implementation-of-quantized-matrix-multiplication">gemmlowp documentation</a></li>
+</ul>
+<h4 id="symmetric-mode">Symmetric Mode</h4>
+<p align="center">
+    <img src="../imgs/quant_sym.png"/>
+</p>
+
+<p>In <strong>symmetric</strong> mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.</p>
+<p>Using the same notations as above, we get:</p>
+<p>
+<script type="math/tex; mode=display">x_q = round\left (x_f \underbrace{\frac{2^{n-1} - 1}{\max|x_f|}}_{q_x} \right) = round(q_x x_f)</script>
+</p>
+<p>Again, let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized, this time in symmetric mode:</p>
+<p>
+<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right)</script>
+</p>
+<p>Therefore:</p>
+<p>
+<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right) \right) </script>
+</p>
+<h4 id="comparing-the-two-modes">Comparing the Two Modes</h4>
+<p>The main trade-off between these two modes is simplicity vs. utilization of the quantized range.</p>
+<ul>
+<li>When using asymmetric quantization, the quantized range is fully utilized. That is because we exactly map the min/max values from the float range to the min/max of the quantized range. Using symmetric mode, if the float range is biased towards one side, could result in a quantized range where significant dynamic range is dedicated to values that we'll never see. The most extreme example of this is after ReLU, where the entire tensor is positive. Quantizing it in symmetric mode means we're effectively losing 1 bit.</li>
+<li>On the other hand, if we look at the derviations for convolution / FC layers above, we can see that the actual implementation of symmetric mode is much simpler. In asymmetric mode, the zero-points require additional logic in HW. The cost of this extra logic in terms of latency and/or power and/or area will of course depend on the exact implementation.</li>
+</ul>
+<h3 id="other-features">Other Features</h3>
+<ul>
+<li><strong>Removing Outliers:</strong> As discussed <a href="../quantization/index.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurt our ability ro represent the values we actually care about accurately. Currently, Distiller supports clipping of activations with averaging.</li>
+</ul>
+<p align="center">
+    <img src="../imgs/quant_clipped.png"/>
+</p>
+
+<ul>
+<li><strong>Scale factor scope:</strong> For weight tensors, Distiller supports per-channel quantization (per output channel).</li>
+</ul>
+<h3 id="implementation-in-distiller">Implementation in Distiller</h3>
+<h4 id="post-training">Post-Training</h4>
+<p>For post-training quantization, currently <strong>convolution</strong> and <strong>FC</strong> are supported using this method.  </p>
+<ul>
+<li>They are implemented by wrapping the existing PyTorch layers with quantization and de-quantization operations. That is - the computation is done on floating-point tensors, but the values themselves are restricted to integer values. The wrapper is implemented in the <code>RangeLinearQuantParamLayerWrapper</code> class.  </li>
+<li>All other layers are unaffected and are executed using their original FP32 implementation.  </li>
+<li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For an example of how to do this, see the <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py"><code>compress_classifier.py</code></a>. This sample also exposes command line arguments to invoke post-training quantization. For details see <a href="../usage/index.html#post-training-quantization">here</a>.</li>
+<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline"), and for activations it is determined dynamically at runtime ("online"). The calculated quantization parameters are store as buffers within the module, so they are automatically serialized when the model checkpoint is saved.</li>
+<li>As this is post-training, using it with number of bits &lt; 8 is likely to lead to severe accuracy degradation for any non-trivial workload.</li>
+</ul>
+<h4 id="quantization-aware-training">Quantization-Aware Training</h4>
+<p>To apply range-based linear quantization in training, use the <code>QuantAwareTrainRangeLinearQuantizer</code> class. As it is now, it will apply weights quantization to convolution and FC modules. For activations quantization, it will insert instances <code>FakeLinearQuantization</code> module after ReLUs. This module follows the methodology described in <a href="http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html">Benoit et al., 2018</a> and uses exponential moving averages to track activation ranges.</p>
+<p>Similarly to post-training, the calculated quantization parameters (scale factors, zero-points, tracked activation ranges) are stored as buffers within their respective modules, so they're saved when a checkpoint is created.</p>
+<p>Note that converting from a quantization-aware training model to a post-training quantization model is not yet supported. Such a conversion will use the activation ranges tracked during training, so additional offline or online calculation of quantization parameters will not be required.</p>
 <h2 id="dorefa">DoReFa</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1606.06160">DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients</a>)  </p>
 <p>In this method, we first define the quantization function <script type="math/tex">quantize_k</script>, which takes a real value <script type="math/tex">a_f \in [0, 1]</script> and outputs a discrete-valued <script type="math/tex">a_q \in \left\{ \frac{0}{2^k-1}, \frac{1}{2^k-1}, ... , \frac{2^k-1}{2^k-1} \right\}</script>, where <script type="math/tex">k</script> is the number of bits used for quantization.</p>
@@ -203,7 +287,7 @@
 <p>
 <script type="math/tex; mode=display">w_q = 2 quantize_k \left( f(w_f) \right) - 1</script>
 </p>
-<p>This method requires training the model with quantization, as discussed <a href="../quantization/index.html#training-with-quantization">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/index.html#quantization-aware-training">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
 <h3 id="notes">Notes:</h3>
 <ul>
 <li>Gradients quantization as proposed in the paper is not supported yet.</li>
@@ -212,7 +296,7 @@
 <h2 id="pact">PACT</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1805.06085">PACT: Parameterized Clipping Activation for Quantized Neural Networks</a>)</p>
 <p>This method is similar to DoReFa, but the upper clipping values, <script type="math/tex">\alpha</script>, of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, <script type="math/tex">\alpha</script> is shared per layer.</p>
-<p>This method requires training the model with quantization, as discussed <a href="../quantization/#training-with-quantization">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
 <h2 id="wrpn">WRPN</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1709.01134">WRPN: Wide Reduced-Precision Networks</a>)  </p>
 <p>In this method, activations are clipped to <script type="math/tex">[0, 1]</script> and quantized as follows (<script type="math/tex">k</script> is the number of bits used for quantization):</p>
@@ -224,31 +308,11 @@
 <script type="math/tex; mode=display">w_q = \frac{1}{2^{k-1}-1} round \left( \left(2^{k-1} - 1 \right)w_f \right)</script>
 </p>
 <p>Note that <script type="math/tex">k-1</script> bits are used to quantize weights, leaving one bit for sign.</p>
-<p>This method requires training the model with quantization, as discussed <a href="../quantization/#training-with-quantization">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
 <h3 id="notes_1">Notes:</h3>
 <ul>
 <li>The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of <code>WRPNQuantizer</code> at the moment. To experiment with this, modify your model implementation to have wider layers.</li>
 <li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>
-</ul>
-<h2 id="symmetric-linear-quantization">Symmetric Linear Quantization</h2>
-<p>In this method, a float value is quantized by multiplying with a numeric constant (the <strong>scale factor</strong>), hence it is <strong>Linear</strong>. We use a signed integer to represent the quantized range, with no quantization bias (or "offset") used. As a result, the floating-point range considered for quantization is <strong>symmetric</strong> with respect to zero.<br />
-In the current implementation the scale factor is chosen so that the entire range of the floating-point tensor is quantized (we do not attempt to remove outliers).<br />
-Let us denote the original floating-point tensor by <script type="math/tex">x_f</script>, the quantized tensor by <script type="math/tex">x_q</script>, the scale factor by <script type="math/tex">q_x</script> and the number of bits used for quantization by <script type="math/tex">n</script>. Then, we get:
-<script type="math/tex; mode=display">q_x = \frac{2^{n-1}-1}{\max|x|}</script>
-<script type="math/tex; mode=display">x_q = round(q_x x_f)</script>
-(The <script type="math/tex">round</script> operation is round-to-nearest-integer)  </p>
-<p>Let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized using this method: (we denote input, output, weights and bias with  <script type="math/tex">x, y, w</script> and <script type="math/tex">b</script> respectively)
-<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right)</script>
-<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right) \right) </script>
-Note how the bias has to be re-scaled to match the scale of the summation.</p>
-<h3 id="implementation">Implementation</h3>
-<p>We've implemented <strong>convolution</strong> and <strong>FC</strong> using this method.  </p>
-<ul>
-<li>They are implemented by wrapping the existing PyTorch layers with quantization and de-quantization operations. That is - the computation is done on floating-point tensors, but the values themselves are restricted to integer values. The wrapper is implemented in the <code>RangeLinearQuantParamLayerWrapper</code> class.  </li>
-<li>All other layers are unaffected and are executed using their original FP32 implementation.  </li>
-<li>To automatically transform an existing model to a quantized model using this method, use the <code>SymmetricLinearQuantizer</code> class.</li>
-<li>For weights and bias the scale factor is determined once at quantization setup ("offline"), and for activations it is determined dynamically at runtime ("online").  </li>
-<li><strong>Important note:</strong> Currently, this method is implemented as <strong>inference only</strong>, with no back-propagation functionality. Hence, it can only be used to quantize a pre-trained FP32 model, with no re-training. As such, using it with <script type="math/tex">n < 8</script> is likely to lead to severe accuracy degradation for any non-trivial workload.</li>
 </ul>
               
             </div>

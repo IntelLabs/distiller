@@ -75,7 +75,7 @@
         
             <li><a class="toctree-l3" href="#performing-pruning-sensitivity-analysis">Performing pruning sensitivity analysis</a></li>
         
-            <li><a class="toctree-l3" href="#direct-quantization-without-training">"Direct" Quantization Without Training</a></li>
+            <li><a class="toctree-l3" href="#post-training-quantization">Post-Training Quantization</a></li>
         
             <li><a class="toctree-l3" href="#summaries">Summaries</a></li>
         
@@ -336,38 +336,38 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 
 <p>The <code>sense</code> command-line argument can be set to either <code>element</code> or <code>filter</code>, depending on the type of analysis you want done.<br></p>
 <p>There is also a <a href="http://localhost:8888/notebooks/sensitivity_analysis.ipynb">Jupyter notebook</a> with example invocations, outputs and explanations.</p>
-<h2 id="direct-quantization-without-training">"Direct" Quantization Without Training</h2>
-<p>Distiller supports 8-bit quantization of trained modules without re-training (using <a href="../algo_quantization/index.html#symmetric-linear-quantization">Symmetric Linear Quantization</a>). So, any model (whether pruned or not) can be quantized.<br />
-Use the <code>--quantize</code> command-line flag, together with <code>--evaluate</code> to evaluate the accuracy of your model after quantization.  The following example qunatizes ResNet18 for ImageNet:</p>
-<pre><code>$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize --evaluate
+<h2 id="post-training-quantization">Post-Training Quantization</h2>
+<p>Distiller supports post-training quantization of trained modules without re-training (using <a href="../algo_quantization/index.html#range-based-linear-quantization">Range-Based Linear Quantization</a>). So, any model (whether pruned or not) can be quantized. To invoke post-training quantization, use <code>--quantize-eval</code> along with <code>--evaluate</code>. Additional arguemnts are available to control parameters of the quantization:</p>
+<pre><code>Arguments controlling quantization at evaluation time(&quot;post-training quantization&quot;):
+  --quantize-eval, --qe
+                        Apply linear quantization to model before evaluation.
+                        Applicable only if --evaluate is also set
+  --qe-mode QE_MODE, --qem QE_MODE
+                        Linear quantization mode. Choices: asym_s | asym_u |
+                        sym
+  --qe-bits-acts NUM_BITS, --qeba NUM_BITS
+                        Number of bits for quantization of activations
+  --qe-bits-wts NUM_BITS, --qebw NUM_BITS
+                        Number of bits for quantization of weights
+  --qe-bits-accum NUM_BITS
+                        Number of bits for quantization of the accumulator
+  --qe-clip-acts, --qeca
+                        Enable clipping of activations using max-abs-value
+                        averaging over batch
+  --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
+                        List of fully-qualified layer names for which not to
+                        clip activations. Applicable only if --qe-clip-acts is
+                        also set
+  --qe-per-channel, --qepc
+                        Enable per-channel quantization
+
 </code></pre>
 
-<p>Generates:</p>
-<pre><code>Preparing model for quantization
---- test ---------------------
-50000 samples (256 per mini-batch)
-Test: [   10/  195]    Loss 0.856354    Top1 79.257812    Top5 92.500000
-Test: [   20/  195]    Loss 0.923131    Top1 76.953125    Top5 92.246094
-Test: [   30/  195]    Loss 0.885186    Top1 77.955729    Top5 92.486979
-Test: [   40/  195]    Loss 0.930263    Top1 76.181641    Top5 92.597656
-Test: [   50/  195]    Loss 0.931062    Top1 75.726562    Top5 92.906250
-Test: [   60/  195]    Loss 0.932019    Top1 75.651042    Top5 93.151042
-Test: [   70/  195]    Loss 0.921287    Top1 76.060268    Top5 93.270089
-Test: [   80/  195]    Loss 0.932539    Top1 75.986328    Top5 93.100586
-Test: [   90/  195]    Loss 0.996000    Top1 74.700521    Top5 92.330729
-Test: [  100/  195]    Loss 1.066699    Top1 73.289062    Top5 91.437500
-Test: [  110/  195]    Loss 1.100970    Top1 72.574574    Top5 91.001420
-Test: [  120/  195]    Loss 1.122376    Top1 72.268880    Top5 90.696615
-Test: [  130/  195]    Loss 1.171726    Top1 71.198918    Top5 90.120192
-Test: [  140/  195]    Loss 1.191500    Top1 70.797991    Top5 89.902344
-Test: [  150/  195]    Loss 1.219954    Top1 70.210938    Top5 89.453125
-Test: [  160/  195]    Loss 1.240942    Top1 69.855957    Top5 89.162598
-Test: [  170/  195]    Loss 1.265741    Top1 69.342831    Top5 88.807445
-Test: [  180/  195]    Loss 1.281185    Top1 69.051649    Top5 88.589410
-Test: [  190/  195]    Loss 1.279682    Top1 69.019326    Top5 88.632812
-==&gt; Top1: 69.130    Top5: 88.732    Loss: 1.276
+<p>The following example qunatizes ResNet18 for ImageNet:</p>
+<pre><code class="bash">$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize-eval --evaluate
 </code></pre>
 
+<p>A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.</p>
 <h2 id="summaries">Summaries</h2>
 <p>You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
 You can log sparsity statistics (written to console and CSV file), performance, optimizer and model information, and also create a PNG image of the DNN.

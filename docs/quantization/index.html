@@ -97,7 +97,7 @@
         
             <li><a class="toctree-l4" href="#aggressive-quantization-int4-and-lower">"Aggressive" Quantization: INT4 and Lower</a></li>
         
-            <li><a class="toctree-l4" href="#training-with-quantization">Training with Quantization</a></li>
+            <li><a class="toctree-l4" href="#quantization-aware-training">Quantization-Aware Training</a></li>
         
             <li><a class="toctree-l4" href="#references">References</a></li>
         
@@ -233,12 +233,15 @@ As mentioned above, a scale factor is used to adapt the dynamic range of the ten
 <li><strong>Offline</strong> means gathering activations statistics before deploying the model, either during training or by running a few "calibration" batches on the trained FP32 model. Based on these gathered statistics, the scaled factors are calculated and are fixed once the model is deployed. This method has the risk of encountering values outside the previously observed ranges at runtime. These values will be clipped, which might lead to accuracy degradation.</li>
 <li><strong>Online</strong> means calculating the min/max values for each tensor dynamically during runtime. In this method clipping cannot occur, however the added computation resources required to calculate the min/max values at runtime might be prohibitive.</li>
 </ul>
-<p>It is important to note, however, that the full float range of an activations tensor usually includes elements which are statistically outliers. These values can be discarded by using a narrower min/max range, effectively allowing some clipping to occur in favor of increasing the resolution provided to the part of the distribution containing most of the information. Statistical measures can be used to intelligently select where to clip the original range in order to preserve as much information as possible (<a href="#migacz-2017">Migacz, 2017</a>).  </p>
+<div id="outliers-removal"></div>
+
+<p>It is important to note, however, that the full float range of an activations tensor usually includes elements which are statistically outliers. These values can be discarded by using a narrower min/max range, effectively allowing some clipping to occur in favor of increasing the resolution provided to the part of the distribution containing most of the information. A simple method which can yield nice results is to simply use an average of the observed min/max values instead of the actual values. Alternatively, statistical measures can be used to intelligently select where to clip the original range in order to preserve as much information as possible (<a href="#migacz-2017">Migacz, 2017</a>). Going further, <a href="#banner-et-al-2018">Banner et al., 2018</a> have proposed a method for analytically computing the clipping value under certain conditions.</p>
 <p>Another possible optimization point is <strong>scale-factor scope</strong>. The most common way is use a single scale-factor per-layer, but it is also possible to calculate a scale-factor per-channel. This can be beneficial if the weight distributions vary greatly between channels.</p>
+<p>When used to directly quantize a model without re-training, as described so far, this method is commonly referred to as <strong>post-training quantization</strong>. However, recent publications have shown that there are cases where post-training quantization to INT8 doesn't preserve accuracy (<a href="#benoit-et-al-2018">Benoit et al., 2018</a>, <a href="#krishnamoorthi-2018">Krishnamoorthi, 2018</a>). Namely, smaller models such as MobileNet seem to not respond as well to post-training quantization, presumabley due to their smaller representational capacity. In such cases, <a href="#quantization-aware-training">quantization-aware training</a> is used.</p>
 <h2 id="aggressive-quantization-int4-and-lower">"Aggressive" Quantization: INT4 and Lower</h2>
 <p>Naively quantizing a FP32 model to INT4 and lower usually incurs significant accuracy degradation. Many works have tried to mitigate this effect. They usually employ one or more of the following concepts in order to improve model accuracy:</p>
 <ul>
-<li><strong>Training / Re-Training</strong>: For INT4 and lower, training is required in order to obtain reasonable accuracy. The training loop is modified to take quantization into account. See details in the <a href="#training-with-quantization">next section</a>.<br />
+<li><strong>Training / Re-Training</strong>: For INT4 and lower, training is required in order to obtain reasonable accuracy. The training loop is modified to take quantization into account. See details in the <a href="#quantization-aware-training">next section</a>.<br />
 <a href="#zhou-et-al-2016">Zhou S et al., 2016</a> have shown that bootstrapping the quantized model with trained FP32 weights leads to higher accuracy, as opposed to training from scratch. Other methods <em>require</em> a trained FP32 model, either as a starting point (<a href="#zhou-et-al-2017">Zhou A et al., 2017</a>), or as a teacher network in a knowledge distillation training setup (see <a href="../knowledge_distillation/index.html#combining">here</a>).</li>
 <li><strong>Replacing the activation function</strong>: The most common activation function in vision models is ReLU, which is unbounded. That is - its dynamic range is not limited for positive inputs. This is very problematic for INT4 and below due to the very limited range and resolution. Therefore, most methods replace ReLU with another function which is bounded. In some cases a clipping function with hard coded values is used (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>, <a href="#mishra-et-al-2018">Mishra et al., 2018</a>). Another method learns the clipping value per layer, with better results (<a href="#choi-et-al-2018">Choi et al., 2018</a>). Once the clipping value is set, the scale factor used for quantization is also set, and no further calibration steps are required (as opposed to INT8 methods described above).</li>
 <li><strong>Modifying network structure</strong>: <a href="#mishra-et-al-2018">Mishra et al., 2018</a> try to compensate for the loss of information due to quantization by using wider layers (more channels). <a href="#lin-et-al-2017">Lin et al., 2017</a> proposed a binary quantization method in which a single FP32 convolution is replaced with multiple binary convolutions, each scaled to represent a different "base", covering a larger dynamic range overall.</li>
@@ -246,9 +249,9 @@ As mentioned above, a scale factor is used to adapt the dynamic range of the ten
 <li><strong>Iterative quantization</strong>: Most methods quantize the entire model at once. <a href="#zhou-et-al-2017">Zhou A et al., 2017</a> employ an iterative method, which starts with a trained FP32 baseline, and quantizes only a portion of the model at the time followed by several epochs of re-training to recover the accuracy loss from quantization.</li>
 <li><strong>Mixed Weights and Activations Precision</strong>: It has been observed that activations are more sensitive to quantization than weights (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>). Hence it is not uncommon to see experiments with activations quantized to a higher precision compared to weights. Some works have focused solely on quantizing weights, keeping the activations at FP32 (<a href="#li-et-al-2016">Li et al., 2016</a>, <a href="#zhu-et-al-2016">Zhu et al., 2016</a>).</li>
 </ul>
-<h2 id="training-with-quantization">Training with Quantization</h2>
-<p>As mentioned above, in order to minimize the loss of accuracy from "aggressive" quantization, many methods that target INT4 and lower involve training the model in a way that considers the quantization. This means training with quantization of weights and activations "baked" into the training procedure. The training graph usually looks like this:</p>
-<p><img alt="Training with Quantization" src="../imgs/training_quant_flow.png" /></p>
+<h2 id="quantization-aware-training">Quantization-Aware Training</h2>
+<p>As mentioned above, in order to minimize the loss of accuracy from "aggressive" quantization, many methods that target INT4 and lower (and in some cases for INT8 as well) involve training the model in a way that considers the quantization. This means training with quantization of weights and activations "baked" into the training procedure. The training graph usually looks like this:</p>
+<p><img alt="Quantization-Aware Training" src="../imgs/training_quant_flow.png" /></p>
 <p>A full precision copy of the weights is maintained throughout the training process ("weights_fp" in the diagram). Its purpose is to accumulate the small changes from the gradients without loss of precision (Note that the quantization of the weights is an integral part of the training graph, meaning that we back-propagate through it as well). Once the model is trained, only the quantized weights are used for inference.<br />
 In the diagram we show "layer N" as the conv + batch-norm + activation combination, but the same applies to fully-connected layers, element-wise operations, etc. During training, the operations within "layer N" can still run in full precision, with the "quantize" operations in the boundaries ensuring discrete-valued weights and activations. This is sometimes called "simulated quantization".  </p>
 <h3 id="straight-through-estimator">Straight-Through Estimator</h3>
@@ -279,7 +282,7 @@ In the diagram we show "layer N" as the conv + batch-norm + activation combinati
 <p><strong>Asit Mishra, Eriko Nurvitadhi, Jeffrey J Cook and Debbie Marr</strong>. WRPN: Wide Reduced-Precision Networks. <a href="https://openreview.net/forum?id=B1ZvaaeAZ">ICLR, 2018</a></p>
 <div id="choi-et-al-2018"></div>
 
-<p><strong>Jungwook Choi, Zhuo Wang, Swagath Venkataramani, Pierce I-Jen Chuang, Vijayalakshmi Srinivasan and Kailash Gopalakrishnan</strong>. PACT: Parameterized Clipping Activation for Quantized Neural Networks. <a href="https://openreview.net/forum?id=By5ugjyCb">2018</a></p>
+<p><strong>Jungwook Choi, Zhuo Wang, Swagath Venkataramani, Pierce I-Jen Chuang, Vijayalakshmi Srinivasan and Kailash Gopalakrishnan</strong>. PACT: Parameterized Clipping Activation for Quantized Neural Networks. <a href="https://arxiv.org/abs/1805.06085">arxiv:1805.06085</a></p>
 <div id="lin-et-al-2017"></div>
 
 <p><strong>Xiaofan Lin, Cong Zhao and Wei Pan</strong>. Towards Accurate Binary Convolutional Neural Network. <a href="http://papers.nips.cc/paper/6638-towards-accurate-binary-convolutional-neural-network">NIPS, 2017</a></p>
@@ -294,10 +297,19 @@ In the diagram we show "layer N" as the conv + batch-norm + activation combinati
 <p><strong>Chenzhuo Zhu, Song Han, Huizi Mao and William J. Dally</strong>. Trained Ternary Quantization. <a href="https://arxiv.org/abs/1612.01064">arxiv:1612.01064</a></p>
 <div id="bengio-et-al-2013"></div>
 
-<p><strong>Yoshua Bengio, Nicholas Leonard and Aaron Courville</strong>. Estimating or Propagating Gradients Through Stochastic Neurons for Conditional Computation. <a href="https://arxiv.org/abs/1308.3432">arxiv:1308.3432, 2013</a></p>
+<p><strong>Yoshua Bengio, Nicholas Leonard and Aaron Courville</strong>. Estimating or Propagating Gradients Through Stochastic Neurons for Conditional Computation. <a href="https://arxiv.org/abs/1308.3432">arxiv:1308.3432</a></p>
 <div id="hinton-et-al-2012"></div>
 
 <p><strong>Geoffrey Hinton, Nitish Srivastava, Kevin Swersky, Tijmen Tieleman and Abdelrahman Mohamed</strong>. Neural Networks for Machine Learning. <a href="https://www.coursera.org/learn/neural-networks">Coursera, video lectures, 2012</a></p>
+<div id="benoit-et-al-2018"></div>
+
+<p><strong>Benoit Jacob, Skirmantas Kligys, Bo Chen, Menglong Zhu, Matthew Tang, Andrew Howard, Hartwig Adam and Dmitry Kalenichenko</strong>. Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference. <a href="http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html">ECCV, 2018</a></p>
+<div id="krishnamoorthi-2018"></div>
+
+<p><strong>Raghuraman Krishnamoorthi</strong>. Quantizing deep convolutional networks for efficient inference: A whitepaper <a href="https://arxiv.org/abs/1806.08342">arxiv:1806.08342</a></p>
+<div id="banner-et-al-2018"></div>
+
+<p><strong>Ron Banner, Yury Nahshan, Elad Hoffer and Daniel Soudry</strong>. ACIQ: Analytical Clipping for Integer Quantization of neural networks <a href="https://arxiv.org/abs/1810.05723">arxiv:1810.05723</a></p>
               
             </div>
           </div>

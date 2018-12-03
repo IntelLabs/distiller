@@ -415,9 +415,8 @@ policies:
 </code></pre>
 
 <h2 id="quantization">Quantization</h2>
-<p>Similarly to pruners and regularizers, specifying a quantizer in the scheduler YAML follows the constructor arguments of the <code>Quantizer</code> class (see details <a href="../design/index.html#quantization">here</a>).<br />
-<strong>Notes</strong>: Only a single quantizer instance may be defined.<br />
-Let's see an example:</p>
+<p>Similarly to pruners and regularizers, specifying a quantizer in the scheduler YAML follows the constructor arguments of the <code>Quantizer</code> class (see details <a href="../design/index.html#quantization">here</a>). <strong>Note</strong> that only a single quantizer instance may be defined per YAML.</p>
+<p>Let's see an example:</p>
 <pre><code>quantizers:
   dorefa_quantizer:
     class: DorefaQuantizer
@@ -469,7 +468,7 @@ Let's see an example:</p>
 <ul>
 <li><strong>Important Note</strong>: The patterns are evaluated eagerly - first match wins. So, to properly quantize a model using "broad" patterns and more "specific" patterns as just shown, make sure the specific pattern is listed <strong>before</strong> the broad one.</li>
 </ul>
-<p>The <code>QuantizationPolicy</code>, which controls the quantization procedure during training, is actually quite simplistic. All it does is call the <code>prepare_model()</code> function of the <code>Quantizer</code> when it's initialized, followed by the first call to <code>quantize_params()</code>. Then, at the end of each epoch, after the float copy of the weights has been updated, it calls the <code>quantize_params()</code> function again. </p>
+<p>The <code>QuantizationPolicy</code>, which controls the quantization procedure during training, is actually quite simplistic. All it does is call the <code>prepare_model()</code> function of the <code>Quantizer</code> when it's initialized, followed by the first call to <code>quantize_params()</code>. Then, at the end of each epoch, after the float copy of the weights has been updated, it calls the <code>quantize_params()</code> function again.</p>
 <pre><code>policies:
     - quantizer:
         instance_name: dorefa_quantizer
@@ -478,7 +477,7 @@ Let's see an example:</p>
       frequency: 1
 </code></pre>
 
-<p><strong>Important Note</strong>: As mentioned <a href="../design/index.html#training-with-quantization">here</a>, since the quantizer modifies the model's parameters (assuming training with quantization in the loop is used), the call to <code>prepare_model()</code> must be performed before an optimizer is called. Therefore, currently, the starting epoch for a quantization policy must be 0, otherwise the quantization process will not work as expected. If one wishes to do a "warm-startup" (or "boot-strapping"), training for a few epochs with full precision and only then starting to quantize, the only way to do this right now is to execute a separate run to generate the boot-strapped weights, and execute a second which will resume the checkpoint with the boot-strapped weights.</p>
+<p><strong>Important Note</strong>: As mentioned <a href="../design/index.html#quantization-aware-training">here</a>, since the quantizer modifies the model's parameters (assuming training with quantization in the loop is used), the call to <code>prepare_model()</code> must be performed before an optimizer is called. Therefore, currently, the starting epoch for a quantization policy must be 0, otherwise the quantization process will not work as expected. If one wishes to do a "warm-startup" (or "boot-strapping"), training for a few epochs with full precision and only then starting to quantize, the only way to do this right now is to execute a separate run to generate the boot-strapped weights, and execute a second which will resume the checkpoint with the boot-strapped weights.</p>
 <h2 id="knowledge-distillation">Knowledge Distillation</h2>
 <p>Knowledge distillation (see <a href="../knowledge_distillation/index.html">here</a>) is also implemented as a <code>Policy</code>, which should be added to the scheduler. However, with the current implementation, it cannot be defined within the YAML file like the rest of the policies described above.</p>
 <p>To make the integration of this method into applications a bit easier, a helper function can be used that will add a set of command-line arguments related to knowledge distillation:</p>

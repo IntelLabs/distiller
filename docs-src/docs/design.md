@@ -74,11 +74,11 @@ To execute the model transformation, call the `prepare_model` function of the `Q
 
 The `Quantizer` class also provides an API to quantize the weights of all layers at once. To use it, the `param_quantization_fn` attribute needs to point to a function that accepts a tensor and the number of bits. During model transformation, the `Quantizer` class will build a list of all model parameters that need to be quantized along with their bit-width. Then, the `quantize_params` function can be called, which will iterate over all parameters and quantize them using `params_quantization_fn`.
 
-### Training with Quantization
+### Quantization-Aware Training
 
-The `Quantizer` class supports training with quantization in the loop. This requires handling of a couple of flows / scenarios:
+The `Quantizer` class supports quantization-aware training, that is - training with quantization in the loop. This requires handling of a couple of flows / scenarios:
 
-1. Maintaining a full precision copy of the weights, as described [here](quantization.md#training-with-quantization). This is enabled by setting `train_with_fp_copy=True` in the `Quantizer` constructor. At model transformation, in each module that has parameters that should be quantized, a new `torch.nn.Parameter` is added, which will maintain the required full precision copy of the parameters. Note that this is done in-place - a new module **is not** created. We preferred not to sub-class the existing PyTorch modules for this purpose. In order to this in-place, and also guarantee proper back-propagation through the weights quantization function, we employ the following "hack": 
+1. Maintaining a full precision copy of the weights, as described [here](quantization.md#quantization-aware-training). This is enabled by setting `train_with_fp_copy=True` in the `Quantizer` constructor. At model transformation, in each module that has parameters that should be quantized, a new `torch.nn.Parameter` is added, which will maintain the required full precision copy of the parameters. Note that this is done in-place - a new module **is not** created. We preferred not to sub-class the existing PyTorch modules for this purpose. In order to this in-place, and also guarantee proper back-propagation through the weights quantization function, we employ the following "hack": 
 
     1. The existing `torch.nn.Parameter`, e.g. `weights`, is replaced by a `torch.nn.Parameter` named `float_weight`.
     2. To maintain the existing functionality of the module, we then register a `buffer` in the module with the original name - `weights`.

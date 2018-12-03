@@ -178,7 +178,7 @@ quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
                          help='Apply linear quantization to model before evaluation. Applicable only if'
                               '--evaluate is also set')
 quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
-                         help='Linear quantization mode')
+                         help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
 quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
                          help='Number of bits for quantization of activations')
 quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
@@ -186,7 +186,7 @@ quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar
 quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
                          help='Number of bits for quantization of the accumulator')
 quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
-                         help='Enable clipping of activations using max-abs-value averaging over batch')
+                         help='Enable clipping of activations using min/max values averaging over batch')
 quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                          help='List of fully-qualified layer names for which not to clip activations. Applicable'
                               'only if --qe-clip-acts is also set')
