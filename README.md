@@ -37,12 +37,12 @@ Network compression can reduce the memory footprint of a neural network, increas
 <details><summary><b>What's New in November?</b></summary>
 <p>
   
-   - Quantization:
-     - To improve quantization results: Added averaging-based activations clipping in SymmetricLinearQuantizer.
-     - For better control over quantization configuration: Added command line arguments for post-training quantization settings in image classification sample.
+   - Quantization: Several new features in [range-based linear quantization](https://nervanasystems.github.io/distiller/algo_quantization/index.html#range-based-linear-quantization):
      - Asymmetric post-training quantization (only symmetric supported so until now)
      - Quantization aware training for range-based (min-max) symmetric and asymmetric quantization
-     - Per-channel quantization support in all of the above scenarios
+     - Per-channel weights quantization support (per output channel) in both training and post-training
+     - To improve quantization results: Averaging-based activations clipping in post-training quantization.
+     - More control over post-training quantization configuration: Additional [command line arguments](https://nervanasystems.github.io/distiller/usage/index.html##post-training-quantization) in image classification sample.
    - Added an implementation of [Dynamic Network Surgery for Efficient DNNs](https://arxiv.org/abs/1608.04493) with:
      - A sample implementation on ResNet50 which achieves 82.5% compression 75.5% Top1 (-0.6% from TorchVision baseline).
      - A new SplicingPruner pruning algorithm.
@@ -101,22 +101,30 @@ Beware.
 
 ## Table of Contents
 
-* [Feature set](#feature-set)
-* [Installation](#installation)
-  + [Clone Distiller](#clone-distiller)
-  + [Create a Python virtual environment](#create-a-python-virtual-environment)
-  + [Install dependencies](#install-dependencies)
-* [Getting Started](#getting-started)
-  + [Example invocations of the sample application](#example-invocations-of-the-sample-application)
-  + [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
-* [Set up the classification datasets](#set-up-the-classification-datasets)
-* [Running the tests](#running-the-tests)
-* [Generating the HTML documentation site](#generating-the-html-documentation-site)
-* [Versioning](#versioning)
-* [License](#license)
-* [Citation](#citation)
-* [Acknowledgments](#acknowledgments)
-* [Disclaimer](#disclaimer)
+- [Table of Contents](#table-of-contents)
+- [Highlighted features](#highlighted-features)
+- [Installation](#installation)
+  - [Clone Distiller](#clone-distiller)
+  - [Create a Python virtual environment](#create-a-python-virtual-environment)
+    - [Using virtualenv](#using-virtualenv)
+    - [Using venv](#using-venv)
+    - [Activate the environment](#activate-the-environment)
+  - [Install dependencies](#install-dependencies)
+- [Getting Started](#getting-started)
+  - [Example invocations of the sample application](#example-invocations-of-the-sample-application)
+    - [Training-only](#training-only)
+    - [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
+    - [Post-training quantization](#post-training-quantization)
+  - [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
+- [Set up the classification datasets](#set-up-the-classification-datasets)
+- [Running the tests](#running-the-tests)
+- [Generating the HTML documentation site](#generating-the-html-documentation-site)
+- [Built With](#built-with)
+- [Versioning](#versioning)
+- [License](#license)
+- [Citation](#citation)
+- [Acknowledgments](#acknowledgments)
+- [Disclaimer](#disclaimer)
 
 ## Highlighted features
 
@@ -144,8 +152,8 @@ Beware.
   - Group Lasso an group variance regularization   
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
-  - Support for [training with quantization](https://nervanasystems.github.io/distiller/quantization/index.html#training-with-quantization) in the loop
-  - One-shot 8-bit quantization of trained full-precision models
+  - Post-training quantization of trained full-precision models
+  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/quantization/index.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
   - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
@@ -232,7 +240,7 @@ For more details, there are some other resources you can refer to:
 ### Example invocations of the sample application
 + [Training-only](#training-only)
 + [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
-+ [8-bit quantization](#8-bit-quantization)
++ [Post-training quantization](#post-training-quantization)
 
 #### Training-only
 The following will invoke training-only (no compression) of a network named 'simplenet' on the CIFAR10 dataset.  This is roughly based on TorchVision's sample Imagenet training application, so it should look familiar if you've used that application.  In  this example we don't invoke any compression mechanisms: we just train because for fine-tuning after pruning, training is an essential part.<br>  
@@ -273,14 +281,14 @@ $ python3 compress_classifier.py --resume=../ssl/checkpoints/checkpoint_trained_
 ```
 <center> <img src="imgs/ch_compute_stats.png"></center>
 
-#### 8-bit quantization
+#### Post-training quantization
 This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've included in the git repository the checkpoint of a ResNet20 model that we've trained with 32-bit floats, so we'll take this model and quantize it:
 
 ```
-$ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resume ../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize --evaluate
+$ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resume ../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize-eval --evaluate
 ```
 
-The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters.
+The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md).
 
 ### Explore the sample Jupyter notebooks
 The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter/index.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
