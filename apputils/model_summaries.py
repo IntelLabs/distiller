@@ -618,7 +618,7 @@ def export_img_classifier_to_onnx(model, onnx_fname, dataset, export_params=True
         if add_softmax:
             # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
             model.original_forward = model.forward
-            softmax = torch.nn.Softmax(dim=1)
+            softmax = torch.nn.Softmax(dim=-1)
             model.forward = lambda input: softmax(model.original_forward(input))
         torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=export_params)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
