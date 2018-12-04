@@ -73,7 +73,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
             for k, v in model.state_dict().items():
                 if 'wrapped_module.weight' in k:
                     q_dict[k] = torch.CharTensor(v.cpu().data.numpy())
-                else: 
+                else:
                     q_dict[k] = v
             checkpoint['state_dict'] = q_dict
 
