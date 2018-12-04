@@ -71,7 +71,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
             msglogger.info("Storing low precision state_dict")
             for k, v in checkpoint['state_dict'].items():
                 if 'wrapped_module.weight' in k:
-                    checkpoint['state_dict'] = v.char()
+                    checkpoint['state_dict'][k] = v.char()
 
     torch.save(checkpoint, fullpath)
     if is_best:
