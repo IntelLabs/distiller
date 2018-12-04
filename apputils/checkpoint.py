@@ -69,13 +69,9 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         b_wts = 'bits_weights' if 'bits_weights' in model.quantizer_metadata['params'] else 'bits_parameters'
         if  save_low_precision and model.quantizer_metadata['params'][b_wts] <= 8:
             msglogger.info("Storing low precision state_dict")
-            q_dict = {}
-            for k, v in model.state_dict().items():
+            for k, v in checkpoint['state_dict'].items():
                 if 'wrapped_module.weight' in k:
-                    q_dict[k] = torch.CharTensor(v.cpu().data.numpy())
-                else:
-                    q_dict[k] = v
-            checkpoint['state_dict'] = q_dict
+                    checkpoint['state_dict'] = v.char()
 
     torch.save(checkpoint, fullpath)
     if is_best:
