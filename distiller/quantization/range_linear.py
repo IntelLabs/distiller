@@ -18,6 +18,7 @@ import torch.nn as nn
 from enum import Enum
 from collections import OrderedDict
 
+import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
 
@@ -337,7 +338,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'per_channel_wts': per_channel_wts}}
         
         def replace_fn(module, name, qbits_map):
-            clip = self.clip_acts and name not in no_clip_layers
+            clip = self.clip_acts and distiller.utils.normalize_module_name(name) not in no_clip_layers
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip,
                                                      per_channel_wts=per_channel_wts)

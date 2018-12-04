@@ -69,7 +69,7 @@ A full precision copy of the weights is maintained throughout the training proce
 In the diagram we show "layer N" as the conv + batch-norm + activation combination, but the same applies to fully-connected layers, element-wise operations, etc. During training, the operations within "layer N" can still run in full precision, with the "quantize" operations in the boundaries ensuring discrete-valued weights and activations. This is sometimes called "simulated quantization".  
 
 ### Straight-Through Estimator
-An important question in this context is how to back-propagate through the quantization functions. These functions are discrete-valued, hence their derivative is 0 almost everywhere. So, using their gradients as-is would severly hinder the learning process. An approximation commonly used to overcome this issue is the "straight-through estimator" (STE) ([Hinton et al., 2012](#hinton-et-al-2012), [Bengio, 2013](#bengio-et-al-2013)), which simply passes the gradient through these functions as-is.  
+An important question in this context is how to back-propagate through the quantization functions. These functions are discrete-valued, hence their derivative is 0 almost everywhere. So, using their gradients as-is would severely hinder the learning process. An approximation commonly used to overcome this issue is the "straight-through estimator" (STE) ([Hinton et al., 2012](#hinton-et-al-2012), [Bengio, 2013](#bengio-et-al-2013)), which simply passes the gradient through these functions as-is.  
 
 ## References
 <div id="dally-2015"></div>

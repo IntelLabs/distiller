@@ -188,10 +188,10 @@ quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_B
 quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
                          help='Enable clipping of activations using min/max values averaging over batch')
 quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                         help='List of fully-qualified layer names for which not to clip activations. Applicable'
-                              'only if --qe-clip-acts is also set')
+                         help='List of layer names for which not to clip activations. Applicable only if '
+                              '--qe-clip-acts is also set')
 quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
-                         help='Enable per-channel quantization')
+                         help='Enable per-channel quantization of weights (per output channel)')
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 

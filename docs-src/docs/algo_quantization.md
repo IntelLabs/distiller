@@ -26,7 +26,7 @@ Let us denote the original floating-point tensor by \(x_f\), the quantized tenso
 
 \[x_q = round\left ((x_f - min_{x_f})\underbrace{\frac{2^n - 1}{max_{x_f} - min_{x_f}}}_{q_x} \right) = round(q_x x_f - \underbrace{min_{x_f}q_x)}_{zp_x} = round(q_x x_f - zp_x)\]
 
-In practice, we actaully use \(zp_x = round(min_{x_f}q_x)\). This means that 0 is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of 0.
+In practice, we actually use \(zp_x = round(min_{x_f}q_x)\). This means that zero is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of zero.
 
 Note that in the derivation above we use unsigned integer to represent the quantized range. That is, \(x_q \in [0, 2^n-1]\). One could use signed integer if necessary (perhaps due to HW considerations). This can be achieved by subtracting \(2^{n-1}\).
 
@@ -73,12 +73,11 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 ### Other Features
 
-- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurt our ability ro represent the values we actually care about accurately. Currently, Distiller supports clipping of activations with averaging.
-
-<p align="center">
-    <img src="../imgs/quant_clipped.png"/>
-</p>
-
+- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability ro represent the values we actually care about accurately.
+   <p align="center">
+       <img src="../imgs/quant_clipped.png"/>
+   </p>
+  Currently, Distiller supports clipping of activations with averaging during post-training quantization. That is - for each batch, instead of calculating global min/max values, an average of the min/max values of each sample in the batch.
 - **Scale factor scope:** For weight tensors, Distiller supports per-channel quantization (per output channel).
 
 ### Implementation in Distiller

@@ -337,7 +337,7 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 <p>The <code>sense</code> command-line argument can be set to either <code>element</code> or <code>filter</code>, depending on the type of analysis you want done.<br></p>
 <p>There is also a <a href="http://localhost:8888/notebooks/sensitivity_analysis.ipynb">Jupyter notebook</a> with example invocations, outputs and explanations.</p>
 <h2 id="post-training-quantization">Post-Training Quantization</h2>
-<p>Distiller supports post-training quantization of trained modules without re-training (using <a href="../algo_quantization/index.html#range-based-linear-quantization">Range-Based Linear Quantization</a>). So, any model (whether pruned or not) can be quantized. To invoke post-training quantization, use <code>--quantize-eval</code> along with <code>--evaluate</code>. Additional arguemnts are available to control parameters of the quantization:</p>
+<p>Distiller supports post-training quantization of trained modules without re-training (using <a href="../algo_quantization/index.html#range-based-linear-quantization">Range-Based Linear Quantization</a>). So, any model (whether pruned or not) can be quantized. To invoke post-training quantization, use <code>--quantize-eval</code> along with <code>--evaluate</code>. Additional arguments are available to control parameters of the quantization:</p>
 <pre><code>Arguments controlling quantization at evaluation time(&quot;post-training quantization&quot;):
   --quantize-eval, --qe
                         Apply linear quantization to model before evaluation.
@@ -352,14 +352,14 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
   --qe-bits-accum NUM_BITS
                         Number of bits for quantization of the accumulator
   --qe-clip-acts, --qeca
-                        Enable clipping of activations using max-abs-value
+                        Enable clipping of activations using min/max values
                         averaging over batch
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of fully-qualified layer names for which not to
                         clip activations. Applicable only if --qe-clip-acts is
                         also set
   --qe-per-channel, --qepc
-                        Enable per-channel quantization
+                        Enable per-channel quantization of weights (per output channel)
 
 </code></pre>
 
@@ -368,6 +368,7 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 </code></pre>
 
 <p>A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.</p>
+<p>For more examples of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md">here</a></p>
 <h2 id="summaries">Summaries</h2>
 <p>You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
 You can log sparsity statistics (written to console and CSV file), performance, optimizer and model information, and also create a PNG image of the DNN.

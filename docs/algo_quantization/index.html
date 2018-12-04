@@ -204,7 +204,7 @@ For any of the methods below that require quantization-aware training, please se
 <p>
 <script type="math/tex; mode=display">x_q = round\left ((x_f - min_{x_f})\underbrace{\frac{2^n - 1}{max_{x_f} - min_{x_f}}}_{q_x} \right) = round(q_x x_f - \underbrace{min_{x_f}q_x)}_{zp_x} = round(q_x x_f - zp_x)</script>
 </p>
-<p>In practice, we actaully use <script type="math/tex">zp_x = round(min_{x_f}q_x)</script>. This means that 0 is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of 0.</p>
+<p>In practice, we actually use <script type="math/tex">zp_x = round(min_{x_f}q_x)</script>. This means that zero is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of zero.</p>
 <p>Note that in the derivation above we use unsigned integer to represent the quantized range. That is, <script type="math/tex">x_q \in [0, 2^n-1]</script>. One could use signed integer if necessary (perhaps due to HW considerations). This can be achieved by subtracting <script type="math/tex">2^{n-1}</script>.</p>
 <p>Let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized in asymmetric mode: (we denote input, output, weights and bias with  <script type="math/tex">x, y, w</script> and <script type="math/tex">b</script> respectively)</p>
 <p>
@@ -246,13 +246,11 @@ For any of the methods below that require quantization-aware training, please se
 </ul>
 <h3 id="other-features">Other Features</h3>
 <ul>
-<li><strong>Removing Outliers:</strong> As discussed <a href="../quantization/index.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurt our ability ro represent the values we actually care about accurately. Currently, Distiller supports clipping of activations with averaging.</li>
-</ul>
-<p align="center">
-    <img src="../imgs/quant_clipped.png"/>
-</p>
-
-<ul>
+<li><strong>Removing Outliers:</strong> As discussed <a href="../quantization/index.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability ro represent the values we actually care about accurately.
+   <p align="center">
+       <img src="../imgs/quant_clipped.png"/>
+   </p>
+  Currently, Distiller supports clipping of activations with averaging during post-training quantization. That is - for each batch, instead of calculating global min/max values, an average of the min/max values of each sample in the batch.</li>
 <li><strong>Scale factor scope:</strong> For weight tensors, Distiller supports per-channel quantization (per output channel).</li>
 </ul>
 <h3 id="implementation-in-distiller">Implementation in Distiller</h3>
