@@ -17,15 +17,30 @@
 import torch
 
 
-def symmetric_linear_quantization_scale_factor(num_bits, saturation_val):
+def symmetric_linear_quantization_params(num_bits, saturation_val):
     # Leave one bit for sign
     n = 2 ** (num_bits - 1) - 1
-    return n / saturation_val
+    scale = n / saturation_val
+    if isinstance(scale, torch.Tensor):
+        zero_point = torch.zeros_like(scale)
+    else:
+        zero_point = 0.0
+    return scale, zero_point
 
 
-def asymmetric_linear_quantization_scale_factor(num_bits, saturation_min, saturation_max):
+def asymmetric_linear_quantization_params(num_bits, saturation_min, saturation_max,
+                                          integral_zero_point=True, signed=False):
     n = 2 ** num_bits - 1
-    return n / (saturation_max - saturation_min)
+    scale = n / (saturation_max - saturation_min)
+    zero_point = scale * saturation_min
+    if integral_zero_point:
+        if isinstance(zero_point, torch.Tensor):
+            zero_point = zero_point.round()
+        else:
+            zero_point = float(round(zero_point))
+    if signed:
+        zero_point += 2 ** (num_bits - 1)
+    return scale, zero_point
 
 
 def clamp(input, min, max, inplace=False):
@@ -35,35 +50,48 @@ def clamp(input, min, max, inplace=False):
     return torch.clamp(input, min, max)
 
 
-def linear_quantize(input, scale_factor, inplace=False):
+def linear_quantize(input, scale, zero_point, inplace=False):
     if inplace:
-        input.mul_(scale_factor).round_()
+        input.mul_(scale).sub_(zero_point).round_()
         return input
-    return torch.round(scale_factor * input)
+    return torch.round(scale * input - zero_point)
 
 
-def linear_quantize_clamp(input, scale_factor, clamp_min, clamp_max, inplace=False):
-    output = linear_quantize(input, scale_factor, inplace)
+def linear_quantize_clamp(input, scale, zero_point, clamp_min, clamp_max, inplace=False):
+    output = linear_quantize(input, scale, zero_point, inplace)
     return clamp(output, clamp_min, clamp_max, inplace)
 
 
-def linear_dequantize(input, scale_factor, inplace=False):
+def linear_dequantize(input, scale, zero_point, inplace=False):
     if inplace:
-        input.div_(scale_factor)
+        input.add_(zero_point).div_(scale)
         return input
-    return input / scale_factor
+    return (input + zero_point) / scale
 
 
-def get_tensor_max_abs(tensor):
-    return max(abs(tensor.max().item()), abs(tensor.min().item()))
+def get_tensor_min_max(t, per_dim=None):
+    if per_dim is None:
+        return t.min(), t.max()
+    if per_dim > t.dim():
+        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
+    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
+    tv = t.view(*view_dims)
+    return tv.min(dim=-1)[0], tv.max(dim=-1)[0]
 
 
-def get_tensor_avg_max_abs_across_batch(tensor):
-    # Assume batch is at dim 0
-    tv = tensor.view(tensor.size()[0], -1)
-    avg_max = tv.max(dim=1)[0].mean().item()
-    avg_min = tv.min(dim=1)[0].mean().item()
-    return max(abs(avg_max), abs(avg_min))
+def get_tensor_avg_min_max(t, across_dim=None):
+    min_per_dim, max_per_dim = get_tensor_min_max(t, per_dim=across_dim)
+    return min_per_dim.mean(), max_per_dim.mean()
+
+
+def get_tensor_max_abs(t, per_dim=None):
+    min_val, max_val = get_tensor_min_max(t, per_dim=per_dim)
+    return torch.max(min_val.abs_(), max_val.abs_())
+
+
+def get_tensor_avg_max_abs(t, across_dim=None):
+    avg_min, avg_max = get_tensor_avg_min_max(t, across_dim=across_dim)
+    return torch.max(avg_min.abs_(), avg_max.abs_())
 
 
 def get_quantized_range(num_bits, signed=True):
@@ -71,3 +99,19 @@ def get_quantized_range(num_bits, signed=True):
         n = 2 ** (num_bits - 1)
         return -n, n - 1
     return 0, 2 ** num_bits - 1
+
+
+class LinearQuantizeSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, scale, zero_point, dequantize, inplace):
+        if inplace:
+            ctx.mark_dirty(input)
+        output = linear_quantize(input, scale, zero_point, inplace)
+        if dequantize:
+            output = linear_dequantize(output, scale, zero_point, inplace)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight-through estimator
+        return grad_output, None, None, None, None

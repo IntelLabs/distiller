@@ -33,7 +33,7 @@ def has_bias(module):
     return hasattr(module, 'bias') and module.bias is not None
 
 
-def hack_float_backup_parameter(module, name):
+def hack_float_backup_parameter(module, name, num_bits):
     try:
         data = dict(module.named_parameters())[name].data
     except KeyError:
@@ -41,6 +41,17 @@ def hack_float_backup_parameter(module, name):
     module.register_parameter(FP_BKP_PREFIX + name, nn.Parameter(data))
     delattr(module, name)
     module.register_buffer(name, torch.zeros_like(data))
+
+    first = False
+    if not hasattr(module, 'repr_mod'):
+        setattr(module, 'repr_mod', ', \nDistiller_QuantAwareTrain: ')
+        first = True
+        module.original_extra_repr = module.extra_repr
+        module.extra_repr = lambda: module.original_extra_repr() + module.repr_mod
+
+    if not first:
+        module.repr_mod += ' ; '
+    module.repr_mod += '{0} --> {1} bits'.format(name, num_bits)
 
 
 class _ParamToQuant(object):
@@ -146,6 +157,11 @@ class Quantizer(object):
         self.module_qbits_map[module_name] = qbits
 
     def prepare_model(self):
+        self._prepare_model_impl()
+
+        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+
+    def _prepare_model_impl(self):
         r"""
         Iterates over the model and replaces modules with their quantized counterparts as defined by
         self.replacement_factory
@@ -164,7 +180,7 @@ class Quantizer(object):
                     continue
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
-                    hack_float_backup_parameter(module, param_name)
+                    hack_float_backup_parameter(module, param_name, qbits.wts)
                     fp_attr_name = FP_BKP_PREFIX + param_name
                 self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, qbits.wts))
 
@@ -177,8 +193,6 @@ class Quantizer(object):
             optimizer_type = type(self.optimizer)
             new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
-
-        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_process_container(self, container, prefix=):
         # Iterate through model, insert quantization functions as appropriate
@@ -220,11 +234,10 @@ class Quantizer(object):
 
     def quantize_params(self):
         """
-        Quantize all parameters using the parameters using self.param_quantization_fn (using the defined number
-        of bits for each parameter)
+        Quantize all parameters using self.param_quantization_fn (with the defined number of bits for each parameter)
         """
         for ptq in self.params_to_quantize:
-            q_param = self.param_quantization_fn(getattr(ptq.module, ptq.fp_attr_name), ptq.num_bits)
+            q_param = self.param_quantization_fn(getattr(ptq.module, ptq.fp_attr_name), ptq)
             if self.train_with_fp_copy:
                 setattr(ptq.module, ptq.q_attr_name, q_param)
             else:

@@ -159,11 +159,26 @@ parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                     help='Load a model without DataParallel wrapping it')
 
+str_to_quant_mode_map = {'sym': quantization.LinearQuantMode.SYMMETRIC,
+                         'asym_s': quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
+                         'asym_u': quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED}
+
+
+def linear_quant_mode_str(val_str):
+    try:
+        return str_to_quant_mode_map[val_str]
+    except KeyError:
+        raise argparse.ArgumentError('Must be one of {0} (received {1})'.format(list(str_to_quant_mode_map.keys()),
+                                                                                val_str))
+
+
 quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
                                         '("post-training quantization)')
 quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
-                         help='Apply linear-symmetric quantization to model before evaluation. Applicable only if'
+                         help='Apply linear quantization to model before evaluation. Applicable only if'
                               '--evaluate is also set')
+quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
+                         help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
 quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
                          help='Number of bits for quantization of activations')
 quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
@@ -171,10 +186,12 @@ quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar
 quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
                          help='Number of bits for quantization of the accumulator')
 quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
-                         help='Enable clipping of activations using max-abs-value averaging over batch')
+                         help='Enable clipping of activations using min/max values averaging over batch')
 quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                         help='List of fully-qualified layer names for which not to clip activations. Applicable'
-                              'only if --qe-clip-acts is also set')
+                         help='List of layer names for which not to clip activations. Applicable only if '
+                              '--qe-clip-acts is also set')
+quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
+                         help='Enable per-channel quantization of weights (per output channel)')
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 
@@ -314,6 +331,7 @@ def main():
     if args.resume:
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
+        model.cuda()
 
     # Define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -716,9 +734,9 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         model.cpu()
-        quantizer = quantization.SymmetricLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers)
+        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
+                                                          args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
+                                                          args.qe_no_clip_layers, args.qe_per_channel)
         quantizer.prepare_model()
         model.cuda()
 

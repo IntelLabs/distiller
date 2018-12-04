@@ -26,7 +26,7 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 from distiller.quantization import Quantizer
-from distiller.quantization.quantizer import QBits
+from distiller.quantization.quantizer import QBits, _ParamToQuant
 from distiller.quantization.quantizer import FP_BKP_PREFIX
 from distiller import has_children
 
@@ -90,8 +90,8 @@ class DummyModel(nn.Sequential):
 # Dummy Quantizer
 #############################
 
-def dummy_quantize_params(param, num_bits):
-    return param + num_bits
+def dummy_quantize_params(param, param_meta):
+    return param + param_meta.num_bits
 
 
 class DummyQuantizer(Quantizer):
@@ -341,5 +341,6 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
             else:
                 quant_param = getattr(post_quant_module, param_name)
 
-            expected = dummy_quantize_params(pre_quant_param, num_bits) if quantizable else pre_quant_param
+            expected = dummy_quantize_params(pre_quant_param,
+                                             _ParamToQuant(None, None, None, None, num_bits)) if quantizable else pre_quant_param
             assert torch.equal(quant_param, expected)

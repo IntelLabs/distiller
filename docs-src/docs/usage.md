@@ -141,39 +141,45 @@ The ```sense``` command-line argument can be set to either ```element``` or ```f
 
 There is also a [Jupyter notebook](http://localhost:8888/notebooks/sensitivity_analysis.ipynb) with example invocations, outputs and explanations.
 
-## "Direct" Quantization Without Training
-Distiller supports 8-bit quantization of trained modules without re-training (using [Symmetric Linear Quantization](algo_quantization.md#symmetric-linear-quantization)). So, any model (whether pruned or not) can be quantized.  
-Use the ```--quantize``` command-line flag, together with ```--evaluate``` to evaluate the accuracy of your model after quantization.  The following example qunatizes ResNet18 for ImageNet:
+## Post-Training Quantization
+
+Distiller supports post-training quantization of trained modules without re-training (using [Range-Based Linear Quantization](algo_quantization.md#range-based-linear-quantization)). So, any model (whether pruned or not) can be quantized. To invoke post-training quantization, use `--quantize-eval` along with `--evaluate`. Additional arguments are available to control parameters of the quantization:
+
 ```
-$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize --evaluate
-```
-Generates:
-```
-Preparing model for quantization
---- test ---------------------
-50000 samples (256 per mini-batch)
-Test: [   10/  195]    Loss 0.856354    Top1 79.257812    Top5 92.500000
-Test: [   20/  195]    Loss 0.923131    Top1 76.953125    Top5 92.246094
-Test: [   30/  195]    Loss 0.885186    Top1 77.955729    Top5 92.486979
-Test: [   40/  195]    Loss 0.930263    Top1 76.181641    Top5 92.597656
-Test: [   50/  195]    Loss 0.931062    Top1 75.726562    Top5 92.906250
-Test: [   60/  195]    Loss 0.932019    Top1 75.651042    Top5 93.151042
-Test: [   70/  195]    Loss 0.921287    Top1 76.060268    Top5 93.270089
-Test: [   80/  195]    Loss 0.932539    Top1 75.986328    Top5 93.100586
-Test: [   90/  195]    Loss 0.996000    Top1 74.700521    Top5 92.330729
-Test: [  100/  195]    Loss 1.066699    Top1 73.289062    Top5 91.437500
-Test: [  110/  195]    Loss 1.100970    Top1 72.574574    Top5 91.001420
-Test: [  120/  195]    Loss 1.122376    Top1 72.268880    Top5 90.696615
-Test: [  130/  195]    Loss 1.171726    Top1 71.198918    Top5 90.120192
-Test: [  140/  195]    Loss 1.191500    Top1 70.797991    Top5 89.902344
-Test: [  150/  195]    Loss 1.219954    Top1 70.210938    Top5 89.453125
-Test: [  160/  195]    Loss 1.240942    Top1 69.855957    Top5 89.162598
-Test: [  170/  195]    Loss 1.265741    Top1 69.342831    Top5 88.807445
-Test: [  180/  195]    Loss 1.281185    Top1 69.051649    Top5 88.589410
-Test: [  190/  195]    Loss 1.279682    Top1 69.019326    Top5 88.632812
-==> Top1: 69.130    Top5: 88.732    Loss: 1.276
+Arguments controlling quantization at evaluation time("post-training quantization"):
+  --quantize-eval, --qe
+                        Apply linear quantization to model before evaluation.
+                        Applicable only if --evaluate is also set
+  --qe-mode QE_MODE, --qem QE_MODE
+                        Linear quantization mode. Choices: asym_s | asym_u |
+                        sym
+  --qe-bits-acts NUM_BITS, --qeba NUM_BITS
+                        Number of bits for quantization of activations
+  --qe-bits-wts NUM_BITS, --qebw NUM_BITS
+                        Number of bits for quantization of weights
+  --qe-bits-accum NUM_BITS
+                        Number of bits for quantization of the accumulator
+  --qe-clip-acts, --qeca
+                        Enable clipping of activations using min/max values
+                        averaging over batch
+  --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
+                        List of fully-qualified layer names for which not to
+                        clip activations. Applicable only if --qe-clip-acts is
+                        also set
+  --qe-per-channel, --qepc
+                        Enable per-channel quantization of weights (per output channel)
+
 ```
 
+The following example qunatizes ResNet18 for ImageNet:
+
+```bash
+$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize-eval --evaluate
+```
+
+A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.
+
+For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md)
 
 ## Summaries
 You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
