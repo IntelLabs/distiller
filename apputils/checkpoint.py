@@ -85,7 +85,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
 
     if os.path.isfile(chkpt_file):
         msglogger.info("=> loading checkpoint %s", chkpt_file)
-        checkpoint = torch.load(chkpt_file)
+        checkpoint = torch.load(chkpt_file, map_location = lambda storage, loc: storage)
         msglogger.info("Checkpoint keys:\n{}".format("\n\t".join(k for k in checkpoint.keys())))
         start_epoch = checkpoint['epoch'] + 1
         best_top1 = checkpoint.get('best_top1', None)

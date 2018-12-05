@@ -81,5 +81,6 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     elif parallel:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
-    model.cuda()
+    if torch.cuda.is_available():
+        model.cuda()
     return model
