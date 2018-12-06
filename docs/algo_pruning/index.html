@@ -65,12 +65,12 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../schedule/index.html">Compression scheduling</a>
+    <a class="" href="../schedule/index.html">Compression Scheduling</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <span class="caption-text">Compressing models</span>
+    <span class="caption-text">Compressing Models</span>
     <ul class="subnav">
                 <li class="">
                     
@@ -104,30 +104,34 @@
     <a class="current" href="index.html">Pruning</a>
     <ul class="subnav">
             
-    <li class="toctree-l3"><a href="#weights-pruning-algorithms">Weights pruning algorithms</a></li>
+    <li class="toctree-l3"><a href="#weights-pruning-algorithms">Weights Pruning Algorithms</a></li>
     
         <ul>
         
-            <li><a class="toctree-l4" href="#magnitude-pruner">Magnitude pruner</a></li>
+            <li><a class="toctree-l4" href="#magnitude-pruner">Magnitude Pruner</a></li>
         
-            <li><a class="toctree-l4" href="#sensitivity-pruner">Sensitivity pruner</a></li>
+            <li><a class="toctree-l4" href="#sensitivity-pruner">Sensitivity Pruner</a></li>
         
-            <li><a class="toctree-l4" href="#level-pruner">Level pruner</a></li>
+            <li><a class="toctree-l4" href="#level-pruner">Level Pruner</a></li>
         
-            <li><a class="toctree-l4" href="#automated-gradual-pruner-agp">Automated gradual pruner (AGP)</a></li>
+            <li><a class="toctree-l4" href="#splicing-pruner">Splicing Pruner</a></li>
         
-            <li><a class="toctree-l4" href="#rnn-pruner">RNN pruner</a></li>
+            <li><a class="toctree-l4" href="#automated-gradual-pruner-agp">Automated Gradual Pruner (AGP)</a></li>
+        
+            <li><a class="toctree-l4" href="#rnn-pruner">RNN Pruner</a></li>
         
         </ul>
     
 
-    <li class="toctree-l3"><a href="#structure-pruners">Structure pruners</a></li>
+    <li class="toctree-l3"><a href="#structure-pruners">Structure Pruners</a></li>
     
         <ul>
         
-            <li><a class="toctree-l4" href="#ranked-structure-pruner">Ranked structure pruner</a></li>
+            <li><a class="toctree-l4" href="#structure-ranking-pruners">Structure Ranking Pruners</a></li>
         
-            <li><a class="toctree-l4" href="#activation-influenced-pruner">Activation-influenced pruner</a></li>
+            <li><a class="toctree-l4" href="#automated-gradual-pruner-agp-for-structures">Automated Gradual Pruner (AGP) for Structures</a></li>
+        
+            <li><a class="toctree-l4" href="#hybrid-pruning">Hybrid Pruning</a></li>
         
         </ul>
     
@@ -152,12 +156,27 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../jupyter/index.html">Jupyter notebooks</a>
+    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
 	    </li>
           
             <li class="toctree-l1">
 		
     <a class="" href="../design/index.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../tutorial-struct_pruning/index.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../tutorial-lang_model/index.html">Pruning a Language Model</a>
+                </li>
+    </ul>
 	    </li>
           
         </ul>
@@ -196,15 +215,15 @@
           <div role="main">
             <div class="section">
               
-                <h1 id="weights-pruning-algorithms">Weights pruning algorithms</h1>
-<p><center><img alt="algorithms" src="../imgs/algorithms.png" /></center></p>
-<h2 id="magnitude-pruner">Magnitude pruner</h2>
+                <h1 id="weights-pruning-algorithms">Weights Pruning Algorithms</h1>
+<p><center><img alt="algorithms" src="../imgs/algorithms-pruning.png" /></center></p>
+<h2 id="magnitude-pruner">Magnitude Pruner</h2>
 <p>This is the most basic pruner: it applies a thresholding function, \(thresh(.)\), on each element, \(w_i\), of a weights tensor.  A different threshold can be used for each layer's weights tensor.<br>
 Because the threshold is applied on individual elements, this pruner belongs to the element-wise pruning algorithm family.</p>
 <p>\[ thresh(w_i)=\left\lbrace
 \matrix{{{w_i: \; if \;|w_i| \; \gt}\;\lambda}\cr {0: \; if \; |w_i| \leq \lambda} }
 \right\rbrace \]</p>
-<h2 id="sensitivity-pruner">Sensitivity pruner</h2>
+<h2 id="sensitivity-pruner">Sensitivity Pruner</h2>
 <p>Finding a threshold magnitude per layer is daunting, especially since each layer's elements have different average absolute values.  We can take advantage of the fact that the weights of convolutional and fully connected layers exhibit a Gaussian distribution with a mean value roughly zero, to avoid using a direct threshold based on the values of each specific tensor.
 <br>
 The diagram below shows the distribution the weights tensor of the first convolutional layer, and first fully-connected layer in TorchVision's pre-trained Alexnet model.  You can see that they have an approximate Gaussian distribution.<br>
@@ -223,7 +242,7 @@ The diagram below shows the distribution the weights tensor of the first convolu
 <p>"We used the sensitivity results to find each layer’s threshold: for example, the smallest threshold was applied to the most sensitive layer, which is the first convolutional layer... The pruning threshold is chosen as a quality parameter multiplied by the standard deviation of a layer’s weights</p>
 </blockquote>
 <p>So the results of executing pruning sensitivity analysis on the tensor, gives us a good starting guess at \(s\).  Sensitivity analysis is an empirical method, and we still have to spend time to hone in on the exact multiplier value.</p>
-<h3 id="method-of-operation">Method of operation</h3>
+<h3 id="method-of-operation">Method of Operation</h3>
 <ol>
 <li>Start by running a pruning sensitivity analysis on the model.  </li>
 <li>Then use the results to set and tune the threshold of each layer, but instead of using a direct threshold use a sensitivity parameter which is multiplied by the standard-deviation of the initial weight-tensor's distribution.</li>
@@ -254,17 +273,19 @@ policies:
     frequency: 2
 </code></pre>
 
-<h2 id="level-pruner">Level pruner</h2>
+<h2 id="level-pruner">Level Pruner</h2>
 <p>Class <code>SparsityLevelParameterPruner</code> uses a similar method to go around specifying specific thresholding magnitudes.
 Instead of specifying a threshold magnitude, you specify a target sparsity level (expressed as a fraction, so 0.5 means 50% sparsity).  Essentially this pruner also uses a pruning criteria based on the magnitude of each tensor element, but it has the advantage that you can aim for an exact and specific sparsity level.<br><br />
 This pruner is much more stable compared to <code>SensitivityPruner</code> because the target sparsity level is not coupled to the actual magnitudes of the elements. Distiller's <code>SensitivityPruner</code> is unstable because the final sparsity level depends on the convergence pattern of the tensor distribution.  Song Han's methodology of using several different values for the multiplier \(s\), and the recalculation of the standard-deviation at each pruning phase, probably gives it stability, but requires much more hyper-parameters (this is the reason we have not implemented it thus far).  </p>
 <p>To set the target sparsity levels, you can once again use pruning sensitivity analysis to make better guesses at the correct sparsity level of each</p>
-<h3 id="method-of-operation_1">Method of operation</h3>
+<h3 id="method-of-operation_1">Method of Operation</h3>
 <ol>
 <li>Sort the weights in the specified layer by their absolute values. <br></li>
 <li>Mask to zero the smallest magnitude weights until the desired sparsity level is reached.</li>
 </ol>
-<h2 id="automated-gradual-pruner-agp">Automated gradual pruner (AGP)</h2>
+<h2 id="splicing-pruner">Splicing Pruner</h2>
+<p>In <a href="https://arxiv.org/abs/1600.604493">Dynamic Network Surgery for Efficient DNNs</a> Guo et. al propose that network pruning and splicing work in tandem.  A <code>SpilicingPruner</code> is a pruner that both prunes and splices connections and works best with a Dynamic Network Surgery schedule, which, for example, configures the <code>PruningPolicy</code> to mask weights only during the forward pass.</p>
+<h2 id="automated-gradual-pruner-agp">Automated Gradual Pruner (AGP)</h2>
 <p>In <a href="https://arxiv.org/abs/1710.01878">To prune, or not to prune: exploring the efficacy of pruning for model compression</a>, authors Michael Zhu and Suyog Gupta provide an algorithm to schedule a Level Pruner which Distiller implements in <code>AutomatedGradualPruner</code>.
 <center><img alt="agp formula" src="../imgs/agp_formula.png" /></center></p>
 <blockquote>
@@ -283,21 +304,42 @@ abundant and gradually reduce the number of weights being pruned each time as th
 <li>Does not make any assumptions about the structure of the network or its constituent layers, and is therefore more generally applicable.</li>
 </ul>
 </blockquote>
-<h2 id="rnn-pruner">RNN pruner</h2>
+<h2 id="rnn-pruner">RNN Pruner</h2>
 <p>The authors of <a href="https://arxiv.org/abs/1704.05119">Exploring Sparsity in Recurrent Neural Networks</a>, Sharan Narang, Erich Elsen, Gregory Diamos, and Shubho Sengupta, "propose a technique to reduce the parameters of a network by pruning weights during the initial training of the network."  They use a gradual pruning schedule which is reminiscent of the schedule used in AGP, for element-wise pruning of RNNs, which they also employ during training.  They show pruning of RNN, GRU, LSTM and embedding layers.</p>
 <p>Distiller's distiller.pruning.BaiduRNNPruner class implements this pruning algorithm.</p>
 <p><center><img alt="Baidu RNN Pruning" src="../imgs/baidu_rnn_pruning.png" /></center></p>
-<h1 id="structure-pruners">Structure pruners</h1>
+<h1 id="structure-pruners">Structure Pruners</h1>
 <p>Element-wise pruning can create very sparse models which can be compressed to consume less memory footprint and bandwidth, but without specialized hardware that can compute using the sparse representation of the tensors, we don't gain any speedup of the computation.  Structure pruners, remove entire "structures", such as kernels, filters, and even entire feature-maps.</p>
-<h2 id="ranked-structure-pruner">Ranked structure pruner</h2>
-<p>The <code>L1RankedStructureParameterPruner</code> pruner calculates the magnitude of some "structure", orders all of the structures based on some magnitude function and the <em>m</em> lowest ranking structures are pruned away.  Currently this pruner only performs ranking of filters (3D structures) and it uses the mean of the absolute value of the tensor as the representative of the filter magnitude.  The absolute mean does not depend on the size of the filter, so it is easier to use compared to just using the \(L_1\)-norm of the structure, and at the same time it is a good proxy of the \(L_1\)-norm.</p>
-<p>In <a href="https://arxiv.org/abs/1608.08710">Pruning Filters for Efficient ConvNets</a> the authors use filter ranking, with <strong>one-shot pruning</strong> followed by fine-tuning.  The authors of <a href="https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=6288897">Exploiting Sparseness in Deep Neural Networks for Large Vocabulary Speech Recognition</a> also use a one-shot pruning schedule, for fully-connected layers, and they provide an explanation:</p>
+<h2 id="structure-ranking-pruners">Structure Ranking Pruners</h2>
+<p>Ranking pruners use some criterion to rank the structures in a tensor, and then prune the tensor to a specified level. In principle, these pruners perform one-shot pruning, but can be combined with automatic pruning-level scheduling, such as AGP (see below).
+In <a href="https://arxiv.org/abs/1608.08710">Pruning Filters for Efficient ConvNets</a> the authors use filter ranking, with <strong>one-shot pruning</strong> followed by fine-tuning.  The authors of <a href="https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=6288897">Exploiting Sparseness in Deep Neural Networks for Large Vocabulary Speech Recognition</a> also use a one-shot pruning schedule, for fully-connected layers, and they provide an explanation:</p>
 <blockquote>
 <p>First, after sweeping through the full training set several times the weights become relatively stable — they tend to remain either large or small magnitudes. Second, in a stabilized model, the importance of the connection is approximated well by the magnitudes of the weights (times the magnitudes of the corresponding input values, but these are relatively uniform within each layer since on the input layer, features are normalized to zero-mean and unit-variance, and hidden-layer values are probabilities)</p>
 </blockquote>
-<h2 id="activation-influenced-pruner">Activation-influenced pruner</h2>
-<p>The motivation for this pruner, is that if a feature-map produces very small activations, then this feature-map is not very important, and can be pruned away.
-- <b>Status: not implemented</b><br></p>
+<h3 id="l1rankedstructureparameterpruner">L1RankedStructureParameterPruner</h3>
+<p>The <code>L1RankedStructureParameterPruner</code> pruner calculates the magnitude of some "structure", orders all of the structures based on some magnitude function and the <em>m</em> lowest ranking structures are pruned away.  This pruner performs ranking of structures using the mean of the absolute value of the structure as the representative of the structure magnitude.  The absolute mean does not depend on the size of the structure, so it is easier to use compared to just using the \(L_1\)-norm of the structure, and at the same time it is a good proxy of the \(L_1\)-norm.  Basically, you can think of <code>mean(abs(t))</code> as a form of normalization of the structure L1-norm by the length of the structure.  <code>L1RankedStructureParameterPruner</code> currently prunes weight filters, channels, and rows (for linear layers).</p>
+<h3 id="activationapozrankedfilterpruner">ActivationAPoZRankedFilterPruner</h3>
+<p>The <code>ActivationAPoZRankedFilterPruner</code> pruner uses the activation channels mean APoZ (average percentage of zeros) to rank weight filters and prune a specified percentage of filters.
+This method is called <em>Network Trimming</em> from the research paper:
+"Network Trimming: A Data-Driven Neuron Pruning Approach towards Efficient Deep Architectures",
+    Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang, ICLR 2016
+    https://arxiv.org/abs/1607.03250  </p>
+<h3 id="gradientrankedfilterpruner">GradientRankedFilterPruner</h3>
+<p>The <code>GradientRankedFilterPruner</code> tries to asses the importance of weight filters using the product of their gradients and the filter value.  </p>
+<h3 id="randomrankedfilterpruner">RandomRankedFilterPruner</h3>
+<p>For research purposes we may want to compare the results of some structure-ranking pruner to a random structure-ranking.  The <code>RandomRankedFilterPruner</code> pruner can be used for this purpose.</p>
+<h2 id="automated-gradual-pruner-agp-for-structures">Automated Gradual Pruner (AGP) for Structures</h2>
+<p>The idea of a mathematical formula controlling the sparsity level growth is very useful and <code>StructuredAGP</code> extends the implementation to structured pruning.</p>
+<h3 id="pruner-compositions">Pruner Compositions</h3>
+<p>Pruners can be combined to create new pruning schemes.  Specifically, with a few lines of code we currently marry the AGP sparsity level scheduler with our filter-ranking classes to create pruner compositions.  For each of these, we use AGP to decided how many filters to prune at each step, and we choose the filters to remove using one of the filter-ranking methods:</p>
+<ul>
+<li><code>L1RankedStructureParameterPruner_AGP</code></li>
+<li><code>ActivationAPoZRankedFilterPruner_AGP</code></li>
+<li><code>GradientRankedFilterPruner_AGP</code></li>
+<li><code>RandomRankedFilterPruner_AGP</code></li>
+</ul>
+<h2 id="hybrid-pruning">Hybrid Pruning</h2>
+<p>In a single schedule we can mix different pruning techniques.  For example, we might mix pruning and regularization.  Or structured pruning and element-wise pruning.  We can even apply different methods on the same tensor.  For example, we might want to perform filter pruning for a few epochs, then perform <em>thinning</em> and continue with element-wise pruning of the smaller network tensors.  This technique of mixing different methods we call Hybrid Pruning, and Distiller has a few example schedules.</p>
               
             </div>
           </div>

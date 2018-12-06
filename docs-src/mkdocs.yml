@@ -16,8 +16,8 @@ pages:
   - Home: index.md
   - Installation: install.md
   - Usage: usage.md
-  - Compression scheduling: schedule.md
-  - Compressing models:
+  - Compression Scheduling: schedule.md
+  - Compressing Models:
     - Pruning: pruning.md
     - Regularization: regularization.md
     - Quantization: quantization.md
@@ -28,5 +28,8 @@ pages:
     - Quantization: algo_quantization.md
     - Early Exit: algo_earlyexit.md
   - Model Zoo: model_zoo.md
-  - Jupyter notebooks: jupyter.md
+  - Jupyter Notebooks: jupyter.md
   - Design: design.md
+  - Tutorials:
+    - Pruning Filters and Channels: tutorial-struct_pruning.md
+    - Pruning a Language Model: tutorial-lang_model.md
