@@ -151,9 +151,9 @@ parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp 
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                     help='Display the confusion matrix')
 parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
-                    help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+                    help='List of loss weights for early exits (e.g. --earlyexit_lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
-                    help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+                    help='List of EarlyExit thresholds (e.g. --earlyexit_thresholds 1.2 0.9)')
 parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type=int,
                     help='number of best scores to track and report (default: 1)')
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
