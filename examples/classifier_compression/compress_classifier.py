@@ -671,7 +671,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
     # but with a grouping of samples equal to the batch size.
     # Note that final group might not be a full batch - so determine actual size.
     this_batch_size = target.size()[0]
-    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
+    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False).cuda()
     for exitnum in range(args.num_exits):
         # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
