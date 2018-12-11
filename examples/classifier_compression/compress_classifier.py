@@ -676,7 +676,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
         # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
         # for batch_size > 1, we need to reduce this down to an average over the batch
-        args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]))
+        args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]).cpu())
 
     for batch_index in range(this_batch_size):
         earlyexit_taken = False
@@ -684,7 +684,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
         for exitnum in range(args.num_exits - 1):
             if args.loss_exits[exitnum][batch_index] < args.earlyexit_thresholds[exitnum]:
                 # take the results from early exit since lower than threshold
-                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
+                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index].cpu(), ndmin=2)),
                         torch.full([1], target[batch_index], dtype=torch.long))
                 args.exit_taken[exitnum] += 1
                 earlyexit_taken = True
@@ -692,7 +692,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
         # this sample does not exit early and therefore continues until final exit
         if not earlyexit_taken:
             exitnum = args.num_exits - 1
-            args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
+            args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index].cpu(), ndmin=2)),
                     torch.full([1], target[batch_index], dtype=torch.long))
             args.exit_taken[exitnum] += 1
 
