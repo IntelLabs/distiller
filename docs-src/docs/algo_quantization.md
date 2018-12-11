@@ -73,7 +73,7 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 ### Other Features
 
-- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability ro represent the values we actually care about accurately.
+- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="../imgs/quant_clipped.png"/>
    </p>
