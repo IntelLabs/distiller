@@ -205,7 +205,7 @@ For any of the methods below that require quantization-aware training, please se
 <p>Let's break down the terminology we use here:</p>
 <ul>
 <li><strong>Linear:</strong> Means a float value is quantized by multiplying with a numeric constant (the <strong>scale factor</strong>).</li>
-<li><strong>Range-Based:</strong>: Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call <strong>clipping-based</strong>, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).</li>
+<li><strong>Range-Based:</strong> Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call <strong>clipping-based</strong>, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).</li>
 </ul>
 <h3 id="asymmetric-vs-symmetric">Asymmetric vs. Symmetric</h3>
 <p>In this method we can use two modes - <strong>asymmetric</strong> and <strong>symmetric</strong>.</p>
