@@ -20,6 +20,7 @@ import logging
 import numpy as np
 import torch
 import json
+import csv
 import gym
 from gym import spaces
 import distiller
@@ -66,7 +67,8 @@ PERFORM_THINNING = True
 #reward = -1 * math.log(total_macs)
 #reward =  -1 * vloss
 
-steps_per_episode = 13  # TODO: this should not be hard-coded
+NUM_CONVS = 13
+steps_per_episode = NUM_CONVS  # TODO: this should not be hard-coded
 
 
 def do_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
@@ -99,12 +101,12 @@ def coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn
             'validate_fn': validate_fn,
             'save_checkpoint_fn': save_checkpoint_fn,
             #'action_range': (0.10, 0.95),
-            'action_range': (0.70, 0.95),
+            'action_range': (0.20, 0.85),
             'onehot_encoding': False,
             'normalize_obs': True,
             'desired_reduction': None,
-            'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top5/100) * math.log(total_macs)
-            #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs)
+            #'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top5/100) * math.log(total_macs)
+            'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top1/100) * math.log(total_macs)
             #'reward_fn': lambda top1, total_macs: -1 * max(1-top1/100, 0.25) * math.log(total_macs)
             #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs/100000)
             #'reward_fn': lambda top1, total_macs:  top1/100 * total_macs/self.dense_model_macs
@@ -175,13 +177,17 @@ class CNNEnvironment(gym.Env):
         if self.onehot_encoding:
             self.STATE_EMBEDDING_LEN += (steps_per_episode - 1)
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN,))
+        fields = ['top1', 'reward', 'total_macs', 'total_nnz']
+        with open(r'amc.csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
 
     def reset(self, init_only=False):
         """Reset the environment.
         This is invoked by the Agent.
         """
         msglogger.info("Resetting the environment (init_only={})".format(init_only))
-        self.current_layer_id = -1
+        self.current_layer_id = 0 #-1
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
         self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
@@ -265,6 +271,13 @@ class CNNEnvironment(gym.Env):
             a = max(0.05, min(a, 1 - duty/flops))
         return a
 
+
+    def save_record(self, top1, reward, total_macs, total_nnz):
+        fields = [top1, reward, total_macs, total_nnz]
+        with open(r'amc.csv', 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+
     def save_checkpoint(self, is_best=False):
         # Save the learned-model checkpoint
         scheduler = distiller.CompressionScheduler(self.model)
@@ -292,49 +305,48 @@ class CNNEnvironment(gym.Env):
         msglogger.info("action ********** (leave) {}".format(action))
         action = 1 - action
         layer_macs = self.get_macs(self.current_layer())
-        if action > 0 and self.current_layer_id > -1:
+        if action > 0 and self.current_layer_id > 0:    # skip first convolution
             actual_action = self.__remove_channels(self.current_layer_id, action, prune_what="filters")
         else:
             actual_action = 0
-        #msglogger.info("-------****---------{}".format(actual_action))
+
         layer_macs_after_action = self.get_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self.current_layer_id += 1
-        next_layer_macs = self.get_macs(self.current_layer())
+        #next_layer_macs = self.get_macs(self.current_layer())
         self._removed_macs += (layer_macs - layer_macs_after_action)
-        self._remaining_macs -= next_layer_macs
+        self._remaining_macs -= layer_macs # next_layer_macs
         #self.prev_action = 1 - actual_action
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('requested_action', action),
                               ('actual_action', 1-actual_action)]))
         distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=self.current_layer_id,
-                                        total_steps=13,
+                                        total_steps=steps_per_episode,
                                         log_freq=1, loggers=[self.tflogger])
 
         if self.episode_is_done():
             observation = self.get_final_obs()
-            reward, top1 = self.compute_reward()
+            reward, top1, total_macs, total_nnz = self.compute_reward()
             self.debug_stats['episode'] += 1
+            self.save_record(top1, reward, total_macs, total_nnz)
             if reward > self.max_reward:
                 self.max_reward = reward
                 self.save_checkpoint(is_best=True)
                 msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.debug_stats['episode'], top1))
-            self.save_checkpoint(is_best=False)
-        else:
-            observation = self._get_obs(next_layer_macs)
-            if True:
-                reward = 0
             else:
-                reward, _ = self.compute_reward()
+                self.save_checkpoint(is_best=False)
+        else:
+            observation = self._get_obs(layer_macs) #next_layer_macs)
+            reward = 0
 
         self.prev_action = 1 - action
         msglogger.info("###################### self.prev_action={}".format(self.prev_action))
         info = {}
         return observation, reward, self.episode_is_done(), info
 
-    def _get_obs4(self, macs, current_layer, conv_module):
+    def _get_obs4(self, current_layer_macs, current_layer, conv_module):
         """Produce a state embedding (i.e. an observation)"""
 
         if self.normalize_obs:
@@ -345,17 +357,17 @@ class CNNEnvironment(gym.Env):
                             current_layer.ifm_w / 32,
                             current_layer.stride[0] / 2,
                             current_layer.k / 3,
-                            macs / self.dense_model_macs,
+                            current_layer_macs / self.dense_model_macs,
                             self.removed_macs(), self.remaining_macs(), self.prev_action])
         else:
             obs = np.array([current_layer.t,
                             conv_module.out_channels, conv_module.in_channels,
                             current_layer.ifm_h, current_layer.ifm_w, current_layer.stride[0], current_layer.k,
-                            macs/self.dense_model_macs,
+                            current_layer_macs/self.dense_model_macs,
                             self.removed_macs(), self.remaining_macs(), self.prev_action])
 
         if self.onehot_encoding:
-            id = np.zeros(13)
+            id = np.zeros(NUM_CONVS)
             id[current_layer.t] = 1
             obs = np.concatenate([id, obs[1:]])
             msglogger.info("obs={}".format(obs))
@@ -363,17 +375,20 @@ class CNNEnvironment(gym.Env):
             msglogger.info("obs={}".format(Observation._make(obs)))
 
         assert len(obs) == self.STATE_EMBEDDING_LEN
-        assert (macs / self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
+        print("macs(%)={}\nremoved macs={}\nremaining macs={}".format(current_layer_macs / self.dense_model_macs,
+                                                                      self.removed_macs(),
+                                                                      self.remaining_macs()))
+        #assert (current_layer_macs / self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
+        assert (self.removed_macs() + self.remaining_macs()) <= 1
         return obs
 
-    def _get_obs(self, macs):
-        #return self._get_obs3(macs)
+    def _get_obs(self, current_layer_macs):
         current_layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, current_layer.name)
-        return self._get_obs4(macs, current_layer, conv_module)
+        return self._get_obs4(current_layer_macs, current_layer, conv_module)
 
     def get_final_obs(self):
-        """Return the final stae embedding (observation)
+        """Return the final state embedding (observation)
         The final state is reached after we traverse all of the Convolution layers.
         """
         obs = np.array([-1, 0, 0,
@@ -381,7 +396,7 @@ class CNNEnvironment(gym.Env):
                          0, self.removed_macs(), 0, 1 - self.prev_action])
 
         if self.onehot_encoding:
-            id = np.zeros(13)
+            id = np.zeros(NUM_CONVS)
             obs = np.concatenate([id, obs[1:]])
 
         assert len(obs) == self.STATE_EMBEDDING_LEN
@@ -474,7 +489,7 @@ class CNNEnvironment(gym.Env):
                               ('total_nnz', int(total_nnz))]))
         distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[self.tflogger, self.pylogger])
-        return reward, top1
+        return reward, top1, total_macs, total_nnz
 
 
 def get_dummy_input(dataset):
