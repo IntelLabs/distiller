@@ -240,7 +240,8 @@ def create_activation_stats_collectors(model, collection_phase):
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
                                                          distiller.utils.activation_channels_apoz),
-        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])})
+        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
+    })
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
@@ -342,7 +343,7 @@ def main():
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.ADC:
-        return automated_deep_compression(model, criterion, pylogger, args)
+        return automated_deep_compression(model, criterion, optimizer, pylogger, args)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -481,7 +482,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
-        if args.kd_policy is None:
+        if not hasattr(args, 'kd_policy') or args.kd_policy is None:
             output = model(inputs)
         else:
             output = args.kd_policy.forward(inputs)
@@ -503,6 +504,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                                                   optimizer=optimizer, return_loss_components=True)
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
+
             for lc in agg_loss.loss_components:
                 if lc.name not in losses:
                     losses[lc.name] = tnt.AverageValueMeter()
@@ -685,7 +687,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
             if args.loss_exits[exitnum][batch_index] < args.earlyexit_thresholds[exitnum]:
                 # take the results from early exit since lower than threshold
                 args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
-                        torch.full([1], target[batch_index], dtype=torch.long))
+                                             torch.full([1], target[batch_index], dtype=torch.long))
                 args.exit_taken[exitnum] += 1
                 earlyexit_taken = True
                 break                    # since exit was taken, do not affect the stats of subsequent exits
@@ -695,6 +697,7 @@ def earlyexit_validate_loss(output, target, criterion, args):
             args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
                     torch.full([1], target[batch_index], dtype=torch.long))
             args.exit_taken[exitnum] += 1
+
 
 def earlyexit_validate_stats(args):
     # Print some interesting summary stats for number of data points that could exit early
@@ -721,6 +724,7 @@ def earlyexit_validate_stats(args):
         msglogger.info("Accuracy Stats for exit %d: top1 = %.3f, top5 = %.3f", exitnum, top1k_stats[exitnum], top5k_stats[exitnum])
     msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
     return(total_top1, total_top5, losses_exits_stats)
+
 
 def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args, scheduler=None):
     # This sample application can be invoked to evaluate the accuracy of your model on
@@ -777,7 +781,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
     distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
 
 
-def automated_deep_compression(model, criterion, loggers, args):
+def automated_deep_compression(model, criterion, optimizer, loggers, args):
     import examples.automated_deep_compression.ADC as ADC
     HAVE_COACH_INSTALLED = True
     if not HAVE_COACH_INSTALLED:
@@ -793,13 +797,16 @@ def automated_deep_compression(model, criterion, loggers, args):
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
                           loggers=loggers, args=args)
+    train_fn = partial(train, train_loader=train_loader, criterion=criterion,
+                       loggers=loggers, args=args)
 
     if args.ADC_params is not None:
         ADC.summarize_experiment(args.ADC_params, args.dataset, args.arch, validate_fn)
         exit()
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
-    ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn, save_checkpoint_fn)
+    optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
+    ADC.do_adc(model, args.dataset, args.arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 if __name__ == '__main__':
