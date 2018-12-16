@@ -17,11 +17,16 @@
 
 $ time python3  compress_classifier.py --arch=plain20_cifar ../../../data.cifar --adc --resume=checkpoint.plain20_cifar.pth.tar --name="AMC-plain20" --lr=0.1
 
-After creating the virtual environment and installing Distiller's Python package dependencies, go ahead and install Coach's
-package dependencies using pip.  Follow up by running the setup scripts as detailed here:
-https://github.com/NervanaSystems/coach#installation.
+After creating the virtual environment and installing Distiller's Python package dependencies, go ahead and
+setup Coach per: https://github.com/NervanaSystems/coach#installation.
 
-If you are running Coach in a development environment, you need to tell the Python runtime where to find the Coach code:
+Make sure that you install Coach's package dependencies into the same virtual environment that already contains
+Distiller's dependency packages.  You do this by ensuring that Distiller's virtual environment is the active environment
+when you install Coach.
+*NOTE: you may need to update TensorFlow to the expected version:
+    $ pip3 install tensorflow==1.9.0
+
+Finally, if you are running Coach in a development environment, you need to tell the Python runtime where to find the Coach code:
 $ export PYTHONPATH=<path-to-coach-code>
 
 """
@@ -38,7 +43,7 @@ from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
-
+from rl_coach import logger
 from rl_coach.base_parameters import TaskParameters
 
 # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
@@ -77,11 +82,12 @@ def do_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn
 
 
 def coach_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
-    task_parameters = TaskParameters(framework_type="tensorflow",
-                                     experiment_path="./experiments/test")
-    extra_params = {'save_checkpoint_secs': None,
-                    'render': True}
-    task_parameters.__dict__.update(extra_params)
+    # task_parameters = TaskParameters(framework_type="tensorflow",
+    #                                  experiment_path="./experiments/test")
+    # extra_params = {'save_checkpoint_secs': None,
+    #                 'render': True}
+    # task_parameters.__dict__.update(extra_params)
+    task_parameters = TaskParameters(experiment_path=logger.get_experiment_path('adc'))
     conv_cnt = count_conv_layer(model)
 
     # Create a dictionary of parameters that Coach will handover to CNNEnvironment
@@ -98,7 +104,7 @@ def coach_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint
     if True:
         amc_cfg = distiller.utils.MutableNamedTuple({
                 #'action_range': (0.20, 0.95),
-                'action_range': (0.20, 0.70),
+                'action_range': (0.20, 0.80),
                 'onehot_encoding': False,
                 'normalize_obs': True,
                 'desired_reduction': None,
@@ -209,7 +215,7 @@ class CNNEnvironment(gym.Env):
         """
         return self._removed_macs / self.dense_model_macs
 
-    def render(self, mode, close):
+    def render(self, mode='human'):
         """Provide some feedback to the user about what's going on.
         This is invoked by the Agent.
         """
