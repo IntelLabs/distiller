@@ -58,7 +58,7 @@ import sys
 import random
 import traceback
 import logging
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from functools import partial
 import numpy as np
 import torch
@@ -124,7 +124,7 @@ parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "v
 parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
                     help='print masks sparsity table at end of each epoch')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
-                    help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
+                    help='log the parameter tensors histograms to file (WARNING: this can use significant disk space)')
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
@@ -134,8 +134,8 @@ parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='
 parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
                     help='test the sensitivity of layers to pruning')
 parser.add_argument('--sense-range', dest='sensitivity_range', type=float, nargs=3, default=[0.0, 0.95, 0.05],
-                    help='an optional paramaeter for sensitivity testing providing the range of sparsities to test.\n'
-                    'This is equaivalent to creating sensitivities = np.arange(start, stop, step)')
+                    help='an optional parameter for sensitivity testing providing the range of sparsities to test.\n'
+                    'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
 parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
 parser.add_argument('--deterministic', '--det', action='store_true',
