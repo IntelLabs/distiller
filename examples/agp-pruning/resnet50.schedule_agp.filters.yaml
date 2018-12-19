@@ -1,8 +1,8 @@
 #
-# This schedule performs filter-pruning using L1-nrom ranking and AGP for the setting the pruning-rate decay.
+# This schedule performs filter-pruning using L1-norm ranking and AGP for the setting the pruning-rate decay.
 #
 # Best Top1: 74.472 (epoch 89)
-# No. of Parameters: 12,335,296 (of 25,502,912) = 43.37% dense (51.63% sparse)
+# No. of Parameters: 12,335,296 (of 25,502,912) = 43.37% dense (56.63% sparse)
 # Total MACs: 1,822,031,872 (of 4,089,184,256) = 44.56% compute = 2.24x
 #
 # time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.0005 --compress=resnet50.schedule_agp.filters.yaml --validation-size=0   --num-best-scores=10 --name="resnet50_filters_v3.2"
