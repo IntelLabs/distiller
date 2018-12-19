@@ -509,6 +509,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 if lc.name not in losses:
                     losses[lc.name] = tnt.AverageValueMeter()
                 losses[lc.name].add(lc.value.item())
+        else:
+            losses[OVERALL_LOSS_KEY].add(loss.item())
 
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
