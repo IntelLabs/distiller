@@ -37,6 +37,7 @@ except ImportError:
 
 logger = logging.getLogger("app_cfg")
 
+
 def log_execution_env_state(app_args, gitroot='.'):
     """Log information about the execution environment.
 
@@ -61,7 +62,7 @@ def log_execution_env_state(app_args, gitroot='.'):
             return
 
         if repo.is_dirty():
-           logger.debug("Git is dirty")
+            logger.debug("Git is dirty")
         try:
             branch_name = repo.active_branch.name
         except TypeError:
