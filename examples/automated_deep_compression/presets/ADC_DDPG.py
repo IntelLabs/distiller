@@ -3,14 +3,11 @@ from rl_coach.graph_managers.basic_rl_graph_manager import BasicRLGraphManager
 from rl_coach.graph_managers.graph_manager import ScheduleParameters
 from rl_coach.base_parameters import VisualizationParameters
 from rl_coach.core_types import EnvironmentEpisodes, EnvironmentSteps
-from rl_coach.environments.gym_environment import GymEnvironmentParameters, GymVectorEnvironment
-from rl_coach.exploration_policies.additive_noise import AdditiveNoiseParameters
+from rl_coach.environments.gym_environment import GymVectorEnvironment
 from rl_coach.exploration_policies.truncated_normal import TruncatedNormalParameters
-from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
 from rl_coach.memories.memory import MemoryGranularity
 from rl_coach.base_parameters import EmbedderScheme
 from rl_coach.architectures.tensorflow_components.layers import Dense
-from rl_coach.filters.filter import InputFilter, OutputFilter
 
 steps_per_episode = 13
 
@@ -29,10 +26,11 @@ schedule_params.heatup_steps = EnvironmentEpisodes(100) #120*steps_per_episode) 
 agent_params = DDPGAgentParameters()
 agent_params.network_wrappers['actor'].input_embedders_parameters['observation'].scheme = [Dense(300)]
 agent_params.network_wrappers['actor'].middleware_parameters.scheme = [Dense(300)]
+agent_params.network_wrappers['actor'].heads_parameters[0].activation_function = 'sigmoid'
 agent_params.network_wrappers['critic'].input_embedders_parameters['observation'].scheme = [Dense(300)]
 agent_params.network_wrappers['critic'].middleware_parameters.scheme = [Dense(300)]
 agent_params.network_wrappers['critic'].input_embedders_parameters['action'].scheme = EmbedderScheme.Empty
-agent_params.network_wrappers['actor'].heads_parameters[0].activation_function = 'sigmoid'
+
 # agent_params.network_wrappers['critic'].clip_gradients = 100
 # agent_params.network_wrappers['actor'].clip_gradients = 100
 
@@ -43,9 +41,6 @@ agent_params.algorithm.discount = 1
 # Replay buffer size
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
 agent_params.exploration = TruncatedNormalParameters()
-agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-    (ConstantSchedule(0.5), EnvironmentSteps(100*steps_per_episode)),
-    (ExponentialSchedule(0.5, 0, 0.996), EnvironmentSteps(300*steps_per_episode))])
 agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
 agent_params.network_wrappers['actor'].learning_rate = 0.0001
 agent_params.network_wrappers['critic'].learning_rate = 0.001
@@ -54,7 +49,7 @@ agent_params.network_wrappers['critic'].learning_rate = 0.001
 #      Gym                   #
 ##############################
 env_params = GymVectorEnvironment()
-env_params.level = '../automated_deep_compression/ADC.py:CNNEnvironment'
+env_params.level = '../automated_deep_compression/ADC.py:DistillerWrapperEnvironment'
 
 
 vis_params = VisualizationParameters()
