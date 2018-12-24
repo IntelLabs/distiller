@@ -246,6 +246,32 @@ def density_ch(tensor):
     return 1 - sparsity_ch(tensor)
 
 
+def sparsity_blocks(tensor, block_depth):
+    """Block-wise sparsity for 4D tensors
+
+    Currently the only supported block shape is: 1 x 1 x block_depth
+    """
+    if tensor.dim() != 4:
+        return 0
+
+    block_width = 1
+    block_height = 1
+    block_volume = block_width * block_height * block_depth
+    num_blocks = volume(tensor) / block_volume
+
+    num_filters = tensor.size(0)
+    num_channels = tensor.size(1)
+    kernel_size = tensor.size(2) * tensor.size(3)
+
+    # Create a view where each block is a column
+    view1 = tensor.view(num_filters*num_channels//block_depth, block_depth, kernel_size)
+
+    # Next, compute the sums of each column (block)
+    block_sums = view1.abs().sum(dim=1)
+    nonzero_blocks = len(torch.nonzero(block_sums))
+    return 1 - nonzero_blocks/num_blocks
+
+
 def sparsity_matrix(tensor, dim):
     """Generic sparsity computation for 2D matrices"""
     if tensor.dim() != 2:

@@ -84,9 +84,9 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
     """
     def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
-        if group_type not in ['3D', 'Filters', 'Channels', 'Rows']:
-            raise ValueError("Structure {} was requested but"
-                             "currently only filter (3D) and channel ranking is supported".
+        if group_type not in ['3D', 'Filters', 'Channels', 'Rows', 'Blocks']:
+            raise ValueError("Structure {} was requested but "
+                             "currently ranking of this shape is not supported".
                              format(group_type))
 
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
@@ -98,6 +98,8 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             group_pruning_fn = self.rank_and_prune_channels
         elif self.group_type == 'Rows':
             group_pruning_fn = self.rank_and_prune_rows
+        elif self.group_type == 'Blocks':
+            group_pruning_fn = self.rank_and_prune_blocks
 
         binary_map = group_pruning_fn(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
         return binary_map
@@ -206,6 +208,63 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
                        distiller.sparsity(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_rows_to_prune, rows_mags.size(0))
+
+    @staticmethod
+    def rank_and_prune_blocks(fraction_to_prune, param, param_name=None,
+                              zeros_mask_dict=None, model=None, binary_map=None):
+        """Block-wise pruning for 4D tensors.
+
+        Currently the only supported block shape is: 1 x 1 x block_depth
+        """
+        block_width = 1
+        block_height = 1
+        block_depth = 8
+        block_volume = block_width * block_height * block_depth
+        num_blocks = distiller.volume(param) / block_volume
+
+        num_filters = param.size(0)
+        num_channels = param.size(1)
+        kernel_size = param.size(2) * param.size(3)
+
+        def rank_blocks(fraction_to_prune, param):
+            # Create a view where each block is a column
+            view1 = param.view(num_filters*num_channels//block_depth, block_depth, kernel_size)
+
+            # Next, compute the sums of each column (block)
+            block_sums = view1.abs().sum(dim=1)
+            # print("block_sums {}".format(block_sums.shape))
+
+            # Now group by channels
+            block_mags = block_sums.view(-1)  # flatten
+            k = int(fraction_to_prune * block_mags.size(0))
+            if k == 0:
+                msglogger.info("Too few blocks (%d)- can't prune %.1f%% blocks",
+                               block_mags.size(0), 100*fraction_to_prune)
+                return None, None
+
+            bottomk, _ = torch.topk(block_mags, k, largest=False, sorted=True)
+            return bottomk, block_mags
+
+        def binary_map_to_mask(binary_map, param):
+            a = binary_map.view(num_filters*num_channels//block_depth, kernel_size)
+            c = a.unsqueeze(1)
+            d = c.expand(num_filters*num_channels//block_depth, block_depth, kernel_size).contiguous()
+            return d.view(num_filters, num_channels, param.size(2), param.size(3))
+
+        if binary_map is None:
+            bottomk_blocks, block_mags = rank_blocks(fraction_to_prune, param)
+            if bottomk_blocks is None:
+                # Empty list means that fraction_to_prune is too low to prune anything
+                return
+            threshold = bottomk_blocks[-1]
+            binary_map = block_mags.gt(threshold).type(param.data.type())
+
+        if zeros_mask_dict is not None:
+            zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
+            msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
+                           distiller.sparsity_blocks(zeros_mask_dict[param_name].mask, block_depth=block_depth),
+                           fraction_to_prune, binary_map.sum().item(), num_blocks)
+        return binary_map
 
 
 def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, binary_map):
