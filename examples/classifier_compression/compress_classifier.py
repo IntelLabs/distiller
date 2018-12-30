@@ -142,6 +142,10 @@ parser.add_argument('--deterministic', '--det', action='store_true',
                     help='Ensure deterministic execution for re-producible results.')
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
+parser.add_argument('--cpu', action='store_true',
+                    help='Use CPU only. \n'
+                    'Flag not set => uses GPUs according to the --gpus flag value.'
+                    'Flag set => overrides the --gpus flag')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
@@ -289,7 +293,10 @@ def main():
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
 
-    if args.gpus is not None:
+    if args.cpu is not None or not torch.cuda.is_available():
+        # Set GPU index to -1 if using CPU
+        args.gpus = -1
+    elif args.gpus is not None:
         try:
             args.gpus = [int(s) for s in args.gpus.split(',')]
         except ValueError:
@@ -331,10 +338,15 @@ def main():
     if args.resume:
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
-        model.cuda()
+        if args.gpus != -1:
+            model.cuda()
 
     # Define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda()
+    if args.gpus == -1:
+        criterion = nn.CrossEntropyLoss()
+    else:
+        criterion = nn.CrossEntropyLoss().cuda()
+
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
@@ -371,7 +383,8 @@ def main():
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
-        model.cuda()
+        if args.gpus != -1:
+            model.cuda()
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
 
@@ -475,7 +488,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
     for train_step, (inputs, target) in enumerate(train_loader):
         # Measure data loading time
         data_time.add(time.time() - end)
-        inputs, target = inputs.to('cuda'), target.to('cuda')
+        if args.gpus != -1:
+            inputs, target = inputs.to('cuda'), target.to('cuda')
 
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
@@ -596,7 +610,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     end = time.time()
     for validation_step, (inputs, target) in enumerate(data_loader):
         with torch.no_grad():
-            inputs, target = inputs.to('cuda'), target.to('cuda')
+            if args.gpus != -1:
+                inputs, target = inputs.to('cuda'), target.to('cuda')
             # compute output from model
             output = model(inputs)
 
@@ -671,7 +686,10 @@ def earlyexit_validate_loss(output, target, criterion, args):
     # but with a grouping of samples equal to the batch size.
     # Note that final group might not be a full batch - so determine actual size.
     this_batch_size = target.size()[0]
-    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
+    if args.gpus != -1:
+        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
+    else:
+        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none')
     for exitnum in range(args.num_exits):
         # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
@@ -738,7 +756,8 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
                                                           args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
                                                           args.qe_no_clip_layers, args.qe_per_channel)
         quantizer.prepare_model()
-        model.cuda()
+        if args.gpus != -1:
+            model.cuda()
 
     top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
 
