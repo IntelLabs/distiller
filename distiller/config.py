@@ -66,6 +66,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
         lr_policies = []
         for policy_def in sched_dict['policies']:
             policy = None
+            completion_required = False
             if 'pruner' in policy_def:
                 try:
                     instance_name, args = __policy_params(policy_def, 'pruner')
@@ -76,6 +77,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 assert instance_name in pruners, "Pruner {} was not defined in the list of pruners".format(instance_name)
                 pruner = pruners[instance_name]
                 policy = distiller.PruningPolicy(pruner, args)
+                completion_required = True
 
             elif 'regularizer' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'regularizer')
@@ -91,6 +93,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
                 quantizer = quantizers[instance_name]
                 policy = distiller.QuantizationPolicy(quantizer)
+                completion_required = True
 
             elif 'lr_scheduler' in policy_def:
                 # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
@@ -103,11 +106,12 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 assert instance_name in extensions, "Extension {} was not defined in the list of extensions".format(instance_name)
                 extension = extensions[instance_name]
                 policy = extension
+                completion_required = True
 
             else:
                 raise ValueError("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]".format(policy_def))
 
-            add_policy_to_scheduler(policy, policy_def, scheduler)
+            add_policy_to_scheduler(policy, policy_def, scheduler, completion_required)
 
         # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
         lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer)
@@ -117,7 +121,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 instance_name)
             lr_scheduler = lr_schedulers[instance_name]
             policy = distiller.LRPolicy(lr_scheduler)
-            add_policy_to_scheduler(policy, policy_def, scheduler)
+            add_policy_to_scheduler(policy, policy_def, scheduler, assert_policy_completion=False)
 
     except AssertionError:
         # propagate the assertion information
@@ -129,13 +133,15 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
     return scheduler
 
 
-def add_policy_to_scheduler(policy, policy_def, scheduler):
+def add_policy_to_scheduler(policy, policy_def, scheduler, assert_policy_completion=False):
     if 'epochs' in policy_def:
-        scheduler.add_policy(policy, epochs=policy_def['epochs'])
+        scheduler.add_policy(policy, epochs=policy_def['epochs'],
+                             assert_policy_completion=assert_policy_completion)
     else:
         scheduler.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
                             ending_epoch=policy_def['ending_epoch'],
-                            frequency=policy_def['frequency'])
+                            frequency=policy_def['frequency'],
+                            assert_policy_completion=assert_policy_completion)
 
 
 def file_config(model, optimizer, filename, scheduler=None):

@@ -53,6 +53,7 @@ models, or with the provided sample models:
 import math
 import argparse
 import time
+import operator
 import os
 import sys
 import random
@@ -269,7 +270,7 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
+    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'top5': 0})
                    for i in range(args.num_best_scores)]
 
     if args.deterministic:
@@ -384,7 +385,7 @@ def main():
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
-                                         frequency=1)
+                                         frequency=1, assert_policy_completion=True)
 
         msglogger.info('\nStudent-Teacher knowledge distillation enabled:')
         msglogger.info('\tTeacher Model: %s', args.kd_teacher)
@@ -392,6 +393,11 @@ def main():
         msglogger.info('\tLoss Weights (distillation | student | teacher): %s',
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
+
+    if compression_scheduler and compression_scheduler.global_policy_end_epoch is not None:
+        if compression_scheduler.global_policy_end_epoch >= (start_epoch + args.epochs):
+            msglogger.warning('scheduler requires at least {} epochs, but only {} are sanctioned'.format(
+                compression_scheduler.global_policy_end_epoch, args.epochs))
 
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
@@ -426,18 +432,24 @@ def main():
         if compression_scheduler:
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
-        # Update the list of top scores achieved so far, and save the checkpoint
-        is_best = top1 > best_epochs[-1].top1
-        if top1 > best_epochs[0].top1:
-            best_epochs[0].epoch = epoch
-            best_epochs[0].top1 = top1
-            # Keep best_epochs sorted such that best_epochs[0] is the lowest top1 in the best_epochs list
-            best_epochs = sorted(best_epochs, key=lambda score: score.top1)
-        for score in reversed(best_epochs):
-            if score.top1 > 0:
-                msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
+        if (not compression_scheduler) or (compression_scheduler.global_policy_end_epoch is None
+                ) or (compression_scheduler.global_policy_end_epoch <= epoch):
+            # Update the list of top scores achieved since all policies have concluded
+            if top1 > best_epochs[-1].top1:
+                best_epochs[-1].epoch = epoch
+                best_epochs[-1].top1 = top1
+                best_epochs[-1].top5 = top5
+                # Keep best_epochs sorted from best to worst
+                best_epochs = sorted(best_epochs, key=operator.attrgetter('top1', 'top5'), reverse=True)
+            for score in best_epochs:
+                if score.top1 > 0:
+                    msglogger.info('==> Best Top1: %.3f Top5: %.3f on epoch: %d',
+                                   score.top1, score.top5, score.epoch)
+
+        is_best = (epoch == best_epochs[0].epoch) and best_epochs[0].top1
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
-                                 best_epochs[-1].top1, is_best, args.name, msglogger.logdir)
+                                 round(best_epochs[0].top1, 3) if best_epochs[0].top1 else None,
+                                 is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
