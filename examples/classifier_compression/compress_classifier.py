@@ -79,6 +79,7 @@ import apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
+import examples.automated_deep_compression.ADC as ADC
 
 
 # Logger handle
@@ -150,8 +151,7 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
-parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
-parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
+parser.add_argument('--amc', dest='AMC', action='store_true', help='temp HACK')
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                     help='Display the confusion matrix')
 parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
@@ -198,6 +198,7 @@ quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
                          help='Enable per-channel quantization of weights (per output channel)')
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
+ADC.add_automl_args(parser)
 
 
 def check_pytorch_version():
@@ -244,7 +245,8 @@ def create_activation_stats_collectors(model, collection_phase):
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
                                                          distiller.utils.activation_channels_apoz),
-        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
+        # This is disabled by default, because it adds significant time to training
+        # "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
     })
     activations_collectors[collection_phase] = collectors
     return activations_collectors
@@ -327,6 +329,7 @@ def main():
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
+
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -352,7 +355,7 @@ def main():
     msglogger.info('Optimizer Type: %s', type(optimizer))
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
-    if args.ADC:
+    if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
 
     # This sample application can be invoked to produce various summary reports.
@@ -453,13 +456,11 @@ def main():
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
 
 
-OVERALL_LOSS_KEY = 'Overall Loss'
-OBJECTIVE_LOSS_KEY = 'Objective Loss'
-
-
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
+    OVERALL_LOSS_KEY = 'Overall Loss'
+    OBJECTIVE_LOSS_KEY = 'Objective Loss'
     losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter()),
                           (OBJECTIVE_LOSS_KEY, tnt.AverageValueMeter())])
 
@@ -795,11 +796,6 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    import examples.automated_deep_compression.ADC as ADC
-    HAVE_COACH_INSTALLED = True
-    if not HAVE_COACH_INSTALLED:
-        raise ValueError("ADC is currently experimental and uses non-public Coach features")
-
     if not isinstance(loggers, list):
         loggers = [loggers]
 
@@ -813,13 +809,9 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
-    if args.ADC_params is not None:
-        ADC.summarize_experiment(args.ADC_params, args.dataset, args.arch, validate_fn)
-        exit()
-
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
-    ADC.do_adc(model, args.dataset, args.arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+    ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 if __name__ == '__main__':
