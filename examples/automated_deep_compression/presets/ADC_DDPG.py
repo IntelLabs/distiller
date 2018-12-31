@@ -5,6 +5,8 @@ from rl_coach.base_parameters import VisualizationParameters
 from rl_coach.core_types import EnvironmentEpisodes, EnvironmentSteps
 from rl_coach.environments.gym_environment import GymVectorEnvironment
 from rl_coach.exploration_policies.truncated_normal import TruncatedNormalParameters
+from rl_coach.exploration_policies.additive_noise import AdditiveNoiseParameters
+
 from rl_coach.memories.memory import MemoryGranularity
 from rl_coach.base_parameters import EmbedderScheme
 from rl_coach.architectures.tensorflow_components.layers import Dense
@@ -15,10 +17,10 @@ steps_per_episode = 13
 # Block Scheduling #
 ####################
 schedule_params = ScheduleParameters()
-schedule_params.improve_steps = EnvironmentEpisodes(400)
-schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(3) #3)  # Neta: (1000)
-schedule_params.evaluation_steps = EnvironmentEpisodes(1) #1)  # Neta: 0
-schedule_params.heatup_steps = EnvironmentEpisodes(100) #120*steps_per_episode) # Neta (2)
+schedule_params.improve_steps = EnvironmentEpisodes(800)
+schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(5)
+schedule_params.evaluation_steps = EnvironmentEpisodes(1)  # Neta: 0
+schedule_params.heatup_steps = EnvironmentEpisodes(100)
 
 #####################
 # DDPG Agent Params #
@@ -38,11 +40,17 @@ agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
 agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(1)
 agent_params.algorithm.heatup_using_network_decisions = True
 agent_params.algorithm.discount = 1
+
+# Shadi
+#agent_params.algorithm.use_non_zero_discount_for_terminal_states = True  # <===========
+
 # Replay buffer size
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
+#agent_params.exploration = AdditiveNoiseParameters() #
 agent_params.exploration = TruncatedNormalParameters()
-agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
-agent_params.network_wrappers['actor'].learning_rate = 0.0001
+#agent_params.exploration.evaluation_noise_percentage = 0.01  # Neta new
+agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)  # <=== 1
+agent_params.network_wrappers['actor'].learning_rate = 0.0001  # 0.0001
 agent_params.network_wrappers['critic'].learning_rate = 0.001
 
 ##############################

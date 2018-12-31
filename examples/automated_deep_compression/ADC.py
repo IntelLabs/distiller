@@ -17,6 +17,8 @@
 
 $ time python3  compress_classifier.py --arch=plain20_cifar ../../../data.cifar --adc --resume=checkpoint.plain20_cifar.pth.tar --name="AMC-plain20" --lr=0.1
 
+Coach installation:
+===================
 After creating the virtual environment and installing Distiller's Python package dependencies, go ahead and
 setup Coach per: https://github.com/NervanaSystems/coach#installation.
 
@@ -26,8 +28,33 @@ when you install Coach.
 *NOTE: you may need to update TensorFlow to the expected version:
     $ pip3 install tensorflow==1.9.0
 
-Finally, if you are running Coach in a development environment, you need to tell the Python runtime where to find the Coach code:
+Finally, if you are running Coach in a development environment, you need to tell the Python runtime where to find
+the Coach code:
 $ export PYTHONPATH=<path-to-coach-code>
+
+
+Spinningup installation:
+========================
+
+Spinup require that we use exactly Python 3.6 so if you are not using this Python version see the instructions here:
+    http://ubuntuhandbook.org/index.php/2017/07/install-python-3-6-1-in-ubuntu-16-04-lts/
+    $ sudo update-alternatives --config python3
+
+For Python 3.6 you may also need to install a new virtual-env:
+    $ sudo apt-get install python3.6-venv
+
+Then create and activate your venv, and populate it with the Distiller packages:
+    $ python3 -m venv  distiller_env_python3.6
+    $ source distiller_env_python3.6/bin/activate
+    $ pip3 install -r requirements.txt
+
+You want to install Spinup into this venv.  First clone Spinup and then install it into your venv:
+    $ cd <spinningup-repo>
+    $ sudo apt-get install python3.6-dev
+    $ pip3 install -e .
+
+
+https://spinningup.openai.com/en/latest/user/installation.html?highlight=license
 
 """
 import math
@@ -44,20 +71,15 @@ from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
-from rl_coach import logger
-from rl_coach.base_parameters import TaskParameters
 
-# When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
-# Coach to create and use our DistillerWrapperEnvironment environment.
-# So Distiller calls Coach, which creates the environment, trains the agent, and ends.
-from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
-# Coach imports
-from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
-from rl_coach.core_types import EnvironmentSteps
+
+# Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
+#RLLIB = "spinup"
+RLLIB = "coach"
 
 
 msglogger = logging.getLogger()
-Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
+Observation = namedtuple('Observation', ['n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
 ALMOST_ONE = 0.9999
 
 
@@ -69,14 +91,23 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
         argparser (argparse.ArgumentParser): Existing parser to which to add the arguments
     """
     group = argparser.add_argument_group('AutoML Compression Arguments')
+    group.add_argument('--amc-protocol', choices=["mac-constrained",
+                                                  "param-constrained",
+                                                  "accuracy-guaranteed",
+                                                  "experimental"],
+                       default="mac-constrained", help='Compression-policy search protocol')
     group.add_argument('--amc-ft-epochs', type=int, default=1,
                        help='The number of epochs to fine-tune each discovered network')
     group.add_argument('--amc-save-chkpts', action='store_true', default=False,
                        help='Save checkpoints of all discovered networks')
     group.add_argument('--amc-action-range',  type=float, nargs=2, default=[0.0, 0.80],
                        help='Density action range (a_min, a_max)')
-    group.add_argument('--amc-thinning', action='store_true', default=False,
-                       help='Perform netowrk thinning after altering each layer')
+    group.add_argument('--amc-heatup-epochs', type=int, default=100,
+                       help='The number of epochs for heatup/exploration')
+    group.add_argument('--amc-training-epochs', type=int, default=300,
+                       help='The number of epochs for training/exploitation')
+    # group.add_argument('--amc-thinning', action='store_true', default=False,
+    #                    help='Perform netowrk thinning after altering each layer')
 
 
 def log_amc_config(amc_cfg):
@@ -97,17 +128,54 @@ def count_conv_layer(model):
     return conv_cnt
 
 
+if RLLIB == "spinup":
+    import tensorflow as tf
+    from spinup.algos.ddpg import core
+    from .ddpg import ddpg
+
+    def ddpg_spinup(env1, env2):
+        from spinup.utils.run_utils import setup_logger_kwargs
+        exp_name = "Test"
+        seed = 0
+        # The number and size of the Actor-Critic MLP hidden layers
+        layers, hid = 2, 300
+        logger_kwargs = setup_logger_kwargs(exp_name)  # ,  seed)
+
+        ddpg.ddpg(env=env1, test_env=env2, actor_critic=core.mlp_actor_critic,
+                  ac_kwargs=dict(hidden_sizes=[hid]*layers, output_activation=tf.sigmoid),
+                  gamma=1,  # discount rate
+                  seed=seed,
+                  epochs=400,
+                  replay_size=2000,
+                  batch_size=64,
+                  start_steps=env1.amc_cfg.exploration_duration,
+                  # steps_per_epoch=50 * env1.num_layers()  # every 50 episodes perform 10 episodes of testing
+                  act_noise=0.5,
+                  pi_lr=1e-4,
+                  q_lr=1e-3,
+                  logger_kwargs=logger_kwargs)
+
+
+if RLLIB == "coach":
+    from rl_coach.base_parameters import TaskParameters
+    from rl_coach.core_types import EnvironmentSteps
+    from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
+
+    # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
+    # Coach to create and use our DistillerWrapperEnvironment environment.
+    # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
+    from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
+
+
 def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
-    perform_thinning = args.amc_thinning
-    num_training_epochs = args.amc_ft_epochs
+    perform_thinning = True  # args.amc_thinning
+    num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
+    num_heatup_epochs = args.amc_heatup_epochs
+    num_training_epochs = args.amc_training_epochs
     np.random.seed()
-    #task_parameters = TaskParameters(experiment_path=logger.get_experiment_path('adc'))
-    coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
-    os.mkdir(coach_logs_dir)
-    task_parameters = TaskParameters(experiment_path=coach_logs_dir)
     conv_cnt = count_conv_layer(model)
 
     # Create a dictionary of parameters that Coach will handover to DistillerWrapperEnvironment
@@ -121,45 +189,61 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
                 'dataset': dataset,
                 'arch': arch,
                 'optimizer_data': optimizer_data})
-    if True:
-        amc_cfg = distiller.utils.MutableNamedTuple({
-                'perform_thinning': perform_thinning,
-                'num_training_epochs': num_training_epochs,
-                'action_range': action_range,
-                'normalize_obs': False,
-                'desired_reduction': None,
-                'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top1/100) * math.log(total_macs),
-                'conv_cnt': conv_cnt,
-                'max_reward': -1000})
+
+    amc_cfg = distiller.utils.MutableNamedTuple({
+            'protocol': args.amc_protocol,
+            'perform_thinning': perform_thinning,
+            'num_ft_epochs': num_ft_epochs,
+            'action_range': action_range,
+            'conv_cnt': conv_cnt})
+    if args.amc_protocol == "accuracy-guaranteed":
+        amc_cfg.target_density = None
+        amc_cfg.reward_fn = lambda top1, top5, vloss, total_macs: -1 * (1-top1/100) * math.log(total_macs)
+        amc_cfg.action_constrain_fn = None
+    elif args.amc_protocol == "mac-constrained":
+        amc_cfg.target_density = 0.5
+        amc_cfg.reward_fn = lambda top1, top5, vloss, total_macs: top1/100
+        amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
+    elif args.amc_protocol == "mac-constrained-experimental":
+        amc_cfg.target_density = 0.5
+        amc_cfg.reward_fn = DistillerWrapperEnvironment.experimental_reward_fn
+        amc_cfg.action_constrain_fn = None
     else:
-        amc_cfg = distiller.utils.MutableNamedTuple({
-                'perform_thinning': perform_thinning,
-                'num_training_epochs': num_training_epochs,
-                'action_range': action_range,
-                'normalize_obs': False,
-                'desired_reduction': 0.8,
-                'reward_fn': lambda top1, top5, vloss, total_macs: top1/100,
-                'conv_cnt': conv_cnt,
-                'max_reward': -1000})
+        raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
-    # These parameters are passed to the Distiller environment
-    graph_manager.env_params.additional_simulator_parameters = {'model': model,
-                                                                'app_args': app_args,
-                                                                'amc_cfg': amc_cfg,
-                                                                'services': services}
     steps_per_episode = conv_cnt
-    amc_cfg.exploration_noise = 0.5
-    amc_cfg.exploration_duration = 100 * steps_per_episode
-    amc_cfg.exploitation_decay = 0.996
-    amc_cfg.exploitation_duration = 300 * steps_per_episode
+    amc_cfg.heatup_noise = 0.5
+    amc_cfg.heatup_duration = num_heatup_epochs * steps_per_episode
+    amc_cfg.initial_training_noise = 0.5
+    amc_cfg.training_noise_decay = 0.996  # 0.998
+    amc_cfg.training_noise_duration = num_training_epochs * steps_per_episode
 
-    agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-        (ConstantSchedule(amc_cfg.exploration_noise), EnvironmentSteps(amc_cfg.exploration_duration)),
-        (ExponentialSchedule(amc_cfg.exploration_noise, 0, amc_cfg.exploitation_decay),
-         EnvironmentSteps(amc_cfg.exploitation_duration))])
+    if RLLIB == "spinup":
+        msglogger.info("AMC: Using spinup")
+        env1 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        ddpg_spinup(env1, env2)
+    else:
+        msglogger.info("AMC: Using coach")
 
-    graph_manager.create_graph(task_parameters)
-    graph_manager.improve()
+        # These parameters are passed to the Distiller environment
+        graph_manager.env_params.additional_simulator_parameters = {'model': model,
+                                                                    'app_args': app_args,
+                                                                    'amc_cfg': amc_cfg,
+                                                                    'services': services}
+
+        agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
+            (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(amc_cfg.heatup_duration)),
+            (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
+             EnvironmentSteps(amc_cfg.training_noise_duration))])
+
+        # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
+
+        coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
+        os.mkdir(coach_logs_dir)
+        task_parameters = TaskParameters(experiment_path=coach_logs_dir)
+        graph_manager.create_graph(task_parameters)
+        graph_manager.improve()
 
 
 class DistillerWrapperEnvironment(gym.Env):
@@ -181,7 +265,8 @@ class DistillerWrapperEnvironment(gym.Env):
         msglogger.info("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
         log_amc_config(amc_cfg)
 
-        self.debug_stats = {'episode': 0}
+        self.episode = 0
+        self.best_reward = -1000
         self.action_low = amc_cfg.action_range[0]
         self.action_high = amc_cfg.action_range[1]
         # Gym spaces documentation: https://gym.openai.com/docs/
@@ -189,7 +274,8 @@ class DistillerWrapperEnvironment(gym.Env):
         self.action_space.default_action = self.action_low
 
         self.STATE_EMBEDDING_LEN = len(Observation._fields)
-        self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN,))
+        #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
+        self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
         self.create_network_record_file()
 
     def reset(self, init_only=False):
@@ -201,14 +287,13 @@ class DistillerWrapperEnvironment(gym.Env):
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
         self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
-        self._remaining_macs = self.dense_model_macs
+        # self._remaining_macs = self.dense_model_macs
         self._removed_macs = 0
         self.action_history = []
+        self.agent_action_history = []
         if init_only:
             return
-
-        layer_macs = self.get_layer_macs(self.current_layer())
-        initial_observation = self._get_obs(layer_macs)
+        initial_observation = self.get_obs()
         return initial_observation
 
     def num_layers(self):
@@ -226,12 +311,6 @@ class DistillerWrapperEnvironment(gym.Env):
     def episode_is_done(self):
         return self.current_layer_id == self.num_layers()
 
-    def remaining_macs(self):
-        """Return the amount of MACs remaining in the model's unprocessed Convolution layers.
-        This is normalized to the range 0..1
-        """
-        return self._remaining_macs / self.dense_model_macs
-
     def removed_macs(self):
         """Return the amount of MACs removed so far.
         This is normalized to the range 0..1
@@ -247,168 +326,156 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.info("Starting a new episode")
             msglogger.info("+" + "-" * 50 + "+")
 
-        msglogger.info("Environment: current_layer_id=%d" % self.current_layer_id)
+        msglogger.info("Render Environment: current_layer_id=%d" % self.current_layer_id)
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
-    def get_action(self, a):
+    def get_action(self, pruning_action):
+        """Compute a resource-constrained action"""
         reduced = self._removed_macs
-        rest = self._remaining_macs * self.action_high
-        target = self.amc_cfg.desired_reduction * self.dense_model_macs
+        rest = self.rest_macs_raw() * self.action_high
+        target_reduction = (1 - self.amc_cfg.target_density) * self.dense_model_macs
 
-        duty = target - (reduced + rest)
+        duty = target_reduction - (reduced + rest)
+        #flops = self.get_layer_macs(self.current_layer()) + self.get_layer_macs(self.get_layer(self.current_layer_id+1))
         flops = self.get_layer_macs(self.current_layer())
-        a_final = max(a, duty/flops)
-        a_final = min(a_final, self.action_high)
+        assert flops > 0
+        #pruning_action_final = min(self.action_high, max(pruning_action, duty/flops))
+        pruning_action_final = np.clip(pruning_action, max(pruning_action, duty/flops), self.action_high)
+        #pruning_action_final = min(self.action_high, max(pruning_action, np.random.normal(1, 0.25) * duty/flops))
+        if pruning_action_final != pruning_action:
+            msglogger.info("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
+                           format(pruning_action, pruning_action_final, reduced/self.dense_model_macs,
+                                  rest/self.dense_model_macs, 1-self.amc_cfg.target_density,
+                                  duty/self.dense_model_macs,
+                                  flops/self.dense_model_macs))
+        return pruning_action_final
 
-        if a_final != a:
-            msglogger.info("action ********** a={}==>a_final={:.2f}: reduced={:.2f} remaining={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
-                           format(a, a_final, reduced/self.dense_model_macs,
-                                  self.remaining_macs(),
-                                  rest/self.dense_model_macs, self.amc_cfg.desired_reduction,
-                                  duty/self.dense_model_macs, flops/self.dense_model_macs))
-        return a_final
-
-    def create_network_record_file(self):
-        """Create the CSV file and write the column names"""
-        fields = ['top1', 'reward', 'total_macs', 'normalized_macs', 'total_nnz', 'ckpt_name', 'action_history']
-        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
-
-    def record_network_details(self, top1, reward, total_macs, normalized_macs, total_nnz, action_history):
-        """Write the details of one network to a CSV file and create a checkpoint file"""
-        if reward > self.amc_cfg.max_reward:
-            self.amc_cfg.max_reward = reward
-            ckpt_name = self.save_checkpoint(is_best=True)
-            msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.debug_stats['episode'], top1))
-        else:
-            ckpt_name = self.save_checkpoint(is_best=False)
-
-        fields = [top1, reward, total_macs, normalized_macs, total_nnz, ckpt_name, action_history]
-        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
-
-    def create_scheduler(self):
-        # if self.amc_cfg.perform_thinning:
-        #     # We don't want to apply the masks if we performed thinning
-        #     return None
-        scheduler = distiller.CompressionScheduler(self.model)
-        masks = {param_name: masker.mask for param_name, masker in self.zeros_mask_dict.items()}
-        scheduler.load_state_dict(state={'masks_dict': masks})
-        return scheduler
-
-    def save_checkpoint(self, is_best=False):
-        # Save the learned-model checkpoint
-        scheduler = self.create_scheduler()
-        episode = self.debug_stats['episode']
-        episode = str(episode).zfill(3)
-        if is_best:
-            fname = "BEST_adc_episode_{}".format(episode)
-        else:
-            fname = "adc_episode_{}".format(episode)
-
-        self.services.save_checkpoint_fn(epoch=self.debug_stats['episode'], model=self.model,
-                                         scheduler=scheduler, name=fname)
-        return fname
-
-    def step(self, action):
+    def step(self, pruning_action):
         """Take a step, given an action.
 
-        The action represents the desired density.
+        The action represents the desired sparsity.
         This function is invoked by the Agent.
         """
-        msglogger.info("env.step - current_layer_id={}\n\tAgent action={}".format(self.current_layer_id, action))
-        assert action == 0 or (action >= self.action_low-0.001 and action <= self.action_high+0.001)
-        if self.amc_cfg.desired_reduction is not None:
-            action = self.get_action(action)
-            msglogger.info("Constrained action={} (leave)".format(action))
-        action = 1 - action
+        msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
+        msglogger.info("\tAgent pruning_action={}".format(pruning_action))
+        pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
+        msglogger.info("\tAgent clipped pruning_action={}".format(pruning_action))
+        self.agent_action_history.append(pruning_action)
+        if self.amc_cfg.protocol == "mac-constrained":
+            pruning_action = self.get_action(pruning_action)
+            msglogger.info("Constrained pruning_action={}".format(pruning_action))
+
+        _, total_macs_before, _ = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
         layer_macs = self.get_layer_macs(self.current_layer())
-        msglogger.info("\tlayer_macs={} removed_macs={:.2f} remaining_macs={:.2f}".format(layer_macs,
-                                                                                          self.removed_macs(),
-                                                                                          self.remaining_macs()))
-        if action > 0 and self.current_layer_id >= 0:
-            actual_action = self.__remove_structures(self.current_layer_id,
-                                                     fraction_to_prune=action,
-                                                     prune_what="filters")
+        msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
+        msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
+        msglogger.info("\trest_macs={:.2f}".format(self.rest_macs()))
+
+        if pruning_action > 0:
+            pruning_action = self.__remove_structures(self.current_layer_id,
+                                                      fraction_to_prune=pruning_action,
+                                                      prune_what="filters")
         else:
-            actual_action = 0
-        self.action_history.append(actual_action)
+            pruning_action = 0
+
+        self.action_history.append(pruning_action)
+        _, total_macs_after, _ = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
         layer_macs_after_action = self.get_layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self.current_layer_id += 1
-        self._removed_macs += (layer_macs - layer_macs_after_action)
-        self._remaining_macs -= layer_macs # next_layer_macs
+        self._removed_macs += (total_macs_before - total_macs_after)
+
+        msglogger.info("actual_action={}".format(pruning_action))
+        msglogger.info("layer_macs={} layer_macs_after_action={} removed now={}".format(layer_macs,
+                                                                                        layer_macs_after_action,
+                                                                                        (layer_macs - layer_macs_after_action)))
+        msglogger.info("self._removed_macs={}".format(self._removed_macs))
+        assert (layer_macs_after_action / layer_macs) == (1 - pruning_action)
 
         stats = ('Peformance/Validation/',
-                 OrderedDict([('requested_action', action),
-                              ('actual_action', 1-actual_action)]))
-        distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=self.current_layer_id,
+                 OrderedDict([('requested_action', pruning_action)]))
+
+        distiller.log_training_progress(stats, None,
+                                        self.episode, steps_completed=self.current_layer_id,
                                         total_steps=self.amc_cfg.conv_cnt, log_freq=1, loggers=[self.tflogger])
 
         if self.episode_is_done():
+            msglogger.info("Episode is ending")
             observation = self.get_final_obs()
             reward, top1, total_macs, total_nnz = self.compute_reward()
-            self.debug_stats['episode'] += 1
-            normalized_macs = total_macs/self.dense_model_macs * 100
-            self.record_network_details(top1, reward, total_macs, normalized_macs, total_nnz, self.action_history)
+            self.episode += 1
+            normalized_macs = total_macs / self.dense_model_macs * 100
+            normalized_nnz = total_nnz / self.dense_model_size * 100
+            self.record_network_details(top1, reward, total_macs, normalized_macs,
+                                        normalized_nnz, self.action_history, self.agent_action_history)
         else:
-            observation = self._get_obs(layer_macs)
+            observation = self.get_obs()
             reward = 0
 
-        self.prev_action = 1 - action
-        msglogger.info("###################### self.prev_action={}".format(self.prev_action))
+        self.prev_action = pruning_action
+        # msglogger.info("###################### self.prev_action={}".format(self.prev_action))
         info = {}
         return observation, reward, self.episode_is_done(), info
 
-    def _get_obs4(self, current_layer_macs, current_layer, conv_module):
+    def one_hot(self, n, r):
+        """Produce a one-hot representation of the layer id"""
+        #return [1 if i == n else 0 for i in range(r)]
+        return [n]
+
+    def get_obs(self):
         """Produce a state embedding (i.e. an observation)"""
 
-        if self.amc_cfg.normalize_obs:
-            # TODO: this should be normalized per the real values of the dense layer!!!!
-            obs = np.array([current_layer.t,
-                            conv_module.out_channels / 512,
-                            conv_module.in_channels / 512,
-                            current_layer.ifm_h / 32,
-                            current_layer.ifm_w / 32,
-                            current_layer.stride[0] / 2,
-                            current_layer.k / 3,
-                            current_layer_macs / self.dense_model_macs,
-                            self.removed_macs(), self.remaining_macs(), self.prev_action])
-        else:
-            obs = np.array([current_layer.t,
-                            conv_module.out_channels, conv_module.in_channels,
-                            current_layer.ifm_h, current_layer.ifm_w, current_layer.stride[0], current_layer.k,
-                            current_layer_macs/self.dense_model_macs,
-                            self.removed_macs(), self.remaining_macs(), self.prev_action])
-
-        msglogger.info("obs={}".format(Observation._make(obs)))
-
-        assert len(obs) == self.STATE_EMBEDDING_LEN
-        print("macs(%)={}\nremoved macs={}\nremaining macs={}".format(current_layer_macs / self.dense_model_macs,
-                                                                      self.removed_macs(),
-                                                                      self.remaining_macs()))
-        #assert (current_layer_macs / self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
-        assert (self.removed_macs() + self.remaining_macs()) <= 1
-        return obs
-
-    def _get_obs(self, current_layer_macs):
+        current_layer_macs = self.get_layer_macs(self.current_layer())
+        current_layer_macs_pct = current_layer_macs/self.dense_model_macs
         current_layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, current_layer.name)
-        return self._get_obs4(current_layer_macs, current_layer, conv_module)
+        obs = [#current_layer.t,
+                conv_module.out_channels,
+                conv_module.in_channels,
+                current_layer.ifm_h,
+                current_layer.ifm_w,
+                current_layer.stride[0],
+                current_layer.k,
+                current_layer_macs_pct*100,
+                self.removed_macs()*100,
+                self.rest_macs()*100,
+                self.prev_action*100]
+        onehot_id = self.one_hot(self.current_layer_id, self.num_layers())
+        msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+        obs = np.array(onehot_id + obs)
+        assert (self.removed_macs() + current_layer_macs_pct + self.rest_macs()) <= 1
+        return obs
 
     def get_final_obs(self):
         """Return the final state embedding (observation)
         The final state is reached after we traverse all of the Convolution layers.
         """
-        obs = np.array([-1, 0, 0,
-                         0, 0, 0, 0,
-                         0, self.removed_macs(), 0, 1 - self.prev_action])
-
-        assert len(obs) == self.STATE_EMBEDDING_LEN
+        obs = [#-1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                self.removed_macs()*100,
+                self.rest_macs()*100,
+                self.prev_action*100]
+        onehot_id = self.one_hot(self.num_layers(), self.num_layers())
+        msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+        obs = np.array(onehot_id + obs)
         return obs
+
+    def rest_macs_raw(self):
+        """Return the number of remaining MACs in the layers following the current layer"""
+        rest = 0
+        for layer_id in range(self.current_layer_id, self.num_layers()):
+            rest += self.get_layer_macs(self.get_layer(layer_id + 1))
+        return rest
+
+    def rest_macs(self):
+        return self.rest_macs_raw() / self.dense_model_macs
 
     def get_layer_macs(self, layer):
         """Return the number of MACs required to compute <layer>'s Convolution"""
@@ -428,7 +495,10 @@ class DistillerWrapperEnvironment(gym.Env):
         return dense_macs * distiller.density_3D(conv_p)  # Filter pruning
 
     def __remove_structures(self, idx, fraction_to_prune, prune_what="channels"):
-        """Physically remove channels and corresponding filters from the model"""
+        """Physically remove channels and corresponding filters from the model
+
+        Returns the compute-sparsity of the layer with index 'idx'
+        """
         if idx not in range(self.num_layers()):
             raise ValueError("idx=%d is not in correct range (0-%d)" % (idx, self.num_layers()))
         if fraction_to_prune < 0:
@@ -441,6 +511,7 @@ class DistillerWrapperEnvironment(gym.Env):
             fraction_to_prune = ALMOST_ONE
 
         layer = self.conv_layers[idx]
+        macs_before = self.get_layer_macs(layer)
         conv_pname = layer.name + ".weight"
         conv_p = distiller.model_find_param(self.model, conv_pname)
 
@@ -472,12 +543,15 @@ class DistillerWrapperEnvironment(gym.Env):
         if self.amc_cfg.perform_thinning:
             remove_structures(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
             conv_p = distiller.model_find_param(self.model, conv_pname)
-            return distiller.volume(conv_p) / layer.weights_vol
-        actual_sparsity = calculate_sparsity(conv_p)
-        return actual_sparsity
+            #return distiller.volume(conv_p) / layer.weights_vol
+            return 1 - (self.get_layer_macs(layer) / macs_before)
+        #actual_sparsity = calculate_sparsity(conv_p)
+        #return actual_sparsity
+        # This is a hack
+        assert False, "We should not get to this point"
 
     def compute_reward(self):
-        """The ADC paper defines reward = -Error"""
+        """Compute the reward"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
         if self.amc_cfg.perform_thinning:
@@ -495,13 +569,15 @@ class DistillerWrapperEnvironment(gym.Env):
         optimizer = torch.optim.SGD(self.model.parameters(), lr=self.app_args.optimizer_data['lr'],
                                     momentum=self.app_args.optimizer_data['momentum'],
                                     weight_decay=self.app_args.optimizer_data['weight_decay'])
-        for _ in range(self.amc_cfg.num_training_epochs):
+        for _ in range(self.amc_cfg.num_ft_epochs):
+            # Fine-tune the model
             self.services.train_fn(model=self.model, compression_scheduler=self.create_scheduler(),
                                    optimizer=optimizer,
-                                   epoch=self.debug_stats['episode'])
+                                   epoch=self.episode)
         # Validate
-        top1, top5, vloss = self.services.validate_fn(model=self.model, epoch=self.debug_stats['episode'])
+        top1, top5, vloss = self.services.validate_fn(model=self.model, epoch=self.episode)
         reward = self.amc_cfg.reward_fn(top1, top5, vloss, total_macs)
+        macs_normalized = total_macs/self.dense_model_macs
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
@@ -509,12 +585,62 @@ class DistillerWrapperEnvironment(gym.Env):
                               ('Top5', top5),
                               ('reward', reward),
                               ('total_macs', int(total_macs)),
-                              ('macs_normalized', total_macs/self.dense_model_macs*100),
+                              ('macs_normalized', macs_normalized*100),
                               ('log(total_macs)', math.log(total_macs)),
                               ('total_nnz', int(total_nnz))]))
-        distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=0, total_steps=1,
+        distiller.log_training_progress(stats, None, self.episode, steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[self.tflogger, self.pylogger])
         return reward, top1, total_macs, total_nnz
+
+    def experimental_reward_fn(self, top1, top5, vloss, total_macs):
+        macs_normalized = total_macs/self.dense_model_macs
+        if macs_normalized > (self.amc_cfg.target_density+0.2):
+            reward = 1 - macs_normalized
+        else:
+            reward += 1
+
+    def create_network_record_file(self):
+        """Create the CSV file and write the column names"""
+        fields = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs',
+                  'normalized_nnz', 'ckpt_name', 'action_history', 'agent_action_history']
+        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+
+    def record_network_details(self, top1, reward, total_macs, normalized_macs,
+                               normalized_nnz, action_history, agent_action_history):
+        """Write the details of one network to a CSV file and create a checkpoint file"""
+        if reward > self.best_reward:
+            self.best_reward = reward
+            ckpt_name = self.save_checkpoint(is_best=True)
+            msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.episode, top1))
+        else:
+            ckpt_name = self.save_checkpoint(is_best=False)
+
+        fields = [self.episode, top1, reward, total_macs, normalized_macs,
+                  normalized_nnz, ckpt_name, action_history, agent_action_history]
+        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+
+    def create_scheduler(self):
+        scheduler = distiller.CompressionScheduler(self.model)
+        masks = {param_name: masker.mask for param_name, masker in self.zeros_mask_dict.items()}
+        scheduler.load_state_dict(state={'masks_dict': masks})
+        return scheduler
+
+    def save_checkpoint(self, is_best=False):
+        """Save the learned-model checkpoint"""
+        scheduler = self.create_scheduler()
+        episode = str(self.episode).zfill(3)
+        if is_best:
+            fname = "BEST_adc_episode_{}".format(episode)
+        else:
+            fname = "adc_episode_{}".format(episode)
+
+        self.services.save_checkpoint_fn(epoch=self.episode, model=self.model,
+                                         scheduler=scheduler, name=fname)
+        return fname
 
 
 def get_dummy_input(dataset):
@@ -553,7 +679,6 @@ def collect_conv_details(model, dataset, perform_thinning):
             if not perform_thinning:
                 #conv.macs *= distiller.density_ch(conv_p)  # Channel pruning
                 conv.macs *= distiller.density_3D(conv_p)   # Filter pruning
-            #assert distiller.density_ch(conv_p) == 1
             total_macs += conv.macs
 
             conv.ofm_h = g.param_shape(conv_op['outputs'][0])[2]
@@ -565,34 +690,3 @@ def collect_conv_details(model, dataset, perform_thinning):
             conv.id = id
             conv_layers[len(conv_layers)] = conv
     return conv_layers, total_macs, total_params
-
-
-# import os
-# import pandas as pd
-# from tabulate import tabulate
-# import apputils
-# from models import create_model
-#
-#
-# def summarize_experiment(experiment_dir, dataset, arch, validate_fn):
-#     df = pd.DataFrame(columns=['File', 'NNZ', 'MACs', 'Top1'])
-#     for file in os.listdir(experiment_dir):
-#         if file.endswith(".pth.tar"):
-#             cnt_macs, cnt_params, top1 = get_experiment_performance_summary(os.path.join(experiment_dir, file), dataset, arch, validate_fn)
-#             df.loc[len(df.index)] = [file, cnt_params, cnt_macs, top1]
-#     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".2f")
-#     print(t)
-#     csv_fname = os.path.join(experiment_dir, "arch_space" + ".csv")
-#     print("Saving results to: {}".format(csv_fname))
-#     df.to_csv(csv_fname, sep=',')
-#
-#
-# def get_experiment_performance_summary(chkpt_fname, dataset, arch, validate_fn):
-#     model = create_model(False, dataset, arch)
-#     model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_fname)
-#
-#     dummy_input = get_dummy_input(dataset)
-#     perf_df = distiller.model_performance_summary(model, dummy_input, 1)
-#     total_macs = perf_df['MACs'].sum()
-#     top1, top5, vloss = validate_fn(model=model, epoch=-1)
-#     return total_macs, distiller.model_numel(model), top1
