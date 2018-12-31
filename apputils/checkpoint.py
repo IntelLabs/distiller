@@ -35,7 +35,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
 
     Args:
         epoch: current epoch
-        arch: name of the network arechitecture/topology
+        arch: name of the architecture/topology
         model: a pytorch model
         optimizer: the optimizer used in the training session
         scheduler: the CompressionScheduler instance used for training, if any
@@ -47,11 +47,6 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if not os.path.isdir(dir):
         raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
 
-    filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
-    fullpath = os.path.join(dir, filename)
-    msglogger.info("Saving checkpoint to: %s" % fullpath)
-    filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
-    fullpath_best = os.path.join(dir, filename_best)
     checkpoint = {}
     checkpoint['epoch'] = epoch
     checkpoint['arch'] = arch
@@ -67,8 +62,14 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
+    filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
+    fullpath = os.path.join(dir, filename)
+    filename_best = 'best_top1.pth.tar' if name is None else name + '_best_top1.pth.tar'
+    fullpath_best = os.path.join(dir, filename_best)
+    msglogger.info("Saving checkpoint to: %s" % fullpath)
     torch.save(checkpoint, fullpath)
     if is_best:
+        msglogger.info("Saving best checkpoint to: %s" % fullpath_best)
         shutil.copyfile(fullpath, fullpath_best)
 
 
