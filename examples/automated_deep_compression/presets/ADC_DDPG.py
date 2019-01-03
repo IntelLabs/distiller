@@ -42,14 +42,16 @@ agent_params.algorithm.heatup_using_network_decisions = True
 agent_params.algorithm.discount = 1
 
 # Shadi
-#agent_params.algorithm.use_non_zero_discount_for_terminal_states = True  # <===========
+agent_params.algorithm.use_non_zero_discount_for_terminal_states = True  # <===========
 
+# See : https://nervanasystems.github.io/coach/components/agents/policy_optimization/ddpg.html?highlight=ddpg#rl_coach.agents.ddpg_agent.DDPGAlgorithmParameters
 # Replay buffer size
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
 #agent_params.exploration = AdditiveNoiseParameters() #
 agent_params.exploration = TruncatedNormalParameters()
+agent_params.algorithm.use_target_network_for_evaluation = True
 #agent_params.exploration.evaluation_noise_percentage = 0.01  # Neta new
-agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)  # <=== 1
+agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
 agent_params.network_wrappers['actor'].learning_rate = 0.0001  # 0.0001
 agent_params.network_wrappers['critic'].learning_rate = 0.001
 

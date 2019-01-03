@@ -94,7 +94,7 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     group.add_argument('--amc-protocol', choices=["mac-constrained",
                                                   "param-constrained",
                                                   "accuracy-guaranteed",
-                                                  "experimental"],
+                                                  "mac-constrained-experimental"],
                        default="mac-constrained", help='Compression-policy search protocol')
     group.add_argument('--amc-ft-epochs', type=int, default=1,
                        help='The number of epochs to fine-tune each discovered network')
@@ -106,26 +106,12 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='The number of epochs for heatup/exploration')
     group.add_argument('--amc-training-epochs', type=int, default=300,
                        help='The number of epochs for training/exploitation')
+    group.add_argument('--amc-reward-every-step', action='store_true', default=False,
+                       help='Compute the reward at every step')
+
+
     # group.add_argument('--amc-thinning', action='store_true', default=False,
     #                    help='Perform netowrk thinning after altering each layer')
-
-
-def log_amc_config(amc_cfg):
-    try:
-        msglogger.info('AMC configuration:')
-        for k, v in amc_cfg.items():
-            msglogger.info("\t{} : {}".format(k, v))
-    except TypeError as e:
-        pass
-
-
-def count_conv_layer(model):
-    """Count the number of Convolution layers exist in this model"""
-    conv_cnt = 0
-    for module in model.modules():
-        if type(module) == torch.nn.Conv2d:
-            conv_cnt += 1
-    return conv_cnt
 
 
 if RLLIB == "spinup":
@@ -148,8 +134,8 @@ if RLLIB == "spinup":
                   epochs=400,
                   replay_size=2000,
                   batch_size=64,
-                  start_steps=env1.amc_cfg.exploration_duration,
-                  # steps_per_epoch=50 * env1.num_layers()  # every 50 episodes perform 10 episodes of testing
+                  start_steps=env1.amc_cfg.num_heatup_epochs,
+                  steps_per_epoch=800 * env1.num_layers(),  # every 50 episodes perform 10 episodes of testing
                   act_noise=0.5,
                   pi_lr=1e-4,
                   q_lr=1e-3,
@@ -167,14 +153,59 @@ if RLLIB == "coach":
     from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
 
 
+def log_amc_config(amc_cfg):
+    try:
+        msglogger.info('AMC configuration:')
+        for k, v in amc_cfg.items():
+            msglogger.info("\t{} : {}".format(k, v))
+    except TypeError as e:
+        pass
+
+
+def count_conv_layer(model):
+    """Count the number of Convolution layers exist in this model"""
+    conv_cnt = 0
+    for module in model.modules():
+        if type(module) == torch.nn.Conv2d:
+            conv_cnt += 1
+    return conv_cnt
+
+
+def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
+    """A more intuitive reward for constraining the compute and optimizing the
+    accuracy under this constraint.
+    """
+    macs_normalized = total_macs/env.dense_model_macs
+    reward = top1/100
+    if macs_normalized > (env.amc_cfg.target_density+0.2):
+        reward = 1 - macs_normalized
+    else:
+        reward += 1
+    return reward
+
+
+def harmonic_mean_reward_fn(env, top1, top5, vloss, total_macs):
+    """This reward is based on the idea of weighted harmonic mean
+
+    Balance compute and accuracy provided a beta value that weighs the two components.
+    See: https://en.wikipedia.org/wiki/F1_score
+    """
+    beta = 1
+    #beta = 0.75  # How much to favor accuracy
+    macs_normalized = total_macs/env.dense_model_macs
+    reward = (1 + beta**2) * top1/100 * macs_normalized / (beta**2 * macs_normalized + top1/100)
+    return reward
+
+
+experimental_reward_fn = harmonic_mean_reward_fn
+
+
 def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
     perform_thinning = True  # args.amc_thinning
     num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
-    num_heatup_epochs = args.amc_heatup_epochs
-    num_training_epochs = args.amc_training_epochs
     np.random.seed()
     conv_cnt = count_conv_layer(model)
 
@@ -192,31 +223,34 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
 
     amc_cfg = distiller.utils.MutableNamedTuple({
             'protocol': args.amc_protocol,
+            'compute_reward_every_step': args.amc_reward_every_step,
             'perform_thinning': perform_thinning,
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
             'conv_cnt': conv_cnt})
     if args.amc_protocol == "accuracy-guaranteed":
         amc_cfg.target_density = None
-        amc_cfg.reward_fn = lambda top1, top5, vloss, total_macs: -1 * (1-top1/100) * math.log(total_macs)
+        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: -(1-top1/100) * math.log(total_macs)
         amc_cfg.action_constrain_fn = None
     elif args.amc_protocol == "mac-constrained":
         amc_cfg.target_density = 0.5
-        amc_cfg.reward_fn = lambda top1, top5, vloss, total_macs: top1/100
+        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
         amc_cfg.target_density = 0.5
-        amc_cfg.reward_fn = DistillerWrapperEnvironment.experimental_reward_fn
+        amc_cfg.reward_fn = experimental_reward_fn
         amc_cfg.action_constrain_fn = None
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
     steps_per_episode = conv_cnt
     amc_cfg.heatup_noise = 0.5
-    amc_cfg.heatup_duration = num_heatup_epochs * steps_per_episode
     amc_cfg.initial_training_noise = 0.5
     amc_cfg.training_noise_decay = 0.996  # 0.998
-    amc_cfg.training_noise_duration = num_training_epochs * steps_per_episode
+    amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
+    amc_cfg.num_training_epochs = args.amc_training_epochs
+    training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
+    heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
 
     if RLLIB == "spinup":
         msglogger.info("AMC: Using spinup")
@@ -233,9 +267,9 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
                                                                     'services': services}
 
         agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-            (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(amc_cfg.heatup_duration)),
+            (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
             (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
-             EnvironmentSteps(amc_cfg.training_noise_duration))])
+             EnvironmentSteps(training_noise_duration))])
 
         # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
 
@@ -252,7 +286,11 @@ class DistillerWrapperEnvironment(gym.Env):
     def __init__(self, model, app_args, amc_cfg, services):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
+        USING_SINGLE_GPU = True
+        if USING_SINGLE_GPU:
+            model = distiller.make_non_parallel_copy(model)
         self.orig_model = model
+
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
@@ -272,7 +310,6 @@ class DistillerWrapperEnvironment(gym.Env):
         # Gym spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
         self.action_space.default_action = self.action_low
-
         self.STATE_EMBEDDING_LEN = len(Observation._fields)
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
@@ -336,12 +373,9 @@ class DistillerWrapperEnvironment(gym.Env):
         target_reduction = (1 - self.amc_cfg.target_density) * self.dense_model_macs
 
         duty = target_reduction - (reduced + rest)
-        #flops = self.get_layer_macs(self.current_layer()) + self.get_layer_macs(self.get_layer(self.current_layer_id+1))
         flops = self.get_layer_macs(self.current_layer())
         assert flops > 0
-        #pruning_action_final = min(self.action_high, max(pruning_action, duty/flops))
-        pruning_action_final = np.clip(pruning_action, max(pruning_action, duty/flops), self.action_high)
-        #pruning_action_final = min(self.action_high, max(pruning_action, np.random.normal(1, 0.25) * duty/flops))
+        pruning_action_final = min(self.action_high, max(pruning_action, duty/flops))
         if pruning_action_final != pruning_action:
             msglogger.info("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
                            format(pruning_action, pruning_action_final, reduced/self.dense_model_macs,
@@ -412,9 +446,10 @@ class DistillerWrapperEnvironment(gym.Env):
         else:
             observation = self.get_obs()
             reward = 0
+            if self.amc_cfg.compute_reward_every_step:
+                reward, top1, total_macs, total_nnz = self.compute_reward(False)
 
         self.prev_action = pruning_action
-        # msglogger.info("###################### self.prev_action={}".format(self.prev_action))
         info = {}
         return observation, reward, self.episode_is_done(), info
 
@@ -550,7 +585,7 @@ class DistillerWrapperEnvironment(gym.Env):
         # This is a hack
         assert False, "We should not get to this point"
 
-    def compute_reward(self):
+    def compute_reward(self, log_stats=True):
         """Compute the reward"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
@@ -563,8 +598,6 @@ class DistillerWrapperEnvironment(gym.Env):
             # What a hack!
             total_nnz *= compression
 
-        msglogger.info("Total parameters left: %.2f%%" % (compression*100))
-        msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
         # Train for zero or more epochs
         optimizer = torch.optim.SGD(self.model.parameters(), lr=self.app_args.optimizer_data['lr'],
                                     momentum=self.app_args.optimizer_data['momentum'],
@@ -576,28 +609,25 @@ class DistillerWrapperEnvironment(gym.Env):
                                    epoch=self.episode)
         # Validate
         top1, top5, vloss = self.services.validate_fn(model=self.model, epoch=self.episode)
-        reward = self.amc_cfg.reward_fn(top1, top5, vloss, total_macs)
-        macs_normalized = total_macs/self.dense_model_macs
+        reward = self.amc_cfg.reward_fn(self, top1, top5, vloss, total_macs)
 
-        stats = ('Peformance/Validation/',
-                 OrderedDict([('Loss', vloss),
-                              ('Top1', top1),
-                              ('Top5', top5),
-                              ('reward', reward),
-                              ('total_macs', int(total_macs)),
-                              ('macs_normalized', macs_normalized*100),
-                              ('log(total_macs)', math.log(total_macs)),
-                              ('total_nnz', int(total_nnz))]))
-        distiller.log_training_progress(stats, None, self.episode, steps_completed=0, total_steps=1,
-                                        log_freq=1, loggers=[self.tflogger, self.pylogger])
+        if log_stats:
+            macs_normalized = total_macs/self.dense_model_macs
+            msglogger.info("Total parameters left: %.2f%%" % (compression*100))
+            msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
+
+            stats = ('Peformance/Validation/',
+                     OrderedDict([('Loss', vloss),
+                                  ('Top1', top1),
+                                  ('Top5', top5),
+                                  ('reward', reward),
+                                  ('total_macs', int(total_macs)),
+                                  ('macs_normalized', macs_normalized*100),
+                                  ('log(total_macs)', math.log(total_macs)),
+                                  ('total_nnz', int(total_nnz))]))
+            distiller.log_training_progress(stats, None, self.episode, steps_completed=0, total_steps=1,
+                                            log_freq=1, loggers=[self.tflogger, self.pylogger])
         return reward, top1, total_macs, total_nnz
-
-    def experimental_reward_fn(self, top1, top5, vloss, total_macs):
-        macs_normalized = total_macs/self.dense_model_macs
-        if macs_normalized > (self.amc_cfg.target_density+0.2):
-            reward = 1 - macs_normalized
-        else:
-            reward += 1
 
     def create_network_record_file(self):
         """Create the CSV file and write the column names"""
@@ -655,7 +685,6 @@ def get_dummy_input(dataset):
 
 def collect_conv_details(model, dataset, perform_thinning):
     dummy_input = get_dummy_input(dataset)
-    #model = distiller.make_non_parallel_copy(model)
     g = SummaryGraph(model, dummy_input)
     conv_layers = OrderedDict()
     total_macs = 0
