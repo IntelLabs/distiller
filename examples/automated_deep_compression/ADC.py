@@ -81,6 +81,13 @@ RLLIB = "coach"
 msglogger = logging.getLogger()
 Observation = namedtuple('Observation', ['n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
 ALMOST_ONE = 0.9999
+#RL_AGENT = "DDPG"
+#RL_AGENT = "PPO"
+RL_AGENT = "ClippedPPO"
+
+
+def is_using_continuous_action_space(agent):
+    return agent in ("DDPG", "ClippedPPO")
 
 
 def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
@@ -150,7 +157,12 @@ if RLLIB == "coach":
     # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
     # Coach to create and use our DistillerWrapperEnvironment environment.
     # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
-    from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
+    if RL_AGENT == "DDPG":
+        from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
+    elif RL_AGENT == "PPO":
+        from examples.automated_deep_compression.presets.ADC_PPO import graph_manager, agent_params
+    elif RL_AGENT == "ClippedPPO":
+        from examples.automated_deep_compression.presets.ADC_ClippedPPO import graph_manager, agent_params
 
 
 def log_amc_config(amc_cfg):
@@ -177,8 +189,8 @@ def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
     """
     macs_normalized = total_macs/env.dense_model_macs
     reward = top1/100
-    if macs_normalized > (env.amc_cfg.target_density+0.2):
-        reward = 1 - macs_normalized
+    if macs_normalized > (env.amc_cfg.target_density+0.002):
+        reward = -3 - macs_normalized
     else:
         reward += 1
     return reward
@@ -266,10 +278,11 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
                                                                     'amc_cfg': amc_cfg,
                                                                     'services': services}
 
-        agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-            (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
-            (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
-             EnvironmentSteps(training_noise_duration))])
+        if RL_AGENT == "DDPG":
+            agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
+                (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
+                (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
+                 EnvironmentSteps(training_noise_duration))])
 
         # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
 
@@ -286,7 +299,7 @@ class DistillerWrapperEnvironment(gym.Env):
     def __init__(self, model, app_args, amc_cfg, services):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
-        USING_SINGLE_GPU = True
+        USING_SINGLE_GPU = False
         if USING_SINGLE_GPU:
             model = distiller.make_non_parallel_copy(model)
         self.orig_model = model
@@ -308,8 +321,11 @@ class DistillerWrapperEnvironment(gym.Env):
         self.action_low = amc_cfg.action_range[0]
         self.action_high = amc_cfg.action_range[1]
         # Gym spaces documentation: https://gym.openai.com/docs/
-        self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
-        self.action_space.default_action = self.action_low
+        if is_using_continuous_action_space(RL_AGENT):
+            self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
+            self.action_space.default_action = self.action_low
+        else:
+            self.action_space = spaces.Discrete(10)
         self.STATE_EMBEDDING_LEN = len(Observation._fields)
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
@@ -392,7 +408,11 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
         msglogger.info("\tAgent pruning_action={}".format(pruning_action))
-        pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
+        if is_using_continuous_action_space(RL_AGENT):
+            pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
+        else:
+            # Divide the action space into 10 discrete levels (0%, 10%, 20%,....90% sparsity)
+            pruning_action = pruning_action / 10
         msglogger.info("\tAgent clipped pruning_action={}".format(pruning_action))
         self.agent_action_history.append(pruning_action)
         if self.amc_cfg.protocol == "mac-constrained":
