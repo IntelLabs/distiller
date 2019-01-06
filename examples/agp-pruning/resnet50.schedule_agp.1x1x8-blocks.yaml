@@ -102,7 +102,7 @@ pruners:
     final_sparsity: 0.70
     group_type: Blocks
     kwargs:
-      block_shape: [1,1,8,1]  # [block_width, block_height, block_depth, block_repitition]
+      block_shape: [1,8,1,1]  # [block_repetition, block_depth, block_height, block_width]
     weights: [module.layer1.0.conv2.weight,
               module.layer1.1.conv2.weight,
               module.layer1.2.conv2.weight,

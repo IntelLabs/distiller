@@ -220,14 +220,31 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
                               zeros_mask_dict=None, model=None, binary_map=None, block_shape=None):
         """Block-wise pruning for 4D tensors.
 
-        Currently the only supported block shape is: 1 x 1 x block_depth x block_repitition
+        The block shape is specified using a tuple: [block_repetitions, block_depth, block_height, block_width].
+        The dimension 'block_repetition' specifies in how many consecutive filters the "basic block"
+        (shaped as [block_depth, block_height, block_width]) repeats to produce a (4D) "super block".
+
+        For example:
+
+          block_pruner:
+            class: L1RankedStructureParameterPruner_AGP
+            initial_sparsity : 0.05
+            final_sparsity: 0.70
+            group_type: Blocks
+            kwargs:
+              block_shape: [1,8,1,1]  # [block_repetitions, block_depth, block_height, block_width]
+
+        Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1
         """
-        block_width = block_shape[0]
-        block_height = block_shape[1]
-        block_depth = block_shape[2]
-        block_repitition = block_shape[3]
-        block_volume = block_width * block_height * block_depth
-        num_blocks = distiller.volume(param) / block_volume
+        if len(block_shape) != 4:
+            raise ValueError("The block shape must be specified as a 4-element tuple")
+        block_repititions, block_depth, block_height, block_width = block_shape
+        if not block_width == block_height == 1:
+            raise ValueError("Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1")
+        super_block_volume = distiller.volume(block_shape)
+        num_super_blocks = distiller.volume(param) / super_block_volume
+        if distiller.volume(param) % super_block_volume != 0:
+            raise ValueError("The super-block size must divide the weight tensor exactly.")
 
         num_filters = param.size(0)
         num_channels = param.size(1)
@@ -235,8 +252,8 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
 
         def rank_blocks(fraction_to_prune, param):
             # Create a view where each block is a column
-            view1 = param.view(num_filters*num_channels//(block_depth*block_repitition),
-                               block_depth*block_repitition, kernel_size)
+            view1 = param.view(num_filters*num_channels//(block_depth*block_repititions),
+                               block_depth*block_repititions, kernel_size)
             # Next, compute the sums of each column (block)
             block_sums = view1.abs().sum(dim=1)
 
@@ -252,10 +269,10 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             return bottomk, block_mags
 
         def binary_map_to_mask(binary_map, param):
-            a = binary_map.view(num_filters*num_channels//(block_depth*block_repitition), kernel_size)
+            a = binary_map.view(num_filters*num_channels//(block_depth*block_repititions), kernel_size)
             c = a.unsqueeze(1)
-            d = c.expand(num_filters*num_channels//(block_depth*block_repitition),
-                         (block_depth*block_repitition), kernel_size).contiguous()
+            d = c.expand(num_filters*num_channels//(block_depth*block_repititions),
+                         (block_depth*block_repititions), kernel_size).contiguous()
             return d.view(num_filters, num_channels, param.size(2), param.size(3))
 
         if binary_map is None:
@@ -269,9 +286,8 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         if zeros_mask_dict is not None:
             zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
             msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
-                           distiller.sparsity_blocks(zeros_mask_dict[param_name].mask,
-                                                     block_depth=block_depth*block_repitition),
-                           fraction_to_prune, binary_map.sum().item(), num_blocks)
+                           distiller.sparsity_blocks(zeros_mask_dict[param_name].mask, block_shape=block_shape),
+                           fraction_to_prune, binary_map.sum().item(), num_super_blocks)
         return binary_map
 
 
