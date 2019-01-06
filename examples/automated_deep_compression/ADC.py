@@ -13,13 +13,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import random
+"""To execute this code:
+
+$ time python3  compress_classifier.py --arch=plain20_cifar ../../../data.cifar --adc --resume=checkpoint.plain20_cifar.pth.tar --name="AMC-plain20" --lr=0.1
+
+After creating the virtual environment and installing Distiller's Python package dependencies, go ahead and
+setup Coach per: https://github.com/NervanaSystems/coach#installation.
+
+Make sure that you install Coach's package dependencies into the same virtual environment that already contains
+Distiller's dependency packages.  You do this by ensuring that Distiller's virtual environment is the active environment
+when you install Coach.
+*NOTE: you may need to update TensorFlow to the expected version:
+    $ pip3 install tensorflow==1.9.0
+
+Finally, if you are running Coach in a development environment, you need to tell the Python runtime where to find the Coach code:
+$ export PYTHONPATH=<path-to-coach-code>
+
+"""
 import math
 import copy
 import logging
 import numpy as np
 import torch
-import json
+import csv
 import gym
 from gym import spaces
 import distiller
@@ -27,7 +43,7 @@ from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
-
+from rl_coach import logger
 from rl_coach.base_parameters import TaskParameters
 
 # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
@@ -44,94 +60,79 @@ Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k',
 
 ALMOST_ONE = 0.9999
 USE_COACH = True
-PERFORM_THINNING = True
-
-#reward = -1 * (1-top1/100) * math.log(total_macs/self.dense_model_macs)
-#
-#reward = -1 * (1-top1/100) + math.log(total_macs/self.dense_model_macs)
-#reward = 4*top1/100 - math.log(total_macs)
-#reward = reward * total_macs/213201664
-#reward = reward - 5 * total_macs/213201664
-#reward = -1 * vloss * math.sqrt(math.log(total_macs))
-#reward = top1 / math.log(total_macs)
-#alpha = 0.9
-#reward = -1 * ( (1-alpha)*(top1/100) + 10*alpha*(total_macs/self.dense_model_macs) )
-
-#alpha = 0.99
-#reward = -1 * ( (1-alpha)*(top1/100) + alpha*(total_macs/self.dense_model_macs) )
-
-#reward = vloss * math.log(total_macs)
-#reward = -1 * vloss * (total_macs / self.dense_model_macs)
-#reward = top1 * (self.dense_model_macs / total_macs)
-#reward = -1 * math.log(total_macs)
-#reward =  -1 * vloss
-
-steps_per_episode = 13  # TODO: this should not be hard-coded
+PERFORM_THINNING = False
+NUM_TRAINING_EPOCHS = 1
 
 
-def do_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
+def count_conv_layer(model):
+    """Count the number of Convolution layers exist in this model"""
+    conv_cnt = 0
+    for module in model.modules():
+        if type(module) == torch.nn.Conv2d:
+            conv_cnt += 1
+    return conv_cnt
+
+
+def do_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     np.random.seed()
 
     if USE_COACH:
-        return coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn)
-    return random_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn)
+        return coach_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+    return random_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn)
 
 
-def coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
-    task_parameters = TaskParameters(framework_type="tensorflow",
-                                     experiment_path="./experiments/test")
-    extra_params = {'save_checkpoint_secs': None,
-                    'render': True}
-    task_parameters.__dict__.update(extra_params)
+def coach_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
+    # task_parameters = TaskParameters(framework_type="tensorflow",
+    #                                  experiment_path="./experiments/test")
+    # extra_params = {'save_checkpoint_secs': None,
+    #                 'render': True}
+    # task_parameters.__dict__.update(extra_params)
+    task_parameters = TaskParameters(experiment_path=logger.get_experiment_path('adc'))
+    conv_cnt = count_conv_layer(model)
 
     # Create a dictionary of parameters that Coach will handover to CNNEnvironment
     # Once it creates it.
-    if True:
-        exploration_noise = 0.5
-        #exploration_noise = 0.25
-        exploitation_decay = 0.996
-        # These parameters are passed to the Distiller environment
-        graph_manager.env_params.additional_simulator_parameters = {
-            'model': model,
-            'dataset': dataset,
-            'arch': arch,
-            'data_loader': data_loader,
-            'validate_fn': validate_fn,
-            'save_checkpoint_fn': save_checkpoint_fn,
-            #'action_range': (0.10, 0.95),
-            'action_range': (0.70, 0.95),
-            'onehot_encoding': False,
-            'normalize_obs': True,
-            'desired_reduction': None,
-            'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top5/100) * math.log(total_macs)
-            #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs)
-            #'reward_fn': lambda top1, total_macs: -1 * max(1-top1/100, 0.25) * math.log(total_macs)
-            #'reward_fn': lambda top1, total_macs: -1 * (1-top1/100) * math.log(total_macs/100000)
-            #'reward_fn': lambda top1, total_macs:  top1/100 * total_macs/self.dense_model_macs
-        }
-    else:
-        exploration_noise = 0.5
-        #exploration_noise = 0.25
-        exploitation_decay = 0.996
-        graph_manager.env_params.additional_simulator_parameters = {
-            'model': model,
-            'dataset': dataset,
-            'arch': arch,
-            'data_loader': data_loader,
-            'validate_fn': validate_fn,
-            'save_checkpoint_fn': save_checkpoint_fn,
-            'action_range': (0.10, 0.95),
-            'onehot_encoding': False,
-            'normalize_obs': True,
-            'desired_reduction': 1.5e8,
-            'reward_fn': lambda top1, total_macs: top1/100
-            #'reward_fn': lambda top1, total_macs: min(top1/100, 0.75)
-        }
+    services = distiller.utils.MutableNamedTuple({
+                'validate_fn': validate_fn,
+                'save_checkpoint_fn': save_checkpoint_fn,
+                'train_fn': train_fn})
 
-    agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([(ConstantSchedule(exploration_noise),
-                                                                             EnvironmentSteps(100*steps_per_episode)),
-                                                                            (ExponentialSchedule(exploration_noise, 0, exploitation_decay),
-                                                                             EnvironmentSteps(300*steps_per_episode))])
+    app_args = distiller.utils.MutableNamedTuple({
+                'dataset': dataset,
+                'arch': arch,
+                'optimizer_data': optimizer_data})
+    if True:
+        amc_cfg = distiller.utils.MutableNamedTuple({
+                #'action_range': (0.20, 0.95),
+                'action_range': (0.20, 0.80),
+                'onehot_encoding': False,
+                'normalize_obs': True,
+                'desired_reduction': None,
+                'reward_fn': lambda top1, top5, vloss, total_macs: -1 * (1-top1/100) * math.log(total_macs),
+                'conv_cnt': conv_cnt,
+                'max_reward': -1000})
+    else:
+        amc_cfg = distiller.utils.MutableNamedTuple({
+                'action_range': (0.10, 0.95),
+                'onehot_encoding': False,
+                'normalize_obs': True,
+                'desired_reduction': 1.5e8,
+                'reward_fn': lambda top1, top5, vloss, total_macs: top1/100,
+                #'reward_fn': lambda top1, total_macs: min(top1/100, 0.75),
+                'conv_cnt': conv_cnt,
+                'max_reward': -1000})
+
+    # These parameters are passed to the Distiller environment
+    graph_manager.env_params.additional_simulator_parameters = {'model': model,
+                                                                'app_args': app_args,
+                                                                'amc_cfg': amc_cfg,
+                                                                'services': services}
+    exploration_noise = 0.5
+    exploitation_decay = 0.996
+    steps_per_episode = conv_cnt
+    agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
+        (ConstantSchedule(exploration_noise), EnvironmentSteps(100*steps_per_episode)),
+        (ExponentialSchedule(exploration_noise, 0, exploitation_decay), EnvironmentSteps(300*steps_per_episode))])
     graph_manager.create_graph(task_parameters)
     graph_manager.improve()
 
@@ -139,49 +140,42 @@ def coach_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn
 class CNNEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn,
-                 action_range, onehot_encoding, normalize_obs, desired_reduction,
-                 reward_fn):
+    def __init__(self, model, app_args, amc_cfg, services):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
-
-        self.dataset = dataset
-        self.arch = arch
-        self.data_loader = data_loader
-        self.validate_fn = validate_fn
-        self.save_checkpoint_fn = save_checkpoint_fn
         self.orig_model = model
-        self.onehot_encoding = onehot_encoding
-        self.normalize_obs = normalize_obs
-        self.max_reward = -1000
-        self.reward_fn = reward_fn
+        self.app_args = app_args
+        self.amc_cfg = amc_cfg
+        self.services = services
+        self.conv_layers, self.dense_model_macs, self.dense_model_size = collect_conv_details(model, self.app_args.dataset)
 
-        self.conv_layers, self.dense_model_macs, self.dense_model_size = collect_conv_details(model, dataset)
         self.reset(init_only=True)
-        msglogger.info("Model %s has %d Convolution layers", arch, len(self.conv_layers))
+        msglogger.info("Model %s has %d Convolution layers", self.app_args.arch, len(self.conv_layers))
         msglogger.info("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
-        msglogger.info("Configuration:\n\tonehot_encoding={}\n\tnormalize_obs={}".format(self.onehot_encoding,
-                                                                                         self.normalize_obs))
+        msglogger.info("Configuration:\n\tonehot_encoding={}\n\tnormalize_obs={}".format(self.amc_cfg.onehot_encoding,
+                                                                                         self.amc_cfg.normalize_obs))
         self.debug_stats = {'episode': 0}
-        self.action_low = action_range[0]
-        self.action_high = action_range[1]
-        # Gym
-        # spaces documentation: https://gym.openai.com/docs/
+        self.action_low = amc_cfg.action_range[0]
+        self.action_high = amc_cfg.action_range[1]
+        # Gym spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
         self.action_space.default_action = self.action_low
 
-        self.desired_reduction = desired_reduction
         self.STATE_EMBEDDING_LEN = len(Observation._fields)
-        if self.onehot_encoding:
-            self.STATE_EMBEDDING_LEN += (steps_per_episode - 1)
+        if self.amc_cfg.onehot_encoding:
+            self.STATE_EMBEDDING_LEN += (self.amc_cfg.conv_cnt - 1)
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN,))
+        fields = ['top1', 'reward', 'total_macs', 'normalize_macs', 'total_nnz']
+        with open(r'amc.csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
 
     def reset(self, init_only=False):
         """Reset the environment.
         This is invoked by the Agent.
         """
         msglogger.info("Resetting the environment (init_only={})".format(init_only))
-        self.current_layer_id = -1
+        self.current_layer_id = 0 #-1
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
         self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
@@ -189,8 +183,10 @@ class CNNEnvironment(gym.Env):
         self._removed_macs = 0
         if init_only:
             return
-        obs, _, _, _, = self.step(0)
-        return obs
+
+        layer_macs = self.get_layer_macs(self.current_layer())
+        initial_observation = self._get_obs(layer_macs)
+        return initial_observation
 
     def num_layers(self):
         return len(self.conv_layers)
@@ -211,24 +207,15 @@ class CNNEnvironment(gym.Env):
         """Return the amount of MACs remaining in the model's unprocessed Convolution layers.
         This is normalized to the range 0..1
         """
-        #return 1 - self.sum_list_macs(self.unprocessed_layers) / self.dense_model_macs
         return self._remaining_macs / self.dense_model_macs
 
     def removed_macs(self):
         """Return the amount of MACs removed so far.
         This is normalized to the range 0..1
         """
-        #return self.sum_list_macs(self.processed_layers) / self.dense_model_macs
         return self._removed_macs / self.dense_model_macs
 
-    # def sum_list_macs(self, conv_list):
-    #     """Sum the MACs in the provided list of Convolution layers"""
-    #     total_macs = 0
-    #     for conv in conv_list:
-    #         total_macs += conv.macs
-    #     return total_macs
-
-    def render(self, mode, close):
+    def render(self, mode='human'):
         """Provide some feedback to the user about what's going on.
         This is invoked by the Agent.
         """
@@ -245,14 +232,14 @@ class CNNEnvironment(gym.Env):
         rest = self._remaining_macs
 
         #duty = self.desired_reduction - (1.2*reduced + rest)
-        duty = self.desired_reduction - (reduced + rest)
-        flops = self.get_macs(self.current_layer())
+        duty = self.amc_cfg.desired_reduction - (reduced + rest)
+        flops = self.get_layer_macs(self.current_layer())
         msglogger.info("action ********** a={}  duty={} desired_reduction={} reduced={}  rest={}  flops={}".
-                       format(a, duty, self.desired_reduction, reduced, rest, flops))
+                       format(a, duty, self.amc_cfg.desired_reduction, reduced, rest, flops))
 
         if duty > 0:
             #duty = 0.9*desired_reduction - (reduced + rest)
-            duty = self.desired_reduction - (reduced + rest)
+            duty = self.amc_cfg.desired_reduction - (reduced + rest)
             msglogger.info("action ********** duty/flops={}".format(duty / flops))
             msglogger.info("action ********** 1 - duty/flops={}".format(1 - duty / flops))
             #a = max(1-self.action_low, min(a, 1 - duty/flops))
@@ -265,11 +252,21 @@ class CNNEnvironment(gym.Env):
             a = max(0.05, min(a, 1 - duty/flops))
         return a
 
-    def save_checkpoint(self, is_best=False):
-        # Save the learned-model checkpoint
+    def save_record(self, top1, reward, total_macs, normalized_macs, total_nnz):
+        fields = [top1, reward, total_macs, normalized_macs, total_nnz]
+        with open(r'amc.csv', 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+
+    def create_scheduler(self):
         scheduler = distiller.CompressionScheduler(self.model)
         masks = {param_name: masker.mask for param_name, masker in self.zeros_mask_dict.items()}
         scheduler.load_state_dict(state={'masks_dict': masks})
+        return scheduler
+
+    def save_checkpoint(self, is_best=False):
+        # Save the learned-model checkpoint
+        scheduler = self.create_scheduler()
         episode = self.debug_stats['episode']
         episode = str(episode).zfill(3)
         if is_best:
@@ -277,7 +274,8 @@ class CNNEnvironment(gym.Env):
         else:
             name = "adc_episode_{}".format(episode)
 
-        self.save_checkpoint_fn(epoch=self.debug_stats['episode'], model=self.model, scheduler=scheduler, name=name)
+        self.services.save_checkpoint_fn(epoch=self.debug_stats['episode'], model=self.model,
+                                         scheduler=scheduler, name=name)
 
     def step(self, action):
         """Take a step, given an action.
@@ -287,57 +285,57 @@ class CNNEnvironment(gym.Env):
         """
         msglogger.info("env.step - current_layer_id={} action={}".format(self.current_layer_id, action))
         assert action == 0 or (action >= self.action_low-0.001 and action <= self.action_high+0.001)
-        if self.desired_reduction is not None:
+        if self.amc_cfg.desired_reduction is not None:
             action = self.get_action(action)
         msglogger.info("action ********** (leave) {}".format(action))
         action = 1 - action
-        layer_macs = self.get_macs(self.current_layer())
-        if action > 0 and self.current_layer_id > -1:
-            actual_action = self.__remove_channels(self.current_layer_id, action, prune_what="filters")
+        layer_macs = self.get_layer_macs(self.current_layer())
+        if action > 0 and self.current_layer_id >= 0:    # skip first convolution
+            actual_action = self.__remove_structures(self.current_layer_id, action, prune_what="filters")
         else:
             actual_action = 0
-        #msglogger.info("-------****---------{}".format(actual_action))
-        layer_macs_after_action = self.get_macs(self.current_layer())
+
+        layer_macs_after_action = self.get_layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self.current_layer_id += 1
-        next_layer_macs = self.get_macs(self.current_layer())
+        #next_layer_macs = self.get_layer_macs(self.current_layer())
         self._removed_macs += (layer_macs - layer_macs_after_action)
-        self._remaining_macs -= next_layer_macs
+        self._remaining_macs -= layer_macs # next_layer_macs
         #self.prev_action = 1 - actual_action
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('requested_action', action),
                               ('actual_action', 1-actual_action)]))
         distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=self.current_layer_id,
-                                        total_steps=13,
+                                        total_steps=self.amc_cfg.conv_cnt,
                                         log_freq=1, loggers=[self.tflogger])
 
         if self.episode_is_done():
             observation = self.get_final_obs()
-            reward, top1 = self.compute_reward()
+            reward, top1, total_macs, total_nnz = self.compute_reward()
             self.debug_stats['episode'] += 1
-            if reward > self.max_reward:
-                self.max_reward = reward
+            normalized_macs = total_macs/self.dense_model_macs * 100
+            self.save_record(top1, reward, total_macs, normalized_macs, total_nnz)
+            if reward > self.amc_cfg.max_reward:
+                self.amc_cfg.max_reward = reward
                 self.save_checkpoint(is_best=True)
                 msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.debug_stats['episode'], top1))
-            self.save_checkpoint(is_best=False)
-        else:
-            observation = self._get_obs(next_layer_macs)
-            if True:
-                reward = 0
             else:
-                reward, _ = self.compute_reward()
+                self.save_checkpoint(is_best=False)
+        else:
+            observation = self._get_obs(layer_macs)
+            reward = 0
 
         self.prev_action = 1 - action
         msglogger.info("###################### self.prev_action={}".format(self.prev_action))
         info = {}
         return observation, reward, self.episode_is_done(), info
 
-    def _get_obs4(self, macs, current_layer, conv_module):
+    def _get_obs4(self, current_layer_macs, current_layer, conv_module):
         """Produce a state embedding (i.e. an observation)"""
 
-        if self.normalize_obs:
+        if self.amc_cfg.normalize_obs:
             obs = np.array([current_layer.t,
                             conv_module.out_channels / 512,
                             conv_module.in_channels / 512,
@@ -345,17 +343,17 @@ class CNNEnvironment(gym.Env):
                             current_layer.ifm_w / 32,
                             current_layer.stride[0] / 2,
                             current_layer.k / 3,
-                            macs / self.dense_model_macs,
+                            current_layer_macs / self.dense_model_macs,
                             self.removed_macs(), self.remaining_macs(), self.prev_action])
         else:
             obs = np.array([current_layer.t,
                             conv_module.out_channels, conv_module.in_channels,
                             current_layer.ifm_h, current_layer.ifm_w, current_layer.stride[0], current_layer.k,
-                            macs/self.dense_model_macs,
+                            current_layer_macs/self.dense_model_macs,
                             self.removed_macs(), self.remaining_macs(), self.prev_action])
 
-        if self.onehot_encoding:
-            id = np.zeros(13)
+        if self.amc_cfg.onehot_encoding:
+            id = np.zeros(self.amc_cfg.conv_cnt)
             id[current_layer.t] = 1
             obs = np.concatenate([id, obs[1:]])
             msglogger.info("obs={}".format(obs))
@@ -363,31 +361,34 @@ class CNNEnvironment(gym.Env):
             msglogger.info("obs={}".format(Observation._make(obs)))
 
         assert len(obs) == self.STATE_EMBEDDING_LEN
-        assert (macs / self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
+        print("macs(%)={}\nremoved macs={}\nremaining macs={}".format(current_layer_macs / self.dense_model_macs,
+                                                                      self.removed_macs(),
+                                                                      self.remaining_macs()))
+        #assert (current_layer_macs / self.dense_model_macs + self.removed_macs() + self.remaining_macs()) <= 1
+        assert (self.removed_macs() + self.remaining_macs()) <= 1
         return obs
 
-    def _get_obs(self, macs):
-        #return self._get_obs3(macs)
+    def _get_obs(self, current_layer_macs):
         current_layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, current_layer.name)
-        return self._get_obs4(macs, current_layer, conv_module)
+        return self._get_obs4(current_layer_macs, current_layer, conv_module)
 
     def get_final_obs(self):
-        """Return the final stae embedding (observation)
+        """Return the final state embedding (observation)
         The final state is reached after we traverse all of the Convolution layers.
         """
         obs = np.array([-1, 0, 0,
                          0, 0, 0, 0,
                          0, self.removed_macs(), 0, 1 - self.prev_action])
 
-        if self.onehot_encoding:
-            id = np.zeros(13)
+        if self.amc_cfg.onehot_encoding:
+            id = np.zeros(self.amc_cfg.conv_cnt)
             obs = np.concatenate([id, obs[1:]])
 
         assert len(obs) == self.STATE_EMBEDDING_LEN
         return obs
 
-    def get_macs(self, layer):
+    def get_layer_macs(self, layer):
         """Return the number of MACs required to compute <layer>'s Convolution"""
         if layer is None:
             return 0
@@ -401,9 +402,10 @@ class CNNEnvironment(gym.Env):
         # If we didn't physically remove structures, we need to use the structural sparsity to compute MACs
         conv_pname = layer.name + ".weight"
         conv_p = distiller.model_find_param(self.model, conv_pname)
-        return dense_macs * distiller.density_ch(conv_p)
+        # return dense_macs * distiller.density_ch(conv_p)  # Channel pruning
+        return dense_macs * distiller.density_3D(conv_p)  # Filter pruning
 
-    def __remove_channels(self, idx, fraction_to_prune, prune_what="channels"):
+    def __remove_structures(self, idx, fraction_to_prune, prune_what="channels"):
         """Physically remove channels and corresponding filters from the model"""
         if idx not in range(self.num_layers()):
             raise ValueError("idx=%d is not in correct range (0-%d)" % (idx, self.num_layers()))
@@ -439,14 +441,14 @@ class CNNEnvironment(gym.Env):
 
         if (self.zeros_mask_dict[conv_pname].mask is None or
             calculate_sparsity(self.zeros_mask_dict[conv_pname].mask) == 0):
-            msglogger.info("__remove_channels: aborting because there are no channels to prune")
+            msglogger.info("__remove_structures: aborting because there are no channels to prune")
             return 0
 
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
 
         if PERFORM_THINNING:
-            remove_structures(self.model, self.zeros_mask_dict, self.arch, self.dataset, optimizer=None)
+            remove_structures(self.model, self.zeros_mask_dict, self.app_args.dataset, self.app_args.dataset, optimizer=None)
             conv_p = distiller.model_find_param(self.model, conv_pname)
             return distiller.volume(conv_p) / layer.weights_vol
         actual_sparsity = calculate_sparsity(conv_p)
@@ -455,13 +457,29 @@ class CNNEnvironment(gym.Env):
     def compute_reward(self):
         """The ADC paper defines reward = -Error"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
-        compression = distiller.model_numel(self.model, param_dims=[4]) / self.dense_model_size
-        _, total_macs, total_nnz = collect_conv_details(self.model, self.dataset)
+
+        if PERFORM_THINNING:
+            _, total_macs, total_nnz = collect_conv_details(self.model, self.app_args.dataset)
+            compression = distiller.model_numel(self.model, param_dims=[4]) / self.dense_model_size
+        else:
+            _, total_macs, total_nnz = collect_conv_details(self.model, self.app_args.dataset)
+            compression = 1 - distiller.model_sparsity(self.model)/100
+            # What a hack!
+            total_nnz *= compression
+
         msglogger.info("Total parameters left: %.2f%%" % (compression*100))
         msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
-
-        top1, top5, vloss = self.validate_fn(model=self.model, epoch=self.debug_stats['episode'])
-        reward = self.reward_fn(top1, top5, vloss, total_macs)
+        # Train for zero or more epochs
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=self.app_args.optimizer_data['lr'],
+                                    momentum=self.app_args.optimizer_data['momentum'],
+                                    weight_decay=self.app_args.optimizer_data['weight_decay'])
+        for _ in range(NUM_TRAINING_EPOCHS):
+            self.services.train_fn(model=self.model, compression_scheduler=self.create_scheduler(),
+                                   optimizer=optimizer,
+                                   epoch=self.debug_stats['episode'])
+        # Validate
+        top1, top5, vloss = self.services.validate_fn(model=self.model, epoch=self.debug_stats['episode'])
+        reward = self.amc_cfg.reward_fn(top1, top5, vloss, total_macs)
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('Loss', vloss),
@@ -469,12 +487,12 @@ class CNNEnvironment(gym.Env):
                               ('Top5', top5),
                               ('reward', reward),
                               ('total_macs', int(total_macs)),
+                              ('macs_normalized', total_macs/self.dense_model_macs*100),
                               ('log(total_macs)', math.log(total_macs)),
-                              #('log(total_macs/self.dense_model_macs)', math.log(total_macs/self.dense_model_macs)),
                               ('total_nnz', int(total_nnz))]))
         distiller.log_training_progress(stats, None, self.debug_stats['episode'], steps_completed=0, total_steps=1,
                                         log_freq=1, loggers=[self.tflogger, self.pylogger])
-        return reward, top1
+        return reward, top1, total_macs, total_nnz
 
 
 def get_dummy_input(dataset):
@@ -492,7 +510,7 @@ def collect_conv_details(model, dataset):
     g = SummaryGraph(model.cuda(), dummy_input.cuda())
     conv_layers = OrderedDict()
     total_macs = 0
-    total_nnz = 0
+    total_params = 0
     for id, (name, m) in enumerate(model.named_modules()):
         if isinstance(m, torch.nn.Conv2d):
             conv = SimpleNamespace()
@@ -505,11 +523,14 @@ def collect_conv_details(model, dataset):
             assert conv_op is not None
 
             conv.weights_vol = conv_op['attrs']['weights_vol']
-            total_nnz += conv.weights_vol
+            total_params += conv.weights_vol
             conv.macs = conv_op['attrs']['MACs']
             conv_pname = name + ".weight"
             conv_p = distiller.model_find_param(model, conv_pname)
-            conv.macs *= distiller.density_ch(conv_p)
+            if not PERFORM_THINNING:
+                #conv.macs *= distiller.density_ch(conv_p)  # Channel pruning
+                conv.macs *= distiller.density_3D(conv_p)   # Filter pruning
+            #assert distiller.density_ch(conv_p) == 1
             total_macs += conv.macs
 
             conv.ofm_h = g.param_shape(conv_op['outputs'][0])[2]
@@ -520,14 +541,14 @@ def collect_conv_details(model, dataset):
             conv.name = name
             conv.id = id
             conv_layers[len(conv_layers)] = conv
-    return conv_layers, total_macs, total_nnz
+    return conv_layers, total_macs, total_params
 
 
 from examples.automated_deep_compression.adc_controlled_envs import *
-def random_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_fn):
+def random_adc(model, dataset, arch, optimizer_data, validate_fn, save_checkpoint_fn):
     """Random ADC agent"""
     action_range = (0.0, 1.0)
-    env = CNNEnvironment(model, dataset, arch, data_loader,
+    env = CNNEnvironment(model, dataset, arch, optimizer_data,
                          validate_fn, save_checkpoint_fn, action_range,
                          onehot_encoding=False, normalize_obs=False, desired_reduction=None,
                          reward_fn=lambda top1, total_macs: top1/100)
@@ -558,32 +579,32 @@ def random_adc(model, dataset, arch, data_loader, validate_fn, save_checkpoint_f
             best_episode = [-1000, None]
 
 
-import os
-import pandas as pd
-from tabulate import tabulate
-import apputils
-from models import create_model
-
-
-def summarize_experiment(experiment_dir, dataset, arch, validate_fn):
-    df = pd.DataFrame(columns=['File', 'NNZ', 'MACs', 'Top1'])
-    for file in os.listdir(experiment_dir):
-        if file.endswith(".pth.tar"):
-            cnt_macs, cnt_params, top1 = get_experiment_performance_summary(os.path.join(experiment_dir, file), dataset, arch, validate_fn)
-            df.loc[len(df.index)] = [file, cnt_params, cnt_macs, top1]
-    t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".2f")
-    print(t)
-    csv_fname = os.path.join(experiment_dir, "arch_space" + ".csv")
-    print("Saving results to: {}".format(csv_fname))
-    df.to_csv(csv_fname, sep=',')
-
-
-def get_experiment_performance_summary(chkpt_fname, dataset, arch, validate_fn):
-    model = create_model(False, dataset, arch)
-    model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_fname)
-
-    dummy_input = get_dummy_input(dataset)
-    perf_df = distiller.model_performance_summary(model, dummy_input, 1)
-    total_macs = perf_df['MACs'].sum()
-    top1, top5, vloss = validate_fn(model=model, epoch=-1)
-    return total_macs, distiller.model_numel(model), top1
+# import os
+# import pandas as pd
+# from tabulate import tabulate
+# import apputils
+# from models import create_model
+#
+#
+# def summarize_experiment(experiment_dir, dataset, arch, validate_fn):
+#     df = pd.DataFrame(columns=['File', 'NNZ', 'MACs', 'Top1'])
+#     for file in os.listdir(experiment_dir):
+#         if file.endswith(".pth.tar"):
+#             cnt_macs, cnt_params, top1 = get_experiment_performance_summary(os.path.join(experiment_dir, file), dataset, arch, validate_fn)
+#             df.loc[len(df.index)] = [file, cnt_params, cnt_macs, top1]
+#     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".2f")
+#     print(t)
+#     csv_fname = os.path.join(experiment_dir, "arch_space" + ".csv")
+#     print("Saving results to: {}".format(csv_fname))
+#     df.to_csv(csv_fname, sep=',')
+#
+#
+# def get_experiment_performance_summary(chkpt_fname, dataset, arch, validate_fn):
+#     model = create_model(False, dataset, arch)
+#     model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_fname)
+#
+#     dummy_input = get_dummy_input(dataset)
+#     perf_df = distiller.model_performance_summary(model, dummy_input, 1)
+#     total_macs = perf_df['MACs'].sum()
+#     top1, top5, vloss = validate_fn(model=model, epoch=-1)
+#     return total_macs, distiller.model_numel(model), top1

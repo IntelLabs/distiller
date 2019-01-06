@@ -243,7 +243,7 @@ class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
             raise ValueError("Could not find a layer named %s in the model."
                              "\nMake sure to use assign_layer_fq_names()" % fq_name)
         if not hasattr(module, 'apoz_channels'):
-            raise ValueError("Could not find attribute \'apoz_channels\' in module %s."
+            raise ValueError("Could not find attribute \'apoz_channels\' in module %s"
                              "\nMake sure to use SummaryActivationStatsCollector(\"apoz_channels\")" % fq_name)
 
         apoz, std = module.apoz_channels.value()
@@ -289,7 +289,7 @@ class RandomRankedFilterPruner(RankedStructureParameterPruner):
             return
 
         filters_ordered_randomly = np.random.permutation(num_filters)[:-num_filters_to_prune]
-        mask, binary_map = mask_from_filter_order(filters_ordered_randomly, param, num_filters)
+        mask, binary_map = mask_from_filter_order(filters_ordered_randomly, param, num_filters, binary_map)
         zeros_mask_dict[param_name].mask = mask
 
         msglogger.info("RandomRankedFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
