@@ -101,6 +101,8 @@ pruners:
     initial_sparsity : 0.05
     final_sparsity: 0.70
     group_type: Blocks
+    kwargs:
+      block_shape: [1,1,8,1]  # [block_width, block_height, block_depth, block_repitition]
     weights: [module.layer1.0.conv2.weight,
               module.layer1.1.conv2.weight,
               module.layer1.2.conv2.weight,
@@ -124,8 +126,8 @@ lr_schedulers:
     class: ExponentialLR
     gamma: 0.95
 
-policies:
 
+policies:
   - pruner:
      instance_name : block_pruner
     starting_epoch: 0
