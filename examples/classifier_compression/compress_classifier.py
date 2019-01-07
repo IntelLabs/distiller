@@ -58,7 +58,7 @@ import sys
 import random
 import traceback
 import logging
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from functools import partial
 import numpy as np
 import torch
@@ -124,7 +124,7 @@ parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "v
 parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
                     help='print masks sparsity table at end of each epoch')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
-                    help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
+                    help='log the parameter tensors histograms to file (WARNING: this can use significant disk space)')
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
                     help='print a summary of the model, and exit - options: ' +
@@ -134,8 +134,8 @@ parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='
 parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
                     help='test the sensitivity of layers to pruning')
 parser.add_argument('--sense-range', dest='sensitivity_range', type=float, nargs=3, default=[0.0, 0.95, 0.05],
-                    help='an optional paramaeter for sensitivity testing providing the range of sparsities to test.\n'
-                    'This is equaivalent to creating sensitivities = np.arange(start, stop, step)')
+                    help='an optional parameter for sensitivity testing providing the range of sparsities to test.\n'
+                    'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
 parser.add_argument('--extras', default=None, type=str,
                     help='file with extra configuration information')
 parser.add_argument('--deterministic', '--det', action='store_true',
@@ -155,9 +155,9 @@ parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp 
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                     help='Display the confusion matrix')
 parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
-                    help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+                    help='List of loss weights for early exits (e.g. --earlyexit_lossweights 0.1 0.3)')
 parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
-                    help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+                    help='List of EarlyExit thresholds (e.g. --earlyexit_thresholds 1.2 0.9)')
 parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type=int,
                     help='number of best scores to track and report (default: 1)')
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
@@ -244,7 +244,8 @@ def create_activation_stats_collectors(model, collection_phase):
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
                                                          distiller.utils.activation_channels_apoz),
-        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])})
+        "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
+    })
     activations_collectors[collection_phase] = collectors
     return activations_collectors
 
@@ -354,7 +355,7 @@ def main():
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.ADC:
-        return automated_deep_compression(model, criterion, pylogger, args)
+        return automated_deep_compression(model, criterion, optimizer, pylogger, args)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -376,7 +377,7 @@ def main():
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
     if args.evaluate:
-        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args)
+        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args, compression_scheduler)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
@@ -495,7 +496,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
-        if args.kd_policy is None:
+        if not hasattr(args, 'kd_policy') or args.kd_policy is None:
             output = model(inputs)
         else:
             output = args.kd_policy.forward(inputs)
@@ -517,10 +518,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                                                   optimizer=optimizer, return_loss_components=True)
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
+
             for lc in agg_loss.loss_components:
                 if lc.name not in losses:
                     losses[lc.name] = tnt.AverageValueMeter()
                 losses[lc.name].add(lc.value.item())
+        else:
+            losses[OVERALL_LOSS_KEY].add(loss.item())
 
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
@@ -687,14 +691,15 @@ def earlyexit_validate_loss(output, target, criterion, args):
     # Note that final group might not be a full batch - so determine actual size.
     this_batch_size = target.size()[0]
     if args.gpus != -1:
-        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none').cuda()
+        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False).cuda()
     else:
-        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduction='none')
+        earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False)
+
     for exitnum in range(args.num_exits):
         # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
         # for batch_size > 1, we need to reduce this down to an average over the batch
-        args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]))
+        args.losses_exits[exitnum].add(torch.mean(args.loss_exits[exitnum]).cpu())
 
     for batch_index in range(this_batch_size):
         earlyexit_taken = False
@@ -702,17 +707,18 @@ def earlyexit_validate_loss(output, target, criterion, args):
         for exitnum in range(args.num_exits - 1):
             if args.loss_exits[exitnum][batch_index] < args.earlyexit_thresholds[exitnum]:
                 # take the results from early exit since lower than threshold
-                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
-                        torch.full([1], target[batch_index], dtype=torch.long))
+                args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index].cpu(), ndmin=2)),
+                                             torch.full([1], target[batch_index], dtype=torch.long))
                 args.exit_taken[exitnum] += 1
                 earlyexit_taken = True
                 break                    # since exit was taken, do not affect the stats of subsequent exits
         # this sample does not exit early and therefore continues until final exit
         if not earlyexit_taken:
             exitnum = args.num_exits - 1
-            args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index], ndmin=2)),
-                    torch.full([1], target[batch_index], dtype=torch.long))
+            args.exiterrors[exitnum].add(torch.tensor(np.array(output[exitnum].data[batch_index].cpu(), ndmin=2)),
+                                         torch.full([1], target[batch_index], dtype=torch.long))
             args.exit_taken[exitnum] += 1
+
 
 def earlyexit_validate_stats(args):
     # Print some interesting summary stats for number of data points that could exit early
@@ -740,7 +746,8 @@ def earlyexit_validate_stats(args):
     msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
     return(total_top1, total_top5, losses_exits_stats)
 
-def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args):
+
+def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args, scheduler=None):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
@@ -763,7 +770,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         checkpoint_name = 'quantized'
-        apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
+        apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1, scheduler=scheduler,
                                  name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
                                  dir=msglogger.logdir)
 
@@ -796,7 +803,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
     distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
 
 
-def automated_deep_compression(model, criterion, loggers, args):
+def automated_deep_compression(model, criterion, optimizer, loggers, args):
     import examples.automated_deep_compression.ADC as ADC
     HAVE_COACH_INSTALLED = True
     if not HAVE_COACH_INSTALLED:
@@ -812,13 +819,16 @@ def automated_deep_compression(model, criterion, loggers, args):
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
                           loggers=loggers, args=args)
+    train_fn = partial(train, train_loader=train_loader, criterion=criterion,
+                       loggers=loggers, args=args)
 
     if args.ADC_params is not None:
         ADC.summarize_experiment(args.ADC_params, args.dataset, args.arch, validate_fn)
         exit()
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
-    ADC.do_adc(model, args.dataset, args.arch, val_loader, validate_fn, save_checkpoint_fn)
+    optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
+    ADC.do_adc(model, args.dataset, args.arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 if __name__ == '__main__':

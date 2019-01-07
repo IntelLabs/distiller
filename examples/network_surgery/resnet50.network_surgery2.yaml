@@ -94,23 +94,7 @@
 # 2018-11-14 09:45:27,176 - Test: [  100/  195]    Loss 0.816492    Top1 78.804688    Top5 94.542969
 # 2018-11-14 09:45:36,202 - Test: [  150/  195]    Loss 0.930595    Top1 76.380208    Top5 93.135417
 # 2018-11-14 09:45:43,168 - ==> Top1: 75.518    Top5: 92.620    Loss: 0.975#
-# --- validate (epoch=359)-----------
-# 10000 samples (256 per mini-batch)
-# ==> Top1: 91.480    Top5: 99.600    Loss: 0.363
-#
-# ==> Best Top1: 91.790 (0.0 sparsity) on Epoch: 181
-#
-# Saving checkpoint to: logs/2018.10.31-232827/checkpoint.pth.tar
-# --- test ---------------------
-# 10000 samples (256 per mini-batch)
-# ==> Top1: 91.480    Top5: 99.600    Loss: 0.363
-#
-#
-# Log file for this run: /home/cvds_lab/nzmora/pytorch_workspace/distiller/examples/classifier_compression/logs/2018.10.31-232827/2018.10.31-232827.log
-#
-# real    64m27.317s
-# user    118m46.020s
-# sys     14m3.627s
+
 
 version: 1
 pruners:

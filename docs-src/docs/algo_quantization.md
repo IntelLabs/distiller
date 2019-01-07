@@ -8,7 +8,7 @@ For any of the methods below that require quantization-aware training, please se
 Let's break down the terminology we use here:
 
 - **Linear:** Means a float value is quantized by multiplying with a numeric constant (the **scale factor**).
-- **Range-Based:**: Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call **clipping-based**, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).
+- **Range-Based:** Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call **clipping-based**, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).
 
 ### Asymmetric vs. Symmetric
 
@@ -73,7 +73,7 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 ### Other Features
 
-- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability ro represent the values we actually care about accurately.
+- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="../imgs/quant_clipped.png"/>
    </p>

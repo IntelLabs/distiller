@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Pruning a Language Model - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../css/highlight.css">
+  <link href="../extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Pruning a Language Model";
+    var mkdocs_page_input_path = "tutorial-lang_model.md";
+    var mkdocs_page_url = "/tutorial-lang_model/index.html";
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js"></script>
+  <script src="../js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../install/index.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../usage/index.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../schedule/index.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../regularization/index.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../quantization/index.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../algo_pruning/index.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_quantization/index.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../design/index.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../tutorial-struct_pruning/index.html">Pruning Filters and Channels</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="index.html">Pruning a Language Model</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#using-distiller-to-prune-a-pytorch-language-model">Using Distiller to prune a PyTorch language model</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#contents">Contents</a></li>
+        
+            <li><a class="toctree-l4" href="#introduction">Introduction</a></li>
+        
+            <li><a class="toctree-l4" href="#setup">Setup</a></li>
+        
+            <li><a class="toctree-l4" href="#creating-compression-baselines">Creating compression baselines</a></li>
+        
+            <li><a class="toctree-l4" href="#compressing-the-language-model">Compressing the language model</a></li>
+        
+            <li><a class="toctree-l4" href="#until-next-time">Until next time</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Tutorials &raquo;</li>
+        
+      
+    
+    <li>Pruning a Language Model</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="using-distiller-to-prune-a-pytorch-language-model">Using Distiller to prune a PyTorch language model</h1>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#setup">Setup</a></li>
+<li><a href="#preparing-the-code">Preparing the code</a></li>
+<li><a href="#training-loop">Training-loop</a></li>
+<li><a href="#creating-compression-baselines">Creating compression baselines</a></li>
+<li><a href="#compressing-the-language-model">Compressing the language model</a></li>
+<li><a href="#what-are-we-compressing">What are we compressing?</a></li>
+<li><a href="#how-are-we-compressing">How are we compressing?</a></li>
+<li><a href="#when-are-we-compressing">When are we compressing?</a></li>
+<li><a href="#until-next-time">Until next time</a></li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>In this tutorial I'll show you how to compress a word-level language model using <a href="https://github.com/NervanaSystems/distiller">Distiller</a>.  Specifically, we use PyTorch’s <a href="https://github.com/pytorch/examples/tree/master/word_language_model">word-level language model sample code</a> as the code-base of our example, weave in some Distiller code, and show how we compress the model using two different element-wise pruning algorithms.  To make things manageable, I've divided the tutorial to two parts: in the first we will setup the sample application and prune using <a href="https://arxiv.org/abs/1710.01878">AGP</a>.  In the second part I'll show how I've added Baidu's RNN pruning algorithm and then use it to prune the same word-level language model.  The completed code is available <a href="https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model">here</a>.</p>
+<p>The results are displayed below and the code is available <a href="https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model">here</a>.
+Note that we can improve the results by training longer, since the loss curves are usually still decreasing at the end of epoch 40.  However, for demonstration purposes we don’t need to do this.</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Sparsity</th>
+<th align="center">NNZ</th>
+<th>Validation</th>
+<th>Test</th>
+<th>Command line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small</td>
+<td>0%</td>
+<td align="center">7,135,600</td>
+<td>101.13</td>
+<td>96.29</td>
+<td>time python3 main.py --cuda --epochs 40 --tied --wd=1e-6</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>0%</td>
+<td align="center">28,390,700</td>
+<td>88.17</td>
+<td>84.21</td>
+<td>time python3 main.py --cuda --emsize 650 --nhid 650 --dropout 0.5 --epochs 40 --tied,--wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>0%</td>
+<td align="center">85,917,000</td>
+<td>87.49</td>
+<td>83.85</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>70%</td>
+<td align="center">25,487,550</td>
+<td>90.67</td>
+<td>85.96</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>70%</td>
+<td align="center">25,487,550</td>
+<td>90.59</td>
+<td>85.84</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml --wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>70%</td>
+<td align="center">25,487,550</td>
+<td>87.40</td>
+<td>82.93</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_70B.schedule_agp.yaml --wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>80.4%</td>
+<td align="center">16,847,550</td>
+<td>89.31</td>
+<td>83.64</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_80.schedule_agp.yaml --wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>90%</td>
+<td align="center">8,591,700</td>
+<td>90.70</td>
+<td>85.67</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_90.schedule_agp.yaml --wd=1e-6</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>95%</td>
+<td align="center">4,295,850</td>
+<td>98.42</td>
+<td>92.79</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_95.schedule_agp.yaml --wd=1e-6</td>
+</tr>
+</tbody>
+</table>
+<p align="center"><b>Table 1: AGP language model pruning results. <br>NNZ stands for number of non-zero coefficients (embeddings are counted once, because they are tied).</b></p>
+
+<p><center><img alt="Example 1" src="../imgs/word_lang_model_performance.png" /></center>
+<p align="center">
+  <b>Figure 1: Perplexity vs model size (lower perplexity is better).</b>
+</p></p>
+<p>The model is composed of an Encoder embedding, two LSTMs, and a Decoder embedding.  The Encoder and decoder embeddings (projections) are tied to improve perplexity results (per https://arxiv.org/pdf/1611.01462.pdf), so in the sparsity statistics we account for only one of the encoder/decoder embeddings.  We used the WikiText2 dataset (twice as large as PTB).</p>
+<p>We compared three model sizes: small (7.1M; 14M), medium (28M; 50M), large: (86M; 136M) – reported as (#parameters net/tied; #parameters gross).
+The results reported below use a preset seed (for reproducibility), and we expect results can be improved if we allow “true” pseudo-randomness.  We limited our tests to 40 epochs, even though validation perplexity was still trending down.</p>
+<p>Essentially, this recreates the language model experiment in the AGP paper, and validates its conclusions:
+<em> “We see that sparse models are able to outperform dense models which have significantly more parameters.”
+</em> The 80% sparse large model (which has 16.9M parameters and a perplexity of 83.64) is able to outperform the dense medium (which has 28.4M parameters and a perplexity of 84.21), a model which has 1.7 times more parameters.  It also outperform the dense large model, which exemplifies how pruning can act as a regularizer.
+* “Our results show that pruning works very well not only on the dense LSTM weights and dense softmax layer but also the dense embedding matrix. This suggests that during the optimization procedure the neural network can find a good sparse embedding for the words in the vocabulary that works well together with the sparse connectivity structure of the LSTM weights and softmax layer.”</p>
+<h2 id="setup">Setup</h2>
+<p>We start by cloning Pytorch’s example <a href="https://github.com/pytorch/examples/tree/master">repository</a>. I’ve copied the language model code to distiller’s examples/word_language_model directory, so I’ll use that for the rest of the tutorial.
+Next, let’s create and activate a virtual environment, as explained in Distiller's <a href="https://github.com/NervanaSystems/distiller#create-a-python-virtual-environment">README</a> file.
+Now we can turn our attention to <a href="https://github.com/pytorch/examples/blob/master/word_language_model/main.py">main.py</a>, which contains the training application.</p>
+<h3 id="preparing-the-code">Preparing the code</h3>
+<p>We begin by adding code to invoke Distiller in file <code>main.py</code>.  This involves a bit of mechanics, because we did not <code>pip install</code> Distiller in our environment (we don’t have a <code>setup.py</code> script for Distiller as of yet).  To make Distiller library functions accessible from <code>main.py</code>, we modify <code>sys.path</code> to include the distiller root directory by taking the current directory and pointing two directories up.  This is very specific to the location of this example code, and it will break if you’ve placed the code elsewhere – so be aware.</p>
+<pre><code class="python">import os
+import sys
+script_dir = os.path.dirname(__file__)
+module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
+import distiller
+import apputils
+from distiller.data_loggers import TensorBoardLogger, PythonLogger
+</code></pre>
+
+<p>Next, we augment the application arguments with two Distiller-specific arguments.  The first, <code>--summary</code>, gives us the ability to do simple compression instrumentation (e.g. log sparsity statistics).  The second argument, <code>--compress</code>, is how we tell the application where the compression scheduling file is located.
+We also add two arguments - momentum and weight-decay - for the SGD optimizer.  As I explain later, I replaced the original code's optimizer with SGD, so we need these extra arguments.</p>
+<pre><code class="python"># Distiller-related arguments
+SUMMARY_CHOICES = ['sparsity', 'model', 'modules', 'png', 'percentile']
+parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
+                    help='print a summary of the model, and exit - options: ' +
+                    ' | '.join(SUMMARY_CHOICES))
+parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
+                    help='configuration file for pruning the model (default is to use hard-coded schedule)')
+parser.add_argument('--momentum', default=0., type=float, metavar='M',
+                    help='momentum')
+parser.add_argument('--weight-decay', '--wd', default=0., type=float,
+                    metavar='W', help='weight decay (default: 1e-4)')
+</code></pre>
+
+<p>We add code to handle the <code>--summary</code> application argument.  It can be as simple as forwarding to <code>distiller.model_summary</code> or more complex, as in the Distiller sample.</p>
+<pre><code class="python">if args.summary:
+    distiller.model_summary(model, None, args.summary, 'wikitext2')
+    exit(0)
+</code></pre>
+
+<p>Similarly, we add code to handle the <code>--compress</code> argument, which creates a CompressionScheduler and configures it from a YAML schedule file:</p>
+<pre><code class="python">if args.compress:
+    source = args.compress
+    compression_scheduler = distiller.CompressionScheduler(model)
+    distiller.config.fileConfig(model, None, compression_scheduler, args.compress, msglogger)
+</code></pre>
+
+<p>We also create the optimizer, and the learning-rate decay policy scheduler.  The original PyTorch example manually manages the optimization and LR decay process, but I think that having a standard optimizer and LR-decay schedule gives us the flexibility to experiment with these during the training process.  Using an <a href="https://pytorch.org/docs/stable/_modules/torch/optim/sgd.html">SGD optimizer</a> configured with <code>momentum=0</code> and <code>weight_decay=0</code>, and a <a href="https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html">ReduceLROnPlateau LR-decay policy</a> with <code>patience=0</code> and <code>factor=0.5</code> will give the same behavior as in the original PyTorch example.  From there, we can experiment with the optimizer and LR-decay configuration.</p>
+<pre><code class="python">optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                            momentum=args.momentum,
+                            weight_decay=args.weight_decay)
+lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                          patience=0, verbose=True, factor=0.5)
+</code></pre>
+
+<p>Next, we add code to setup the logging backends: a Python logger backend which reads its configuration from file and logs messages to the console and log file (<code>pylogger</code>); and a TensorBoard backend logger which logs statistics to a TensorBoard data file (<code>tflogger</code>).  I configured the TensorBoard backend to log gradients because RNNs suffer from vanishing and exploding gradients, so we might want to take a look in case the training experiences a sudden failure.
+This code is not strictly required, but it is quite useful to be able to log the session progress, and to export logs to TensorBoard for realtime visualization of the training progress.</p>
+<pre><code class="python"># Distiller loggers
+msglogger = apputils.config_pylogger('logging.conf', None)
+tflogger = TensorBoardLogger(msglogger.logdir)
+tflogger.log_gradients = True
+pylogger = PythonLogger(msglogger)
+</code></pre>
+
+<h3 id="training-loop">Training loop</h3>
+<p>Now we scroll down all the way to the train() function.  We'll change its signature to include the <code>epoch</code>, <code>optimizer</code>, and <code>compression_schdule</code>.   We'll soon see why we need these.</p>
+<pre><code class="python">def train(epoch, optimizer, compression_scheduler=None)
+</code></pre>
+
+<p>Function <code>train()</code> is responsible for training the network in batches for one epoch, and in its epoch loop we want to perform compression.   The <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/scheduler.py">CompressionScheduler</a> invokes <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/policy.py">ScheduledTrainingPolicy</a> instances per the scheduling specification that was programmed in the <code>CompressionScheduler</code> instance.  There are four main <code>SchedulingPolicy</code> types: <code>PruningPolicy</code>, <code>RegularizationPolicy</code>, <code>LRPolicy</code>, and <code>QuantizationPolicy</code>.  We'll be using <code>PruningPolicy</code>, which is triggered <code>on_epoch_begin</code> (to invoke the <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/pruning/pruner.py">Pruners</a>, and <code>on_minibatch_begin</code> (to mask the weights).   Later we will create a YAML scheduling file, and specify the schedule of <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/pruning/automated_gradual_pruner.py">AutomatedGradualPruner</a> instances.  </p>
+<p>Because we are writing a single application, which can be used with various Policies in the future (e.g. group-lasso regularization), we should add code to invoke all of the <code>CompressionScheduler</code>'s callbacks, not just the mandatory <code>on_epoch_begin</code> callback.    We invoke <code>on_minibatch_begin</code> before running the forward-pass, <code>before_backward_pass</code> after computing the loss, and <code>on_minibatch_end</code> after completing the backward-pass.</p>
+<pre><code class="lang-python">
+def train(epoch, optimizer, compression_scheduler=None):
+    ...
+
+    # The line below was fixed as per: https://github.com/pytorch/examples/issues/214
+    for batch, i in enumerate(range(0, train_data.size(0), args.bptt)):
+        data, targets = get_batch(train_data, i)
+        # Starting each batch, we detach the hidden state from how it was previously produced.
+        # If we didn't, the model would try backpropagating all the way to start of the dataset.
+        hidden = repackage_hidden(hidden)
+
+        <b>if compression_scheduler:
+            compression_scheduler.on_minibatch_begin(epoch, minibatch_id=batch, minibatches_per_epoch=steps_per_epoch)</b>
+        output, hidden = model(data, hidden)
+        loss = criterion(output.view(-1, ntokens), targets)
+
+        <b>if compression_scheduler:
+            compression_scheduler.before_backward_pass(epoch, minibatch_id=batch,
+                                                       minibatches_per_epoch=steps_per_epoch,
+                                                       loss=loss)</b>
+        optimizer.zero_grad()
+        loss.backward()
+
+        # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+        torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        optimizer.step()
+
+        total_loss += loss.item()
+
+        <b>if compression_scheduler:
+            compression_scheduler.on_minibatch_end(epoch, minibatch_id=batch, minibatches_per_epoch=steps_per_epoch)</b>
+</code></pre>
+
+<p>The rest of the code could stay as in the original PyTorch sample, but I wanted to use an SGD optimizer, so I replaced:</p>
+<pre><code class="python">for p in model.parameters():
+    p.data.add_(-lr, p.grad.data)
+</code></pre>
+
+<p>with:</p>
+<pre><code>optimizer.step()
+</code></pre>
+
+<p>The rest of the code in function <code>train()</code> logs to a text file and a <a href="https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard">TensorBoard</a> backend.  Again, such code is not mandatory, but a few lines give us a lot of visibility: we have training progress information saved to log, and we can monitor the training progress in realtime on TensorBoard.  That's a lot for a few lines of code ;-)</p>
+<pre><code>
+if batch % args.log_interval == 0 and batch > 0:
+    cur_loss = total_loss / args.log_interval
+    elapsed = time.time() - start_time
+    lr = optimizer.param_groups[0]['lr']
+    msglogger.info(
+            '| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.4f} | ms/batch {:5.2f} '
+            '| loss {:5.2f} | ppl {:8.2f}'.format(
+        epoch, batch, len(train_data) // args.bptt, lr,
+        elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+    total_loss = 0
+    start_time = time.time()
+    stats = ('Peformance/Training/',
+        OrderedDict([
+            ('Loss', cur_loss),
+            ('Perplexity', math.exp(cur_loss)),
+            ('LR', lr),
+            ('Batch Time', elapsed * 1000)])
+        )
+    steps_completed = batch + 1
+    distiller.log_training_progress(stats, model.named_parameters(), epoch, steps_completed,
+                                    steps_per_epoch, args.log_interval, [tflogger])
+</code></pre>
+
+<p>Finally we get to the outer training-loop which loops on <code>args.epochs</code>.  We add the two final <code>CompressionScheduler</code> callbacks: <code>on_epoch_begin</code>, at the start of the loop, and <code>on_epoch_end</code> after running <code>evaluate</code> on the model and updating the learning-rate.</p>
+<pre><code class="lang-python">
+try:
+    for epoch in range(0, args.epochs):
+        epoch_start_time = time.time()
+        <b>if compression_scheduler:
+            compression_scheduler.on_epoch_begin(epoch)</b>
+
+        train(epoch, optimizer, compression_scheduler)
+        val_loss = evaluate(val_data)
+        lr_scheduler.step(val_loss)
+
+        <b>if compression_scheduler:
+            compression_scheduler.on_epoch_end(epoch)</b>
+</code></pre>
+
+<p>And that's it!  The language model sample is ready for compression.  </p>
+<h2 id="creating-compression-baselines">Creating compression baselines</h2>
+<p>In <a href="https://arxiv.org/abs/1710.01878">To prune, or not to prune: exploring the efficacy of pruning for model compression</a> Zhu and Gupta, "compare the accuracy of large, but pruned models (large-sparse) and their smaller, but dense (small-dense) counterparts with identical memory footprint." They also "propose a new gradual pruning technique that is simple and straightforward to apply across a variety of models/datasets with minimal tuning."<br />
+This pruning schedule is implemented by distiller.AutomatedGradualPruner (AGP), which increases the sparsity level (expressed as a percentage of zero-valued elements) gradually over several pruning steps. Distiller's implementation only prunes elements once in an epoch (the model is fine-tuned in between pruning events), which is a small deviation from Zhu and Gupta's paper. The research paper specifies the schedule in terms of mini-batches, while our implementation specifies the schedule in terms of epochs. We feel that using epochs performs well, and is more "stable", since the number of mini-batches will change, if you change the batch size.</p>
+<p>Before we start compressing stuff ;-), we need to create baselines so we have something to benchmark against.  Let's prepare small, medium, and large baseline models, like Table 3 of <em>To prune, or Not to Prune</em>.  These will provide baseline perplexity results that we'll compare the compressed models against.  <br />
+I chose to use tied input/output embeddings, and constrained the training to 40 epochs.  The table below shows the model sizes, where we are interested in the tied version (biases are ignored due to their small size and because we don't prune them).</p>
+<table>
+<thead>
+<tr>
+<th>Size</th>
+<th>Number of Weights (untied)</th>
+<th>Number of Weights (tied)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small</td>
+<td>13,951,200</td>
+<td>7,295,600</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>50,021,400</td>
+<td>28,390,700</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>135,834,000</td>
+<td>85,917,000</td>
+</tr>
+</tbody>
+</table>
+<p>I started experimenting with the optimizer setup like in the PyTorch example, but I added some L2 regularization when I noticed that the training was overfitting.  The two right columns show the perplexity results (lower is better) of each of the models with no L2 regularization and with 1e-5 and 1e-6.
+In all three model sizes using the smaller L2 regularization (1e-6) gave the best results.  BTW, I'm not showing here experiments with even lower regularization because that did not help.</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Command line</th>
+<th>Validation</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small</td>
+<td>time python3 main.py --cuda --epochs 40 --tied</td>
+<td>105.23</td>
+<td>99.53</td>
+</tr>
+<tr>
+<td>Small</td>
+<td>time python3 main.py --cuda --epochs 40 --tied --wd=1e-6</td>
+<td>101.13</td>
+<td>96.29</td>
+</tr>
+<tr>
+<td>Small</td>
+<td>time python3 main.py --cuda --epochs 40 --tied --wd=1e-5</td>
+<td>109.49</td>
+<td>103.53</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>time python3 main.py --cuda --emsize 650 --nhid 650 --dropout 0.5 --epochs 40 --tied</td>
+<td>90.93</td>
+<td>86.20</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>time python3 main.py --cuda --emsize 650 --nhid 650 --dropout 0.5 --epochs 40 --tied --wd=1e-6</td>
+<td>88.17</td>
+<td>84.21</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>time python3 main.py --cuda --emsize 650 --nhid 650 --dropout 0.5 --epochs 40 --tied --wd=1e-5</td>
+<td>97.75</td>
+<td>93.06</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied</td>
+<td>88.23</td>
+<td>84.21</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --wd=1e-6</td>
+<td>87.49</td>
+<td>83.85</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --wd=1e-5</td>
+<td>99.22</td>
+<td>94.28</td>
+</tr>
+</tbody>
+</table>
+<h2 id="compressing-the-language-model">Compressing the language model</h2>
+<p>OK, so now let's recreate the results of the language model experiment from section 4.2 of paper.  We're using PyTorch's sample, so the language model we implement is not exactly like the one in the AGP paper (and uses a different dataset), but it's close enough, so if everything goes well, we should see similar compression results.</p>
+<h3 id="what-are-we-compressing">What are we compressing?</h3>
+<p>To gain insight about the model parameters, we can use the command-line to produce a weights-sparsity table:</p>
+<pre><code class="csh">$ python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --summary=sparsity
+
+Parameters:
++---------+------------------+---------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+|         | Name             | Shape         |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
+|---------+------------------+---------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------|
+| 0.00000 | encoder.weight   | (33278, 1500) |      49917000 |       49916999 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00000 | 0.05773 | -0.00000 |    0.05000 |
+| 1.00000 | rnn.weight_ih_l0 | (6000, 1500)  |       9000000 |        9000000 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00000 | 0.01491 |  0.00001 |    0.01291 |
+| 2.00000 | rnn.weight_hh_l0 | (6000, 1500)  |       9000000 |        8999999 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00001 | 0.01491 |  0.00000 |    0.01291 |
+| 3.00000 | rnn.weight_ih_l1 | (6000, 1500)  |       9000000 |        8999999 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00001 | 0.01490 | -0.00000 |    0.01291 |
+| 4.00000 | rnn.weight_hh_l1 | (6000, 1500)  |       9000000 |        9000000 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00000 | 0.01491 | -0.00000 |    0.01291 |
+| 5.00000 | decoder.weight   | (33278, 1500) |      49917000 |       49916999 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00000 | 0.05773 | -0.00000 |    0.05000 |
+| 6.00000 | Total sparsity:  | -             |     135834000 |      135833996 |    0.00000 |    0.00000 |        0 |  0.00000 |        0 |    0.00000 | 0.00000 |  0.00000 |    0.00000 |
++---------+------------------+---------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+Total sparsity: 0.00
+</code></pre>
+
+<p>So what's going on here?
+<code>encoder.weight</code> and <code>decoder.weight</code> are the input and output embeddings, respectively.  Remember that in the configuration I chose for the three model sizes these embeddings are tied, which means that we only have one copy of parameters, that is shared between the encoder and decoder.
+We also have two pairs of RNN (LSTM really) parameters.  There is a pair because the model uses the command-line argument <code>args.nlayers</code> to decide how many instances of RNN (or LSTM or GRU) cells to use, and it defaults to 2.  The recurrent cells are LSTM cells, because this is the default of <code>args.model</code>, which is used in the initialization of <code>RNNModel</code>.  Let's look at the parameters of the first RNN: <code>rnn.weight_ih_l0</code> and <code>rnn.weight_hh_l0</code>: what are these?<br />
+Recall the <a href="https://pytorch.org/docs/stable/nn.html#lstm">LSTM equations</a> that PyTorch implements.  In the equations, there are 8 instances of vector-matrix multiplication (when batch=1).  These can be combined into a single matrix-matrix multiplication (GEMM), but PyTorch groups these into two GEMM operations: one GEMM multiplies the inputs (<code>rnn.weight_ih_l0</code>), and the other multiplies the hidden-state (<code>rnn.weight_hh_l0</code>).  </p>
+<h3 id="how-are-we-compressing">How are we compressing?</h3>
+<p>Let's turn to the configurations of the Large language model compression schedule to 70%, 80%, 90% and 95% sparsity. Using AGP it is easy to configure the pruning schedule to produce an exact sparsity of the compressed model.  I'll use the <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml">70% schedule</a> to show a concrete example.</p>
+<p>The YAML file has two sections: <code>pruners</code> and <code>policies</code>.  Section <code>pruners</code> defines instances of <code>ParameterPruner</code> - in our case we define three instances of <code>AutomatedGradualPruner</code>: for the weights of the first RNN (<code>l0_rnn_pruner</code>), the second RNN (<code>l1_rnn_pruner</code>) and the embedding layer (<code>embedding_pruner</code>).  These names are arbitrary, and serve are name-handles which bind Policies to Pruners - so you can use whatever names you want.
+Each <code>AutomatedGradualPruner</code> is configured with an <code>initial_sparsity</code> and <code>final_sparsity</code>.  For examples, the <code>l0_rnn_pruner</code> below is configured to prune 5% of the weights as soon as it starts working, and finish when 70% of the weights have been pruned.  The <code>weights</code> parameter tells the Pruner which weight tensors to prune.</p>
+<pre><code class="YAML">pruners:
+  l0_rnn_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.70
+    weights: [rnn.weight_ih_l0, rnn.weight_hh_l0]
+
+  l1_rnn_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.70
+    weights: [rnn.weight_ih_l1, rnn.weight_hh_l1]
+
+  embedding_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.05
+    final_sparsity: 0.70
+    weights: [encoder.weight]
+</code></pre>
+
+<h3 id="when-are-we-compressing">When are we compressing?</h3>
+<p>If the <code>pruners</code> section defines "what-to-do", the <code>policies</code> section defines "when-to-do".  This part is harder, because we define the pruning schedule, which requires us to try a few different schedules until we understand which schedule works best.
+Below we define three <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/policy.py#L63:L87">PruningPolicy</a> instances.  The first two instances start operating at epoch 2 (<code>starting_epoch</code>), end at epoch 20 (<code>ending_epoch</code>), and operate once every epoch (<code>frequency</code>; as I explained above, Distiller's Pruning scheduling operates only at <code>on_epoch_begin</code>).  In between pruning operations, the pruned model is fine-tuned.</p>
+<pre><code class="YAML">policies:
+  - pruner:
+      instance_name : l0_rnn_pruner
+    starting_epoch: 2
+    ending_epoch: 20  
+    frequency: 1
+
+  - pruner:
+      instance_name : l1_rnn_pruner
+    starting_epoch: 2
+    ending_epoch: 20
+    frequency: 1
+
+  - pruner:
+      instance_name : embedding_pruner
+    starting_epoch: 3
+    ending_epoch: 21
+    frequency: 1
+</code></pre>
+
+<p>We invoke the compression as follows:</p>
+<pre><code>$ time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml
+</code></pre>
+
+<p><a href="https://github.com/NervanaSystems/distiller/wiki/Tutorial%3A-Pruning-a-PyTorch-language-model/_edit#table-1-agp-language-model-pruning-results">Table 1</a> above shows that we can make a negligible improvement when adding L2 regularization.  I did some experimenting with the sparsity distribution between the layers, and the scheduling frequency and noticed that the embedding layers are much less sensitive to pruning than the RNN cells.  I didn't notice any difference between the RNN cells, but I also didn't invest in this exploration.
+A new <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70B.schedule_agp.yaml">70% sparsity schedule</a>, prunes the RNNs only to 50% sparsity, but prunes the embedding to 85% sparsity, and achieves almost a 3 points improvement in the test perplexity results.</p>
+<p>We provide <a href="https://github.com/NervanaSystems/distiller/tree/master/examples/agp-pruning">similar pruning schedules</a> for the other compression rates.</p>
+<h2 id="until-next-time">Until next time</h2>
+<p>This concludes the first part of the tutorial on pruning a PyTorch language model.<br />
+In the next installment, I'll explain how we added an implementation of Baidu Research's <a href="https://arxiv.org/abs/1704.05119">Exploring Sparsity in Recurrent Neural Networks</a> paper, and applied to this language model.</p>
+<p>Geek On.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../tutorial-struct_pruning/index.html" class="btn btn-neutral" title="Pruning Filters and Channels"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="../tutorial-struct_pruning/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+    </span>
+</div>
+    <script>var base_url = '..';</script>
+    <script src="../js/theme.js"></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+      <script src="../search/require.js"></script>
+      <script src="../search/search.js"></script>
+
+</body>
+</html>
