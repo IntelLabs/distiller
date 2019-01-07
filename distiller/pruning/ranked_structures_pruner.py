@@ -221,7 +221,7 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         """Block-wise pruning for 4D tensors.
 
         The block shape is specified using a tuple: [block_repetitions, block_depth, block_height, block_width].
-        The dimension 'block_repetition' specifies in how many consecutive filters the "basic block"
+        The dimension 'block_repetitions' specifies in how many consecutive filters the "basic block"
         (shaped as [block_depth, block_height, block_width]) repeats to produce a (4D) "super block".
 
         For example:
@@ -238,7 +238,7 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         """
         if len(block_shape) != 4:
             raise ValueError("The block shape must be specified as a 4-element tuple")
-        block_repititions, block_depth, block_height, block_width = block_shape
+        block_repetitions, block_depth, block_height, block_width = block_shape
         if not block_width == block_height == 1:
             raise ValueError("Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1")
         super_block_volume = distiller.volume(block_shape)
@@ -250,10 +250,22 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         num_channels = param.size(1)
         kernel_size = param.size(2) * param.size(3)
 
+        if block_depth > 1:
+            view_dims = (
+                num_filters*num_channels//(block_repetitions*block_depth),
+                block_repetitions*block_depth,
+                kernel_size,
+                )
+        else:
+            view_dims = (
+                num_filters // block_repetitions,
+                block_repetitions,
+                -1,
+                )
+
         def rank_blocks(fraction_to_prune, param):
             # Create a view where each block is a column
-            view1 = param.view(num_filters*num_channels//(block_depth*block_repititions),
-                               block_depth*block_repititions, kernel_size)
+            view1 = param.view(*view_dims)
             # Next, compute the sums of each column (block)
             block_sums = view1.abs().sum(dim=1)
 
@@ -269,10 +281,9 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             return bottomk, block_mags
 
         def binary_map_to_mask(binary_map, param):
-            a = binary_map.view(num_filters*num_channels//(block_depth*block_repititions), kernel_size)
+            a = binary_map.view(view_dims[0], view_dims[2])
             c = a.unsqueeze(1)
-            d = c.expand(num_filters*num_channels//(block_depth*block_repititions),
-                         (block_depth*block_repititions), kernel_size).contiguous()
+            d = c.expand(*view_dims).contiguous()
             return d.view(num_filters, num_channels, param.size(2), param.size(3))
 
         if binary_map is None:

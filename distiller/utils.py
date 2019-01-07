@@ -249,14 +249,14 @@ def density_ch(tensor):
 def sparsity_blocks(tensor, block_shape):
     """Block-wise sparsity for 4D tensors
 
-    Currently the only supported block shape is: 1 x 1 x block_depth
+    Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1
     """
     if tensor.dim() != 4:
         raise ValueError("sparsity_blocks is only supported for 4-D tensors")
 
     if len(block_shape) != 4:
         raise ValueError("Block shape must be specified as a 4-element tuple")
-    block_repititions, block_depth, block_height, block_width = block_shape
+    block_repetitions, block_depth, block_height, block_width = block_shape
     if not block_width == block_height == 1:
         raise ValueError("Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1")
 
@@ -267,8 +267,20 @@ def sparsity_blocks(tensor, block_shape):
     kernel_size = tensor.size(2) * tensor.size(3)
 
     # Create a view where each block is a column
-    view1 = tensor.view(num_filters*num_channels//(block_depth*block_repititions),
-                        block_depth*block_repititions, kernel_size)
+    if block_depth > 1:
+        view_dims = (
+            num_filters*num_channels//(block_repetitions*block_depth),
+            block_repetitions*block_depth,
+            kernel_size,
+            )
+    else:
+        view_dims = (
+            num_filters // block_repetitions,
+            block_repetitions,
+            -1,
+            )
+    view1 = tensor.view(*view_dims)
+
     # Next, compute the sums of each column (block)
     block_sums = view1.abs().sum(dim=1)
 
