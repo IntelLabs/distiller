@@ -99,10 +99,10 @@ class StructuredAGP(AutomatedGradualPrunerBase):
 # TODO: this class parameterization is cumbersome: the ranking functions (per structure)
 # should come from the YAML schedule
 class L1RankedStructureParameterPruner_AGP(StructuredAGP):
-    def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None):
+    def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None, kwargs=None):
         super().__init__(name, initial_sparsity, final_sparsity)
-        self.pruner = L1RankedStructureParameterPruner(name, group_type, desired_sparsity=0,
-                                                       weights=weights, group_dependency=group_dependency)
+        self.pruner = L1RankedStructureParameterPruner(name, group_type, desired_sparsity=0, weights=weights,
+                                                       group_dependency=group_dependency, kwargs=kwargs)
 
 
 class ActivationAPoZRankedFilterPruner_AGP(StructuredAGP):
