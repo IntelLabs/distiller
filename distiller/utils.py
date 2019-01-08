@@ -131,7 +131,7 @@ def volume(tensor):
     """return the volume of a pytorch tensor"""
     if isinstance(tensor, torch.FloatTensor) or isinstance(tensor, torch.cuda.FloatTensor):
         return np.prod(tensor.shape)
-    if isinstance(tensor, tuple):
+    if isinstance(tensor, tuple) or isinstance(tensor, list):
         return np.prod(tensor)
     raise ValueError
 
@@ -244,6 +244,50 @@ def sparsity_ch(tensor):
 def density_ch(tensor):
     """Channel-wise density for 4D tensors"""
     return 1 - sparsity_ch(tensor)
+
+
+def sparsity_blocks(tensor, block_shape):
+    """Block-wise sparsity for 4D tensors
+
+    Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1
+    """
+    if tensor.dim() != 4:
+        raise ValueError("sparsity_blocks is only supported for 4-D tensors")
+
+    if len(block_shape) != 4:
+        raise ValueError("Block shape must be specified as a 4-element tuple")
+    block_repetitions, block_depth, block_height, block_width = block_shape
+    if not block_width == block_height == 1:
+        raise ValueError("Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1")
+
+    super_block_volume = volume(block_shape)
+    num_super_blocks = volume(tensor) / super_block_volume
+
+    num_filters, num_channels = tensor.size(0), tensor.size(1)
+    kernel_size = tensor.size(2) * tensor.size(3)
+
+    # Create a view where each block is a column
+    if block_depth > 1:
+        view_dims = (
+            num_filters*num_channels//(block_repetitions*block_depth),
+            block_repetitions*block_depth,
+            kernel_size,
+            )
+    else:
+        view_dims = (
+            num_filters // block_repetitions,
+            block_repetitions,
+            -1,
+            )
+    view1 = tensor.view(*view_dims)
+
+    # Next, compute the sums of each column (block)
+    block_sums = view1.abs().sum(dim=1)
+
+    # Next, compute the sums of each column (block)
+    block_sums = view1.abs().sum(dim=1)
+    nonzero_blocks = len(torch.nonzero(block_sums))
+    return 1 - nonzero_blocks/num_super_blocks
 
 
 def sparsity_matrix(tensor, dim):
