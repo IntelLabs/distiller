@@ -88,7 +88,7 @@ RL_AGENT = "ClippedPPO"
 
 def is_using_continuous_action_space(agent):
     return agent in ("DDPG", "ClippedPPO")
-
+    
 
 def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     """
@@ -693,18 +693,8 @@ class DistillerWrapperEnvironment(gym.Env):
         return fname
 
 
-def get_dummy_input(dataset):
-    if dataset == 'imagenet':
-        dummy_input = torch.randn(1, 3, 224, 224)
-    elif dataset == 'cifar10':
-        dummy_input = torch.randn(1, 3, 32, 32)
-    else:
-        raise ValueError("dataset %s is not supported" % dataset)
-    return dummy_input
-
-
 def collect_conv_details(model, dataset, perform_thinning):
-    dummy_input = get_dummy_input(dataset)
+    dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
     conv_layers = OrderedDict()
     total_macs = 0
