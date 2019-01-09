@@ -270,10 +270,13 @@ def main():
 
         # Update the list of top scores achieved so far, and save the checkpoint
         if top1 > 0:
-            best_epochs.append(distiller.MutableNamedTuple({'top1': top1, 'top5': top5, 'epoch': epoch}))
+            sparsity = (distiller.weights_sparsity_tbl_summary(model, return_total_sparsity=True)[1]
+                if args.compress else 0)
+            best_epochs.append(distiller.MutableNamedTuple(
+                {'top1': top1, 'top5': top5, 'sparsity': sparsity, 'epoch': epoch}))
         # Keep best_epochs sorted from best to worst
-        # Sort by top1 first, secondary sort by top5, and so forth
-        best_epochs.sort(key=operator.attrgetter('top1', 'top5', 'epoch'), reverse=True)
+        # Sort by sparsity first, secondary sort by top1, and so forth
+        best_epochs.sort(key=operator.attrgetter('sparsity', 'top1', 'top5', 'epoch'), reverse=True)
         for score in best_epochs[:args.num_best_scores]:
             msglogger.info('==> Best Top1: %.3f Top5: %.3f on epoch: %d',
                            score.top1, score.top5, score.epoch)
