@@ -78,16 +78,8 @@ def assign_layer_fq_names(container, name=None):
     Sometimes we need to access modules by their names, and we'd like to use
     fully-qualified names for convinience.
     """
-    is_leaf = True
-    for key, module in container._modules.items():
-        try:
-            assign_layer_fq_names(module, ".".join([name, key]) if name is not None else key)
-            is_leaf = False
-        except AttributeError:
-            if module is not None:
-                raise
-    if is_leaf:
-        container.distiller_name = name
+    for name, module in container.named_modules():
+        module.distiller_name = name
 
 
 def find_module_by_fq_name(model, fq_mod_name):
@@ -472,6 +464,10 @@ def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total
         log_freq: The number of steps between logging records
         loggers: A list of loggers to send the log info to
     """
+    if loggers is None:
+        return
+    if not isinstance(loggers, list):
+        loggers = [loggers]
     for logger in loggers:
         logger.log_training_progress(stats_dict, epoch,
                                      steps_completed,
@@ -499,6 +495,16 @@ def has_children(module):
         return True
     except StopIteration:
         return False
+
+
+def get_dummy_input(dataset):
+    if dataset == 'imagenet':
+        dummy_input = torch.randn(1, 3, 224, 224)
+    elif dataset == 'cifar10':
+        dummy_input = torch.randn(1, 3, 32, 32)
+    else:
+        raise ValueError("dataset %s is not supported" % dataset)
+    return dummy_input
 
 
 def make_non_parallel_copy(model):
