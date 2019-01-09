@@ -151,7 +151,8 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
-parser.add_argument('--amc', dest='AMC', action='store_true', help='temp HACK')
+parser.add_argument('--amc', dest='AMC', action='store_true', help='AutoML Compression')
+parser.add_argument('--greedy', dest='greedy', action='store_true', help='greedy filter pruning')
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                     help='Display the confusion matrix')
 parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
@@ -358,6 +359,9 @@ def main():
     if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
 
+    if args.greedy:
+        return greedy(model, criterion, optimizer, pylogger, args)
+
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
         return summarize_model(model, args.dataset, which_summary=args.summary)
@@ -374,7 +378,7 @@ def main():
     activations_collectors = create_activation_stats_collectors(model, collection_phase=args.activation_stats)
 
     if args.sensitivity is not None:
-        sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
+        sensitivities = np.arange(*args.sensitivity_range)
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
     if args.evaluate:
@@ -780,8 +784,6 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
     # This sample application can be invoked to execute Sensitivity Analysis on your
     # model.  The ouptut is saved to CSV and PNG.
     msglogger.info("Running sensitivity tests")
-    if not isinstance(loggers, list):
-        loggers = [loggers]
     test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
                        loggers=loggers, args=args,
                        activations_collectors=create_activation_stats_collectors(model, None))
@@ -812,6 +814,19 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
     ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+
+
+def greedy(model, criterion, optimizer, loggers, args):
+    train_loader, val_loader, test_loader, _ = apputils.load_data(
+        args.dataset, os.path.expanduser(args.data), args.batch_size,
+        args.workers, args.validation_size, args.deterministic)
+
+    test_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                      loggers=loggers, args=args,
+                      activations_collectors=create_activation_stats_collectors(model, None))
+    train_fn = partial(train, train_loader=train_loader, criterion=criterion,
+                       loggers=loggers, args=args)
+    distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args, 0.5, 0.10, test_fn, train_fn)
 
 
 if __name__ == '__main__':
