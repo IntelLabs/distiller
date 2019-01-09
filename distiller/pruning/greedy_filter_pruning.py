@@ -22,9 +22,25 @@ import distiller
 from apputils import SummaryGraph, save_checkpoint
 from distiller import normalize_module_name
 
-
-__all__ = ['greedy_pruner']
+__all__ = ['add_greedy_pruner_args', 'greedy_pruner']
 msglogger = logging.getLogger()
+
+
+def add_greedy_pruner_args(argparser, arch_choices=None, enable_pretrained=False):
+    """
+    Helper function to make it easier to add command-line arguments for Greedy Prunign
+    to any application.
+
+    Arguments:
+        argparser (argparse.ArgumentParser): Existing parser to which to add the arguments
+    """
+    group = argparser.add_argument_group('Greedy Pruning')
+    group.add_argument('--greedy-ft-epochs', type=int, default=1,
+                       help='The number of epochs to fine-tune each discovered network')
+    group.add_argument('--greedy-target-density', type=float,
+                       help='Target density of the network we are seeking')
+    group.add_argument('--greedy-pruning-step', type=float, default=0.10,
+                       help='The size of each pruning step (as a fraction in [0..1])')
 
 
 def prune_tensor(param, param_name, fraction_to_prune, zeros_mask_dict):
@@ -44,14 +60,15 @@ def prune_tensor(param, param_name, fraction_to_prune, zeros_mask_dict):
     return distiller.sparsity_3D(param)
 
 
-def find_most_robust_layer(model, pruning_step, test_func, train_fn, app_args):
+def find_most_robust_layer(model, pruning_step, test_func, train_fn, app_args, tensors_to_prune=None):
     """Find the layer that is most robust to pruning 'pruning_step' filters.
 
     For each layer: prune 'step' percent of the filters, fine-tune, and measure top1 accuracy
     """
-    net_params = [param_name for param_name, _ in model.named_parameters()]
+    if tensors_to_prune is None:
+        tensors_to_prune = [param_name for param_name, _ in model.named_parameters()]
     best_layer = (-np.inf, -np.inf, None, None, None)  # format: (prec1, prec5, param_name, pruned_model, zeros_mask_dict)
-    for param_name in net_params:
+    for param_name in tensors_to_prune:
         if model.state_dict()[param_name].dim() != 4:
             continue
 
@@ -76,14 +93,14 @@ def find_most_robust_layer(model, pruning_step, test_func, train_fn, app_args):
     return best_layer
 
 
-def get_model_compute_budget(model, dataset):
+def get_model_compute_budget(model, dataset, tensors_to_prune=None):
     """Return the compute budget of the Convolution layers in an image-classifier.
     """
     dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
     total_macs = 0
     for name, m in model.named_modules():
-        if isinstance(m, torch.nn.Conv2d):
+        if isinstance(m, torch.nn.Conv2d) and (tensors_to_prune is None or name in tensors_to_prune):
             # Use the SummaryGraph to obtain some other details of the models
             conv_op = g.find_op(normalize_module_name(name))
             assert conv_op is not None
@@ -113,25 +130,47 @@ def record_network_details(fields):
         writer.writerow(fields)
 
 
+# resnet50_params = ["module.layer1.0.conv2.weight",
+#                    "module.layer1.1.conv2.weight",
+#                    "module.layer1.2.conv2.weight",
+#                    "module.layer2.0.conv2.weight",
+#                    "module.layer2.1.conv2.weight",
+#                    "module.layer2.2.conv2.weight",
+#                    "module.layer2.3.conv2.weight",
+#                    "module.layer3.0.conv2.weight",
+#                    "module.layer3.1.conv2.weight",
+#                    "module.layer3.2.conv2.weight",
+#                    "module.layer3.3.conv2.weight",
+#                    "module.layer3.4.conv2.weight",
+#                    "module.layer3.5.conv2.weight",
+#                    "module.layer4.0.conv2.weight",
+#                    "module.layer4.1.conv2.weight",
+#                    "module.layer4.2.conv2.weight"]
+# resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
+resnet50_params = resnet50_layers = None
+
+
 def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_fn, train_fn):
     dataset = app_args.dataset
     arch = app_args.arch
     create_network_record_file()
-    total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset)
+    total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
     iteration = 0
     while total_macs > fraction_to_prune * dense_total_macs:
         iteration += 1
         prec1, prec5, param_name, pruned_model, zeros_mask_dict = find_most_robust_layer(pruned_model, pruning_step,
-                                                                                         test_fn, train_fn, app_args)
+                                                                                         test_fn, train_fn, app_args,
+                                                                                         resnet50_params)
         assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
         # Physically remove filters
         distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
 
-        total_macs = get_model_compute_budget(pruned_model, dataset)
+        total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
         results = (iteration, prec1, param_name, total_macs/dense_total_macs, total_macs)
         record_network_details(results)
         msglogger.info("Iteration {}: {} {} {}".format(*results[0:4]))
 
+    assert iteration > 0
     prec1, prec5, loss = test_fn(model=pruned_model)
     print(prec1, prec5, loss)
     scheduler = create_scheduler(pruned_model, zeros_mask_dict)

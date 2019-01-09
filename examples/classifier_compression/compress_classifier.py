@@ -200,6 +200,7 @@ quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
 ADC.add_automl_args(parser)
+distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
 
 
 def check_pytorch_version():
@@ -826,7 +827,11 @@ def greedy(model, criterion, optimizer, loggers, args):
                       activations_collectors=create_activation_stats_collectors(model, None))
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
-    distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args, 0.5, 0.10, test_fn, train_fn)
+    assert args.greedy_target_density is not None
+    distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args,
+                                                          args.greedy_target_density,
+                                                          args.greedy_pruning_step,
+                                                          test_fn, train_fn)
 
 
 if __name__ == '__main__':
