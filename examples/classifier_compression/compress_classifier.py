@@ -383,8 +383,7 @@ def main():
             teacher, _, _ = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
-        compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
-                                         frequency=1)
+        compression_scheduler.add_policy(args.kd_policy, range(args.kd_start_epoch, args.epochs, 1))
 
         msglogger.info('\nStudent-Teacher knowledge distillation enabled:')
         msglogger.info('\tTeacher Model: %s', args.kd_teacher)
