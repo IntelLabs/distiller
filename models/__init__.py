@@ -51,6 +51,10 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         dataset:
         arch:
         parallel:
+        device_ids: Devices on which model should be created -
+            None - GPU if available, otherwise CPU
+            -1 - CPU
+            >=0 - GPU device IDs
     """
     msglogger.info('==> using %s dataset' % dataset)
 
@@ -81,5 +85,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     elif parallel:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
-    model.cuda()
+    if torch.cuda.is_available() and device_ids != -1:
+        model.cuda()
+
     return model

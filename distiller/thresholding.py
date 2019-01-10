@@ -62,7 +62,7 @@ def group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         view_2d = param.view(-1, param.size(2) * param.size(3))
         # 1. Determine if the kernel "value" is below the threshold, by creating a 1D
         #    thresholds tensor with length = #IFMs * # OFMs
-        thresholds = torch.Tensor([threshold] * param.size(0) * param.size(1)).cuda()
+        thresholds = torch.Tensor([threshold] * param.size(0) * param.size(1)).to(param.device)
         # 2. Create a binary thresholds mask, where we use the mean of the abs values of the
         #    elements in each channel as the threshold filter.
         # 3. Apply the threshold filter
@@ -71,20 +71,20 @@ def group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
 
     elif group_type == 'Rows':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
-        thresholds = torch.Tensor([threshold] * param.size(0)).cuda()
+        thresholds = torch.Tensor([threshold] * param.size(0)).to(param.device)
         binary_map = threshold_policy(param, thresholds, threshold_criteria)
         return binary_map
 
     elif group_type == 'Cols':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
-        thresholds = torch.Tensor([threshold] * param.size(1)).cuda()
+        thresholds = torch.Tensor([threshold] * param.size(1)).to(param.device)
         binary_map = threshold_policy(param, thresholds, threshold_criteria, dim=0)
         return binary_map
 
     elif group_type == '3D' or group_type == 'Filters':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         view_filters = param.view(param.size(0), -1)
-        thresholds = torch.Tensor([threshold] * param.size(0)).cuda()
+        thresholds = torch.Tensor([threshold] * param.size(0)).to(param.device)
         binary_map = threshold_policy(view_filters, thresholds, threshold_criteria)
         return binary_map
 
@@ -109,7 +109,7 @@ def group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         # Next, compute the sum of the squares (of the elements in each row/kernel)
         kernel_means = view_2d.abs().mean(dim=1)
         k_means_mat = kernel_means.view(num_filters, num_kernels_per_filter).t()
-        thresholds = torch.Tensor([threshold] * num_kernels_per_filter).cuda()
+        thresholds = torch.Tensor([threshold] * num_kernels_per_filter).to(param.device)
         binary_map = k_means_mat.data.mean(dim=1).gt(thresholds).type(param.type())
         return binary_map
 
