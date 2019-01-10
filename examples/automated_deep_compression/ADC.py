@@ -88,7 +88,7 @@ RL_AGENT = "ClippedPPO"
 
 def is_using_continuous_action_space(agent):
     return agent in ("DDPG", "ClippedPPO")
-    
+
 
 def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     """
@@ -115,8 +115,8 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='The number of epochs for training/exploitation')
     group.add_argument('--amc-reward-every-step', action='store_true', default=False,
                        help='Compute the reward at every step')
-
-
+    group.add_argument('--amc-target-density', type=float,
+                       help='Target density of the network we are seeking')
     # group.add_argument('--amc-thinning', action='store_true', default=False,
     #                    help='Perform netowrk thinning after altering each layer')
 
@@ -245,7 +245,7 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
         amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: -(1-top1/100) * math.log(total_macs)
         amc_cfg.action_constrain_fn = None
     elif args.amc_protocol == "mac-constrained":
-        amc_cfg.target_density = 0.5
+        amc_cfg.target_density = args.amc_target_density
         amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
@@ -293,6 +293,27 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
         graph_manager.improve()
 
 
+# This is a temporary hack!
+resnet50_params = ["module.layer1.0.conv2.weight",
+                   "module.layer1.1.conv2.weight",
+                   "module.layer1.2.conv2.weight",
+                   "module.layer2.0.conv2.weight",
+                   "module.layer2.1.conv2.weight",
+                   "module.layer2.2.conv2.weight",
+                   "module.layer2.3.conv2.weight",
+                   "module.layer3.0.conv2.weight",
+                   "module.layer3.1.conv2.weight",
+                   "module.layer3.2.conv2.weight",
+                   "module.layer3.3.conv2.weight",
+                   "module.layer3.4.conv2.weight",
+                   "module.layer3.5.conv2.weight",
+                   "module.layer4.0.conv2.weight",
+                   "module.layer4.1.conv2.weight",
+                   "module.layer4.2.conv2.weight"]
+resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
+resnet50_params = resnet50_layers = None
+
+
 class DistillerWrapperEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
 
@@ -303,13 +324,10 @@ class DistillerWrapperEnvironment(gym.Env):
         if USING_SINGLE_GPU:
             model = distiller.make_non_parallel_copy(model)
         self.orig_model = model
-
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
-        self.conv_layers, self.dense_model_macs, self.dense_model_size = collect_conv_details(
-            model, self.app_args.dataset,
-            self.amc_cfg.perform_thinning)
+        self.conv_layers, self.dense_model_macs, self.dense_model_size = self.collect_conv_details(model)
 
         self.reset(init_only=True)
         msglogger.info("Model %s has %d Convolution layers", self.app_args.arch, len(self.conv_layers))
@@ -360,6 +378,9 @@ class DistillerWrapperEnvironment(gym.Env):
             return self.conv_layers[idx]
         except KeyError:
             return None
+
+    def collect_conv_details(self, model):
+        return collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning, resnet50_layers)
 
     def episode_is_done(self):
         return self.current_layer_id == self.num_layers()
@@ -419,7 +440,7 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = self.get_action(pruning_action)
             msglogger.info("Constrained pruning_action={}".format(pruning_action))
 
-        _, total_macs_before, _ = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
+        _, total_macs_before, _ = self.collect_conv_details(self.model)
         layer_macs = self.get_layer_macs(self.current_layer())
         msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
         msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
@@ -433,7 +454,7 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = 0
 
         self.action_history.append(pruning_action)
-        _, total_macs_after, _ = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
+        _, total_macs_after, _ = self.collect_conv_details(self.model)
         layer_macs_after_action = self.get_layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
@@ -610,10 +631,10 @@ class DistillerWrapperEnvironment(gym.Env):
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
         if self.amc_cfg.perform_thinning:
-            _, total_macs, total_nnz = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
+            _, total_macs, total_nnz = self.collect_conv_details(self.model)
             compression = distiller.model_numel(self.model, param_dims=[4]) / self.dense_model_size
         else:
-            _, total_macs, total_nnz = collect_conv_details(self.model, self.app_args.dataset, self.amc_cfg.perform_thinning)
+            _, total_macs, total_nnz = self.collect_conv_details(self.model)
             compression = 1 - distiller.model_sparsity(self.model)/100
             # What a hack!
             total_nnz *= compression
@@ -693,7 +714,7 @@ class DistillerWrapperEnvironment(gym.Env):
         return fname
 
 
-def collect_conv_details(model, dataset, perform_thinning):
+def collect_conv_details(model, dataset, perform_thinning, layers_to_prune=None):
     dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
     conv_layers = OrderedDict()
@@ -727,5 +748,6 @@ def collect_conv_details(model, dataset, perform_thinning):
 
             conv.name = name
             conv.id = id
-            conv_layers[len(conv_layers)] = conv
+            if layers_to_prune is None or name in layers_to_prune:
+                conv_layers[len(conv_layers)] = conv
     return conv_layers, total_macs, total_params

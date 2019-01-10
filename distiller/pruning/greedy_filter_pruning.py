@@ -93,14 +93,14 @@ def find_most_robust_layer(model, pruning_step, test_func, train_fn, app_args, t
     return best_layer
 
 
-def get_model_compute_budget(model, dataset, tensors_to_prune=None):
+def get_model_compute_budget(model, dataset, layers_to_prune=None):
     """Return the compute budget of the Convolution layers in an image-classifier.
     """
     dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
     total_macs = 0
     for name, m in model.named_modules():
-        if isinstance(m, torch.nn.Conv2d) and (tensors_to_prune is None or name in tensors_to_prune):
+        if isinstance(m, torch.nn.Conv2d) and (layers_to_prune is None or name in layers_to_prune):
             # Use the SummaryGraph to obtain some other details of the models
             conv_op = g.find_op(normalize_module_name(name))
             assert conv_op is not None
@@ -130,23 +130,23 @@ def record_network_details(fields):
         writer.writerow(fields)
 
 
-# resnet50_params = ["module.layer1.0.conv2.weight",
-#                    "module.layer1.1.conv2.weight",
-#                    "module.layer1.2.conv2.weight",
-#                    "module.layer2.0.conv2.weight",
-#                    "module.layer2.1.conv2.weight",
-#                    "module.layer2.2.conv2.weight",
-#                    "module.layer2.3.conv2.weight",
-#                    "module.layer3.0.conv2.weight",
-#                    "module.layer3.1.conv2.weight",
-#                    "module.layer3.2.conv2.weight",
-#                    "module.layer3.3.conv2.weight",
-#                    "module.layer3.4.conv2.weight",
-#                    "module.layer3.5.conv2.weight",
-#                    "module.layer4.0.conv2.weight",
-#                    "module.layer4.1.conv2.weight",
-#                    "module.layer4.2.conv2.weight"]
-# resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
+resnet50_params = ["module.layer1.0.conv2.weight",
+                   "module.layer1.1.conv2.weight",
+                   "module.layer1.2.conv2.weight",
+                   "module.layer2.0.conv2.weight",
+                   "module.layer2.1.conv2.weight",
+                   "module.layer2.2.conv2.weight",
+                   "module.layer2.3.conv2.weight",
+                   "module.layer3.0.conv2.weight",
+                   "module.layer3.1.conv2.weight",
+                   "module.layer3.2.conv2.weight",
+                   "module.layer3.3.conv2.weight",
+                   "module.layer3.4.conv2.weight",
+                   "module.layer3.5.conv2.weight",
+                   "module.layer4.0.conv2.weight",
+                   "module.layer4.1.conv2.weight",
+                   "module.layer4.2.conv2.weight"]
+resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 resnet50_params = resnet50_layers = None
 
 
