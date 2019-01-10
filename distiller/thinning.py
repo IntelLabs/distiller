@@ -394,8 +394,8 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
 
 class StructureRemover(ScheduledTrainingPolicy):
     """A policy which applies a network thinning function"""
-    def __init__(self, thinning_func_str, arch, dataset):
-        super(StructureRemover, self).__init__()
+    def __init__(self, thinning_func_str, arch, dataset, defer_best_checkpoint=False):
+        super(StructureRemover, self).__init__(defer_best_checkpoint=defer_best_checkpoint)
         self.thinning_func = globals()[thinning_func_str]
         self.arch = arch
         self.dataset = dataset

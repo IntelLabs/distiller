@@ -82,9 +82,10 @@ class CompressionScheduler(object):
         for name, param in self.model.named_parameters():
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
+        self.global_policy_end_epoch = None
 
     def add_policy(self, policy, epochs):
-        """Add a new policy to the schedule.
+        """Add a new policy to the schedule and update global_policy_end_epoch.
 
         Args:
             epochs (range, iterable): epochs in which to apply the policy
@@ -103,6 +104,10 @@ class CompressionScheduler(object):
         self.sched_metadata[policy] = {'starting_epoch': starting_epoch,
                                        'ending_epoch': ending_epoch,
                                        'frequency': step_epoch}
+
+        if policy.defer_best_checkpoint:
+            self.global_policy_end_epoch = (max(self.global_policy_end_epoch, ending_epoch)
+                if self.global_policy_end_epoch is not None else ending_epoch)
 
     def on_epoch_begin(self, epoch, optimizer=None):
         if epoch in self.policies:
