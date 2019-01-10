@@ -151,6 +151,7 @@ parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experime
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
                     help='Portion of training dataset to set aside for validation')
+parser.add_argument('--test-size', '--ts', type=float_range, default=1.0, help='Portion of test dataset to use')
 parser.add_argument('--amc', dest='AMC', action='store_true', help='AutoML Compression')
 parser.add_argument('--greedy', dest='greedy', action='store_true', help='greedy filter pruning')
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
@@ -372,7 +373,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_size, args.deterministic, args.test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -804,7 +805,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_size, args.deterministic, args.test_size)
 
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
@@ -820,7 +821,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 def greedy(model, criterion, optimizer, loggers, args):
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_size, args.deterministic, args.test_size)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args,
