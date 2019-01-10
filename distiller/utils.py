@@ -25,6 +25,14 @@ import torch.nn as nn
 from copy import deepcopy
 
 
+def model_device(model):
+    """Determine the device the model is allocated on."""
+    # Source: https://discuss.pytorch.org/t/how-to-check-if-model-is-on-cuda/180
+    if next(model.parameters()).is_cuda:
+        return 'cuda'
+    return 'cpu'
+
+
 def to_np(var):
     return var.data.cpu().numpy()
 
