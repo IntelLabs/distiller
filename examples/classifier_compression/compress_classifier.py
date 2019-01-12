@@ -119,8 +119,10 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', choices=["train", "valid", "test"], default=None,
-                    help='collect activation statistics (WARNING: this slows down training)')
+parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
+                    # choices=["train", "valid", "test"]
+                    help='collect activation statistics on phases: train, valid, and/or test'
+                    ' (WARNING: this slows down training)')
 parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
                     help='print masks sparsity table at end of each epoch')
 parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
@@ -213,7 +215,7 @@ def check_pytorch_version():
         exit(1)
 
 
-def create_activation_stats_collectors(model, collection_phase):
+def create_activation_stats_collectors(model, *phases):
     """Create objects that collect activation statistics.
 
     This is a utility function that creates two collectors:
@@ -222,8 +224,7 @@ def create_activation_stats_collectors(model, collection_phase):
 
     Args:
         model - the model on which we want to collect statistics
-        phase - the statistics collection phase which is either "train" (for training),
-                or "valid" (for validation)
+        phases - the statistics collection phases: train, valid, and/or test
 
     WARNING! Enabling activation statsitics collection will significantly slow down training!
     """
@@ -234,10 +235,7 @@ def create_activation_stats_collectors(model, collection_phase):
 
     distiller.utils.assign_layer_fq_names(model)
 
-    activations_collectors = {"train": missingdict(), "valid": missingdict(), "test": missingdict()}
-    if collection_phase is None:
-        return activations_collectors
-    collectors = missingdict({
+    genCollectors = lambda: missingdict({
         "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
                                                          lambda t: 100 * distiller.utils.sparsity(t)),
         "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",
@@ -246,8 +244,9 @@ def create_activation_stats_collectors(model, collection_phase):
                                                          distiller.utils.activation_channels_apoz),
         "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
     })
-    activations_collectors[collection_phase] = collectors
-    return activations_collectors
+
+    return {k: (genCollectors() if k in phases else missingdict())
+            for k in ('train', 'valid', 'test')}
 
 
 def save_collectors_data(collectors, directory):
@@ -368,7 +367,7 @@ def main():
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
-    activations_collectors = create_activation_stats_collectors(model, collection_phase=args.activation_stats)
+    activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     if args.sensitivity is not None:
         sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
@@ -783,7 +782,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
         loggers = [loggers]
     test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
                        loggers=loggers, args=args,
-                       activations_collectors=create_activation_stats_collectors(model, None))
+                       activations_collectors=create_activation_stats_collectors(model))
     which_params = [param_name for param_name, _ in model.named_parameters()]
     sensitivity = distiller.perform_sensitivity_analysis(model,
                                                          net_params=which_params,
