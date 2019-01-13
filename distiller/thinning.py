@@ -68,12 +68,13 @@ def create_graph(dataset, arch):
     if dataset == 'imagenet':
         dummy_input = torch.randn((1, 3, 224, 224), requires_grad=False)
     elif dataset == 'cifar10':
-        dummy_input = torch.randn((1, 3, 32, 32))
+        dummy_input = torch.randn((1, 3, 32, 32), requires_grad=False)
     assert dummy_input is not None, "Unsupported dataset ({}) - aborting draw operation".format(dataset)
 
     model = create_model(False, dataset, arch, parallel=False)
     assert model is not None
-    return SummaryGraph(model, dummy_input.cuda())
+    dummy_input = dummy_input.to(distiller.model_device(model))
+    return SummaryGraph(model, dummy_input)
 
 
 def param_name_2_layer_name(param_name):
@@ -486,7 +487,7 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                     msglogger.debug("[thinning] {}: setting {} to {}".
                                     format(layer_name, attr, indices_to_select.nelement()))
                     setattr(layers[layer_name], attr,
-                            torch.index_select(running, dim=dim_to_trim, index=indices_to_select))
+                            torch.index_select(running, dim=dim_to_trim, index=indices_to_select.to(running.device)))
             else:
                 msglogger.debug("[thinning] {}: setting {} to {}".format(layer_name, attr, val))
                 setattr(layers[layer_name], attr, val)
@@ -521,13 +522,13 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                     param.grad = param.grad.resize_(*directive[3])
             else:
                 if param.data.size(dim) != len_indices:
-                    param.data = torch.index_select(param.data, dim, indices)
+                    param.data = torch.index_select(param.data, dim, indices.to(param.device))
                     msglogger.debug("[thinning] changed param {} shape: {}".format(param_name, len_indices))
                 # We also need to change the dimensions of the gradient tensor.
                 # If have not done a backward-pass thus far, then the gradient will
                 # not exist, and therefore won't need to be re-dimensioned.
                 if param.grad is not None and param.grad.size(dim) != len_indices:
-                    param.grad = torch.index_select(param.grad, dim, indices)
+                    param.grad = torch.index_select(param.grad, dim, indices.to(param.device))
                     if optimizer_thinning(optimizer, param, dim, indices):
                         msglogger.debug("Updated velocity buffer %s" % param_name)
 

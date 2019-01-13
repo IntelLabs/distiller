@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+from functools import partial
 import numpy as np
 import logging
 import torch
@@ -82,12 +83,17 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
 
     This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
-    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None, kwargs=None):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
-        if group_type not in ['3D', 'Filters', 'Channels', 'Rows']:
-            raise ValueError("Structure {} was requested but"
-                             "currently only filter (3D) and channel ranking is supported".
+        if group_type not in ['3D', 'Filters', 'Channels', 'Rows', 'Blocks']:
+            raise ValueError("Structure {} was requested but "
+                             "currently ranking of this shape is not supported".
                              format(group_type))
+        if group_type == 'Blocks':
+            try:
+                self.block_shape = kwargs['block_shape']
+            except KeyError:
+                raise ValueError("When defining a block pruner you must also specify the block shape")
 
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
@@ -98,6 +104,8 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
             group_pruning_fn = self.rank_and_prune_channels
         elif self.group_type == 'Rows':
             group_pruning_fn = self.rank_and_prune_rows
+        elif self.group_type == 'Blocks':
+            group_pruning_fn = partial(self.rank_and_prune_blocks, block_shape=self.block_shape)
 
         binary_map = group_pruning_fn(fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map)
         return binary_map
@@ -206,6 +214,92 @@ class L1RankedStructureParameterPruner(RankedStructureParameterPruner):
         msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
                        distiller.sparsity(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_rows_to_prune, rows_mags.size(0))
+
+    @staticmethod
+    def rank_and_prune_blocks(fraction_to_prune, param, param_name=None,
+                              zeros_mask_dict=None, model=None, binary_map=None, block_shape=None):
+        """Block-wise pruning for 4D tensors.
+
+        The block shape is specified using a tuple: [block_repetitions, block_depth, block_height, block_width].
+        The dimension 'block_repetitions' specifies in how many consecutive filters the "basic block"
+        (shaped as [block_depth, block_height, block_width]) repeats to produce a (4D) "super block".
+
+        For example:
+
+          block_pruner:
+            class: L1RankedStructureParameterPruner_AGP
+            initial_sparsity : 0.05
+            final_sparsity: 0.70
+            group_type: Blocks
+            kwargs:
+              block_shape: [1,8,1,1]  # [block_repetitions, block_depth, block_height, block_width]
+
+        Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1
+        """
+        if len(block_shape) != 4:
+            raise ValueError("The block shape must be specified as a 4-element tuple")
+        block_repetitions, block_depth, block_height, block_width = block_shape
+        if not block_width == block_height == 1:
+            raise ValueError("Currently the only supported block shape is: block_repetitions x block_depth x 1 x 1")
+        super_block_volume = distiller.volume(block_shape)
+        num_super_blocks = distiller.volume(param) / super_block_volume
+        if distiller.volume(param) % super_block_volume != 0:
+            raise ValueError("The super-block size must divide the weight tensor exactly.")
+
+        num_filters = param.size(0)
+        num_channels = param.size(1)
+        kernel_size = param.size(2) * param.size(3)
+
+        if block_depth > 1:
+            view_dims = (
+                num_filters*num_channels//(block_repetitions*block_depth),
+                block_repetitions*block_depth,
+                kernel_size,
+                )
+        else:
+            view_dims = (
+                num_filters // block_repetitions,
+                block_repetitions,
+                -1,
+                )
+
+        def rank_blocks(fraction_to_prune, param):
+            # Create a view where each block is a column
+            view1 = param.view(*view_dims)
+            # Next, compute the sums of each column (block)
+            block_sums = view1.abs().sum(dim=1)
+
+            # Now group by channels
+            block_mags = block_sums.view(-1)  # flatten
+            k = int(fraction_to_prune * block_mags.size(0))
+            if k == 0:
+                msglogger.info("Too few blocks (%d)- can't prune %.1f%% blocks",
+                               block_mags.size(0), 100*fraction_to_prune)
+                return None, None
+
+            bottomk, _ = torch.topk(block_mags, k, largest=False, sorted=True)
+            return bottomk, block_mags
+
+        def binary_map_to_mask(binary_map, param):
+            a = binary_map.view(view_dims[0], view_dims[2])
+            c = a.unsqueeze(1)
+            d = c.expand(*view_dims).contiguous()
+            return d.view(num_filters, num_channels, param.size(2), param.size(3))
+
+        if binary_map is None:
+            bottomk_blocks, block_mags = rank_blocks(fraction_to_prune, param)
+            if bottomk_blocks is None:
+                # Empty list means that fraction_to_prune is too low to prune anything
+                return
+            threshold = bottomk_blocks[-1]
+            binary_map = block_mags.gt(threshold).type(param.data.type())
+
+        if zeros_mask_dict is not None:
+            zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
+            msglogger.info("L1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)", param_name,
+                           distiller.sparsity_blocks(zeros_mask_dict[param_name].mask, block_shape=block_shape),
+                           fraction_to_prune, binary_map.sum().item(), num_super_blocks)
+        return binary_map
 
 
 def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, binary_map):

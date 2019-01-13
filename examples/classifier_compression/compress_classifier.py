@@ -142,6 +142,10 @@ parser.add_argument('--deterministic', '--det', action='store_true',
                     help='Ensure deterministic execution for re-producible results.')
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
+parser.add_argument('--cpu', action='store_true',
+                    help='Use CPU only. \n'
+                    'Flag not set => uses GPUs according to the --gpus flag value.'
+                    'Flag set => overrides the --gpus flag')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
 parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
@@ -290,20 +294,25 @@ def main():
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
 
-    if args.gpus is not None:
-        try:
-            args.gpus = [int(s) for s in args.gpus.split(',')]
-        except ValueError:
-            msglogger.error('ERROR: Argument --gpus must be a comma-separated list of integers only')
-            exit(1)
-        available_gpus = torch.cuda.device_count()
-        for dev_id in args.gpus:
-            if dev_id >= available_gpus:
-                msglogger.error('ERROR: GPU device ID {0} requested, but only {1} devices available'
-                                .format(dev_id, available_gpus))
+    if args.cpu is not None or not torch.cuda.is_available():
+        # Set GPU index to -1 if using CPU
+        args.device = 'cpu'
+    else:
+        args.device = 'cuda'
+        if args.gpus is not None:
+            try:
+                args.gpus = [int(s) for s in args.gpus.split(',')]
+            except ValueError:
+                msglogger.error('ERROR: Argument --gpus must be a comma-separated list of integers only')
                 exit(1)
-        # Set default device in case the first one on the list != 0
-        torch.cuda.set_device(args.gpus[0])
+            available_gpus = torch.cuda.device_count()
+            for dev_id in args.gpus:
+                if dev_id >= available_gpus:
+                    msglogger.error('ERROR: GPU device ID {0} requested, but only {1} devices available'
+                                    .format(dev_id, available_gpus))
+                    exit(1)
+            # Set default device in case the first one on the list != 0
+            torch.cuda.set_device(args.gpus[0])
 
     # Infer the dataset from the model name
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
@@ -332,10 +341,11 @@ def main():
     if args.resume:
         model, compression_scheduler, start_epoch = apputils.load_checkpoint(
             model, chkpt_file=args.resume)
-        model.cuda()
+        model.to(args.device)
 
     # Define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(args.device)
+
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
@@ -372,7 +382,7 @@ def main():
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
-        model.cuda()
+        model.to(args.device)
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
 
@@ -476,7 +486,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     for train_step, (inputs, target) in enumerate(train_loader):
         # Measure data loading time
         data_time.add(time.time() - end)
-        inputs, target = inputs.to('cuda'), target.to('cuda')
+        inputs, target = inputs.to(args.device), target.to(args.device)
 
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
@@ -600,7 +610,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     end = time.time()
     for validation_step, (inputs, target) in enumerate(data_loader):
         with torch.no_grad():
-            inputs, target = inputs.to('cuda'), target.to('cuda')
+            inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model
             output = model(inputs)
 
@@ -675,7 +685,8 @@ def earlyexit_validate_loss(output, target, criterion, args):
     # but with a grouping of samples equal to the batch size.
     # Note that final group might not be a full batch - so determine actual size.
     this_batch_size = target.size()[0]
-    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False).cuda()
+    earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False).to(args.device)
+
     for exitnum in range(args.num_exits):
         # calculate losses at each sample separately in the minibatch.
         args.loss_exits[exitnum] = earlyexit_validate_criterion(output[exitnum], target)
@@ -744,7 +755,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
                                                           args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
                                                           args.qe_no_clip_layers, args.qe_per_channel)
         quantizer.prepare_model()
-        model.cuda()
+        model.to(args.device)
 
     top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
 

@@ -213,7 +213,8 @@ def model_performance_summary(model, dummy_input, batch_size=1):
     model = distiller.make_non_parallel_copy(model)
     model.apply(install_perf_collector)
     # Now run the forward path and collect the data
-    model(dummy_input.cuda())
+    dummy_input = dummy_input.to(distiller.model_device(model))
+    model(dummy_input)
     # Unregister from the forward hooks
     for handle in hook_handles:
         handle.remove()
