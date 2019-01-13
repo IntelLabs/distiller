@@ -126,6 +126,8 @@ def cifar10_load_data(data_dir, batch_size, num_workers, valid_size, determinist
         indices = list(range(num_test))
         split = int(np.floor(test_size * num_test))
         test_sampler = SubsetRandomSampler(indices[:split])
+    else:
+        test_sampler = SubsetRandomSampler(range(len(testset)))
     test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, sampler=test_sampler,
                                               num_workers=num_workers, pin_memory=True)
 
@@ -199,7 +201,8 @@ def imagenet_load_data(data_dir, batch_size, num_workers, valid_size, determinis
         indices = list(range(num_test))
         split = int(np.floor(test_size * num_test))
         test_sampler = SubsetRandomSampler(indices[:split])
-
+    else:
+        test_sampler = SubsetRandomSampler(range(len(test_dataset)))
     test_loader = torch.utils.data.DataLoader(test_dataset,
                                               batch_size=batch_size, sampler=test_sampler,
                                               num_workers=num_workers, pin_memory=True)
