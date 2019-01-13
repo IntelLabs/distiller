@@ -86,11 +86,14 @@ import examples.automated_deep_compression.ADC as ADC
 msglogger = None
 
 
-def float_range(val_str):
-    val = float(val_str)
-    if val < 0 or val >= 1:
-        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
-    return val
+def float_range(minval=0, maxval=1):
+    """Allows floats in [minval..maxval]"""
+    def checker(val_str):
+        val = float(val_str)
+        if val < minval or val > maxval:
+            raise argparse.ArgumentTypeError('Must be in range [{}..{}] (received {})'.format(minval, maxval, val_str))
+        return val
+    return checker
 
 
 parser = argparse.ArgumentParser(description='Distiller image classification model compression')
@@ -164,6 +167,9 @@ parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type
                     help='number of best scores to track and report (default: 1)')
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                     help='Load a model without DataParallel wrapping it')
+parser.add_argument('--training-epoch-duration', type=float_range, default=1.,
+                    help='scales the duration of training epochs by a value in (0..1] (default: 1.)')
+parser.add_argument('--test-epoch-duration', type=float_range, default=1.)
 
 str_to_quant_mode_map = {'sym': quantization.LinearQuantMode.SYMMETRIC,
                          'asym_s': quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
@@ -481,10 +487,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
 
-    total_samples = len(train_loader.sampler)
+    total_samples = int(len(train_loader.sampler) * args.training_epoch_duration)
     batch_size = train_loader.batch_size
     steps_per_epoch = math.ceil(total_samples / batch_size)
-    msglogger.info('Training epoch: %d samples (%d per mini-batch)', total_samples, batch_size)
+    msglogger.info('Training epoch [%d]: %d samples in %d mini-batches (%d per mini-batch)',
+                   epoch, total_samples, steps_per_epoch, batch_size)
 
     # Switch to train mode
     model.train()
@@ -539,8 +546,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # measure elapsed time
         batch_time.add(time.time() - end)
         steps_completed = (train_step+1)
+        done = train_step >= steps_per_epoch
 
-        if steps_completed % args.print_freq == 0:
+        if done or steps_completed % args.print_freq == 0:
             # Log some statistics
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
@@ -567,6 +575,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
         end = time.time()
+        if done:
+            # sometimes we don't use the entire dataset to train an epoch, so we exit early
+            break
 
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):
@@ -582,14 +593,16 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     """Model Test"""
     msglogger.info('--- test ---------------------')
 
+    if activations_collectors is None:
+        activations_collectors = create_activation_stats_collectors(model, None)
     with collectors_context(activations_collectors["test"]) as collectors:
-        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
+        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args, epoch_duration=args.test_epoch_duration)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
         save_collectors_data(collectors, msglogger.logdir)
     return top1, top5, lossses
 
 
-def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
+def _validate(data_loader, model, criterion, loggers, args, epoch=-1, epoch_duration=1):
     """Execute the validation/test loop."""
     losses = {'objective_loss': tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
@@ -604,11 +617,11 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         args.exit_taken = [0] * args.num_exits
 
     batch_time = tnt.AverageValueMeter()
-    total_samples = len(data_loader.sampler)
+    total_samples = int(len(data_loader.sampler) * epoch_duration)
     batch_size = data_loader.batch_size
     if args.display_confusion:
         confusion = tnt.ConfusionMeter(args.num_classes)
-    total_steps = total_samples / batch_size
+    total_steps = math.ceil(total_samples / batch_size)
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
     # Switch to evaluation mode
@@ -637,7 +650,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             end = time.time()
 
             steps_completed = (validation_step+1)
-            if steps_completed % args.print_freq == 0:
+            done = steps_completed >= total_steps
+            if done or steps_completed % args.print_freq == 0:
                 if not args.earlyexit_thresholds:
                     stats = ('',
                             OrderedDict([('Loss', losses['objective_loss'].mean),
@@ -661,6 +675,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
+            if done:
+                # sometimes we don't use the entire dataset to validate/test, so we exit early
+                break
+
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
@@ -810,6 +828,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
                           loggers=loggers, args=args)
+
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
@@ -824,10 +843,8 @@ def greedy(model, criterion, optimizer, loggers, args):
         args.workers, args.validation_size, args.deterministic, args.test_size)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
-                      loggers=loggers, args=args,
-                      activations_collectors=create_activation_stats_collectors(model, None))
-    train_fn = partial(train, train_loader=train_loader, criterion=criterion,
-                       loggers=loggers, args=args)
+                      args=args, activations_collectors=None)
+    train_fn = partial(train, train_loader=train_loader, criterion=criterion, args=args)
     assert args.greedy_target_density is not None
     distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args,
                                                           args.greedy_target_density,
