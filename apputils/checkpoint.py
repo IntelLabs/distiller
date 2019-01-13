@@ -94,7 +94,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
 
         if 'compression_sched' in checkpoint:
             compression_scheduler = distiller.CompressionScheduler(model)
-            compression_scheduler.load_state_dict(checkpoint['compression_sched'])
+            compression_scheduler.load_state_dict(checkpoint['compression_sched'], distiller.model_device(model))
             msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
                            checkpoint['epoch'])
         else:

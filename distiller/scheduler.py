@@ -187,7 +187,7 @@ class CompressionScheduler(object):
         state = {'masks_dict': masks}
         return state
 
-    def load_state_dict(self, state):
+    def load_state_dict(self, state, device):
         """Loads the scheduler state.
 
         Currently the scheduler state is comprised only of the set of pruning masks.
@@ -210,6 +210,8 @@ class CompressionScheduler(object):
         for name, mask in self.zeros_mask_dict.items():
             masker = self.zeros_mask_dict[name]
             masker.mask = loaded_masks[name]
+            if masker.mask is not None:
+                masker.mask = masker.mask.to(device)
 
     @staticmethod
     def verify_policy_loss(policy_loss):
