@@ -146,7 +146,7 @@ parser.add_argument('--deterministic', '--det', action='store_true',
                     help='Ensure deterministic execution for re-producible results.')
 parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                     help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
-parser.add_argument('--cpu', action='store_true',
+parser.add_argument('--cpu', action='store_true', default=False,
                     help='Use CPU only. \n'
                     'Flag not set => uses GPUs according to the --gpus flag value.'
                     'Flag set => overrides the --gpus flag')
@@ -305,7 +305,7 @@ def main():
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
 
-    if args.cpu is not None or not torch.cuda.is_available():
+    if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
         args.device = 'cpu'
     else:
