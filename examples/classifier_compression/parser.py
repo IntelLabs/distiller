@@ -25,7 +25,7 @@ SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_para
 def getParser():
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
-    parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
+    parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
                         choices=models.ALL_MODEL_NAMES,
                         help='model architecture: ' +
                         ' | '.join(models.ALL_MODEL_NAMES) +
@@ -58,12 +58,12 @@ def getParser():
                         help='print masks sparsity table at end of each epoch')
     parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                         help='log the parameter tensors histograms to file (WARNING: this can use significant disk space)')
-    parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
+    parser.add_argument('--summary', type=lambda s: s.lower(), choices=SUMMARY_CHOICES,
                         help='print a summary of the model, and exit - options: ' +
                         ' | '.join(SUMMARY_CHOICES))
     parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
                         help='configuration file for pruning the model (default is to use hard-coded schedule)')
-    parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
+    parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'], type=lambda s: s.lower(),
                         help='test the sensitivity of layers to pruning')
     parser.add_argument('--sense-range', dest='sensitivity_range', type=float, nargs=3, default=[0.0, 0.95, 0.05],
                         help='an optional parameter for sensitivity testing providing the range of sparsities to test.\n'
