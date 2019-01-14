@@ -152,9 +152,8 @@ parser.add_argument('--cpu', action='store_true', default=False,
                     'Flag set => overrides the --gpus flag')
 parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
 parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+parser.add_argument('--validation-size', '--vs', type=float_range(), default=0.1,
                     help='Portion of training dataset to set aside for validation')
-parser.add_argument('--test-size', '--ts', type=float_range, default=1.0, help='Portion of test dataset to use')
 parser.add_argument('--amc', dest='AMC', action='store_true', help='AutoML Compression')
 parser.add_argument('--greedy', dest='greedy', action='store_true', help='greedy filter pruning')
 parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
@@ -167,9 +166,9 @@ parser.add_argument('--num-best-scores', dest='num_best_scores', default=1, type
                     help='number of best scores to track and report (default: 1)')
 parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                     help='Load a model without DataParallel wrapping it')
-parser.add_argument('--training-epoch-duration', type=float_range, default=1.,
+parser.add_argument('--training-epoch-duration', type=float_range(), default=1.,
                     help='scales the duration of training epochs by a value in (0..1] (default: 1.)')
-parser.add_argument('--test-epoch-duration', type=float_range, default=1.)
+parser.add_argument('--test-epoch-duration', type=float_range(), default=1.)
 
 str_to_quant_mode_map = {'sym': quantization.LinearQuantMode.SYMMETRIC,
                          'asym_s': quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
@@ -299,11 +298,13 @@ def main():
         random.seed(0)
         np.random.seed(0)
         cudnn.deterministic = True
+        args.shuffle_test = False
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
+        args.shuffle_test = True
 
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
@@ -379,7 +380,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic, args.test_size)
+        args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -818,17 +819,13 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    if not isinstance(loggers, list):
-        loggers = [loggers]
-
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic, args.test_size)
+        args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
 
     args.display_confusion = True
-    validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
-                          loggers=loggers, args=args)
-
+    validate_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                          loggers=loggers, args=args, activations_collectors=None)
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
@@ -840,7 +837,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 def greedy(model, criterion, optimizer, loggers, args):
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic, args.test_size)
+        args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       args=args, activations_collectors=None)

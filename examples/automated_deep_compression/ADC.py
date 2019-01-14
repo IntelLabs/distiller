@@ -649,7 +649,7 @@ class DistillerWrapperEnvironment(gym.Env):
                                    optimizer=optimizer,
                                    epoch=self.episode)
         # Validate
-        top1, top5, vloss = self.services.validate_fn(model=self.model, epoch=self.episode)
+        top1, top5, vloss = self.services.validate_fn(model=self.model)
         reward = self.amc_cfg.reward_fn(self, top1, top5, vloss, total_macs)
 
         if log_stats:
