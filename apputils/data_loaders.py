@@ -29,7 +29,7 @@ import numpy as np
 DATASETS_NAMES = ['imagenet', 'cifar10']
 
 
-def load_data(dataset, data_dir, batch_size, workers, valid_size=0.1, deterministic=False, test_size=1.0):
+def load_data(dataset, data_dir, batch_size, workers, valid_size=0.1, deterministic=False, shuffle_test=False):
     """Load a dataset.
 
     Args:
@@ -42,7 +42,7 @@ def load_data(dataset, data_dir, batch_size, workers, valid_size=0.1, determinis
           Note that deterministic data loading suffers from poor performance.
     """
     assert dataset in DATASETS_NAMES
-    params = (data_dir, batch_size, workers, valid_size, deterministic, test_size)
+    params = (data_dir, batch_size, workers, valid_size, deterministic, shuffle_test)
     if dataset == 'cifar10':
         return cifar10_load_data(*params)
     if dataset == 'imagenet':
@@ -63,7 +63,7 @@ def __deterministic_worker_init_fn(worker_id, seed=0):
     torch.manual_seed(seed)
 
 
-def cifar10_load_data(data_dir, batch_size, num_workers, valid_size, deterministic, test_size):
+def cifar10_load_data(data_dir, batch_size, num_workers, valid_size, deterministic, shuffle_test=False):
     """Load the CIFAR10 dataset.
 
     The original training dataset is split into training and validation sets (code is
@@ -120,15 +120,7 @@ def cifar10_load_data(data_dir, batch_size, num_workers, valid_size, determinist
 
     testset = datasets.CIFAR10(root=data_dir, train=False,
                                download=True, transform=transform_test)
-    test_sampler = None
-    if test_size < 1.0:
-        num_test = len(testset)
-        indices = list(range(num_test))
-        split = int(np.floor(test_size * num_test))
-        test_sampler = SubsetRandomSampler(indices[:split])
-    else:
-        test_sampler = SubsetRandomSampler(range(len(testset)))
-    test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, sampler=test_sampler,
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=shuffle_test,
                                               num_workers=num_workers, pin_memory=True)
 
     input_shape = __image_size(train_dataset)
@@ -137,7 +129,7 @@ def cifar10_load_data(data_dir, batch_size, num_workers, valid_size, determinist
     return train_loader, valid_loader or test_loader, test_loader, input_shape
 
 
-def imagenet_load_data(data_dir, batch_size, num_workers, valid_size, deterministic, test_size):
+def imagenet_load_data(data_dir, batch_size, num_workers, valid_size, deterministic, shuffle_test=False):
     """Load the ImageNet dataset.
 
     Somewhat unconventionally, we use the ImageNet validation dataset as our test dataset,
@@ -195,16 +187,8 @@ def imagenet_load_data(data_dir, batch_size, num_workers, valid_size, determinis
                                                    num_workers=num_workers, pin_memory=True,
                                                    worker_init_fn=worker_init_fn)
 
-    test_sampler = None
-    if test_size < 1.0:
-        num_test = len(test_dataset)
-        indices = list(range(num_test))
-        split = int(np.floor(test_size * num_test))
-        test_sampler = SubsetRandomSampler(indices[:split])
-    else:
-        test_sampler = SubsetRandomSampler(range(len(test_dataset)))
     test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=batch_size, sampler=test_sampler,
+                                              batch_size=batch_size, shuffle=shuffle_test,
                                               num_workers=num_workers, pin_memory=True)
 
     # If validation split was 0 we use the test set as the validation set
