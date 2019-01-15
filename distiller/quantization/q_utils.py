@@ -100,6 +100,18 @@ def get_quantized_range(num_bits, signed=True):
         return -n, n - 1
     return 0, 2 ** num_bits - 1
 
+class BinaryQuantizeSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, inplace=False):
+        if inplace:
+            ctx.mark_dirty(input)
+        E = input.abs().mean()
+        output = input.sign() * E
+        return output
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None, None, None, None
 
 class LinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
