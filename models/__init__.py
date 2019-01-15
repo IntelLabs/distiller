@@ -80,12 +80,13 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         print("FATAL ERROR: create_model does not support models for dataset %s" % dataset)
         exit()
 
-    if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
-        model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
-    elif parallel:
-        model = torch.nn.DataParallel(model, device_ids=device_ids)
-
     if torch.cuda.is_available() and device_ids != -1:
-        model.cuda()
+        device = 'cuda'
+        if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
+            model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
+        elif parallel:
+            model = torch.nn.DataParallel(model, device_ids=device_ids)
+    else:
+        device = 'cpu'
 
-    return model
+    return model.to(device)
