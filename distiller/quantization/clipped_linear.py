@@ -125,6 +125,16 @@ class WRPNQuantizer(Quantizer):
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
 
+def dorefa_quantize_param(param_fp, param_meta):
+    if param_meta.num_bits == 1:
+        out = BinaryQuantizeSTE.apply(param_fp)
+    else:
+        scale, zero_point = asymmetric_linear_quantization_params(param_meta.num_bits, 0, 1, signed=False)
+        out = param_fp.tanh()
+        out = out / (2 * out.abs().max()) + 0.5
+        out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)
+        out = 2 * out - 1
+    return out
 
 def dorefa_quantize_param(param_fp, param_meta):
     scale, zero_point = asymmetric_linear_quantization_params(param_meta.num_bits, 0, 1, signed=False)
