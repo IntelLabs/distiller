@@ -297,6 +297,7 @@ def main():
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
         args.device = 'cpu'
+        args.gpus = -1
     else:
         args.device = 'cuda'
         if args.gpus is not None:
