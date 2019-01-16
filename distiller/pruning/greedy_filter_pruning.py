@@ -218,6 +218,10 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
         total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
         results = (iteration, prec1, param_name, total_macs/dense_total_macs, total_macs)
         record_network_details(results)
+        scheduler = create_scheduler(pruned_model, zeros_mask_dict)
+        save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
+                        name='_'.join(("greedy", str(iteration), str(fraction_to_prune))),
+                        dir=msglogger.logdir)
         msglogger.info("Iteration {}: {} {} {}".format(*results[0:4]))
 
     assert iteration > 0
