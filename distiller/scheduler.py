@@ -23,7 +23,7 @@ import logging
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
 from .policy import PolicyLoss, LossComponent
-
+from .utils import model_device
 msglogger = logging.getLogger()
 
 
@@ -187,7 +187,7 @@ class CompressionScheduler(object):
         state = {'masks_dict': masks}
         return state
 
-    def load_state_dict(self, state, device):
+    def load_state_dict(self, state):
         """Loads the scheduler state.
 
         Currently the scheduler state is comprised only of the set of pruning masks.
@@ -207,6 +207,7 @@ class CompressionScheduler(object):
                 print("\t\t" + k)
             exit(1)
 
+        device = model_device(self.model)
         for name, mask in self.zeros_mask_dict.items():
             masker = self.zeros_mask_dict[name]
             masker.mask = loaded_masks[name]
