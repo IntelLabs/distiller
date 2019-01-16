@@ -80,6 +80,8 @@ RLLIB = "coach"
 
 msglogger = logging.getLogger()
 Observation = namedtuple('Observation', ['n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
+LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest'])
+LayerDescLen = len(LayerDesc._fields)
 ALMOST_ONE = 0.9999
 #RL_AGENT = "DDPG"
 #RL_AGENT = "PPO"
@@ -347,6 +349,7 @@ class DistillerWrapperEnvironment(gym.Env):
         self.STATE_EMBEDDING_LEN = len(Observation._fields)
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
+        #self.observation_space = spaces.Box(0, float("inf"), shape=(LayerDescLen * self.num_layers(), ))
         self.create_network_record_file()
 
     def reset(self, init_only=False):
@@ -397,7 +400,7 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         if self.current_layer_id == 0:
             msglogger.info("+" + "-" * 50 + "+")
-            msglogger.info("Starting a new episode")
+            msglogger.info("Starting a new episode %d", self.episode)
             msglogger.info("+" + "-" * 50 + "+")
 
         msglogger.info("Render Environment: current_layer_id=%d" % self.current_layer_id)
@@ -543,6 +546,36 @@ class DistillerWrapperEnvironment(gym.Env):
         obs = np.array(onehot_id + obs)
         return obs
 
+    def whole_network_get_obs(self):
+        """Produce a state embedding (i.e. an observation)"""
+        num_layers = self.num_layers()
+        network_obs = np.empty(shape=(LayerDescLen, num_layers))
+        for layer_id in range(num_layers):
+            layer = self.get_layer(layer_id)
+            layer_macs = self.get_layer_macs(layer)
+            layer_macs_pct = layer_macs/self.dense_model_macs
+            conv_module = distiller.model_find_module(self.model, layer.name)
+            obs =  [layer.t,
+                    conv_module.out_channels,
+                    conv_module.in_channels,
+                    layer.ifm_h,
+                    layer.ifm_w,
+                    layer.stride[0],
+                    layer.k,
+                    layer_macs_pct,
+                    self.removed_macs(),
+                    self.rest_macs()]
+            network_obs[:, layer_id] = np.array(obs)
+
+        #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+        #network_obs = network_obs.reshape(network_obs.shape[0], network_obs.shape[1], 1)
+        network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
+        #msglogger.info("* obs={}".format(network_obs))
+        return network_obs
+
+    def whole_network_get_final_obs(self):
+        return self.get_obs()
+
     def rest_macs_raw(self):
         """Return the number of remaining MACs in the layers following the current layer"""
         rest = 0
@@ -657,7 +690,7 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.info("Total parameters left: %.2f%%" % (compression*100))
             msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
 
-            stats = ('Peformance/Validation/',
+            stats = ('Peformance/EpisodeEnd/',
                      OrderedDict([('Loss', vloss),
                                   ('Top1', top1),
                                   ('Top5', top5),
