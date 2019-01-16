@@ -127,7 +127,7 @@ class WRPNQuantizer(Quantizer):
 
 def dorefa_quantize_param(param_fp, param_meta):
     if param_meta.num_bits == 1:
-        out = BinaryQuantizeSTE.apply(param_fp)
+        out = DorefaParamsBinarizationSTE.apply(param_fp)
     else:
         scale, zero_point = asymmetric_linear_quantization_params(param_meta.num_bits, 0, 1, signed=False)
         out = param_fp.tanh()
@@ -136,14 +136,18 @@ def dorefa_quantize_param(param_fp, param_meta):
         out = 2 * out - 1
     return out
 
-def dorefa_quantize_param(param_fp, param_meta):
-    scale, zero_point = asymmetric_linear_quantization_params(param_meta.num_bits, 0, 1, signed=False)
-    out = param_fp.tanh()
-    out = out / (2 * out.abs().max()) + 0.5
-    out = LinearQuantizeSTE.apply(out, scale, zero_point, True, False)
-    out = 2 * out - 1
-    return out
-
+class DorefaParamsBinarizationSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, inplace=False):
+        if inplace:
+            ctx.mark_dirty(input)
+        E = input.abs().mean()
+        output = input.sign() * E
+        return output
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None
 
 class DorefaQuantizer(Quantizer):
     """
