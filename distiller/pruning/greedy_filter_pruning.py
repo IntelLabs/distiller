@@ -237,7 +237,7 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
                                                                                          test_fn, train_fn,
                                                                                          app_args, resnet50_params,
                                                                                          training_epoch_duration)
-        assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
+        #assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
         # Physically remove filters
         # distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
 
