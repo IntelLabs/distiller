@@ -79,8 +79,7 @@ import apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
-import examples.automated_deep_compression.ADC as ADC
-
+import examples.automated_deep_compression as adc
 
 # Logger handle
 msglogger = None
@@ -205,7 +204,7 @@ quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
                          help='Enable per-channel quantization of weights (per output channel)')
 
 distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
-ADC.add_automl_args(parser)
+adc.automl_args.add_automl_args(parser)
 distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
 
 
@@ -832,7 +831,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
-    ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+    adc.ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 def greedy(model, criterion, optimizer, loggers, args):
@@ -841,7 +840,7 @@ def greedy(model, criterion, optimizer, loggers, args):
         args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
-                      args=args, activations_collectors=None)
+                      loggers=loggers, args=args, activations_collectors=None)
     train_fn = partial(train, train_loader=train_loader, criterion=criterion, args=args)
     assert args.greedy_target_density is not None
     distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args,
