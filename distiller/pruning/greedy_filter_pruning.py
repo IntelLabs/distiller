@@ -40,11 +40,13 @@ def add_greedy_pruner_args(argparser, arch_choices=None, enable_pretrained=False
     """
     group = argparser.add_argument_group('Greedy Pruning')
     group.add_argument('--greedy-ft-epochs', type=int, default=1,
-                       help='The number of epochs to fine-tune each discovered network')
+                       help='number of epochs to fine-tune each discovered network')
     group.add_argument('--greedy-target-density', type=float,
-                       help='Target density of the network we are seeking')
+                       help='target density of the network we are seeking')
     group.add_argument('--greedy-pruning-step', type=float, default=0.10,
-                       help='The size of each pruning step (as a fraction in [0..1])')
+                       help='size of each pruning step (as a fraction in [0..1])')
+    group.add_argument('--greedy-finetuning-policy', choices=["constant", "linear-grow"], default="constant",
+                       help='policy used for determining how long to fine-tune')
 
 
 def prune_tensor(param, param_name, fraction_to_prune, zeros_mask_dict):
@@ -69,7 +71,7 @@ def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
     zeros_mask_dict = distiller.create_model_masks_dict(model_cpy)
     param = model_cpy.state_dict()[param_name]
     if 0 == prune_tensor(param, param_name, pruning_step, zeros_mask_dict):
-        return (-1, -1, -1)  # Did not prune anything
+        return (-1, -1, -1, zeros_mask_dict)  # Did not prune anything
 
     if train_fn is not None:
         # Fine-tune
@@ -78,6 +80,11 @@ def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
         app_args.training_epoch_duration = training_epoch_duration
         train_fn(model=model_cpy, compression_scheduler=create_scheduler(model_cpy, zeros_mask_dict),
                  optimizer=optimizer, epoch=iteration, loggers=[pylogger])
+
+    # Physically remove filters
+    dataset = app_args.dataset
+    arch = app_args.arch
+    distiller.remove_filters(model_cpy, zeros_mask_dict, arch, dataset, optimizer=None)
 
     # Test and record the performance of the pruned model
     prec1, prec5, loss = test_fn(model=model_cpy, loggers=None)
@@ -155,6 +162,20 @@ def get_model_compute_budget(model, dataset, layers_to_prune=None):
     return total_macs
 
 
+def get_param_densities(model, compressed_model, tensors_to_prune):
+    if tensors_to_prune is None:
+        tensors_to_prune = [param_name for param_name, _ in model.named_parameters()]
+
+    densities = []
+    for param_name in tensors_to_prune:
+        if model.state_dict()[param_name].dim() != 4:
+            continue
+        param = model.state_dict()[param_name]
+        compressed_param = compressed_model.state_dict()[param_name]
+        densities.append(torch.numel(compressed_param) / torch.numel(param))
+    return densities
+
+
 def create_scheduler(model, zeros_mask_dict):
     scheduler = distiller.CompressionScheduler(model)
     masks = {param_name: masker.mask for param_name, masker in zeros_mask_dict.items()}
@@ -164,7 +185,7 @@ def create_scheduler(model, zeros_mask_dict):
 
 def create_network_record_file():
     """Create the CSV file and write the column names"""
-    fields = ['iteration', 'top1', 'param_name', 'normalized_macs', 'total_macs']
+    fields = ['iteration', 'top1', 'param_name', 'normalized_macs', 'total_macs', 'densities']
     with open(os.path.join(msglogger.logdir, 'greedy.csv'), 'w') as f:
         writer = csv.writer(f)
         writer.writerow(fields)
@@ -203,9 +224,14 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
     create_network_record_file()
     total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
     iteration = 0
+    model = pruned_model
     while total_macs > fraction_to_prune * dense_total_macs:
         iteration += 1
-        training_epoch_duration = 1 - (total_macs / dense_total_macs)
+        if app_args.greedy_finetuning_policy == "constant":
+            training_epoch_duration = app_args.training_epoch_duration
+        elif app_args.greedy_finetuning_policy == "linear-grow":
+            training_epoch_duration = 1 - (total_macs / dense_total_macs)
+
         prec1, prec5, param_name, pruned_model, zeros_mask_dict = find_most_robust_layer(iteration, pruned_model,
                                                                                          pruning_step,
                                                                                          test_fn, train_fn,
@@ -213,16 +239,18 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
                                                                                          training_epoch_duration)
         assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
         # Physically remove filters
-        distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
+        # distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
 
         total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
-        results = (iteration, prec1, param_name, total_macs/dense_total_macs, total_macs)
+        densities = get_param_densities(model, pruned_model, resnet50_layers)
+        compute_density = total_macs/dense_total_macs
+        results = (iteration, prec1, param_name, compute_density, total_macs, densities)
         record_network_details(results)
         scheduler = create_scheduler(pruned_model, zeros_mask_dict)
         save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
-                        name='_'.join(("greedy", str(iteration), str(fraction_to_prune))),
+                        name="greedy_{}_{:.1f}".format(str(iteration).zfill(3), compute_density*100),
                         dir=msglogger.logdir)
-        msglogger.info("Iteration {}: {} {} {}".format(*results[0:4]))
+        msglogger.info("Iteration {:.2f}: {} {} {:.2f}".format(*results[0:4]))
 
     assert iteration > 0
     prec1, prec5, loss = test_fn(model=pruned_model)
