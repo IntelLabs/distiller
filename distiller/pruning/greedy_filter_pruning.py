@@ -98,6 +98,7 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
     For each layer: prune 'step' percent of the filters, fine-tune, and measure top1 accuracy
     """
     if tensors_to_prune is None:
+        assert False
         tensors_to_prune = [param_name for param_name, _ in model.named_parameters()]
     # best_layer format: (prec1, prec5, param_name, pruned_model, zeros_mask_dict)
     best_layer = (-np.inf, -np.inf, None, None, None, np.inf)
@@ -215,14 +216,28 @@ resnet50_params = ["module.layer1.0.conv2.weight",
                    "module.layer4.1.conv2.weight",
                    "module.layer4.2.conv2.weight"]
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
-resnet50_params = resnet50_layers = None
+
+resnet20_params = ["module.layer1.0.conv1.weight",
+                   "module.layer1.1.conv1.weight",
+                   "module.layer1.2.conv1.weight",
+                   "module.layer2.0.conv1.weight",
+                   "module.layer2.1.conv1.weight",
+                   "module.layer2.2.conv1.weight",
+
+                   "module.layer3.0.conv1.weight",
+                   "module.layer3.1.conv1.weight",
+                   "module.layer3.2.conv1.weight"]
+resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
+resnet_params = resnet20_params
+resnet_layers = resnet20_layers
+#resnet_params = resnet_layers = None
 
 
 def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_fn, train_fn):
     dataset = app_args.dataset
     arch = app_args.arch
     create_network_record_file()
-    total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
+    total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
     iteration = 0
     model = pruned_model
     while total_macs > fraction_to_prune * dense_total_macs:
@@ -235,20 +250,20 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
         prec1, prec5, param_name, pruned_model, zeros_mask_dict = find_most_robust_layer(iteration, pruned_model,
                                                                                          pruning_step,
                                                                                          test_fn, train_fn,
-                                                                                         app_args, resnet50_params,
+                                                                                         app_args, resnet_params,
                                                                                          training_epoch_duration)
         #assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
         # Physically remove filters
         # distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
 
-        total_macs = get_model_compute_budget(pruned_model, dataset, resnet50_layers)
-        densities = get_param_densities(model, pruned_model, resnet50_layers)
+        total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
+        densities = get_param_densities(model, pruned_model, resnet_params)
         compute_density = total_macs/dense_total_macs
         results = (iteration, prec1, param_name, compute_density, total_macs, densities)
         record_network_details(results)
         scheduler = create_scheduler(pruned_model, zeros_mask_dict)
         save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
-                        name="greedy_{}_{:.1f}".format(str(iteration).zfill(3), compute_density*100),
+                        name="greedy__{}__{:.1f}__{:.1f}".format(str(iteration).zfill(3), compute_density*100, prec1),
                         dir=msglogger.logdir)
         msglogger.info("Iteration {:.2f}: {} {} {:.2f}".format(*results[0:4]))
 
