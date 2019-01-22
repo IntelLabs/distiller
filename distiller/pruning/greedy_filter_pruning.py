@@ -38,6 +38,7 @@ def add_greedy_pruner_args(argparser, arch_choices=None, enable_pretrained=False
     Arguments:
         argparser (argparse.ArgumentParser): Existing parser to which to add the arguments
     """
+    argparser.add_argument('--greedy', dest='greedy', action='store_true', help='greedy filter pruning')
     group = argparser.add_argument_group('Greedy Pruning')
     group.add_argument('--greedy-ft-epochs', type=int, default=1,
                        help='number of epochs to fine-tune each discovered network')
