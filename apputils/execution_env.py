@@ -81,7 +81,7 @@ def log_execution_env_state(app_args, gitroot='.'):
     logger.debug("PyTorch: %s", torch.__version__)
     logger.debug("Numpy: %s", np.__version__)
     log_git_state()
-    logger.debug("App args: %s", app_args)
+    logger.debug("Command line: %s", " ".join(app_args))
 
 
 def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
