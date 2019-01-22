@@ -36,5 +36,5 @@ def threshold_model(model, threshold):
     """
     for name, p in model.named_parameters():
        if 'weight' in name:
-           mask = distiller.threshold_mask(param.data, threshold)
+           mask = distiller.threshold_mask(p.data, threshold)
            p.data = p.data.mul_(mask)
