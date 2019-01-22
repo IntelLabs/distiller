@@ -98,7 +98,6 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
     For each layer: prune 'step' percent of the filters, fine-tune, and measure top1 accuracy
     """
     if tensors_to_prune is None:
-        assert False
         tensors_to_prune = [param_name for param_name, _ in model.named_parameters()]
     # best_layer format: (prec1, prec5, param_name, pruned_model, zeros_mask_dict)
     best_layer = (-np.inf, -np.inf, None, None, None, np.inf)
@@ -106,6 +105,11 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
         if model.state_dict()[param_name].dim() != 4:
             continue
         # Make a copy of the model, because when we prune the parameter tensor the model's weights are altered
+        try:
+            del model_cpy
+        except NameError:
+            pass
+        torch.cuda.empty_cache()
         model_cpy = deepcopy(model)
         (prec1, prec5, loss, zeros_mask_dict) = prune_finetune_test(iteration, model_cpy, pruning_step, test_fn,
                                                                     train_fn, app_args, param_name,
@@ -199,22 +203,22 @@ def record_network_details(fields):
         writer.writerow(fields)
 
 
-resnet50_params = ["module.layer1.0.conv2.weight",
-                   "module.layer1.1.conv2.weight",
-                   "module.layer1.2.conv2.weight",
-                   "module.layer2.0.conv2.weight",
-                   "module.layer2.1.conv2.weight",
-                   "module.layer2.2.conv2.weight",
-                   "module.layer2.3.conv2.weight",
-                   "module.layer3.0.conv2.weight",
-                   "module.layer3.1.conv2.weight",
-                   "module.layer3.2.conv2.weight",
-                   "module.layer3.3.conv2.weight",
-                   "module.layer3.4.conv2.weight",
-                   "module.layer3.5.conv2.weight",
-                   "module.layer4.0.conv2.weight",
-                   "module.layer4.1.conv2.weight",
-                   "module.layer4.2.conv2.weight"]
+resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight",
+                   "module.layer1.1.conv1.weight", "module.layer1.1.conv2.weight",
+                   "module.layer1.2.conv1.weight", "module.layer1.2.conv2.weight",
+                   "module.layer2.0.conv1.weight", "module.layer2.0.conv2.weight",
+                   "module.layer2.1.conv1.weight", "module.layer2.1.conv2.weight",
+                   "module.layer2.2.conv1.weight", "module.layer2.2.conv2.weight",
+                   "module.layer2.3.conv1.weight", "module.layer2.3.conv2.weight",
+                   "module.layer3.0.conv1.weight", "module.layer3.0.conv2.weight",
+                   "module.layer3.1.conv1.weight", "module.layer3.1.conv2.weight",
+                   "module.layer3.2.conv1.weight", "module.layer3.2.conv2.weight",
+                   "module.layer3.3.conv1.weight", "module.layer3.3.conv2.weight",
+                   "module.layer3.4.conv1.weight", "module.layer3.4.conv2.weight",
+                   "module.layer3.5.conv1.weight", "module.layer3.5.conv2.weight",
+                   "module.layer4.0.conv1.weight", "module.layer4.0.conv2.weight",
+                   "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
+                   "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 
 resnet20_params = ["module.layer1.0.conv1.weight",
