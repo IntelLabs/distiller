@@ -176,17 +176,23 @@ class Quantizer(object):
 
             curr_parameters = dict(module.named_parameters())
             for param_name, param in curr_parameters.items():
-                if param_name.endswith('bias') and not self.quantize_bias:
-                    continue
+                # Bias is usually quantized according to the accumulator's number of bits
+                # Temporary hack: Assume that number is 32 bits and hard-code it here
+                # TODO: Handle # of bits for bias quantization as "first-class" citizen, similarly to weights
+                n_bits = qbits.wts
+                if param_name.endswith('bias'):
+                    if not self.quantize_bias:
+                        continue
+                    n_bits = 32
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
-                    hack_float_backup_parameter(module, param_name, qbits.wts)
+                    hack_float_backup_parameter(module, param_name, n_bits)
                     fp_attr_name = FP_BKP_PREFIX + param_name
-                self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, qbits.wts))
+                self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, n_bits))
 
                 param_full_name = '.'.join([module_name, param_name])
                 msglogger.info(
-                    "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, qbits.wts))
+                    "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
         # If an optimizer was passed, assume we need to update it
         if self.optimizer:
