@@ -500,7 +500,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f Energy: %.3f Watts\n',
-                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean,energy
+                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean,energy)
 
         if args.display_confusion:
             msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
