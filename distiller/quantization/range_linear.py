@@ -15,6 +15,7 @@
 #
 
 import torch.nn as nn
+import argparse
 from enum import Enum
 from collections import OrderedDict
 
@@ -41,11 +42,6 @@ def verify_mode(mode):
         raise TypeError("'mode' argument can be either a string or member of {0}".format(LinearQuantMode.__name__))
 
 
-###############################################################################
-# Post Training
-###############################################################################
-
-
 def _get_tensor_quantization_params(tensor, num_bits, mode, clip=False, per_channel=False):
     if per_channel and tensor.dim() not in [2, 4]:
         raise ValueError('Per channel quantization possible only with 2D or 4D tensors (linear or conv layer weights)')
@@ -67,6 +63,49 @@ def _get_tensor_quantization_params(tensor, num_bits, mode, clip=False, per_chan
         zp = zp.view(dims)
 
     return scale, zp
+
+
+###############################################################################
+# Post Training
+###############################################################################
+
+
+def add_post_train_quant_args(argparser):
+    str_to_quant_mode_map = {'sym': LinearQuantMode.SYMMETRIC,
+                             'asym_s': LinearQuantMode.ASYMMETRIC_SIGNED,
+                             'asym_u': LinearQuantMode.ASYMMETRIC_UNSIGNED}
+
+    def linear_quant_mode_str(val_str):
+        try:
+            return str_to_quant_mode_map[val_str]
+        except KeyError:
+            raise argparse.ArgumentError('Must be one of {0} (received {1})'.format(list(str_to_quant_mode_map.keys()),
+                                                                                    val_str))
+
+    group = argparser.add_argument_group('Arguments controlling quantization at evaluation time'
+                                         '("post-training quantization")')
+    exc_group = group.add_mutually_exclusive_group()
+    exc_group.add_argument('--quantize-eval', '--qe', action='store_true',
+                       help='Apply linear quantization to model before evaluation. Applicable only if '
+                            '--evaluate is also set')
+    exc_group.add_argument('--qe-calibration', type=int, metavar='NUM_CALIBRATION_BATCHES',
+                       help='Run the model in evaluation mode for the specified number of batches and collect'
+                            'statistics. Ignores all other \'qe--*\' arguments')
+    group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
+                       help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
+    group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
+                       help='Number of bits for quantization of activations')
+    group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
+                       help='Number of bits for quantization of weights')
+    group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
+                       help='Number of bits for quantization of the accumulator')
+    group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
+                       help='Enable clipping of activations using min/max values averaging over batch')
+    group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
+                       help='List of layer names for which not to clip activations. Applicable '
+                            'only if --qe-clip-acts is also set')
+    group.add_argument('--qe-per-channel', '--qepc', action='store_true',
+                       help='Enable per-channel quantization of weights (per output channel)')
 
 
 class RangeLinearQuantWrapper(nn.Module):

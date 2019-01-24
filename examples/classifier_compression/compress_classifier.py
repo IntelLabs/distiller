@@ -90,8 +90,7 @@ def main():
     global msglogger
 
     # Parse arguments
-    prsr = parser.getParser()
-    distiller.knowledge_distillation.add_distillation_args(prsr, ALL_MODEL_NAMES, True)
+    prsr = parser.get_parser()
     args = prsr.parse_args()
 
     if not os.path.exists(args.output_dir):
