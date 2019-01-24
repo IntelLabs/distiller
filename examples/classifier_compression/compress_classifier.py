@@ -80,7 +80,7 @@ from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 import parser
-
+from energy_report import extract_report
 
 # Logger handle
 msglogger = None
@@ -441,6 +441,12 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
     end = time.time()
     for validation_step, (inputs, target) in enumerate(data_loader):
+        #compute energy
+        if(args.quantize_eval == True):
+            os.system("nvidia-smi >> ./report_energy_quantized.txt")
+        else:
+            os.system("nvidia-smi >> ./report_energy_not_quantized.txt")
+            
         with torch.no_grad():
             inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model
@@ -486,9 +492,15 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
+    if(args.quantize_eval == True):
+        energy = extract_report('./report_energy_quantized.txt','report_energy_quantized')
+        
+    else:
+        energy = extract_report('./report_energy_not_quantized.txt','report_energy_not_quantized')
+
     if not args.earlyexit_thresholds:
-        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
-                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
+        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f Energy: %.3f Watts\n',
+                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean,energy
 
         if args.display_confusion:
             msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
