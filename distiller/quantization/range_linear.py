@@ -18,12 +18,14 @@ import torch.nn as nn
 import argparse
 from enum import Enum
 from collections import OrderedDict
+from functools import reduce, partial
 import logging
 import os
 
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
+import distiller.modules
 
 msglogger = logging.getLogger()
 
@@ -125,7 +127,8 @@ def add_post_train_quant_args(argparser):
                        help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
                             'be run (Note that not all layer types are supported for dynamic quantization)')
     group.add_argument('--qe-config-file', type=str, metavar='PATH',
-                       help='Path to YAML file containing configuration for PostTrainLinearQuantizer')
+                       help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
+                            'all other --qe* arguments are ignored)')
 
 
 class RangeLinearQuantWrapper(nn.Module):
@@ -437,6 +440,134 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         return tmpstr
 
 
+class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
+    def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=False,
+                 activation_stats=None):
+        if not isinstance(wrapped_module, distiller.modules.Concat):
+            raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.Concat modules')
+
+        if not activation_stats:
+            raise ValueError(self.__class__.__name__ +
+                             ' must get activation stats, dynamic quantization not supported')
+
+        super(RangeLinearQuantConcatWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
+                                                            clip_acts=clip_acts, activation_stats=activation_stats)
+
+        if self.preset_act_stats:
+            # For concatenation to make sense, we need to match all the inputs' scales, so we
+            # set a re-scale factor based on the preset output scale
+            for idx, in_scale in enumerate(self.inputs_scales()):
+                self.register_buffer('in_{0}_requant_scale'.format(idx), self.output_scale / in_scale)
+
+    def inputs_requant_scales(self):
+        if not self.preset_act_stats:
+            raise RuntimeError('Input quantization parameter iterators only available when activation stats were given')
+        for idx in range(self.num_inputs):
+            name = 'in_{0}_requant_scale'.format(idx)
+            yield getattr(self, name)
+
+    def get_inputs_quantization_params(self, *inputs):
+        return self.inputs_scales(), self.inputs_zero_points()
+
+    def quantized_forward(self, *inputs_q):
+        # Re-quantize all inputs based to the same range (the output range)
+        inputs_re_q = [linear_quantize_clamp(input_q + zp, requant_scale, self.output_zero_point,
+                                             self.acts_min_q_val, self.acts_max_q_val, inplace=False)
+                       for input_q, requant_scale, zp in zip(inputs_q, self.inputs_requant_scales(),
+                                                             self.inputs_zero_points())]
+        return self.wrapped_module(*inputs_re_q)
+
+    def get_output_quantization_params(self, accumulator):
+        return self.output_scale, self.output_zero_point
+
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        # Nothing to do here, since we already re-quantized in quantized_forward prior to the actual concatenation
+        return 1., 0.
+
+
+class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
+    def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=False,
+                 activation_stats=None):
+        if not isinstance(wrapped_module, distiller.modules.EltwiseAdd):
+            raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseAdd modules')
+
+        if not activation_stats:
+            raise ValueError(self.__class__.__name__ +
+                             ' must get activation stats, dynamic quantization not supported')
+
+        super(RangeLinearQuantEltwiseAddWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
+                                                                clip_acts=clip_acts, activation_stats=activation_stats)
+
+        if self.preset_act_stats:
+            # For addition to make sense, all input scales must match. So we set a re-scale factor according
+            # to the preset output scale
+            for idx, in_scale in enumerate(self.inputs_scales()):
+                self.register_buffer('in_{0}_requant_scale'.format(idx), self.output_scale / in_scale)
+
+    def inputs_requant_scales(self):
+        if not self.preset_act_stats:
+            raise RuntimeError('Input quantization parameter iterators only available when activation stats were given')
+        for idx in range(self.num_inputs):
+            name = 'in_{0}_requant_scale'.format(idx)
+            yield getattr(self, name)
+
+    def get_inputs_quantization_params(self, *inputs):
+        return self.inputs_scales(), self.inputs_zero_points()
+
+    def quantized_forward(self, *inputs_q):
+        # Re-scale inputs to the accumulator range
+        inputs_re_q = [linear_quantize_clamp(input_q + zp, requant_scale, 0,
+                                             self.accum_min_q_val, self.accum_max_q_val, inplace=False)
+                       for input_q, requant_scale, zp in zip(inputs_q, self.inputs_requant_scales(),
+                                                             self.inputs_zero_points())]
+        accum = self.wrapped_module(*inputs_re_q)
+        clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
+
+        return accum
+
+    def get_output_quantization_params(self, accumulator):
+        return self.output_scale, self.output_zero_point
+
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        return 1., self.output_zero_point
+
+
+class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
+    def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=False,
+                 activation_stats=None):
+        if not isinstance(wrapped_module, distiller.modules.EltwiseMult):
+            raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseMult modules')
+
+        if not activation_stats:
+            raise ValueError(self.__class__.__name__ +
+                             ' must get activation stats, dynamic quantization not supported')
+
+        super(RangeLinearQuantEltwiseMultWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
+                                                                 clip_acts=clip_acts, activation_stats=activation_stats)
+
+        if self.preset_act_stats:
+            self.register_buffer('accum_scale', reduce(lambda x, y: x * y, self.inputs_scales()))
+
+    def get_inputs_quantization_params(self, *inputs):
+        return self.inputs_scales(), self.inputs_zero_points()
+
+    def quantized_forward(self, *inputs_q):
+        if self.mode != LinearQuantMode.SYMMETRIC:
+            for input_q, zp in zip(inputs_q, self.inputs_zero_points()):
+                input_q += zp
+
+        accum = self.wrapped_module(*inputs_q)
+        clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
+
+        return accum
+
+    def get_output_quantization_params(self, accumulator):
+        return self.output_scale, self.output_zero_point
+
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        return output_scale / self.accum_scale, output_zero_point
+
+
 class PostTrainLinearQuantizer(Quantizer):
     """
     Applies range-based linear quantization to a model.
@@ -489,6 +620,12 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None))
 
+        def replace_non_param_layer(wrapper_type, module, name, qbits_map):
+            norm_name = distiller.utils.normalize_module_name(name)
+            clip = self.clip_acts and norm_name not in self.no_clip_layers
+            return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
+                                activation_stats=self.model_activation_stats.get(norm_name, None))
+
         self.clip_acts = clip_acts
         self.no_clip_layers = [] or no_clip_layers
         self.model_activation_stats = model_activation_stats or {}
@@ -496,6 +633,12 @@ class PostTrainLinearQuantizer(Quantizer):
         self.mode = mode
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
+        self.replacement_factory[distiller.modules.Concat] = partial(
+            replace_non_param_layer, RangeLinearQuantConcatWrapper)
+        self.replacement_factory[distiller.modules.EltwiseAdd] = partial(
+            replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
+        self.replacement_factory[distiller.modules.EltwiseMult] = partial(
+            replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
 
 
 ###############################################################################
@@ -627,11 +770,14 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         self.per_channel_wts = per_channel_wts
 
         def linear_quantize_param(param_fp, param_meta):
-            perch = per_channel_wts and param_fp.dim() in [2, 4]
+            m = param_meta.module
+            # We don't quantize the learned weights of embedding layers per-channel, because they're used
+            # as inputs in subsequent layers and we don't support per-channel activations quantization yet
+            perch = not isinstance(m, nn.Embedding) and per_channel_wts and param_fp.dim() in [2, 4]
+
             with torch.no_grad():
                 scale, zero_point = _get_quant_params_from_tensor(param_fp, param_meta.num_bits, mode,
                                                                   per_channel=perch)
-            m = param_meta.module
             setattr(m, param_meta.q_attr_name + '_scale', scale)
             setattr(m, param_meta.q_attr_name + '_zero_point', zero_point)
             out = LinearQuantizeSTE.apply(param_fp, scale, zero_point, True, False)
@@ -667,7 +813,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         for ptq in self.params_to_quantize:
             m = ptq.module
             param_fp = getattr(m, ptq.fp_attr_name)
-            perch = self.per_channel_wts and param_fp.dim() in [2, 4]
+            perch = not isinstance(m, nn.Embedding) and self.per_channel_wts and param_fp.dim() in [2, 4]
             with torch.no_grad():
                 scale, zero_point = _get_quant_params_from_tensor(param_fp, ptq.num_bits, self.mode,
                                                                   per_channel=perch)

@@ -153,8 +153,8 @@ class Quantizer(object):
         self.params_to_quantize = []
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
-        if module_type not in [nn.Conv2d, nn.Linear]:
-            # For now we support weights quantization only for Conv and FC layers (so, for example, we don't
+        if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
+            # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
             # support quantization of batch norm scale parameters)
             qbits = QBits(acts=qbits.acts, wts=None)
         self.module_qbits_map[module_name] = qbits
