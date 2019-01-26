@@ -592,9 +592,14 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         model.cpu()
-        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers, args.qe_per_channel)
+        if args.qe_config_file:
+            quantizer = distiller.config_component_from_file_by_class(model, args.qe_config_file,
+                                                                      'PostTrainLinearQuantizer')
+        else:
+            quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
+                                                              args.qe_bits_accum, None, args.qe_mode, args.qe_clip_acts,
+                                                              args.qe_no_clip_layers, args.qe_per_channel,
+                                                              args.qe_stats_file)
         quantizer.prepare_model()
         model.to(args.device)
 

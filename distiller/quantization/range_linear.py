@@ -124,6 +124,8 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-stats-file', type=str, metavar='PATH',
                        help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
                             'be run (Note that not all layer types are supported for dynamic quantization)')
+    group.add_argument('--qe-config-file', type=str, metavar='PATH',
+                       help='Path to YAML file containing configuration for PostTrainLinearQuantizer')
 
 
 class RangeLinearQuantWrapper(nn.Module):
@@ -452,11 +454,12 @@ class PostTrainLinearQuantizer(Quantizer):
         model_activation_stats (str / dict / OrderedDict): Either a path to activation stats YAML file, or a dictionary
             containing the stats. If None then stats will be calculated dynamically.
     """
-    def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
+    def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32, bits_overrides=None,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None, per_channel_wts=False,
                  model_activation_stats=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
-                                                       bits_weights=bits_parameters, train_with_fp_copy=False)
+                                                       bits_weights=bits_parameters, bits_overrides=bits_overrides,
+                                                       train_with_fp_copy=False)
 
         mode = verify_mode(mode)
 
@@ -592,7 +595,7 @@ class FakeQuantizationWrapper(nn.Module):
 
 
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
-    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides=None,
                  quantize_bias=True, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
                  quantize_inputs=True, num_bits_inputs=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
@@ -626,8 +629,8 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         def linear_quantize_param(param_fp, param_meta):
             perch = per_channel_wts and param_fp.dim() in [2, 4]
             with torch.no_grad():
-                scale, zero_point = _get_tensor_quantization_params(param_fp, param_meta.num_bits, mode,
-                                                                    per_channel=perch)
+                scale, zero_point = _get_quant_params_from_tensor(param_fp, param_meta.num_bits, mode,
+                                                                  per_channel=perch)
             m = param_meta.module
             setattr(m, param_meta.q_attr_name + '_scale', scale)
             setattr(m, param_meta.q_attr_name + '_zero_point', zero_point)
@@ -666,7 +669,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             param_fp = getattr(m, ptq.fp_attr_name)
             perch = self.per_channel_wts and param_fp.dim() in [2, 4]
             with torch.no_grad():
-                scale, zero_point = _get_tensor_quantization_params(param_fp, ptq.num_bits, self.mode,
-                                                                    per_channel=perch)
+                scale, zero_point = _get_quant_params_from_tensor(param_fp, ptq.num_bits, self.mode,
+                                                                  per_channel=perch)
             m.register_buffer(ptq.q_attr_name + '_scale', torch.ones_like(scale))
             m.register_buffer(ptq.q_attr_name + '_zero_point', torch.zeros_like(zero_point))

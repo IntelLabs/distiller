@@ -91,10 +91,13 @@ class Quantizer(object):
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
     """
-    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
                  quantize_bias=False, train_with_fp_copy=False):
+        if bits_overrides is None:
+            bits_overrides = OrderedDict()
         if not isinstance(bits_overrides, OrderedDict):
-            raise TypeError('bits_overrides must be an instance of collections.OrderedDict')
+            raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
+
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
