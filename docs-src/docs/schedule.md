@@ -238,7 +238,7 @@ policies:
 
 ```
 
-## Quantization
+## Quantization-Aware Training
 
 Similarly to pruners and regularizers, specifying a quantizer in the scheduler YAML follows the constructor arguments of the `Quantizer` class (see details [here](design.md#quantization)). **Note** that only a single quantizer instance may be defined per YAML.
 
@@ -281,7 +281,7 @@ bits_overrides:
     wts: 2
     acts: null
 ```
-        
+
 - **RegEx Note**: Remember that the dot (`.`) is a meta-character (i.e. a reserved character) in regular expressions. So, to match the actual dot characters which separate sub-modules in PyTorch module names, we need to escape it: `\.`
     
 **Overlapping patterns** are also possible, which allows to define some override for a groups of layers and also "single-out" specific layers for different overrides. For example, let's take the last example and configure a different override for `block1.conv1`:
@@ -295,7 +295,7 @@ bits_overrides:
     wts: 2
     acts: null
 ```
-      
+
 - **Important Note**: The patterns are evaluated eagerly - first match wins. So, to properly quantize a model using "broad" patterns and more "specific" patterns as just shown, make sure the specific pattern is listed **before** the broad one.
 
 
@@ -303,14 +303,114 @@ The `QuantizationPolicy`, which controls the quantization procedure during train
 
 ```
 policies:
-    - quantizer:
-        instance_name: dorefa_quantizer
+  - quantizer:
+      instance_name: dorefa_quantizer
       starting_epoch: 0
       ending_epoch: 200
       frequency: 1
 ```
 
 **Important Note**: As mentioned [here](design.md#quantization-aware-training), since the quantizer modifies the model's parameters (assuming training with quantization in the loop is used), the call to `prepare_model()` must be performed before an optimizer is called. Therefore, currently, the starting epoch for a quantization policy must be 0, otherwise the quantization process will not work as expected. If one wishes to do a "warm-startup" (or "boot-strapping"), training for a few epochs with full precision and only then starting to quantize, the only way to do this right now is to execute a separate run to generate the boot-strapped weights, and execute a second which will resume the checkpoint with the boot-strapped weights.
+
+## Post-Training Quantization
+
+Post-training quantization differs from the other techniques described here. Since it is not executed during training, it does not require any Policies nor a Scheduler. Currently, the only method implemented for pots-training quantization is [range-based linear quantization](algo_quantization.md#range-based-linear-quantization). Quantizing a model using this method, requires adding 2 lines of code:
+
+```python
+quantizer = distiller.quantization.PostTrainLinearQuantizer(model, <quantizer arguments>)
+quantizer.prepare_model()
+# Execute evaluation on model as usual
+```
+
+See the documentation for `PostTrainLinearQuantizer` in [range_linear.py](https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py) for details on the available arguments.  
+In addition to directly instantiating the quantizer with arguments, it can also be configured from a YAML file. The syntax for the YAML file is exactly the same as seen in the quantization-aware training section above. Not surprisingly, the `class` defined must be `PostTrainLinearQuantizer`, and any other components or policies defined in the YAML file are ignored. We'll see how to create the quantizer in this manner below.
+
+If more configurability is needed, a helper function can be used that will add a set of command-line arguments to configure the quantizer:
+
+```python
+parser = argparse.ArgumentParser()
+distiller.quantization.add_post_train_quant_args(parser)
+args = parser.parse_args()
+```
+
+These are the available command line arguments:
+
+```
+Arguments controlling quantization at evaluation time("post-training quantization"):
+  --quantize-eval, --qe
+                        Apply linear quantization to model before evaluation.
+                        Applicable only if --evaluate is also set
+  --qe-calibration NUM_CALIBRATION_BATCHES
+                        Run the model in evaluation mode for the specified
+                        number of batches and collect statistics. Ignores all
+                        other 'qe--*' arguments
+  --qe-mode QE_MODE, --qem QE_MODE
+                        Linear quantization mode. Choices: sym | asym_s |
+                        asym_u
+  --qe-bits-acts NUM_BITS, --qeba NUM_BITS
+                        Number of bits for quantization of activations
+  --qe-bits-wts NUM_BITS, --qebw NUM_BITS
+                        Number of bits for quantization of weights
+  --qe-bits-accum NUM_BITS
+                        Number of bits for quantization of the accumulator
+  --qe-clip-acts, --qeca
+                        Enable clipping of activations using min/max values
+                        averaging over batch
+  --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
+                        List of layer names for which not to clip activations.
+                        Applicable only if --qe-clip-acts is also set
+  --qe-per-channel, --qepc
+                        Enable per-channel quantization of weights (per output
+                        channel)
+  --qe-stats-file PATH  Path to YAML file with calibration stats. If not
+                        given, dynamic quantization will be run (Note that not
+                        all layer types are supported for dynamic
+                        quantization)
+  --qe-config-file PATH
+                        Path to YAML file containing configuration for
+                        PostTrainLinearQuantizer (if present, all other --qe*
+                        arguments are ignored)
+```
+
+(Note that `--quantize-eval` and `--qe-calibration` are mutually exclusive.)
+
+When using these command line arguments, the quantizer can be invoked as follows:
+
+```python
+if args.quantize_eval:
+    if args.qe_config_file:
+        quantizer = distiller.config_component_from_file_by_class(model, args.qe_config_file,
+                                                                  'PostTrainLinearQuantizer')
+    else:
+        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
+                                                          args.qe_bits_accum, None, args.qe_mode, args.qe_clip_acts,
+                                                          args.qe_no_clip_layers, args.qe_per_channel,
+                                                          args.qe_stats_file)
+    quantizer.prepare_model()
+    # Execute evaluation on model as usual
+```
+
+Note that the command-line arguments don't expose the `bits_overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
+
+To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+
+### Collecting Statistics for Quantization
+
+To collect generate statistics that can be used for static quantization of activations, do the following (shown here assuming the command line argument `--qe-calibration` shown above is used, which specifies the number of batches to use for statistics generation):
+
+```python
+if args.qe_calibration:
+    distiller.utils.assign_layer_fq_names(model)
+    msglogger.info("Generating quantization calibration stats based on {0} users".format(args.qe_calibration))
+    collector = distiller.data_loggers.QuantCalibrationStatsCollector(model)
+    with collector_context(collector):
+        # Here call your model evaluation function, making sure to execute the
+        # number of batches specified by the qe_calibration argument
+    yaml_path = 'some/dir/quantization_stats.yaml'
+    collector.save(yaml_path)
+```
+
+The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml).
 
 ## Knowledge Distillation
 
