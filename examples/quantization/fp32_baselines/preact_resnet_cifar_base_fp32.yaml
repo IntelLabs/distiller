@@ -2,7 +2,7 @@
 # Applicable to ResNet 20 / 32 / 44 / 56 / 110
 # 
 # Command line for training (running from the compress_classifier.py directory):
-# python compress_classifier.py -a preact_resnet20_cifar --lr 0.1 -p 50 -b 128 <path_to_cifar10_dataset> -j 1 --epochs 200 --compress=../quantization/preact_resnet_cifar_base_fp32.yaml --wd=0.0002 --vs=0 --gpus 0
+# python compress_classifier.py -a preact_resnet20_cifar --lr 0.1 -p 50 -b 128 <path_to_cifar10_dataset> -j 1 --epochs 200 --compress=../quantization/fp32_baselines/preact_resnet_cifar_base_fp32.yaml --wd=0.0002 --vs=0 --gpus 0
 #
 # Notes:
 #  * In '-a preact_resnet20_cifar', replace '20' with the required depth
