@@ -29,22 +29,27 @@ agent_params = ClippedPPOAgentParameters()
 
 agent_params.network_wrappers['main'].learning_rate = 0.0003  #  0.0003
 agent_params.network_wrappers['main'].input_embedders_parameters['observation'].activation_function = 'tanh'
-agent_params.network_wrappers['main'].input_embedders_parameters['observation'].scheme = [Dense(300)]  # was 64
-agent_params.network_wrappers['main'].middleware_parameters.scheme = [Dense(300)]  #  was 64
+agent_params.network_wrappers['main'].input_embedders_parameters['observation'].scheme = [Dense(64)]
+agent_params.network_wrappers['main'].middleware_parameters.scheme = [Dense(64)]
 agent_params.network_wrappers['main'].middleware_parameters.activation_function = 'tanh'
 agent_params.network_wrappers['main'].batch_size = 64
 agent_params.network_wrappers['main'].optimizer_epsilon = 1e-5
 agent_params.network_wrappers['main'].adam_optimizer_beta2 = 0.999
 
 agent_params.algorithm.clip_likelihood_ratio_using_epsilon = 0.2
+agent_params.algorithm.num_consecutive_playing_steps.num_steps = 1024
 agent_params.algorithm.clipping_decay_schedule = LinearSchedule(1.0, 0, 1000000)
+# The entropy coefficient is a regularizer. A policy has maximum entropy when all policies are equally
+# likely and minimum when the one action probability of the policy is dominant. The entropy coefficient
+# is multiplied by the maximum possible entropy and added to loss. This helps prevent premature convergence
+# of one action probability dominating the policy and preventing exploration.
+# Source: https://medium.com/aureliantactics/ppo-hyperparameters-and-ranges-6fc2d29bccbe
+# This value sets the regularization penalty
 agent_params.algorithm.beta_entropy = 0
 agent_params.algorithm.gae_lambda = 0.95
-agent_params.algorithm.discount = 1 #  0.99
+agent_params.algorithm.discount = 1
 agent_params.algorithm.optimization_epochs = 10
 agent_params.algorithm.estimate_state_value_using_gae = True
-#agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(2048)
-agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(32)
 
 # Distributed Coach synchronization type.
 agent_params.algorithm.distributed_coach_synchronization_type = DistributedCoachSynchronizationType.SYNC
