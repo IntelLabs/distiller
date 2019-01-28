@@ -33,6 +33,17 @@ agent_params.network_wrappers['critic'].input_embedders_parameters['observation'
 agent_params.network_wrappers['critic'].middleware_parameters.scheme = [Dense(300)]
 agent_params.network_wrappers['critic'].input_embedders_parameters['action'].scheme = EmbedderScheme.Empty
 
+agent_params.network_wrappers['actor'].optimizer_type = 'Adam'
+agent_params.network_wrappers['actor'].adam_optimizer_beta1 = 0.9
+agent_params.network_wrappers['actor'].adam_optimizer_beta2 = 0.999
+
+agent_params.network_wrappers['critic'].optimizer_type = 'Adam'
+agent_params.network_wrappers['critic'].adam_optimizer_beta1 = 0.9
+agent_params.network_wrappers['critic'].adam_optimizer_beta2 = 0.999
+
+
+agent_params.network_wrappers['actor'].learning_rate = 0.0001  # 0.0001
+agent_params.network_wrappers['critic'].learning_rate = 0.001
 # agent_params.network_wrappers['critic'].clip_gradients = 100
 # agent_params.network_wrappers['actor'].clip_gradients = 100
 
@@ -52,8 +63,7 @@ agent_params.exploration = TruncatedNormalParameters()
 agent_params.algorithm.use_target_network_for_evaluation = True
 #agent_params.exploration.evaluation_noise_percentage = 0.01  # Neta new
 agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
-agent_params.network_wrappers['actor'].learning_rate = 0.0001  # 0.0001
-agent_params.network_wrappers['critic'].learning_rate = 0.001
+
 
 ##############################
 #      Gym                   #
