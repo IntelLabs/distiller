@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
 import logging
 import os
 import sys
@@ -21,9 +20,11 @@ import pytest
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
-
+import distiller
 from models import create_model
 from apputils import load_checkpoint
+
+
 
 def test_load():
     logger = logging.getLogger('simple_example')

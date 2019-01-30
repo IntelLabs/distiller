@@ -44,7 +44,7 @@ def onnx_name_2_pytorch_name(name, op_type):
 
     # First see if there's an instance identifier
     instance = ''
-    if name.find('.') > 0:
+    if name.find('.') >= 0:
         instance = name[name.find('.')+1:]
 
     # Next, split by square brackets
@@ -99,7 +99,8 @@ class SummaryGraph(object):
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
-            torch.onnx._optimize_trace(trace, False)
+            torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
+
             graph = trace.graph()
             self.ops = {}
             self.params = {}
@@ -180,7 +181,7 @@ class SummaryGraph(object):
         tensor['id'] = n.uniqueName()
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
-            s = str(n.type())
+            s = str(n.node())
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
         except ValueError:
@@ -286,7 +287,7 @@ class SummaryGraph(object):
             node_is_an_op = False
             node = self.find_param(node_name)
             if node is None:
-                msglogger.warn("predecessors_f: Could not find node {}".format(node_name))
+                msglogger.warning("predecessors_f: Could not find node {}".format(node_name))
                 return []
 
         if done_list is None:

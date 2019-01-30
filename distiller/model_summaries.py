@@ -20,6 +20,8 @@
     - optimizer state
     - model details
 """
+import distiller
+
 from functools import partial
 import pandas as pd
 from tabulate import tabulate
@@ -27,7 +29,7 @@ import logging
 import torch
 from torch.autograd import Variable
 import torch.optim
-import distiller
+
 from .data_loggers import PythonLogger, CsvLogger
 
 msglogger = logging.getLogger()
