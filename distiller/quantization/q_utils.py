@@ -19,7 +19,7 @@ import torch
 
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
-    out = torch.tensor(sat_val)
+    out = torch.tensor(sat_val) if is_scalar else sat_val.clone().detach()
     if not out.is_floating_point():
         out = out.to(torch.float32)
     if out.dim() == 0:

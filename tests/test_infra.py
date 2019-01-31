@@ -17,13 +17,15 @@ import logging
 import os
 import sys
 import pytest
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
-import distiller
+try:
+    import distiller
+except ImportError:
+    module_path = os.path.abspath(os.path.join('..'))
+    if module_path not in sys.path:
+        sys.path.append(module_path)
+    import distiller
 from models import create_model
 from apputils import load_checkpoint
-
 
 
 def test_load():
@@ -34,6 +36,7 @@ def test_load():
     model, compression_scheduler, start_epoch = load_checkpoint(model, '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
+
 
 def test_load_negative():
     with pytest.raises(FileNotFoundError):
