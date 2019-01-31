@@ -87,7 +87,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         msglogger.info("=> loading checkpoint %s", chkpt_file)
         checkpoint = torch.load(chkpt_file, map_location = lambda storage, loc: storage)
         msglogger.info("Checkpoint keys:\n{}".format("\n\t".join(k for k in checkpoint.keys())))
-        start_epoch = checkpoint['epoch'] + 1
+        start_epoch = checkpoint.get('epoch', -1) + 1
         best_top1 = checkpoint.get('best_top1', None)
         if best_top1 is not None:
             msglogger.info("   best top@1: %.3f", best_top1)
@@ -116,7 +116,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             quantizer = qmd['type'](model, **qmd['params'])
             quantizer.prepare_model()
 
-        msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, checkpoint['epoch'])
+        msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, start_epoch-1)
 
         model.load_state_dict(checkpoint['state_dict'])
         return model, compression_scheduler, start_epoch
