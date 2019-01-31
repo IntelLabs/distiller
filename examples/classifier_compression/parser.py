@@ -51,7 +51,6 @@ def getParser():
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
     parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
-                        # choices=["train", "valid", "test"]
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
@@ -94,6 +93,8 @@ def getParser():
                         help='number of best scores to track and report (default: 1)')
     parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                         help='Load a model without DataParallel wrapping it')
+    parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
+                        help='physically remove zero-filters and create a smaller model')
 
     str_to_quant_mode_map = {
                           'sym': distiller.quantization.LinearQuantMode.SYMMETRIC,
