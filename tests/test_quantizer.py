@@ -265,7 +265,9 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
             assert ptq.fp_attr_name in named_params
 
         # Check number of bits registered correctly
-        assert ptq.num_bits == expected_qbits[ptq.module_name].wts
+        # Bias number of bits is hard-coded to 32 for now...
+        expected_n_bits = 32 if ptq.q_attr_name == 'bias' else expected_qbits[ptq.module_name].wts
+        assert ptq.num_bits == expected_n_bits
 
     q_named_modules = dict(model.named_modules())
     orig_named_modules = dict(m_orig.named_modules())
@@ -315,12 +317,17 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
         if has_children(pre_quant_module):
             continue
 
-        num_bits = expected_qbits[name].wts
+        num_qbits = expected_qbits[name].wts
 
         for param_name, pre_quant_param in pre_quant_module.named_parameters():
-            quantizable = num_bits is not None
+            quantizable = num_qbits is not None
             if param_name.endswith('bias'):
                 quantizable = quantizable and quantize_bias
+                # Bias number of bits is hard-coded to 32 for now...
+                if quantizable:
+                    num_bits = 32
+            else:
+                num_bits = num_qbits
 
             if quantizable and train_with_fp_copy:
                 # "param_name" and "pre_quant_param" refer to the float copy
