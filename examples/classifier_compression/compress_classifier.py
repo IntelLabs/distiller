@@ -51,7 +51,6 @@ models, or with the provided sample models:
 """
 
 import math
-import argparse
 import time
 import os
 import sys
@@ -177,8 +176,7 @@ def main():
 
     # We can optionally resume from a checkpoint
     if args.resume:
-        model, compression_scheduler, start_epoch = apputils.load_checkpoint(
-            model, chkpt_file=args.resume)
+        model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_file=args.resume)
         model.to(args.device)
 
     # Define loss function (criterion) and optimizer
@@ -226,6 +224,15 @@ def main():
         model.to(args.device)
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
+
+    if args.thinnify:
+        #zeros_mask_dict = distiller.create_model_masks_dict(model)
+        assert args.resume is not None, "You must use --resume to provide a checkpoint file to thinnify"
+        distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
+        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
+                                 name="{}_thinned".format(args.resume.replace(".pth.tar", "")), dir=msglogger.logdir)
+        print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
+        return
 
     args.kd_policy = None
     if args.kd_teacher:
