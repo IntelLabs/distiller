@@ -1,9 +1,24 @@
-"""This package contains the implementation of a greedy algorithm which is very similar to NetAdapt and CAR.
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+"""This package contains the implementation of a greedy algorithm that is similar to NetAdapt and CAR.
 
 We score improvement by means of the computation load (MACs/FLOPs) and do not use direct metrics because this is
 an open-source package that runs on many different hardware platforms.
 
-
+References:
 [1] Structural Compression of Convolutional Neural Networks Based on Greedy Filter Pruning
     Reza Abbasi-Asl, Bin Yu https://arxiv.org/abs/1705.07356
 
@@ -160,7 +175,7 @@ def get_model_compute_budget(model, dataset, layers_to_prune=None):
     g = SummaryGraph(model, dummy_input)
     total_macs = 0
     for name, m in model.named_modules():
-        if isinstance(m, torch.nn.Conv2d) and (layers_to_prune is None or name in layers_to_prune):
+        if isinstance(m, torch.nn.Conv2d):
             # Use the SummaryGraph to obtain some other details of the models
             conv_op = g.find_op(normalize_module_name(name))
             assert conv_op is not None
@@ -220,31 +235,41 @@ resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight
                    "module.layer4.0.conv1.weight", "module.layer4.0.conv2.weight",
                    "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
                    "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
-resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 
-resnet20_params = ["module.layer1.0.conv1.weight",
-                   "module.layer1.1.conv1.weight",
-                   "module.layer1.2.conv1.weight",
-                   "module.layer2.0.conv1.weight",
-                   "module.layer2.1.conv1.weight",
-                   "module.layer2.2.conv1.weight",
+resnet20_params = ["module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
+                   "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
+                   "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight"]
 
-                   "module.layer3.0.conv1.weight",
-                   "module.layer3.1.conv1.weight",
-                   "module.layer3.2.conv1.weight"]
-resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
-resnet_params = resnet20_params
-resnet_layers = resnet20_layers
-#resnet_params = resnet_layers = None
+resnet56_params = [ "module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
+                    "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
+                    "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight",
+                    "module.layer1.3.conv1.weight", "module.layer2.3.conv1.weight", "module.layer3.3.conv1.weight",
+                    "module.layer1.4.conv1.weight", "module.layer2.4.conv1.weight", "module.layer3.4.conv1.weight",
+                    "module.layer1.5.conv1.weight", "module.layer2.5.conv1.weight", "module.layer3.5.conv1.weight",
+                    "module.layer1.6.conv1.weight", "module.layer2.6.conv1.weight", "module.layer3.6.conv1.weight",
+                    "module.layer1.7.conv1.weight", "module.layer2.7.conv1.weight", "module.layer3.7.conv1.weight",
+                    "module.layer1.8.conv1.weight", "module.layer2.8.conv1.weight", "module.layer3.8.conv1.weight"]
 
 
 def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_fn, train_fn):
     dataset = app_args.dataset
     arch = app_args.arch
     create_network_record_file()
+
+    # Temporary ugly hack!
+    resnet_layers = None
+    if arch == "resnet20_cifar":
+        resnet_params = resnet20_params
+    elif arch == "resnet56_cifar":
+        resnet_params = resnet56_params
+    elif arch == "resnet50_cifar":
+        resnet_params = resnet50_params
+    resnet_layers = [param[:-len(".weight")] for param in resnet_params]
+
     total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
     iteration = 0
     model = pruned_model
+
     while total_macs > fraction_to_prune * dense_total_macs:
         iteration += 1
         if app_args.greedy_finetuning_policy == "constant":
@@ -257,10 +282,6 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
                                                                                          test_fn, train_fn,
                                                                                          app_args, resnet_params,
                                                                                          training_epoch_duration)
-        #assert distiller.sparsity_3D(zeros_mask_dict[param_name].mask) > 0
-        # Physically remove filters
-        # distiller.remove_filters(pruned_model, zeros_mask_dict, arch, dataset, optimizer=None)
-
         total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
         densities = get_param_densities(model, pruned_model, resnet_params)
         compute_density = total_macs/dense_total_macs
@@ -270,7 +291,8 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
         save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
                         name="greedy__{}__{:.1f}__{:.1f}".format(str(iteration).zfill(3), compute_density*100, prec1),
                         dir=msglogger.logdir)
-        msglogger.info("Iteration {:.2f}: {} {} {:.2f}".format(*results[0:4]))
+        del scheduler
+        msglogger.info("Iteration {}: top1-{:.2f} {} compute-{:.2f}".format(*results[0:4]))
 
     assert iteration > 0
     prec1, prec5, loss = test_fn(model=pruned_model)
