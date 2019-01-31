@@ -15,7 +15,8 @@
 #
 """To execute this code:
 
-$ time python3  compress_classifier.py --arch=plain20_cifar ../../../data.cifar --adc --resume=checkpoint.plain20_cifar.pth.tar --name="AMC-plain20" --lr=0.1
+$ time python3 compress_classifier.py --arch=plain20_cifar ../../../data.cifar10 --resume=checkpoint.plain20_cifar.pth.tar --lr=0.05 --amc --amc-protocol=mac-constrained --amc-target-density=0.5 -p=50
+
 
 Coach installation:
 ===================
@@ -192,6 +193,8 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
     np.random.seed()
     conv_cnt = count_conv_layer(model)
 
+    msglogger.info("Executing AMC: RL agent - %s   RL library - %s", RL_AGENT, RLLIB)
+
     # Create a dictionary of parameters that Coach will handover to DistillerWrapperEnvironment
     # Once it creates it.
     services = distiller.utils.MutableNamedTuple({
@@ -217,7 +220,7 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
         amc_cfg.action_constrain_fn = None
     elif args.amc_protocol == "mac-constrained":
         amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100
+        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100 #(90.5 - top1) / 10
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
         amc_cfg.target_density = 0.5
@@ -265,24 +268,40 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
 
 
 # This is a temporary hack!
-resnet50_params = ["module.layer1.0.conv2.weight",
-                   "module.layer1.1.conv2.weight",
-                   "module.layer1.2.conv2.weight",
-                   "module.layer2.0.conv2.weight",
-                   "module.layer2.1.conv2.weight",
-                   "module.layer2.2.conv2.weight",
-                   "module.layer2.3.conv2.weight",
-                   "module.layer3.0.conv2.weight",
-                   "module.layer3.1.conv2.weight",
-                   "module.layer3.2.conv2.weight",
-                   "module.layer3.3.conv2.weight",
-                   "module.layer3.4.conv2.weight",
-                   "module.layer3.5.conv2.weight",
-                   "module.layer4.0.conv2.weight",
-                   "module.layer4.1.conv2.weight",
-                   "module.layer4.2.conv2.weight"]
+resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight",
+                   "module.layer1.1.conv1.weight", "module.layer1.1.conv2.weight",
+                   "module.layer1.2.conv1.weight", "module.layer1.2.conv2.weight",
+                   "module.layer2.0.conv1.weight", "module.layer2.0.conv2.weight",
+                   "module.layer2.1.conv1.weight", "module.layer2.1.conv2.weight",
+                   "module.layer2.2.conv1.weight", "module.layer2.2.conv2.weight",
+                   "module.layer2.3.conv1.weight", "module.layer2.3.conv2.weight",
+                   "module.layer3.0.conv1.weight", "module.layer3.0.conv2.weight",
+                   "module.layer3.1.conv1.weight", "module.layer3.1.conv2.weight",
+                   "module.layer3.2.conv1.weight", "module.layer3.2.conv2.weight",
+                   "module.layer3.3.conv1.weight", "module.layer3.3.conv2.weight",
+                   "module.layer3.4.conv1.weight", "module.layer3.4.conv2.weight",
+                   "module.layer3.5.conv1.weight", "module.layer3.5.conv2.weight",
+                   "module.layer4.0.conv1.weight", "module.layer4.0.conv2.weight",
+                   "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
+                   "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
+
+resnet20_params = ["module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
+                   "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
+                   "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight"]
+
+resnet56_params = [ "module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
+                    "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
+                    "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight",
+                    "module.layer1.3.conv1.weight", "module.layer2.3.conv1.weight", "module.layer3.3.conv1.weight",
+                    "module.layer1.4.conv1.weight", "module.layer2.4.conv1.weight", "module.layer3.4.conv1.weight",
+                    "module.layer1.5.conv1.weight", "module.layer2.5.conv1.weight", "module.layer3.5.conv1.weight",
+                    "module.layer1.6.conv1.weight", "module.layer2.6.conv1.weight", "module.layer3.6.conv1.weight",
+                    "module.layer1.7.conv1.weight", "module.layer2.7.conv1.weight", "module.layer3.7.conv1.weight",
+                    "module.layer1.8.conv1.weight", "module.layer2.8.conv1.weight", "module.layer3.8.conv1.weight"]
+
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
-resnet50_params = resnet50_layers = None
+resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
+resnet56_layers = [param[:-len(".weight")] for param in resnet56_params]
 
 
 class DistillerWrapperEnvironment(gym.Env):
@@ -291,9 +310,6 @@ class DistillerWrapperEnvironment(gym.Env):
     def __init__(self, model, app_args, amc_cfg, services):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
         self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
-        USING_SINGLE_GPU = False
-        if USING_SINGLE_GPU:
-            model = distiller.make_non_parallel_copy(model)
         self.orig_model = model
         self.app_args = app_args
         self.amc_cfg = amc_cfg
@@ -351,8 +367,20 @@ class DistillerWrapperEnvironment(gym.Env):
         except KeyError:
             return None
 
+    def get_model_resources_requirements(self, model):
+        _, total_macs, total_nnz = collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning)
+        return total_macs, total_nnz
+
     def collect_conv_details(self, model):
-        return collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning, resnet50_layers)
+        # Temporary ugly hack!
+        resnet_layers = None
+        if self.app_args.arch == "resnet20_cifar":
+            resnet_layers = resnet20_layers
+        elif self.app_args.arch == "resnet56_cifar":
+            resnet_layers = resnet56_layers
+        elif self.app_args.arch == "resnet50_cifar":
+            resnet_layers = resnet50_layers
+        return collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning, resnet_layers)
 
     def episode_is_done(self):
         return self.current_layer_id == self.num_layers()
@@ -408,11 +436,11 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = pruning_action / 10
         msglogger.info("\tAgent clipped pruning_action={}".format(pruning_action))
         self.agent_action_history.append(pruning_action)
-        if self.amc_cfg.protocol == "mac-constrained":
-            pruning_action = self.get_action(pruning_action)
+        if self.amc_cfg.action_constrain_fn is not None:
+            pruning_action = self.amc_cfg.action_constrain_fn(self, pruning_action=pruning_action)
             msglogger.info("Constrained pruning_action={}".format(pruning_action))
 
-        _, total_macs_before, _ = self.collect_conv_details(self.model)
+        total_macs_before, _ = self.get_model_resources_requirements(self.model)
         layer_macs = self.get_layer_macs(self.current_layer())
         msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
         msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
@@ -426,7 +454,7 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = 0
 
         self.action_history.append(pruning_action)
-        _, total_macs_after, _ = self.collect_conv_details(self.model)
+        total_macs_after, _ = self.get_model_resources_requirements(self.model)
         layer_macs_after_action = self.get_layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
@@ -438,7 +466,7 @@ class DistillerWrapperEnvironment(gym.Env):
                                                                                         layer_macs_after_action,
                                                                                         (layer_macs - layer_macs_after_action)))
         msglogger.info("self._removed_macs={}".format(self._removed_macs))
-        assert (layer_macs_after_action / layer_macs) == (1 - pruning_action)
+        assert math.isclose(layer_macs_after_action / layer_macs, 1 - pruning_action)
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('requested_action', pruning_action)]))
@@ -450,7 +478,7 @@ class DistillerWrapperEnvironment(gym.Env):
         if self.episode_is_done():
             msglogger.info("Episode is ending")
             observation = self.get_final_obs()
-            reward, top1, total_macs, total_nnz = self.compute_reward()
+            reward, top1, total_macs, total_nnz = self.compute_reward(total_macs_after)
             self.episode += 1
             normalized_macs = total_macs / self.dense_model_macs * 100
             normalized_nnz = total_nnz / self.dense_model_size * 100
@@ -460,7 +488,7 @@ class DistillerWrapperEnvironment(gym.Env):
             observation = self.get_obs()
             reward = 0
             if self.amc_cfg.compute_reward_every_step:
-                reward, top1, total_macs, total_nnz = self.compute_reward(False)
+                reward, top1, total_macs, total_nnz = self.compute_reward(None, False)
 
         self.prev_action = pruning_action
         info = {}
@@ -618,25 +646,27 @@ class DistillerWrapperEnvironment(gym.Env):
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
 
-        if self.amc_cfg.perform_thinning:
-            remove_structures(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
-            conv_p = distiller.model_find_param(self.model, conv_pname)
-            #return distiller.volume(conv_p) / layer.weights_vol
-            return 1 - (self.get_layer_macs(layer) / macs_before)
-        #actual_sparsity = calculate_sparsity(conv_p)
-        #return actual_sparsity
-        # This is a hack
-        assert False, "We should not get to this point"
+        assert self.amc_cfg.perform_thinning
+        remove_structures(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
+        conv_p = distiller.model_find_param(self.model, conv_pname)
+        return 1 - (self.get_layer_macs(layer) / macs_before)
 
-    def compute_reward(self, log_stats=True):
+    def is_macs_constraint_achieved(self, compressed_model_total_macs):
+        current_density = compressed_model_total_macs / self.dense_model_macs
+        return self.amc_cfg.target_density >= current_density
+
+    def compute_reward(self, compressed_model_total_macs, log_stats=True):
         """Compute the reward"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
+        # if (compressed_model_total_macs is not None and
+        #    not self.is_macs_constraint_achieved(compressed_model_total_macs)):
+        #     return [0] * 4
 
         if self.amc_cfg.perform_thinning:
-            _, total_macs, total_nnz = self.collect_conv_details(self.model)
+            total_macs, total_nnz = self.get_model_resources_requirements(self.model)
             compression = distiller.model_numel(self.model, param_dims=[4]) / self.dense_model_size
         else:
-            _, total_macs, total_nnz = self.collect_conv_details(self.model)
+            total_macs, total_nnz = self.get_model_resources_requirements(self.model)
             compression = 1 - distiller.model_sparsity(self.model)/100
             # What a hack!
             total_nnz *= compression
