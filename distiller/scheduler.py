@@ -18,8 +18,10 @@
 
 This implements the scheduling of the compression policies.
 """
+import contextlib
 from functools import partial
 import logging
+
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
 from .policy import PolicyLoss, LossComponent
@@ -194,18 +196,17 @@ class CompressionScheduler(object):
 
         Arguments:
             state_dict (dict): scheduler state. Should be an object returned
-                from a call to :meth:`state_dict`.  It is a dictionary of parameter
+                from a call to :meth:`state_dict`. It is a dictionary of parameter
                 names (keys) and parameter masks (values).
         """
         try:
             loaded_masks = state['masks_dict']
-        except Exception as exception:
-            print("ERROR: could not load the CompressionScheduler state")
-            print("Exception: %s %s" % (type(exception), exception))
-            print("\t\tFound the following keys in the state dictionary:")
-            for k in state.keys():
-                print("\t\t" + k)
-            exit(1)
+        except KeyError as exception:
+            msglogger.error('could not load the CompressionScheduler state.'
+                ' masks_dict is missing from state')
+            with contextlib.suppress(TypeError):
+                msglogger.debug('Scheduler state keys are: {}'.format(', '.join(state)))
+            raise
 
         device = model_device(self.model)
         for name, mask in self.zeros_mask_dict.items():
