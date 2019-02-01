@@ -17,6 +17,9 @@
 import logging
 import os
 import sys
+import tempfile
+
+import torch
 import pytest
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
@@ -33,6 +36,29 @@ def test_load():
     model, compression_scheduler, start_epoch = load_checkpoint(model, '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
+
+def test_load_state_dict():
+    # prepare lean checkpoint
+    state_dict_arrays = torch.load('../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar').get('state_dict')
+
+    with tempfile.NamedTemporaryFile() as tmpfile:
+        torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
+        model = create_model(False, 'cifar10', 'resnet20_cifar')
+        model, compression_scheduler, start_epoch = load_checkpoint(model, tmpfile.name)
+
+    assert len(list(model.named_modules())) >= len([x for x in state_dict_arrays if x.endswith('weight')]) > 0
+    assert compression_scheduler is None
+    assert start_epoch == 0
+
+def test_load_dumb_checkpoint():
+    # prepare lean checkpoint
+    state_dict_arrays = torch.load('../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar').get('state_dict')
+
+    with tempfile.NamedTemporaryFile() as tmpfile:
+        torch.save(state_dict_arrays, tmpfile.name)
+        model = create_model(False, 'cifar10', 'resnet20_cifar')
+        with pytest.raises(ValueError):
+            model, compression_scheduler, start_epoch = load_checkpoint(model, tmpfile.name)
 
 def test_load_negative():
     with pytest.raises(FileNotFoundError):
