@@ -181,6 +181,18 @@ def harmonic_mean_reward_fn(env, top1, top5, vloss, total_macs):
     return reward
 
 
+def amc_reward_fn(env, top1, top5, vloss, total_macs):
+    """This reward punishes the agent when it produces networks that don't comply with the MACs resource-constraint,
+    (the negative reward is in proportion to the network density).  Otherwise, the reward is the Top1 accuracy.
+    """
+    if not env.is_macs_constraint_achieved(total_macs):
+        current_density = total_macs / env.dense_model_macs
+        reward = env.amc_cfg.target_density - current_density
+    else:
+        reward = top1/100
+    return reward
+
+
 experimental_reward_fn = harmonic_mean_reward_fn
 
 
@@ -214,6 +226,10 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
             'conv_cnt': conv_cnt})
+
+    net_wrapper = NetworkWrapper(model, app_args, services)
+    return sample_networks(net_wrapper, services)
+
     if args.amc_protocol == "accuracy-guaranteed":
         amc_cfg.target_density = None
         amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: -(1-top1/100) * math.log(total_macs)
@@ -223,7 +239,7 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
         amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100 #(90.5 - top1) / 10
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
-        amc_cfg.target_density = 0.5
+        amc_cfg.target_density = args.amc_target_density
         amc_cfg.reward_fn = experimental_reward_fn
         amc_cfg.action_constrain_fn = None
     else:
@@ -257,7 +273,6 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
                 (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
                 (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
                  EnvironmentSteps(training_noise_duration))])
-
         # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
 
         coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
@@ -304,6 +319,129 @@ resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
 resnet56_layers = [param[:-len(".weight")] for param in resnet56_params]
 
 
+class NetworkWrapper(object):
+    def __init__(self, model, app_args, services):
+        self.app_args = app_args
+        self.services = services
+        self.conv_layers, _, _  = self.collect_conv_details(model)
+        self.reset(model)
+
+    def get_model_resources_requirements(self, model=None):
+        if model is None:
+            model = self.model
+        _, total_macs, total_nnz = collect_conv_details(model, self.app_args.dataset, True)
+        return total_macs, total_nnz
+
+    @property
+    def arch(self):
+        return self.app_args.arch
+
+    def collect_conv_details(self, model):
+        # Temporary ugly hack!
+        resnet_layers = None
+        if self.app_args.arch == "resnet20_cifar":
+            resnet_layers = resnet20_layers
+        elif self.app_args.arch == "resnet56_cifar":
+            resnet_layers = resnet56_layers
+        elif self.app_args.arch == "resnet50":
+            resnet_layers = resnet50_layers
+        return collect_conv_details(model, self.app_args.dataset, True, resnet_layers)
+
+    def num_layers(self):
+        return len(self.conv_layers)
+
+    def get_layer(self, idx):
+        try:
+            return self.conv_layers[idx]
+        except KeyError:
+            return None
+
+    def get_layer_macs(self, layer):
+        """Return the number of MACs required to compute <layer>'s Convolution"""
+        if layer is None:
+            return 0
+        conv_module = distiller.model_find_module(self.model, layer.name)
+        # MACs = volume(OFM) * (#IFM * K^2)
+        dense_macs = (conv_module.out_channels * layer.ofm_h * layer.ofm_w) * (conv_module.in_channels * layer.k**2)
+        return dense_macs
+
+    def reset(self, model):
+        self.model = model
+        self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
+
+    def create_scheduler(self):
+        scheduler = distiller.CompressionScheduler(self.model)
+        masks = {param_name: masker.mask for param_name, masker in self.zeros_mask_dict.items()}
+        scheduler.load_state_dict(state={'masks_dict': masks})
+        return scheduler
+
+    def remove_structures(self, layer_id, fraction_to_prune, prune_what="channels"):
+        """Physically remove channels and corresponding filters from the model
+
+        Returns the compute-sparsity of the layer with index 'layer_id'
+        """
+        if layer_id not in range(self.num_layers()):
+            raise ValueError("idx=%d is not in correct range (0-%d)" % (layer_id, self.num_layers()))
+        if fraction_to_prune < 0:
+            raise ValueError("fraction_to_prune=%f is illegal" % (fraction_to_prune))
+
+        if fraction_to_prune == 0:
+            return 0
+        if fraction_to_prune == 1.0:
+            # For now, prevent the removal of entire layers
+            fraction_to_prune = ALMOST_ONE
+
+        layer = self.conv_layers[layer_id]
+        macs_before = self.get_layer_macs(layer)
+        conv_pname = layer.name + ".weight"
+        conv_p = distiller.model_find_param(self.model, conv_pname)
+
+        msglogger.info("ADC: removing %.1f%% %s from %s" % (fraction_to_prune*100, prune_what, conv_pname))
+
+        if prune_what == "channels":
+            calculate_sparsity = distiller.sparsity_ch
+            remove_structures = distiller.remove_channels
+            group_type = "Channels"
+        elif prune_what == "filters":
+            calculate_sparsity = distiller.sparsity_3D
+            group_type = "Filters"
+            remove_structures = distiller.remove_filters
+        else:
+            raise ValueError("unsupported structure {}".format(prune_what))
+        # Create a channel-ranking pruner
+        pruner = distiller.pruning.L1RankedStructureParameterPruner("adc_pruner", group_type,
+                                                                    fraction_to_prune, conv_pname)
+        pruner.set_param_mask(conv_p, conv_pname, self.zeros_mask_dict, meta=None)
+        del pruner
+
+        if (self.zeros_mask_dict[conv_pname].mask is None or
+            calculate_sparsity(self.zeros_mask_dict[conv_pname].mask) == 0):
+            msglogger.info("remove_structures: aborting because there are no channels to prune")
+            return 0
+
+        # Use the mask to prune
+        self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
+        remove_structures(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
+        conv_p = distiller.model_find_param(self.model, conv_pname)
+        return 1 - (self.get_layer_macs(layer) / macs_before)
+
+    def validate(self):
+        top1, top5, vloss = self.services.validate_fn(model=self.model)
+        return top1, top5, vloss
+
+    def train(self, num_epochs, episode=0):
+        # Train for zero or more epochs
+        opt_cfg = self.app_args.optimizer_data
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=opt_cfg['lr'],
+                                    momentum=opt_cfg['momentum'], weight_decay=opt_cfg['weight_decay'])
+        compression_scheduler = self.create_scheduler()
+        for _ in range(num_epochs):
+            # Fine-tune the model
+            self.services.train_fn(model=self.model, compression_scheduler=compression_scheduler,
+                                   optimizer=optimizer, epoch=episode)
+        del compression_scheduler
+
+
 class DistillerWrapperEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
 
@@ -314,10 +452,12 @@ class DistillerWrapperEnvironment(gym.Env):
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
-        self.conv_layers, self.dense_model_macs, self.dense_model_size = self.collect_conv_details(model)
+        self.net_wrapper = NetworkWrapper(model, app_args, services)
+        #self.conv_layers, self.dense_model_macs, self.dense_model_size = self.net_wrapper.collect_conv_details(model) #self.collect_conv_details(model)
+        self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_model_resources_requirements(model)
 
         self.reset(init_only=True)
-        msglogger.info("Model %s has %d Convolution layers", self.app_args.arch, len(self.conv_layers))
+        msglogger.info("Model %s has %d Convolution layers", self.app_args.arch, self.net_wrapper.num_layers())
         msglogger.info("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
         log_amc_config(amc_cfg)
 
@@ -345,8 +485,7 @@ class DistillerWrapperEnvironment(gym.Env):
         self.current_layer_id = 0
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
-        self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
-        # self._remaining_macs = self.dense_model_macs
+        self.net_wrapper.reset(self.model)
         self._removed_macs = 0
         self.action_history = []
         self.agent_action_history = []
@@ -355,35 +494,11 @@ class DistillerWrapperEnvironment(gym.Env):
         initial_observation = self.get_obs()
         return initial_observation
 
-    def num_layers(self):
-        return len(self.conv_layers)
-
     def current_layer(self):
-        return self.get_layer(self.current_layer_id)
-
-    def get_layer(self, idx):
-        try:
-            return self.conv_layers[idx]
-        except KeyError:
-            return None
-
-    def get_model_resources_requirements(self, model):
-        _, total_macs, total_nnz = collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning)
-        return total_macs, total_nnz
-
-    def collect_conv_details(self, model):
-        # Temporary ugly hack!
-        resnet_layers = None
-        if self.app_args.arch == "resnet20_cifar":
-            resnet_layers = resnet20_layers
-        elif self.app_args.arch == "resnet56_cifar":
-            resnet_layers = resnet56_layers
-        elif self.app_args.arch == "resnet50_cifar":
-            resnet_layers = resnet50_layers
-        return collect_conv_details(model, self.app_args.dataset, self.amc_cfg.perform_thinning, resnet_layers)
+        return self.net_wrapper.get_layer(self.current_layer_id)
 
     def episode_is_done(self):
-        return self.current_layer_id == self.num_layers()
+        return self.current_layer_id == self.net_wrapper.num_layers()
 
     def removed_macs(self):
         """Return the amount of MACs removed so far.
@@ -410,7 +525,7 @@ class DistillerWrapperEnvironment(gym.Env):
         target_reduction = (1 - self.amc_cfg.target_density) * self.dense_model_macs
 
         duty = target_reduction - (reduced + rest)
-        flops = self.get_layer_macs(self.current_layer())
+        flops = self.net_wrapper.get_layer_macs(self.current_layer())
         assert flops > 0
         pruning_action_final = min(self.action_high, max(pruning_action, duty/flops))
         if pruning_action_final != pruning_action:
@@ -440,22 +555,22 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = self.amc_cfg.action_constrain_fn(self, pruning_action=pruning_action)
             msglogger.info("Constrained pruning_action={}".format(pruning_action))
 
-        total_macs_before, _ = self.get_model_resources_requirements(self.model)
-        layer_macs = self.get_layer_macs(self.current_layer())
+        total_macs_before, _ = self.net_wrapper.get_model_resources_requirements(self.model)
+        layer_macs = self.net_wrapper.get_layer_macs(self.current_layer())
         msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
         msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
         msglogger.info("\trest_macs={:.2f}".format(self.rest_macs()))
 
         if pruning_action > 0:
-            pruning_action = self.__remove_structures(self.current_layer_id,
-                                                      fraction_to_prune=pruning_action,
-                                                      prune_what="filters")
+            pruning_action = self.net_wrapper.remove_structures(self.current_layer_id,
+                                                                fraction_to_prune=pruning_action,
+                                                                prune_what="filters")
         else:
             pruning_action = 0
 
         self.action_history.append(pruning_action)
-        total_macs_after, _ = self.get_model_resources_requirements(self.model)
-        layer_macs_after_action = self.get_layer_macs(self.current_layer())
+        total_macs_after, _ = self.net_wrapper.get_model_resources_requirements(self.model)
+        layer_macs_after_action = self.net_wrapper.get_layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self.current_layer_id += 1
@@ -478,17 +593,17 @@ class DistillerWrapperEnvironment(gym.Env):
         if self.episode_is_done():
             msglogger.info("Episode is ending")
             observation = self.get_final_obs()
-            reward, top1, total_macs, total_nnz = self.compute_reward(total_macs_after)
-            self.episode += 1
+            reward, top1, total_macs, total_nnz = self.compute_reward()
             normalized_macs = total_macs / self.dense_model_macs * 100
             normalized_nnz = total_nnz / self.dense_model_size * 100
             self.record_network_details(top1, reward, total_macs, normalized_macs,
                                         normalized_nnz, self.action_history, self.agent_action_history)
+            self.episode += 1
         else:
             observation = self.get_obs()
             reward = 0
             if self.amc_cfg.compute_reward_every_step:
-                reward, top1, total_macs, total_nnz = self.compute_reward(None, False)
+                reward, top1, total_macs, total_nnz = self.compute_reward(False)
 
         self.prev_action = pruning_action
         info = {}
@@ -502,7 +617,7 @@ class DistillerWrapperEnvironment(gym.Env):
     def get_obs(self):
         """Produce a state embedding (i.e. an observation)"""
 
-        current_layer_macs = self.get_layer_macs(self.current_layer())
+        current_layer_macs = self.net_wrapper.get_layer_macs(self.current_layer())
         current_layer_macs_pct = current_layer_macs/self.dense_model_macs
         current_layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, current_layer.name)
@@ -517,7 +632,7 @@ class DistillerWrapperEnvironment(gym.Env):
                 self.removed_macs()*100,
                 self.rest_macs()*100,
                 self.prev_action*100]
-        onehot_id = self.one_hot(self.current_layer_id, self.num_layers())
+        onehot_id = self.one_hot(self.current_layer_id, self.net_wrapper.num_layers())
         msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
         obs = np.array(onehot_id + obs)
         assert (self.removed_macs() + current_layer_macs_pct + self.rest_macs()) <= 1
@@ -538,18 +653,18 @@ class DistillerWrapperEnvironment(gym.Env):
                 self.removed_macs()*100,
                 self.rest_macs()*100,
                 self.prev_action*100]
-        onehot_id = self.one_hot(self.num_layers(), self.num_layers())
+        onehot_id = self.one_hot(self.net_wrapper.num_layers(), self.net_wrapper.num_layers())
         msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
         obs = np.array(onehot_id + obs)
         return obs
 
     def whole_network_get_obs(self):
         """Produce a state embedding (i.e. an observation)"""
-        num_layers = self.num_layers()
+        num_layers = self.net_wrapper.num_layers()
         network_obs = np.empty(shape=(LayerDescLen, num_layers))
         for layer_id in range(num_layers):
             layer = self.get_layer(layer_id)
-            layer_macs = self.get_layer_macs(layer)
+            layer_macs = self.net_wrapper.get_layer_macs(layer)
             layer_macs_pct = layer_macs/self.dense_model_macs
             conv_module = distiller.model_find_module(self.model, layer.name)
             obs =  [layer.t,
@@ -576,112 +691,30 @@ class DistillerWrapperEnvironment(gym.Env):
     def rest_macs_raw(self):
         """Return the number of remaining MACs in the layers following the current layer"""
         rest = 0
-        for layer_id in range(self.current_layer_id, self.num_layers()):
-            rest += self.get_layer_macs(self.get_layer(layer_id + 1))
+        for layer_id in range(self.current_layer_id, self.net_wrapper.num_layers()):
+            rest += self.net_wrapper.get_layer_macs(self.net_wrapper.get_layer(layer_id + 1))
         return rest
 
     def rest_macs(self):
         return self.rest_macs_raw() / self.dense_model_macs
 
-    def get_layer_macs(self, layer):
-        """Return the number of MACs required to compute <layer>'s Convolution"""
-        if layer is None:
-            return 0
-
-        conv_module = distiller.model_find_module(self.model, layer.name)
-        # MACs = volume(OFM) * (#IFM * K^2)
-        dense_macs = (conv_module.out_channels * layer.ofm_h * layer.ofm_w) * (conv_module.in_channels * layer.k**2)
-        if self.amc_cfg.perform_thinning:
-            return dense_macs
-
-        # If we didn't physically remove structures, we need to use the structural sparsity to compute MACs
-        conv_pname = layer.name + ".weight"
-        conv_p = distiller.model_find_param(self.model, conv_pname)
-        # return dense_macs * distiller.density_ch(conv_p)  # Channel pruning
-        return dense_macs * distiller.density_3D(conv_p)  # Filter pruning
-
-    def __remove_structures(self, idx, fraction_to_prune, prune_what="channels"):
-        """Physically remove channels and corresponding filters from the model
-
-        Returns the compute-sparsity of the layer with index 'idx'
-        """
-        if idx not in range(self.num_layers()):
-            raise ValueError("idx=%d is not in correct range (0-%d)" % (idx, self.num_layers()))
-        if fraction_to_prune < 0:
-            raise ValueError("fraction_to_prune=%f is illegal" % (fraction_to_prune))
-
-        if fraction_to_prune == 0:
-            return 0
-        if fraction_to_prune == 1.0:
-            # For now, prevent the removal of entire layers
-            fraction_to_prune = ALMOST_ONE
-
-        layer = self.conv_layers[idx]
-        macs_before = self.get_layer_macs(layer)
-        conv_pname = layer.name + ".weight"
-        conv_p = distiller.model_find_param(self.model, conv_pname)
-
-        msglogger.info("ADC: removing %.1f%% %s from %s" % (fraction_to_prune*100, prune_what, conv_pname))
-
-        if prune_what == "channels":
-            calculate_sparsity = distiller.sparsity_ch
-            remove_structures = distiller.remove_channels
-            group_type = "Channels"
-        elif prune_what == "filters":
-            calculate_sparsity = distiller.sparsity_3D
-            group_type = "Filters"
-            remove_structures = distiller.remove_filters
-        else:
-            raise ValueError("unsupported structure {}".format(prune_what))
-        # Create a channel-ranking pruner
-        pruner = distiller.pruning.L1RankedStructureParameterPruner("adc_pruner", group_type,
-                                                                    fraction_to_prune, conv_pname)
-        pruner.set_param_mask(conv_p, conv_pname, self.zeros_mask_dict, meta=None)
-
-        if (self.zeros_mask_dict[conv_pname].mask is None or
-            calculate_sparsity(self.zeros_mask_dict[conv_pname].mask) == 0):
-            msglogger.info("__remove_structures: aborting because there are no channels to prune")
-            return 0
-
-        # Use the mask to prune
-        self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
-
-        assert self.amc_cfg.perform_thinning
-        remove_structures(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
-        conv_p = distiller.model_find_param(self.model, conv_pname)
-        return 1 - (self.get_layer_macs(layer) / macs_before)
-
     def is_macs_constraint_achieved(self, compressed_model_total_macs):
         current_density = compressed_model_total_macs / self.dense_model_macs
         return self.amc_cfg.target_density >= current_density
 
-    def compute_reward(self, compressed_model_total_macs, log_stats=True):
+    def compute_reward(self, log_stats=True):
         """Compute the reward"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
-        # if (compressed_model_total_macs is not None and
-        #    not self.is_macs_constraint_achieved(compressed_model_total_macs)):
-        #     return [0] * 4
-
+        total_macs, total_nnz = self.net_wrapper.get_model_resources_requirements(self.model)
         if self.amc_cfg.perform_thinning:
-            total_macs, total_nnz = self.get_model_resources_requirements(self.model)
             compression = distiller.model_numel(self.model, param_dims=[4]) / self.dense_model_size
         else:
-            total_macs, total_nnz = self.get_model_resources_requirements(self.model)
             compression = 1 - distiller.model_sparsity(self.model)/100
             # What a hack!
             total_nnz *= compression
 
-        # Train for zero or more epochs
-        optimizer = torch.optim.SGD(self.model.parameters(), lr=self.app_args.optimizer_data['lr'],
-                                    momentum=self.app_args.optimizer_data['momentum'],
-                                    weight_decay=self.app_args.optimizer_data['weight_decay'])
-        for _ in range(self.amc_cfg.num_ft_epochs):
-            # Fine-tune the model
-            self.services.train_fn(model=self.model, compression_scheduler=self.create_scheduler(),
-                                   optimizer=optimizer,
-                                   epoch=self.episode)
-        # Validate
-        top1, top5, vloss = self.services.validate_fn(model=self.model)
+        self.net_wrapper.train(self.amc_cfg.num_ft_epochs, self.episode)
+        top1, top5, vloss = self.net_wrapper.validate()
         reward = self.amc_cfg.reward_fn(self, top1, top5, vloss, total_macs)
 
         if log_stats:
@@ -726,23 +759,18 @@ class DistillerWrapperEnvironment(gym.Env):
             writer = csv.writer(f)
             writer.writerow(fields)
 
-    def create_scheduler(self):
-        scheduler = distiller.CompressionScheduler(self.model)
-        masks = {param_name: masker.mask for param_name, masker in self.zeros_mask_dict.items()}
-        scheduler.load_state_dict(state={'masks_dict': masks})
-        return scheduler
-
     def save_checkpoint(self, is_best=False):
         """Save the learned-model checkpoint"""
-        scheduler = self.create_scheduler()
+        scheduler = self.net_wrapper.create_scheduler()
         episode = str(self.episode).zfill(3)
         if is_best:
             fname = "BEST_adc_episode_{}".format(episode)
         else:
             fname = "adc_episode_{}".format(episode)
 
-        self.services.save_checkpoint_fn(epoch=self.episode, model=self.model,
+        self.services.save_checkpoint_fn(epoch=0, model=self.model,
                                          scheduler=scheduler, name=fname)
+        del scheduler
         return fname
 
 
@@ -783,3 +811,58 @@ def collect_conv_details(model, dataset, perform_thinning, layers_to_prune=None)
             if layers_to_prune is None or name in layers_to_prune:
                 conv_layers[len(conv_layers)] = conv
     return conv_layers, total_macs, total_params
+
+
+import pandas as pd
+def sample_networks(net_wrapper, services):
+    """Sample networks from the posterior distribution.
+
+    1. Sort the networks we discovered using AMC by their reward.
+    2. Use the top 10% best-performing networks discovered by AMC to postulate a posterior distribution of the
+       density/sparsity of each layer:
+            p([layers-sparsity] | Top1, L1)
+    3. Sample 100 networks from this distribution.
+       For each such network: fine-tune, score using Top1, and save
+    """
+    #fname = "logs/resnet20___2019.01.29-102912/amc.csv"
+    fname = "logs/resnet20___2019.02.03-210001/amc.csv"
+    df = pd.read_csv(fname)
+
+    #top1_sorted_df = df.sort_values(by=['top1'], ascending=False)
+    top1_sorted_df = df.sort_values(by=['reward'], ascending=False)
+    top10pct = top1_sorted_df[:int(len(df.index) * 0.1)]
+
+    dense_macs, _ = net_wrapper.get_model_resources_requirements()
+    layer_sparsities_list = []
+    for index, row in top10pct.iterrows():
+        layer_sparsities = row['action_history']
+        layer_sparsities = layer_sparsities[1:-1].split(",")  # convert from string to list
+        layer_sparsities = [float(sparsity) for sparsity in layer_sparsities]
+        layer_sparsities_list.append(layer_sparsities)
+
+    layer_sparsities = np.array(layer_sparsities_list)
+    mean = layer_sparsities.mean(axis=0)
+    cov = np.cov(layer_sparsities.T)
+    num_networks = 100
+    data = np.random.multivariate_normal(mean, cov, num_networks)
+
+    orig_model = net_wrapper.model
+    for i in range(num_networks):
+        model = copy.deepcopy(orig_model)
+        net_wrapper.reset(model)
+        for layer_id, sparsity_level in enumerate(data[i]):
+            sparsity_level = min(max(0, sparsity_level), ALMOST_ONE)
+            net_wrapper.remove_structures(layer_id,
+                                          fraction_to_prune=sparsity_level,
+                                          prune_what="filters")
+
+        net_wrapper.train(1)
+        top1, top5, vloss = net_wrapper.validate()
+
+        """Save the learned-model checkpoint"""
+        scheduler = net_wrapper.create_scheduler()
+        total_macs, _ = net_wrapper.get_model_resources_requirements(model)
+        fname = "{}_top1_{:2f}__density_{:2f}_sampled".format(net_wrapper.arch, top1, total_macs/dense_macs)
+        services.save_checkpoint_fn(epoch=0, model=net_wrapper.model,
+                                    scheduler=scheduler, name=fname)
+        del scheduler
