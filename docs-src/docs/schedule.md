@@ -314,7 +314,7 @@ policies:
 
 ## Post-Training Quantization
 
-Post-training quantization differs from the other techniques described here. Since it is not executed during training, it does not require any Policies nor a Scheduler. Currently, the only method implemented for pots-training quantization is [range-based linear quantization](algo_quantization.md#range-based-linear-quantization). Quantizing a model using this method, requires adding 2 lines of code:
+Post-training quantization differs from the other techniques described here. Since it is not executed during training, it does not require any Policies nor a Scheduler. Currently, the only method implemented for post-training quantization is [range-based linear quantization](algo_quantization.md#range-based-linear-quantization). Quantizing a model using this method, requires adding 2 lines of code:
 
 ```python
 quantizer = distiller.quantization.PostTrainLinearQuantizer(model, <quantizer arguments>)

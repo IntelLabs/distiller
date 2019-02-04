@@ -316,7 +316,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
       * Average min / max (calculate min / max per sample and average those)
       * Overall mean
       * TODO: Overall standard-deviation
-    Calculated stats are save to a YAML file.
+    Calculated stats are saved to a YAML file.
 
     If a certain layer operates in-place, that layer's input stats will be overwritten by its output stats.
     The collector can, optionally, check for such cases at runtime. In addition, a simple mechanism to disable inplace
