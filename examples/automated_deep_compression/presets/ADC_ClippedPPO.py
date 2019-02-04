@@ -27,7 +27,7 @@ schedule_params.heatup_steps = EnvironmentSteps(0)
 agent_params = ClippedPPOAgentParameters()
 
 
-agent_params.network_wrappers['main'].learning_rate = 0.0003  #  0.0003
+agent_params.network_wrappers['main'].learning_rate = 0.0001  #  0.0003
 agent_params.network_wrappers['main'].input_embedders_parameters['observation'].activation_function = 'tanh'
 agent_params.network_wrappers['main'].input_embedders_parameters['observation'].scheme = [Dense(64)]
 agent_params.network_wrappers['main'].middleware_parameters.scheme = [Dense(64)]
