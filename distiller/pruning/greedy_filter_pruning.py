@@ -258,13 +258,16 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
 
     # Temporary ugly hack!
     resnet_layers = None
+    resnet_params = None
     if arch == "resnet20_cifar":
         resnet_params = resnet20_params
     elif arch == "resnet56_cifar":
         resnet_params = resnet56_params
     elif arch == "resnet50_cifar":
         resnet_params = resnet50_params
-    resnet_layers = [param[:-len(".weight")] for param in resnet_params]
+    if resnet_params is not None:
+        resnet_layers = [param[:-len(".weight")] for param in resnet_params]
+
 
     total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
     iteration = 0
