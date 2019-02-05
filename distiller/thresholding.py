@@ -151,7 +151,7 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria, binar
         if binary_map is None:
             binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         a = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t()
-        return a.view(param.size(0), param.size(1), param.size(2), param.size(3)), binary_map
+        return a.view(*param.shape), binary_map
 
     elif group_type == '4D':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
@@ -181,10 +181,14 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria, binar
 def threshold_policy(weights, thresholds, threshold_criteria, dim=1):
     """
     """
-    if threshold_criteria == 'Mean_Abs':
-        return weights.data.abs().mean(dim=dim).gt(thresholds).type(weights.type())
+    if threshold_criteria in ['Mean_Abs', 'Mean_L1']:
+        return weights.data.norm(p=1, dim=dim).div(weights.size(dim)).gt(thresholds).type(weights.type())
+    if threshold_criteria == 'Mean_L2':
+        return weights.data.norm(p=2, dim=dim).div(weights.size(dim)).gt(thresholds).type(weights.type())
     elif threshold_criteria == 'L1':
         return weights.data.norm(p=1, dim=dim).gt(thresholds).type(weights.type())
+    elif threshold_criteria == 'L2':
+        return weights.data.norm(p=2, dim=dim).gt(thresholds).type(weights.type())
     elif threshold_criteria == 'Max':
         maxv, _ = weights.data.abs().max(dim=dim)
         return maxv.gt(thresholds).type(weights.type())
