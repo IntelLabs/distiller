@@ -26,5 +26,10 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='Compute the reward at every step')
     group.add_argument('--amc-target-density', type=float,
                        help='Target density of the network we are seeking')
+    group.add_argument('--amc-agent-algo', choices=["ClippedPPO-continuous",
+                                                    "ClippedPPO-discrete",
+                                                    "DDPG"],
+                       default="ClippedPPO-continuous",
+                       help="The agent algorithm to use")
     # group.add_argument('--amc-thinning', action='store_true', default=False,
     #                    help='Perform netowrk thinning after altering each layer')

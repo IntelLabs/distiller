@@ -84,13 +84,10 @@ Observation = namedtuple('Observation', ['n', 'c', 'h', 'w', 'stride', 'k', 'MAC
 LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest'])
 LayerDescLen = len(LayerDesc._fields)
 ALMOST_ONE = 0.9999
-#RL_AGENT = "DDPG"
-#RL_AGENT = "PPO"
-RL_AGENT = "ClippedPPO"
 
 
 def is_using_continuous_action_space(agent):
-    return agent in ("DDPG", "ClippedPPO")
+    return agent in ("DDPG", "ClippedPPO-continuous")
 
 
 if RLLIB == "spinup":
@@ -125,16 +122,6 @@ if RLLIB == "coach":
     from rl_coach.base_parameters import TaskParameters
     from rl_coach.core_types import EnvironmentSteps
     from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
-
-    # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
-    # Coach to create and use our DistillerWrapperEnvironment environment.
-    # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
-    if RL_AGENT == "DDPG":
-        from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
-    elif RL_AGENT == "PPO":
-        from examples.automated_deep_compression.presets.ADC_PPO import graph_manager, agent_params
-    elif RL_AGENT == "ClippedPPO":
-        from examples.automated_deep_compression.presets.ADC_ClippedPPO import graph_manager, agent_params
 
 
 def log_amc_config(amc_cfg):
@@ -205,7 +192,7 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
     np.random.seed()
     conv_cnt = count_conv_layer(model)
 
-    msglogger.info("Executing AMC: RL agent - %s   RL library - %s", RL_AGENT, RLLIB)
+    msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, RLLIB)
 
     # Create a dictionary of parameters that Coach will handover to DistillerWrapperEnvironment
     # Once it creates it.
@@ -221,14 +208,15 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
 
     amc_cfg = distiller.utils.MutableNamedTuple({
             'protocol': args.amc_protocol,
+            'agent_algo': args.amc_agent_algo,
             'compute_reward_every_step': args.amc_reward_every_step,
             'perform_thinning': perform_thinning,
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
             'conv_cnt': conv_cnt})
 
-    net_wrapper = NetworkWrapper(model, app_args, services)
-    return sample_networks(net_wrapper, services)
+    #net_wrapper = NetworkWrapper(model, app_args, services)
+    #return sample_networks(net_wrapper, services)
 
     if args.amc_protocol == "accuracy-guaranteed":
         amc_cfg.target_density = None
@@ -262,18 +250,24 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
     else:
         msglogger.info("AMC: Using coach")
 
+        # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
+        # Coach to create and use our DistillerWrapperEnvironment environment.
+        # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
+        if args.amc_agent_algo == "DDPG":
+            from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
+            agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
+                (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
+                (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
+                 EnvironmentSteps(training_noise_duration))])
+            # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
+        elif "ClippedPPO" in args.amc_agent_algo:
+            from examples.automated_deep_compression.presets.ADC_ClippedPPO import graph_manager, agent_params
+
         # These parameters are passed to the Distiller environment
         graph_manager.env_params.additional_simulator_parameters = {'model': model,
                                                                     'app_args': app_args,
                                                                     'amc_cfg': amc_cfg,
                                                                     'services': services}
-
-        if RL_AGENT == "DDPG":
-            agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-                (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
-                (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
-                 EnvironmentSteps(training_noise_duration))])
-        # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
 
         coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
         os.mkdir(coach_logs_dir)
@@ -323,7 +317,7 @@ class NetworkWrapper(object):
     def __init__(self, model, app_args, services):
         self.app_args = app_args
         self.services = services
-        self.conv_layers, _, _  = self.collect_conv_details(model)
+        self.conv_layers, _, _ = self.collect_conv_details(model)
         self.reset(model)
 
     def get_model_resources_requirements(self, model=None):
@@ -453,7 +447,6 @@ class DistillerWrapperEnvironment(gym.Env):
         self.amc_cfg = amc_cfg
         self.services = services
         self.net_wrapper = NetworkWrapper(model, app_args, services)
-        #self.conv_layers, self.dense_model_macs, self.dense_model_size = self.net_wrapper.collect_conv_details(model) #self.collect_conv_details(model)
         self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_model_resources_requirements(model)
 
         self.reset(init_only=True)
@@ -466,7 +459,7 @@ class DistillerWrapperEnvironment(gym.Env):
         self.action_low = amc_cfg.action_range[0]
         self.action_high = amc_cfg.action_range[1]
         # Gym spaces documentation: https://gym.openai.com/docs/
-        if is_using_continuous_action_space(RL_AGENT):
+        if is_using_continuous_action_space(self.amc_cfg.agent_algo):
             self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
             self.action_space.default_action = self.action_low
         else:
@@ -544,7 +537,7 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
         msglogger.info("\tAgent pruning_action={}".format(pruning_action))
-        if is_using_continuous_action_space(RL_AGENT):
+        if is_using_continuous_action_space(self.amc_cfg.agent_algo):
             pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
         else:
             # Divide the action space into 10 discrete levels (0%, 10%, 20%,....90% sparsity)
