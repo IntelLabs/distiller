@@ -242,7 +242,7 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
     training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
     heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
 
-    if amc_cfg.amc_protocol == "Random-policy":
+    if amc_cfg.agent_algo == "Random-policy":
         return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
 
     if RLLIB == "spinup":
