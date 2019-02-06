@@ -24,8 +24,8 @@ except ImportError:
     if module_path not in sys.path:
         sys.path.append(module_path)
     import distiller
-from models import create_model
-from apputils import load_checkpoint
+from distiller.models import create_model
+from distiller.apputils import load_checkpoint
 
 
 def test_load():

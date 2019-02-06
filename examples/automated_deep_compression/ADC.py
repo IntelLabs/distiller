@@ -39,10 +39,9 @@ import csv
 import gym
 from gym import spaces
 import distiller
-from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
-from distiller import normalize_module_name
+from distiller import normalize_module_name, SummaryGraph
 from rl_coach import logger
 from rl_coach.base_parameters import TaskParameters
 

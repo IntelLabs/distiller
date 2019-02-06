@@ -17,7 +17,7 @@
 import argparse
 
 import distiller
-import models
+import distiller.models as models
 
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']

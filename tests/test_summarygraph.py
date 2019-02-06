@@ -26,9 +26,12 @@ except ImportError:
     if module_path not in sys.path:
          sys.path.append(module_path)
     import distiller
-from models import ALL_MODEL_NAMES, create_model
-from apputils import *
-from distiller import normalize_module_name, denormalize_module_name
+from distiller.models import ALL_MODEL_NAMES, create_model
+from distiller.apputils import *
+from distiller import normalize_module_name, denormalize_module_name, \
+    SummaryGraph, onnx_name_2_pytorch_name
+from distiller.model_summaries import connectivity_summary, connectivity_summary_verbose
+
 
 # Logging configuration
 logging.basicConfig(level=logging.DEBUG)

@@ -24,7 +24,7 @@ if module_path not in sys.path:
 import distiller
 import pytest
 import common  # common test code
-import apputils
+import distiller.apputils as apputils
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)

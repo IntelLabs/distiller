@@ -75,10 +75,10 @@ try:
 except ImportError:
     sys.path.append(module_path)
     import distiller
-import apputils
+import distiller.apputils as apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
-from models import ALL_MODEL_NAMES, create_model
+from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 
 
