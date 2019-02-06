@@ -83,9 +83,12 @@ l2_magnitude = partial(torch.norm, p=2)
 
 
 class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
-    """Uses mean L1-norm to rank and prune structures.
+    """Uses Lp-norm to rank and prune structures.
 
-    This class prunes to a prescribed percentage of structured-sparsity (level pruning).
+    This class prunes to a prescribed percentage of structured-sparsity (level pruning), by
+    first ranking (sorting) the structures based on their Lp-norm, and then pruning a perctenage
+    of the lower-ranking structures.
+    See also: https://en.wikipedia.org/wiki/Lp_space#The_p-norm_in_finite_dimensions
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
                  group_dependency=None, kwargs=None, magnitude_fn=None):
