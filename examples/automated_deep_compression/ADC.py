@@ -72,7 +72,7 @@ from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
-
+from .adc_random_env import random_agent
 
 # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
 #RLLIB = "spinup"
@@ -87,7 +87,7 @@ ALMOST_ONE = 0.9999
 
 
 def is_using_continuous_action_space(agent):
-    return agent in ("DDPG", "ClippedPPO-continuous")
+    return agent in ("DDPG", "ClippedPPO-continuous", "Random-policy")
 
 
 if RLLIB == "spinup":
@@ -241,6 +241,9 @@ def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_f
     amc_cfg.num_training_epochs = args.amc_training_epochs
     training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
     heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
+
+    if amc_cfg.amc_protocol == "Random-policy":
+        return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
 
     if RLLIB == "spinup":
         msglogger.info("AMC: Using spinup")
