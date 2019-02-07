@@ -23,7 +23,7 @@ import logging
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
 from .policy import PolicyLoss, LossComponent
-from .utils import model_device
+from .utils import model_device, normalize_module_name
 msglogger = logging.getLogger()
 
 
@@ -187,7 +187,7 @@ class CompressionScheduler(object):
         state = {'masks_dict': masks}
         return state
 
-    def load_state_dict(self, state):
+    def load_state_dict(self, state, convert_scheduler_keys):
         """Loads the scheduler state.
 
         Currently the scheduler state is comprised only of the set of pruning masks.
@@ -196,6 +196,10 @@ class CompressionScheduler(object):
             state_dict (dict): scheduler state. Should be an object returned
                 from a call to :meth:`state_dict`.  It is a dictionary of parameter
                 names (keys) and parameter masks (values).
+            convert_scheduler_keys (bool): indicates if we should convert the keys from
+                DataParallel format.  This should be set to True when loading a model
+                from a GPU-checkpoint onto a CPU (because currently we don't use DataParallel
+                on the CPU).
         """
         try:
             loaded_masks = state['masks_dict']
@@ -207,6 +211,8 @@ class CompressionScheduler(object):
                 print("\t\t" + k)
             exit(1)
 
+        if convert_scheduler_keys:
+            loaded_masks = {normalize_module_name(k): v for k, v in loaded_masks.items()}
         device = model_device(self.model)
         for name, mask in self.zeros_mask_dict.items():
             masker = self.zeros_mask_dict[name]

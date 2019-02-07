@@ -22,8 +22,10 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 
-from models import create_model
+import distiller
 from apputils import load_checkpoint
+from models import create_model
+
 
 def test_load():
     logger = logging.getLogger('simple_example')
@@ -38,3 +40,14 @@ def test_load_negative():
     with pytest.raises(FileNotFoundError):
         model = create_model(False, 'cifar10', 'resnet20_cifar')
         model, compression_scheduler, start_epoch = load_checkpoint(model, 'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
+
+
+def test_load_gpu_model_on_cpu():
+    model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=-1)
+    model, compression_scheduler, start_epoch = load_checkpoint(model,
+                                                                '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
+    assert compression_scheduler is not None
+    assert start_epoch == 180
+
+if __name__ == '__main__':
+    test_load_gpu_model_on_cpu()
