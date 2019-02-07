@@ -79,8 +79,18 @@ def getParser():
                         'Flag set => overrides the --gpus flag')
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-    parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+    parser.add_argument('--validation-split', '--vs', type=float_range_exc_1, default=0.1,
                         help='Portion of training dataset to set aside for validation')
+    parser.add_argument('--effective-train-size', '--etrs', type=float_range_exc_0, default=1.,
+                        help='Portion of training dataset to actually load. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-valid-size', '--evs', type=float_range_exc_0, default=1.,
+                        help='Portion of validation dataset to actually load. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-test-size', '--etes', type=float_range_exc_0, default=1.,
+                        help='Portion of test dataset to actually load')
     parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
     parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
     parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
@@ -134,8 +144,15 @@ def getParser():
     return parser
 
 
-def float_range(val_str):
+def float_range_exc_1(val_str):
     val = float(val_str)
     if val < 0 or val >= 1:
         raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
+    return val
+
+
+def float_range_exc_0(val_str):
+    val = float(val_str)
+    if val <= 0 or val > 1:
+        raise argparse.ArgumentTypeError('Must be > 0 and <= 1 (received {0})'.format(val_str))
     return val

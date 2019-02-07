@@ -124,6 +124,12 @@ def main():
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
 
+    args.shuffle_test = False
+    if args.effective_test_size < 1.:
+        # If we're using only a part of the test set, we want to shuffle it to make sure we
+        # get a representative subset
+        args.shuffle_test = True
+
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
         args.device = 'cpu'
@@ -194,7 +200,8 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic, args.shuffle_test,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -644,7 +651,8 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic, args.shuffle_test,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
