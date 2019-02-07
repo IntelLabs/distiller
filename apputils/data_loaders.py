@@ -23,13 +23,14 @@ import os
 import torch
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import Sampler
 import numpy as np
 
 DATASETS_NAMES = ['imagenet', 'cifar10']
 
 
-def load_data(dataset, data_dir, batch_size, workers, valid_size=0.1, deterministic=False, shuffle_test=False):
+def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
+              effective_train_size=1., effective_valid_size=1., effective_test_size=1.):
     """Load a dataset.
 
     Args:
@@ -37,29 +38,19 @@ def load_data(dataset, data_dir, batch_size, workers, valid_size=0.1, determinis
         data_dir: the directory where the datset resides
         batch_size: the batch size
         workers: the number of worker threads to use for loading the data
-        valid_size: portion of training dataset to set aside for validation
+        validation_split: portion of training dataset to set aside for validation
         deterministic: set to True if you want the data loading process to be deterministic.
           Note that deterministic data loading suffers from poor performance.
-        shuffle_test: set to True if test set should be shuffled by the data loader
+        effective_train/valid/test_size: portion of the datasets to load on each epoch.
+          The subset is chosen randomly each time. For the training and validation sets, this is applied AFTER
+          the split to those sets according to the validation_split parameter
     """
     if dataset not in DATASETS_NAMES:
         raise ValueError('load_data does not support dataset %s" % dataset')
     datasets_fn = cifar10_get_datasets if dataset == 'cifar10' else imagenet_get_datasets
-    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, valid_size=valid_size,
-                            deterministic=deterministic, shuffle_test=shuffle_test)
-
-
-def __image_size(dataset):
-    # un-squeeze is used here to add the batch dimension (value=1), which is missing
-    return dataset[0][0].unsqueeze(0).size()
-
-
-def __deterministic_worker_init_fn(worker_id, seed=0):
-    import random
-    import numpy
-    random.seed(seed)
-    numpy.random.seed(seed)
-    torch.manual_seed(seed)
+    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, validation_split=validation_split,
+                            deterministic=deterministic, effective_train_size=effective_train_size,
+                            effective_valid_size=effective_valid_size, effective_test_size=effective_test_size)
 
 
 def cifar10_get_datasets(data_dir):
@@ -131,36 +122,84 @@ def imagenet_get_datasets(data_dir):
     return train_dataset, test_dataset
 
 
-def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, valid_size=0.1, deterministic=False,
-                     shuffle_test=False):
+def __image_size(dataset):
+    # un-squeeze is used here to add the batch dimension (value=1), which is missing
+    return dataset[0][0].unsqueeze(0).size()
+
+
+def __deterministic_worker_init_fn(worker_id, seed=0):
+    import random
+    import numpy
+    random.seed(seed)
+    numpy.random.seed(seed)
+    torch.manual_seed(seed)
+
+
+def __split_list(l, ratio):
+    split_idx = int(np.floor(ratio * len(l)))
+    return l[:split_idx], l[split_idx:]
+
+
+class SwitchingSubsetRandomSampler(Sampler):
+    """Samples a random subset of elements from a data source, without replacement.
+
+    The subset of elements is re-chosen randomly each time the sampler is enumerated
+
+    Args:
+        data_source (Dataset): dataset to sample from
+        subset_size (float): value in (0..1], representing the portion of dataset to sample at each enumeration.
+    """
+    def __init__(self, data_source, subset_size):
+        if subset_size <= 0 or subset_size > 1:
+            raise ValueError('subset_size must be in (0..1]')
+        self.data_source = data_source
+        self.subset_length = int(np.floor(len(self.data_source) * subset_size))
+
+    def __iter__(self):
+        indices = list(range(len(self.data_source)))
+        np.random.shuffle(indices)
+        subset_indices = indices[:self.subset_length]
+        return iter(subset_indices)
+
+    def __len__(self):
+        return self.subset_length
+
+
+def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
+                     effective_train_size=1., effective_valid_size=1., effective_test_size=1.):
     train_dataset, test_dataset = datasets_fn(data_dir)
-
-    num_train = len(train_dataset)
-    indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
-
-    np.random.shuffle(indices)
-
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
 
     worker_init_fn = __deterministic_worker_init_fn if deterministic else None
 
+    num_train = len(train_dataset)
+    indices = list(range(num_train))
+
+    # TODO: Switch to torch.utils.data.datasets.random_split()
+
+    # We shuffle indices here in case the data is arranged by class, in which case we'd would get mutually
+    # exclusive datasets if we didn't shuffle
+    np.random.shuffle(indices)
+
+    valid_indices, train_indices = __split_list(indices, validation_split)
+
+    train_sampler = SwitchingSubsetRandomSampler(train_indices, effective_train_size)
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size, sampler=train_sampler,
                                                num_workers=num_workers, pin_memory=True,
                                                worker_init_fn=worker_init_fn)
 
     valid_loader = None
-    if split > 0:
-        valid_sampler = SubsetRandomSampler(valid_idx)
+    if valid_indices:
+        valid_sampler = SwitchingSubsetRandomSampler(valid_indices, effective_valid_size)
         valid_loader = torch.utils.data.DataLoader(train_dataset,
                                                    batch_size=batch_size, sampler=valid_sampler,
                                                    num_workers=num_workers, pin_memory=True,
                                                    worker_init_fn=worker_init_fn)
 
+    test_indices = list(range(len(test_dataset)))
+    test_sampler = SwitchingSubsetRandomSampler(test_indices, effective_test_size)
     test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=batch_size, shuffle=shuffle_test,
+                                              batch_size=batch_size, sampler=test_sampler,
                                               num_workers=num_workers, pin_memory=True)
 
     input_shape = __image_size(train_dataset)
