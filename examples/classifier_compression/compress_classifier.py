@@ -194,7 +194,8 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -644,7 +645,8 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
