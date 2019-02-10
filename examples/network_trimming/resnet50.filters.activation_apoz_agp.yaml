@@ -1,7 +1,7 @@
 #
 # This schedule uses the average percentage of zeros (APoZ) in the activations, to rank filters.
 #
-# time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.0005 --compress=resnet50.schedule_agp.filters.yaml --validation-size=0   --num-best-scores=10 --name="resnet50_filters_v5_APoZ"   --act-stats=valid
+# time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.0005 --compress=resnet50.schedule_agp.filters.yaml --validation-split=0   --num-best-scores=10 --name="resnet50_filters_v5_APoZ"   --act-stats=valid
 #
 # Results:
 #   Best Top1: 73.926 on Epoch: 88

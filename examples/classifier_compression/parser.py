@@ -15,6 +15,7 @@
 #
 
 import argparse
+import operator
 
 import distiller
 import distiller.quantization
@@ -53,7 +54,6 @@ def get_parser():
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
     parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
-                        # choices=["train", "valid", "test"]
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
@@ -82,8 +82,19 @@ def get_parser():
                         'Flag set => overrides the --gpus flag')
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-    parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+    parser.add_argument('--validation-split', '--valid-size', '--vs', dest='validation_split',
+                        type=float_range(exc_max=True), default=0.1,
                         help='Portion of training dataset to set aside for validation')
+    parser.add_argument('--effective-train-size', '--etrs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of training dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-valid-size', '--evs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of validation dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-test-size', '--etes', type=float_range(exc_min=True), default=1.,
+                        help='Portion of test dataset to be used in each epoch')
     parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
     parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
     parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
@@ -96,6 +107,8 @@ def get_parser():
                         help='number of best scores to track and report (default: 1)')
     parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                         help='Load a model without DataParallel wrapping it')
+    parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
+                        help='physically remove zero-filters and create a smaller model')
 
     distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
     distiller.quantization.add_post_train_quant_args(parser)
@@ -103,8 +116,15 @@ def get_parser():
     return parser
 
 
-def float_range(val_str):
-    val = float(val_str)
-    if val < 0 or val >= 1:
-        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
-    return val
+def float_range(min_val=0., max_val=1., exc_min=False, exc_max=False):
+    def checker(val_str):
+        val = float(val_str)
+        min_op, min_op_str = (operator.gt, '>') if exc_min else (operator.ge, '>=')
+        max_op, max_op_str = (operator.lt, '<') if exc_max else (operator.le, '<=')
+        if min_op(val, min_val) and max_op(val, max_val):
+            return val
+        raise argparse.ArgumentTypeError(
+            'Value must be {} {} and {} {} (received {})'.format(min_op_str, min_val, max_op_str, max_val, val))
+    if min_val >= max_val:
+        raise ValueError('min_val must be less than max_val')
+    return checker

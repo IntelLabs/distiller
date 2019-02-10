@@ -51,7 +51,6 @@ models, or with the provided sample models:
 """
 
 import math
-import argparse
 import time
 import os
 import sys
@@ -169,8 +168,7 @@ def main():
 
     # We can optionally resume from a checkpoint
     if args.resume:
-        model, compression_scheduler, start_epoch = apputils.load_checkpoint(
-            model, chkpt_file=args.resume)
+        model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_file=args.resume)
         model.to(args.device)
 
     # Define loss function (criterion) and optimizer
@@ -205,8 +203,8 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic,
-        shuffle_test=args.shuffle_test)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -226,6 +224,15 @@ def main():
         model.to(args.device)
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
+
+    if args.thinnify:
+        #zeros_mask_dict = distiller.create_model_masks_dict(model)
+        assert args.resume is not None, "You must use --resume to provide a checkpoint file to thinnify"
+        distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
+        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
+                                 name="{}_thinned".format(args.resume.replace(".pth.tar", "")), dir=msglogger.logdir)
+        print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
+        return
 
     args.kd_policy = None
     if args.kd_teacher:
@@ -649,7 +656,8 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
