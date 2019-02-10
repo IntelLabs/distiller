@@ -121,13 +121,11 @@ def main():
         random.seed(0)
         np.random.seed(0)
         cudnn.deterministic = True
-        args.shuffle_test = False
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
-        args.shuffle_test = True
 
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
@@ -163,7 +161,6 @@ def main():
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
-
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -190,7 +187,6 @@ def main():
 
     if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
-
     if args.greedy:
         return greedy(model, criterion, optimizer, pylogger, args)
 
@@ -203,14 +199,15 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
     activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     if args.sensitivity is not None:
-        sensitivities = np.arange(*args.sensitivity_range)
+        sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
     if args.evaluate:
@@ -301,11 +298,13 @@ def main():
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
 
 
+OVERALL_LOSS_KEY = 'Overall Loss'
+OBJECTIVE_LOSS_KEY = 'Objective Loss'
+
+
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
-    OVERALL_LOSS_KEY = 'Overall Loss'
-    OBJECTIVE_LOSS_KEY = 'Objective Loss'
     losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter()),
                           (OBJECTIVE_LOSS_KEY, tnt.AverageValueMeter())])
 
@@ -320,11 +319,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
 
-    total_samples = int(len(train_loader.sampler) * args.training_epoch_duration)
+    total_samples = len(train_loader.sampler)
     batch_size = train_loader.batch_size
     steps_per_epoch = math.ceil(total_samples / batch_size)
-    msglogger.info('Training epoch [%d]: %d samples in %d mini-batches (%d per mini-batch)',
-                   epoch, total_samples, steps_per_epoch, batch_size)
+    msglogger.info('Training epoch: %d samples (%d per mini-batch)', total_samples, batch_size)
 
     # Switch to train mode
     model.train()
@@ -379,9 +377,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # measure elapsed time
         batch_time.add(time.time() - end)
         steps_completed = (train_step+1)
-        done = train_step >= steps_per_epoch
 
-        if done or steps_completed % args.print_freq == 0:
+        if steps_completed % args.print_freq == 0:
             # Log some statistics
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
@@ -408,9 +405,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
         end = time.time()
-        if done:
-            # sometimes we don't use the entire dataset to train an epoch, so we exit early
-            break
 
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):
@@ -425,17 +419,16 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
 def test(test_loader, model, criterion, loggers, activations_collectors, args):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-
     if activations_collectors is None:
         activations_collectors = create_activation_stats_collectors(model, None)
     with collectors_context(activations_collectors["test"]) as collectors:
-        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args, epoch_duration=args.test_epoch_duration)
+        top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
         save_collectors_data(collectors, msglogger.logdir)
     return top1, top5, lossses
 
 
-def _validate(data_loader, model, criterion, loggers, args, epoch=-1, epoch_duration=1):
+def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     """Execute the validation/test loop."""
     losses = {'objective_loss': tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
@@ -450,11 +443,11 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, epoch_dura
         args.exit_taken = [0] * args.num_exits
 
     batch_time = tnt.AverageValueMeter()
-    total_samples = int(len(data_loader.sampler) * epoch_duration)
+    total_samples = len(data_loader.sampler)
     batch_size = data_loader.batch_size
     if args.display_confusion:
         confusion = tnt.ConfusionMeter(args.num_classes)
-    total_steps = math.ceil(total_samples / batch_size)
+    total_steps = total_samples / batch_size
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
     # Switch to evaluation mode
@@ -483,8 +476,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, epoch_dura
             end = time.time()
 
             steps_completed = (validation_step+1)
-            done = steps_completed >= total_steps
-            if done or steps_completed % args.print_freq == 0:
+            if steps_completed % args.print_freq == 0:
                 if not args.earlyexit_thresholds:
                     stats = ('',
                             OrderedDict([('Loss', losses['objective_loss'].mean),
@@ -508,10 +500,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, epoch_dura
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
-            if done:
-                # sometimes we don't use the entire dataset to validate/test, so we exit early
-                break
-
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
@@ -637,6 +625,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
     # This sample application can be invoked to execute Sensitivity Analysis on your
     # model.  The ouptut is saved to CSV and PNG.
     msglogger.info("Running sensitivity tests")
+    if not isinstance(loggers, list):
+        loggers = [loggers]
     test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
                        loggers=loggers, args=args,
                        activations_collectors=create_activation_stats_collectors(model))
@@ -653,7 +643,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic, shuffle_test=args.shuffle_test)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
     validate_fn = partial(test, test_loader=test_loader, criterion=criterion,

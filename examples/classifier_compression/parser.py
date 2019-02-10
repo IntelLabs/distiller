@@ -15,6 +15,7 @@
 #
 
 import argparse
+import operator
 
 import distiller
 import models
@@ -79,8 +80,19 @@ def getParser():
                         'Flag set => overrides the --gpus flag')
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-    parser.add_argument('--validation-size', '--vs', type=float_range(), default=0.1,
+    parser.add_argument('--validation-split', '--valid-size', '--vs', dest='validation_split',
+                        type=float_range(exc_max=True), default=0.1,
                         help='Portion of training dataset to set aside for validation')
+    parser.add_argument('--effective-train-size', '--etrs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of training dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-valid-size', '--evs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of validation dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-test-size', '--etes', type=float_range(exc_min=True), default=1.,
+                        help='Portion of test dataset to be used in each epoch')
     parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                         help='Display the confusion matrix')
     parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
@@ -91,9 +103,9 @@ def getParser():
                         help='number of best scores to track and report (default: 1)')
     parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                         help='Load a model without DataParallel wrapping it')
-    parser.add_argument('--training-epoch-duration', type=float_range(), default=1.,
-                        help='scales the duration of training epochs by a value in (0..1] (default: 1.)')
-    parser.add_argument('--test-epoch-duration', type=float_range(), default=1.)
+    # parser.add_argument('--training-epoch-duration', type=float_range(), default=1.,
+    #                     help='scales the duration of training epochs by a value in (0..1] (default: 1.)')
+    # parser.add_argument('--test-epoch-duration', type=float_range(), default=1.)
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
 
@@ -115,7 +127,7 @@ def getParser():
                                             '("post-training quantization)')
     quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
                              help='Apply linear quantization to model before evaluation. Applicable only if'
-                                 '--evaluate is also set')
+                                  '--evaluate is also set')
     quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
                              help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
     quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
@@ -135,11 +147,16 @@ def getParser():
     return parser
 
 
-def float_range(minval=0, maxval=1):
-    """Allows floats in [minval..maxval]"""
+def float_range(min_val=0., max_val=1., exc_min=False, exc_max=False):
     def checker(val_str):
         val = float(val_str)
-        if val < minval or val > maxval:
-            raise argparse.ArgumentTypeError('Must be in range [{}..{}] (received {})'.format(minval, maxval, val_str))
-        return val
+        min_op, min_op_str = (operator.gt, '>') if exc_min else (operator.ge, '>=')
+        max_op, max_op_str = (operator.lt, '<') if exc_max else (operator.le, '<=')
+        if min_op(val, min_val) and max_op(val, max_val):
+            return val
+        raise argparse.ArgumentTypeError(
+            'Value must be {} {} and {} {} (received {})'.format(min_op_str, min_val, max_op_str, max_val, val))
+    if min_val >= max_val:
+        raise ValueError('min_val must be less than max_val')
+
     return checker
