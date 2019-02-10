@@ -118,13 +118,13 @@ test_configs = [
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [48.340, 92.630]),
     TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, accuracy_checker, [91.580, 99.620]),
+               DS_CIFAR, accuracy_checker, [91.640, 99.610]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
                DS_CIFAR, accuracy_checker, [48.290, 94.460]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3188), ('sensitivity.png', 96158)])
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3165), ('sensitivity.png', 96158)])
 ]
 
 

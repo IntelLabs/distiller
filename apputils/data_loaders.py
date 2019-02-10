@@ -156,10 +156,11 @@ class SwitchingSubsetRandomSampler(Sampler):
         self.subset_length = int(np.floor(len(self.data_source) * subset_size))
 
     def __iter__(self):
-        indices = list(range(len(self.data_source)))
-        np.random.shuffle(indices)
+        # Randomizing in the same way as in torch.utils.data.sampler.SubsetRandomSampler to maintain
+        # reproducibility with the previous data loaders implementation
+        indices = torch.randperm(len(self.data_source))
         subset_indices = indices[:self.subset_length]
-        return iter(subset_indices)
+        return (self.data_source[i] for i in subset_indices)
 
     def __len__(self):
         return self.subset_length
