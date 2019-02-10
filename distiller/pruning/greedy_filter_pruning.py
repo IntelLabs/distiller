@@ -121,10 +121,6 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
         if model.state_dict()[param_name].dim() != 4:
             continue
         # Make a copy of the model, because when we prune the parameter tensor the model's weights are altered
-        try:
-            del model_cpy
-        except NameError:
-            pass
         torch.cuda.empty_cache()
         model_cpy = deepcopy(model)
         (prec1, prec5, loss, zeros_mask_dict) = prune_finetune_test(iteration, model_cpy, pruning_step, test_fn,
@@ -132,6 +128,8 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
                                                                     training_epoch_duration)
         if (prec1, prec5, -loss) > (best_layer[0], best_layer[1], -best_layer[-1]):
             best_layer = (prec1, prec5, param_name, model_cpy, zeros_mask_dict, loss)
+        del model_cpy
+        del zeros_mask_dict
     return best_layer[:-1]
 
 
@@ -180,6 +178,7 @@ def get_model_compute_budget(model, dataset, layers_to_prune=None):
             conv_op = g.find_op(normalize_module_name(name))
             assert conv_op is not None
             total_macs += conv_op['attrs']['MACs']
+    del g
     return total_macs
 
 
@@ -263,11 +262,10 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
         resnet_params = resnet20_params
     elif arch == "resnet56_cifar":
         resnet_params = resnet56_params
-    elif arch == "resnet50_cifar":
+    elif arch == "resnet50":
         resnet_params = resnet50_params
     if resnet_params is not None:
         resnet_layers = [param[:-len(".weight")] for param in resnet_params]
-
 
     total_macs = dense_total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
     iteration = 0
@@ -295,6 +293,7 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
                         name="greedy__{}__{:.1f}__{:.1f}".format(str(iteration).zfill(3), compute_density*100, prec1),
                         dir=msglogger.logdir)
         del scheduler
+        del zeros_mask_dict
         msglogger.info("Iteration {}: top1-{:.2f} {} compute-{:.2f}".format(*results[0:4]))
 
     assert iteration > 0
