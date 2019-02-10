@@ -19,11 +19,12 @@ import xlsxwriter
 import yaml
 import os
 from sys import float_info
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from contextlib import contextmanager
 import torch
 from torchnet.meter import AverageValueMeter
 import logging
+from math import sqrt
 import distiller
 msglogger = logging.getLogger()
 
@@ -92,7 +93,8 @@ class ActivationStatsCollector(object):
         Eligible modules are currently filtered by their class type.
         """
         is_leaf_node = len(list(module.children())) == 0
-        if is_leaf_node and (not self.classes or type(module) in self.classes):
+        register_all_class_types = not self.classes
+        if is_leaf_node and (register_all_class_types or (type(module) in self.classes)):
             self.fwd_hook_handles.append(module.register_forward_hook(self._activation_stats_cb))
             self._start_counter(module)
 
@@ -235,7 +237,9 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         batch_min_list = to_np(torch.min(act, dim=1)).tolist()
         batch_max_list = to_np(torch.max(act, dim=1)).tolist()
         batch_mean_list = to_np(torch.mean(act, dim=1)).tolist()
-        if act.shape[1] == 1:
+        # If activation contains only a single element, standard-deviation is meaningless (and std() returns NaN)
+        # Return 0 instead
+        if act.shape[0] == act.numel():
             batch_std_list = to_np(torch.zeros(act.shape[0])).tolist()
         else:
             batch_std_list = to_np(torch.std(act, dim=1)).tolist()
@@ -297,7 +301,7 @@ class _QuantStatsRecord(object):
         records = OrderedDict()
         records['min'] = float_info.max
         records['max'] = -float_info.max
-        for stat_name in ['avg_min', 'avg_max', 'mean']:  # , 'M', 'std']:
+        for stat_name in ['avg_min', 'avg_max', 'mean', 'std']:
             records[stat_name] = 0
         records['shape'] = ''
         return records
@@ -315,7 +319,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
       * Absolute min / max
       * Average min / max (calculate min / max per sample and average those)
       * Overall mean
-      * TODO: Overall standard-deviation
+      * Overall standard-deviation
     Calculated stats are saved to a YAML file.
 
     If a certain layer operates in-place, that layer's input stats will be overwritten by its output stats.
@@ -331,6 +335,13 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
           in-place operations and disable them.
         inplace_attr_names (iterable): If disable_inplace_attrs is enabled, this is the list of attribute name
           that will be searched for.
+
+    TODO: Consider merging with RecordsActivationStatsCollector
+    Current differences between the classes:
+      * Track single value per-input/output-per-module for the entire run. Specifically, for standard deviation this
+        cannot be done by tracking per-activation std followed by some post-processing
+      * Track inputs in addition to outputs
+      * Different serialization (yaml vs xlsx)
     """
     def __init__(self, model, classes=None, inplace_runtime_check=False,
                  disable_inplace_attrs=False, inplace_attr_names=('inplace',)):
@@ -349,7 +360,16 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
     def _activation_stats_cb(self, module, inputs, output):
         def update_mean(old_mean, new_val):
             return old_mean + (new_val - old_mean) / module.batch_idx
-            # return (old_mean * (self.batch_idx - 1) + new_val) / self.batch_idx
+
+        def update_std(values, old_std, old_mean, new_mean):
+            # See here:
+            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
+            numel = values.numel() if isinstance(values, torch.Tensor) else values.size
+            total_values_so_far = numel * (module.batch_idx - 1)
+            M = (old_std ** 2) * (total_values_so_far - 1)
+            mean_diffs = (values - old_mean) * (values - new_mean)
+            M += mean_diffs.sum()
+            return sqrt((M / (total_values_so_far + numel - 1)).item())
 
         def update_record(record, tensor):
             act = tensor.view(tensor.size(0), -1)
@@ -360,15 +380,14 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             try:
                 record['avg_min'] = update_mean(record['avg_min'], min_per_sample.mean().item())
                 record['avg_max'] = update_mean(record['avg_max'], max_per_sample.mean().item())
-                record['mean'] = update_mean(record['mean'], act.mean().item())
+                new_mean = update_mean(record['mean'], act.mean().item())
+                record['std'] = update_std(tensor, record['std'], record['mean'], new_mean)
             except RuntimeError:
                 record['avg_min'] = update_mean(record['avg_min'], min_per_sample.cpu().numpy().mean().item(0))
                 record['avg_max'] = update_mean(record['avg_max'], max_per_sample.cpu().numpy().mean().item(0))
-                record['mean'] = update_mean(record['mean'], act.cpu().numpy().mean().item(0))
-
-            # TODO: Add std calculation
-            # See here:
-            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
+                new_mean = update_mean(record['mean'], act.cpu().numpy().mean().item(0))
+                record['std'] = update_std(tensor.cpu().numpy(), record['std'], record['mean'], new_mean)
+            record['mean'] = new_mean
 
             record['shape'] = distiller.size2str(tensor)
 

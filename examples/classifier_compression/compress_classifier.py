@@ -115,11 +115,13 @@ def main():
             exit(1)
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
+        args.shuffle_test = False
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
+        args.shuffle_test = True
 
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
@@ -193,8 +195,10 @@ def main():
         msglogger.info('Quantization calibration stats collection enabled: Setting constant seeds and converting '
                        'model to serialized execution')
         distiller.set_deterministic()
+        args.shuffle_test = True
         model = distiller.make_non_parallel_copy(model)
         activations_collectors.update(create_quantization_stats_collector(model))
+        args.evaluate = True
 
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
@@ -202,7 +206,7 @@ def main():
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
         args.workers, args.validation_size, args.deterministic,
-        shuffle_test=args.qe_calibration is not None)
+        shuffle_test=args.shuffle_test)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -210,8 +214,9 @@ def main():
         sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
-    if args.evaluate or args.qe_calibration:
-        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args, compression_scheduler)
+    if args.evaluate:
+        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args,
+                              compression_scheduler)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
@@ -592,14 +597,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         model.cpu()
-        if args.qe_config_file:
-            quantizer = distiller.config_component_from_file_by_class(model, args.qe_config_file,
-                                                                      'PostTrainLinearQuantizer')
-        else:
-            quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                              args.qe_bits_accum, None, args.qe_mode, args.qe_clip_acts,
-                                                              args.qe_no_clip_layers, args.qe_per_channel,
-                                                              args.qe_stats_file)
+        quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
         quantizer.prepare_model()
         model.to(args.device)
 

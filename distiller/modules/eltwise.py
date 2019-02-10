@@ -22,7 +22,6 @@ class EltwiseAdd(nn.Module):
         super(EltwiseAdd, self).__init__()
         self.inplace = inplace
 
-    # def forward(self, t1, t2):
     def forward(self, *input):
         res = input[0]
         if self.inplace:

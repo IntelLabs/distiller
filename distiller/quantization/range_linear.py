@@ -22,6 +22,7 @@ from functools import reduce, partial
 import logging
 import os
 
+import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
@@ -639,6 +640,19 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
         self.replacement_factory[distiller.modules.EltwiseMult] = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+
+    @classmethod
+    def from_args(cls, model, args):
+        """
+        Returns an instance of PostTrainLinearQuantizer based on the set command-line arguments that are
+        given by add_post_train_quant_args()
+        """
+        if args.qe_config_file:
+            return distiller.config_component_from_file_by_class(model, args.qe_config_file,
+                                                                 'PostTrainLinearQuantizer')
+        else:
+            return cls(model, args.qe_bits_acts, args.qe_bits_wts, args.qe_bits_accum, None, args.qe_mode,
+                       args.qe_clip_acts, args.qe_no_clip_layers, args.qe_per_channel, args.qe_stats_file)
 
 
 ###############################################################################
