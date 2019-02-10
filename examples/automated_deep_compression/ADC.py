@@ -72,7 +72,7 @@ from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name
-from .adc_random_env import random_agent
+from examples.automated_deep_compression.adc_random_env import random_agent
 
 # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
 #RLLIB = "spinup"
@@ -540,6 +540,7 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
         msglogger.info("\tAgent pruning_action={}".format(pruning_action))
+        assert pruning_action >= 0
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
             pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
         else:
