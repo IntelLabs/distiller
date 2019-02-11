@@ -114,13 +114,11 @@ def main():
             exit(1)
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
-        args.shuffle_test = False
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
-        args.shuffle_test = True
 
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU
@@ -190,13 +188,14 @@ def main():
     activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     if args.qe_calibration:
-        msglogger.info('Quantization calibration stats collection enabled: Setting constant seeds and converting '
-                       'model to serialized execution')
+        msglogger.info('Quantization calibration stats collection enabled:')
+        msglogger.info('\tStats will be collected for {:.1%} of test dataset'.format(args.qe_calibration))
+        msglogger.info('\tSetting constant seeds and converting model to serialized execution')
         distiller.set_deterministic()
-        args.shuffle_test = True
         model = distiller.make_non_parallel_copy(model)
         activations_collectors.update(create_quantization_stats_collector(model))
         args.evaluate = True
+        args.effective_test_size = args.qe_calibration
 
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
@@ -450,9 +449,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     if args.display_confusion:
         confusion = tnt.ConfusionMeter(args.num_classes)
     total_steps = total_samples / batch_size
-    if args.qe_calibration:
-        total_steps = min(total_steps, args.qe_calibration)
-        msglogger.info("Generating quantization calibration stats based on {0} batches".format(total_steps))
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
     # Switch to evaluation mode
@@ -460,8 +456,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
     end = time.time()
     for validation_step, (inputs, target) in enumerate(data_loader):
-        if validation_step >= total_steps:
-            break
         with torch.no_grad():
             inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model

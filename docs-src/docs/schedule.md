@@ -336,14 +336,14 @@ args = parser.parse_args()
 These are the available command line arguments:
 
 ```
-Arguments controlling quantization at evaluation time("post-training quantization"):
+Arguments controlling quantization at evaluation time ("post-training quantization"):
   --quantize-eval, --qe
                         Apply linear quantization to model before evaluation.
                         Applicable only if --evaluate is also set
-  --qe-calibration NUM_CALIBRATION_BATCHES
-                        Run the model in evaluation mode for the specified
-                        number of batches and collect statistics. Ignores all
-                        other 'qe--*' arguments
+  --qe-calibration PORTION_OF_TEST_SET
+                        Run the model in evaluation mode on the specified
+                        portion of the test dataset and collect statistics.
+                        Ignores all other 'qe--*' arguments
   --qe-mode QE_MODE, --qem QE_MODE
                         Linear quantization mode. Choices: sym | asym_s |
                         asym_u
@@ -404,8 +404,8 @@ if args.qe_calibration:
     msglogger.info("Generating quantization calibration stats based on {0} users".format(args.qe_calibration))
     collector = distiller.data_loggers.QuantCalibrationStatsCollector(model)
     with collector_context(collector):
-        # Here call your model evaluation function, making sure to execute the
-        # number of batches specified by the qe_calibration argument
+        # Here call your model evaluation function, making sure to execute only
+        # the portion of the dataset specified by the qe_calibration argument
     yaml_path = 'some/dir/quantization_stats.yaml'
     collector.save(yaml_path)
 ```

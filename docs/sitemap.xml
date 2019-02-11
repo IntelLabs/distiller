@@ -2,87 +2,87 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
      <loc>/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/install/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/usage/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/schedule/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/pruning/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/regularization/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/quantization/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/knowledge_distillation/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/conditional_computation/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/algo_pruning/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/algo_quantization/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/algo_earlyexit/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/model_zoo/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/jupyter/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/design/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/tutorial-struct_pruning/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>/tutorial-lang_model/index.html</loc>
-     <lastmod>2019-02-04</lastmod>
+     <lastmod>2019-02-11</lastmod>
      <changefreq>daily</changefreq>
     </url>
 </urlset>

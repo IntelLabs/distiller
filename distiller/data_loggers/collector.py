@@ -389,7 +389,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 record['std'] = update_std(tensor.cpu().numpy(), record['std'], record['mean'], new_mean)
             record['mean'] = new_mean
 
-            record['shape'] = distiller.size2str(tensor)
+            if not record['shape']:
+                record['shape'] = distiller.size2str(tensor)
 
         if self.inplace_runtime_check and any([id(input) == id(output) for input in inputs]):
             raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
