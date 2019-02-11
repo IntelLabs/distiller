@@ -1,0 +1,59 @@
+#
+# Sample configuration file for post-training quantization of ResNet-18.
+#
+# This allows for more fine-grained control over quantization parameters compared to configuring post-training
+# quantization using command-line arguments only (see 'command_line.md' in this directory for examples of that
+# method).
+#
+# The syntax for the YAML configuration file is identical to the scheduler YAML syntax used for configuring
+# quantization-aware training / pruning and regularization. The difference is that for post-training quantization we
+# only need to define the quantizer itself, without a policy or any other components (e.g. a learning-rate scheduler).
+#
+# To invoke, run:
+#
+# python compress_classifier.py -a=resnet18 -p=10 -j=22 <path_to_imagenet_dataset> --pretrained --evaluate --quantize-eval --qe-config-file ../quantization/post_train_quant/resnet18_imagenet_post_train.yaml
+# (Note that when '--qe-config-file' is passed, all other '--qe*' arguments are ignored. Only the settings in the YAML file are used)
+#
+# Specifically, configuring with a YAML file allows us to define the 'bits_overrides' section, which is cumbersome
+# to define programatically and not exposed as a command-line argument.
+#
+# To illustrate how this may come in handy, we'll try post-training quantization of ResNet-18 using 6-bits for weights
+# and activations. First we'll see what we get when we quantize all layers with 6-bits, and then we'll see how we
+# can get better results by selectively quantizing some layers to 8-bits.
+#
+# FP32: (Run the above command line without the part starting with '--quantize-eval')
+#   ==> Top1: 69.758    Top5: 89.076    Loss: 1.251
+#
+# All layers 6-bits: (Just comment out the entire 'bits_overrides' section)
+#   ==> Top1: 64.702    Top5: 85.990    Loss: 1.467
+#
+# First + last layer with 8-bits, everything else in 6-bits (comment out just the section with the header '.*add')
+#   ==> Top1: 67.040    Top5: 87.548    Loss: 1.366
+#
+# First + last layers AND element-wise add layers with 8-bits, everything else in 6-bits (un-comment everything):
+#   ==> Top1: 68.382    Top5: 88.308    Loss: 1.306
+#
+
+quantizers:
+  post_train_quantizer:
+    class: PostTrainLinearQuantizer
+    bits_activations: 6
+    bits_parameters: 6
+    bits_accum: 32
+    mode: ASYMMETRIC_UNSIGNED
+    # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
+    model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
+    per_channel_wts: True
+    clip_acts: True
+    no_clip_layers: fc
+    bits_overrides:
+    # First and last layers + element-wise add layers in 8-bits
+      conv1:
+        wts: 8
+        acts: 8
+      .*add:
+        wts: 8
+        acts: 8
+      fc:
+        wts: 8
+        acts: 8

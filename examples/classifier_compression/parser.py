@@ -15,15 +15,18 @@
 #
 
 import argparse
-import operator
 
 import distiller
+import distiller.quantization
+import examples.automated_deep_compression as adc
+from distiller.utils import float_range_argparse_checker as float_range
 import models
 
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 
-def getParser():
+
+def get_parser():
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
@@ -103,60 +106,11 @@ def getParser():
                         help='number of best scores to track and report (default: 1)')
     parser.add_argument('--load-serialized', dest='load_serialized', action='store_true', default=False,
                         help='Load a model without DataParallel wrapping it')
-    # parser.add_argument('--training-epoch-duration', type=float_range(), default=1.,
-    #                     help='scales the duration of training epochs by a value in (0..1] (default: 1.)')
-    # parser.add_argument('--test-epoch-duration', type=float_range(), default=1.)
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
 
-    str_to_quant_mode_map = {
-                          'sym': distiller.quantization.LinearQuantMode.SYMMETRIC,
-                          'asym_s': distiller.quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
-                          'asym_u': distiller.quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED,
-                          }
-
-    def linear_quant_mode_str(val_str):
-        try:
-            return str_to_quant_mode_map[val_str]
-        except KeyError:
-            raise argparse.ArgumentError(
-                    'Must be one of {0} (received {1})'.format(
-                      list(str_to_quant_mode_map), val_str))
-
-    quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
-                                            '("post-training quantization)')
-    quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
-                             help='Apply linear quantization to model before evaluation. Applicable only if'
-                                  '--evaluate is also set')
-    quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
-                             help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
-    quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
-                             help='Number of bits for quantization of activations')
-    quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
-                             help='Number of bits for quantization of weights')
-    quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
-                             help='Number of bits for quantization of the accumulator')
-    quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
-                             help='Enable clipping of activations using min/max values averaging over batch')
-    quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                             help='List of layer names for which not to clip activations. Applicable only if '
-                                  '--qe-clip-acts is also set')
-    quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
-                             help='Enable per-channel quantization of weights (per output channel)')
-
+    distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
+    distiller.quantization.add_post_train_quant_args(parser)
+    distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
+    adc.automl_args.add_automl_args(parser)
     return parser
-
-
-def float_range(min_val=0., max_val=1., exc_min=False, exc_max=False):
-    def checker(val_str):
-        val = float(val_str)
-        min_op, min_op_str = (operator.gt, '>') if exc_min else (operator.ge, '>=')
-        max_op, max_op_str = (operator.lt, '<') if exc_max else (operator.le, '<=')
-        if min_op(val, min_val) and max_op(val, max_val):
-            return val
-        raise argparse.ArgumentTypeError(
-            'Value must be {} {} and {} {} (received {})'.format(min_op_str, min_val, max_op_str, max_val, val))
-    if min_val >= max_val:
-        raise ValueError('min_val must be less than max_val')
-
-    return checker

@@ -18,6 +18,9 @@
 We score improvement by means of the computation load (MACs/FLOPs) and do not use direct metrics because this is
 an open-source package that runs on many different hardware platforms.
 
+TODO: this code requires refactoring as is makes assumptions about applicative layers (e.g. the names of certain
+      members of the application `args` variable) and this is both tight-coupling and reverse-dependency.
+
 References:
 [1] Structural Compression of Convolutional Neural Networks Based on Greedy Filter Pruning
     Reza Abbasi-Asl, Bin Yu https://arxiv.org/abs/1705.07356
@@ -82,7 +85,7 @@ def prune_tensor(param, param_name, fraction_to_prune, zeros_mask_dict):
 
 
 def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
-                        app_args, param_name, training_epoch_duration):
+                        app_args, param_name, effective_train_size):
     pylogger = PythonLogger(msglogger)
     zeros_mask_dict = distiller.create_model_masks_dict(model_cpy)
     param = model_cpy.state_dict()[param_name]
@@ -93,7 +96,7 @@ def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
         # Fine-tune
         optimizer = torch.optim.SGD(model_cpy.parameters(), lr=app_args.lr,
                                     momentum=app_args.momentum, weight_decay=app_args.weight_decay)
-        app_args.training_epoch_duration = training_epoch_duration
+        app_args.effective_train_size = effective_train_size
         train_fn(model=model_cpy, compression_scheduler=create_scheduler(model_cpy, zeros_mask_dict),
                  optimizer=optimizer, epoch=iteration, loggers=[pylogger])
 
@@ -108,7 +111,7 @@ def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
 
 
 def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
-                           app_args, tensors_to_prune=None, training_epoch_duration=1):
+                           app_args, tensors_to_prune=None, effective_train_size=1):
     """Find the layer that is most robust to pruning 'pruning_step' filters.
 
     For each layer: prune 'step' percent of the filters, fine-tune, and measure top1 accuracy
@@ -125,7 +128,7 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
         model_cpy = deepcopy(model)
         (prec1, prec5, loss, zeros_mask_dict) = prune_finetune_test(iteration, model_cpy, pruning_step, test_fn,
                                                                     train_fn, app_args, param_name,
-                                                                    training_epoch_duration)
+                                                                    effective_train_size)
         if (prec1, prec5, -loss) > (best_layer[0], best_layer[1], -best_layer[-1]):
             best_layer = (prec1, prec5, param_name, model_cpy, zeros_mask_dict, loss)
         del model_cpy
@@ -134,7 +137,7 @@ def find_most_robust_layer(iteration, model, pruning_step, test_fn, train_fn,
 
 
 def find_most_robust_layer_mp(iteration, model, pruning_step, test_fn, train_fn,
-                              app_args, tensors_to_prune=None, training_epoch_duration=1):
+                              app_args, tensors_to_prune=None, effective_train_size=1):
     """Multiprocessing version of find_most_robust_layer
     """
     if tensors_to_prune is None:
@@ -151,7 +154,7 @@ def find_most_robust_layer_mp(iteration, model, pruning_step, test_fn, train_fn,
         model_cpy.share_memory()
         (prec1, prec5, loss, zeros_mask_dict) = prune_finetune_test(iteration, model_cpy, pruning_step,
                                                                     test_fn, train_fn, app_args,
-                                                                    param_name, training_epoch_duration)
+                                                                    param_name, effective_train_size)
         param = model_cpy.state_dict()[param_name]
         p = mp.Process(target=prune_finetune_test, args=(pqueue, model_cpy, pruning_step, test_fn,
                                                          train_fn, app_args, param_name, param))
@@ -274,15 +277,15 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
     while total_macs > fraction_to_prune * dense_total_macs:
         iteration += 1
         if app_args.greedy_finetuning_policy == "constant":
-            training_epoch_duration = app_args.training_epoch_duration
+            effective_train_size = app_args.effective_train_size
         elif app_args.greedy_finetuning_policy == "linear-grow":
-            training_epoch_duration = 1 - (total_macs / dense_total_macs)
+            effective_train_size = 1 - (total_macs / dense_total_macs)
 
         prec1, prec5, param_name, pruned_model, zeros_mask_dict = find_most_robust_layer(iteration, pruned_model,
                                                                                          pruning_step,
                                                                                          test_fn, train_fn,
                                                                                          app_args, resnet_params,
-                                                                                         training_epoch_duration)
+                                                                                         effective_train_size)
         total_macs = get_model_compute_budget(pruned_model, dataset, resnet_layers)
         densities = get_param_densities(model, pruned_model, resnet_params)
         compute_density = total_macs/dense_total_macs
