@@ -540,7 +540,7 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
         msglogger.info("\tAgent pruning_action={}".format(pruning_action))
-        assert pruning_action >= 0
+
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
             pruning_action = np.clip(pruning_action[0], self.action_low, self.action_high)
         else:
