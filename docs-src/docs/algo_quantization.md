@@ -84,17 +84,24 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 #### Post-Training
 
-For post-training quantization, currently **convolution** and **FC** are supported using this method.  
+For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in [`range_linear.py`](https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py).
 
-- They are implemented by wrapping the existing PyTorch layers with quantization and de-quantization operations. That is - the computation is done on floating-point tensors, but the values themselves are restricted to integer values. The wrapper is implemented in the `RangeLinearQuantParamLayerWrapper` class.  
-- All other layers are unaffected and are executed using their original FP32 implementation.  
-- To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For an example of how to do this, see the [`compress_classifier.py`](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). This sample also exposes command line arguments to invoke post-training quantization. For details see [here](usage.md#post-training-quantization).
-- For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline"), and for activations it is determined dynamically at runtime ("online"). The calculated quantization parameters are store as buffers within the module, so they are automatically serialized when the model checkpoint is saved.
-- As this is post-training, using it with number of bits < 8 is likely to lead to severe accuracy degradation for any non-trivial workload.
+- The operations currently supported are:
+    - Convolution
+    - Fully connected
+    - Element-wise addition
+    - Element-wise multiplication
+    - Concatenation
+- All other layers are unaffected and are executed using their original FP32 implementation.
+- To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For details on ways to invoke the quantizer see [here](schedule.md#post-training-quantization).
+- The transform performed by the Quantizer only works on sub-classes of `torch.nn.Module`. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the `torch` namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/distiller/modules). It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified [ResNet implementation](https://github.com/NervanaSystems/distiller/blob/quantization_updates/models/imagenet/resnet.py).
+- For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that [here](schedule.md#collecting-statistics-for-quantization).
+- The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.
 
 #### Quantization-Aware Training
 
-To apply range-based linear quantization in training, use the `QuantAwareTrainRangeLinearQuantizer` class. As it is now, it will apply weights quantization to convolution and FC modules. For activations quantization, it will insert instances `FakeLinearQuantization` module after ReLUs. This module follows the methodology described in [Benoit et al., 2018](http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html) and uses exponential moving averages to track activation ranges.
+To apply range-based linear quantization in training, use the `QuantAwareTrainRangeLinearQuantizer` class. As it is now, it will apply weights quantization to convolution, FC and embedding modules. For activations quantization, it will insert instances `FakeLinearQuantization` module after ReLUs. This module follows the methodology described in [Benoit et al., 2018](http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html) and uses exponential moving averages to track activation ranges.  
+Note that the current implementation of `QuantAwareTrainRangeLinearQuantizer` supports training with **single GPU only**.
 
 Similarly to post-training, the calculated quantization parameters (scale factors, zero-points, tracked activation ranges) are stored as buffers within their respective modules, so they're saved when a checkpoint is created.
 

@@ -16,17 +16,20 @@
 
 from functools import partial
 import xlsxwriter
+import yaml
 import os
+from sys import float_info
 from collections import OrderedDict
 from contextlib import contextmanager
 import torch
 from torchnet.meter import AverageValueMeter
 import logging
+from math import sqrt
 import distiller
 msglogger = logging.getLogger()
 
 __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
-           'collector_context', 'collectors_context']
+           'QuantCalibrationStatsCollector', 'collector_context', 'collectors_context']
 
 
 class ActivationStatsCollector(object):
@@ -56,17 +59,12 @@ class ActivationStatsCollector(object):
         """
         Args:
             model - the model we are monitoring.
-            statistics_dict - a dictionary of {stat_name: statistics_function}, where name
-                provides a means for us to access the statistics data at a later time; and the
-                statistics_function is a function that gets an activation as input and returns
-                some statistic.
-                For example, the dictionary below collects element-wise activation sparsity
-                statistics:
-                    {"sparsity": distiller.utils.sparsity}
-            classes - a list of class types for which we collect activation statistics.
+            stat_name - name for the statistics being collected.
                 You can access a module's activation statistics by referring to module.<stat_name>
                 For example:
                     print(module.sparsity)
+            classes - a list of class types for which we collect activation statistics.
+                Passing an empty list or None will collect statistics for all class types.
         """
         super(ActivationStatsCollector, self).__init__()
         self.model = model
@@ -90,12 +88,13 @@ class ActivationStatsCollector(object):
         self.model.apply(self.start_module)
 
     def start_module(self, module):
-        """Iteratively register to the forward-pass callback of all eligable modules.
+        """Iteratively register to the forward-pass callback of all eligible modules.
 
-        Eligable modules are currently filtered by their class type.
+        Eligible modules are currently filtered by their class type.
         """
         is_leaf_node = len(list(module.children())) == 0
-        if is_leaf_node and type(module) in self.classes:
+        register_all_class_types = not self.classes
+        if is_leaf_node and (register_all_class_types or (type(module) in self.classes)):
             self.fwd_hook_handles.append(module.register_forward_hook(self._activation_stats_cb))
             self._start_counter(module)
 
@@ -113,11 +112,18 @@ class ActivationStatsCollector(object):
         self.model.apply(self._reset_counter)
         return self
 
-    def __activation_stats_cb(self, module, input, output):
+    def save(self, fname):
+        pass
+
+    def _activation_stats_cb(self, module, input, output):
         """Handle new activations ('output' argument).
 
         This is invoked from the forward-pass callback of module 'module'.
         """
+        raise NotImplementedError
+
+    def _start_counter(self, module):
+        """Start a specific statistic counter - this is subclass-specific code"""
         raise NotImplementedError
 
     def _reset_counter(self, module):
@@ -182,7 +188,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
                 mean = mean.tolist()
             activation_stats[getattr(module, self.stat_name).name] = mean
 
-    def to_xlsx(self, fname):
+    def save(self, fname):
         """Save the records to an Excel workbook, with one worksheet per layer.
         """
         fname = ".".join([fname, 'xlsx'])
@@ -204,16 +210,16 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
 
 class RecordsActivationStatsCollector(ActivationStatsCollector):
-    """This class collects activiations statistical records.
+    """This class collects activations statistical records.
 
-    This Collector computes a hard-coded set of activations statsitics and collects a
+    This Collector computes a hard-coded set of activations statistics and collects a
     record per activation.  The activation records of the entire model (only filtered modules),
     can be saved to an Excel workbook.
 
     For obvious reasons, this is slower than SummaryActivationStatsCollector.
     """
     def __init__(self, model, classes=[torch.nn.ReLU]):
-        super(RecordsActivationStatsCollector, self).__init__(model, "statsitics_records", classes)
+        super(RecordsActivationStatsCollector, self).__init__(model, "statistics_records", classes)
 
     def _activation_stats_cb(self, module, input, output):
         """Record the activation sparsity of 'module'
@@ -231,15 +237,20 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         batch_min_list = to_np(torch.min(act, dim=1)).tolist()
         batch_max_list = to_np(torch.max(act, dim=1)).tolist()
         batch_mean_list = to_np(torch.mean(act, dim=1)).tolist()
-        batch_std_list = to_np(torch.std(act, dim=1)).tolist()
+        # If activation contains only a single element, standard-deviation is meaningless (and std() returns NaN)
+        # Return 0 instead
+        if act.shape[0] == act.numel():
+            batch_std_list = to_np(torch.zeros(act.shape[0])).tolist()
+        else:
+            batch_std_list = to_np(torch.std(act, dim=1)).tolist()
         batch_l2_list = to_np(torch.norm(act, p=2, dim=1)).tolist()
 
-        module.statsitics_records['min'].extend(batch_min_list)
-        module.statsitics_records['max'].extend(batch_max_list)
-        module.statsitics_records['mean'].extend(batch_mean_list)
-        module.statsitics_records['std'].extend(batch_std_list)
-        module.statsitics_records['l2'].extend(batch_l2_list)
-        module.statsitics_records['shape'] = distiller.size2str(output)
+        module.statistics_records['min'].extend(batch_min_list)
+        module.statistics_records['max'].extend(batch_max_list)
+        module.statistics_records['mean'].extend(batch_mean_list)
+        module.statistics_records['std'].extend(batch_std_list)
+        module.statistics_records['l2'].extend(batch_l2_list)
+        module.statistics_records['shape'] = distiller.size2str(output)
 
     @staticmethod
     def _create_records_dict():
@@ -249,7 +260,7 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         records['shape'] = 
         return records
 
-    def to_xlsx(self, fname):
+    def save(self, fname):
         """Save the records to an Excel workbook, with one worksheet per layer.
         """
         fname = ".".join([fname, 'xlsx'])
@@ -272,16 +283,169 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                 worksheet.write(0, len(col_names)+2, module_act_records['shape'])
 
     def _start_counter(self, module):
-        if not hasattr(module, "statsitics_records"):
-            module.statsitics_records = self._create_records_dict()
+        if not hasattr(module, "statistics_records"):
+            module.statistics_records = self._create_records_dict()
 
     def _reset_counter(self, module):
-        if hasattr(module, "statsitics_records"):
-            module.statsitics_records = self._create_records_dict()
+        if hasattr(module, "statistics_records"):
+            module.statistics_records = self._create_records_dict()
 
     def _collect_activations_stats(self, module, activation_stats, name=):
-        if hasattr(module, "statsitics_records"):
-            activation_stats[module.distiller_name] = module.statsitics_records
+        if hasattr(module, "statistics_records"):
+            activation_stats[module.distiller_name] = module.statistics_records
+
+
+class _QuantStatsRecord(object):
+    @staticmethod
+    def create_records_dict():
+        records = OrderedDict()
+        records['min'] = float_info.max
+        records['max'] = -float_info.max
+        for stat_name in ['avg_min', 'avg_max', 'mean', 'std']:
+            records[stat_name] = 0
+        records['shape'] = 
+        return records
+
+    def __init__(self):
+        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+        self.inputs = []
+        self.output = self.create_records_dict()
+
+
+class QuantCalibrationStatsCollector(ActivationStatsCollector):
+    """
+    This class tracks activations stats required for quantization, for each layer and for each input
+    and output. The tracked stats are:
+      * Absolute min / max
+      * Average min / max (calculate min / max per sample and average those)
+      * Overall mean
+      * Overall standard-deviation
+    Calculated stats are saved to a YAML file.
+
+    If a certain layer operates in-place, that layer's input stats will be overwritten by its output stats.
+    The collector can, optionally, check for such cases at runtime. In addition, a simple mechanism to disable inplace
+    operations in the model can be used. See arguments details below.
+
+    Args:
+        model (torch.nn.Module): The model we are monitoring
+        classes (list): List of class types for which we collect activation statistics. Passing an empty list or
+          None will collect statistics for all class types.
+        inplace_runtime_check (bool): If True will raise an error if an in-place operation is detected
+        disable_inplace_attrs (bool): If True, will search all modules within the model for attributes controlling
+          in-place operations and disable them.
+        inplace_attr_names (iterable): If disable_inplace_attrs is enabled, this is the list of attribute name
+          that will be searched for.
+
+    TODO: Consider merging with RecordsActivationStatsCollector
+    Current differences between the classes:
+      * Track single value per-input/output-per-module for the entire run. Specifically, for standard deviation this
+        cannot be done by tracking per-activation std followed by some post-processing
+      * Track inputs in addition to outputs
+      * Different serialization (yaml vs xlsx)
+    """
+    def __init__(self, model, classes=None, inplace_runtime_check=False,
+                 disable_inplace_attrs=False, inplace_attr_names=('inplace',)):
+        super(QuantCalibrationStatsCollector, self).__init__(model, "quant_stats", classes)
+        self.batch_idx = 0
+        self.inplace_runtime_check = inplace_runtime_check
+
+        if disable_inplace_attrs:
+            if not inplace_attr_names:
+                raise ValueError('inplace_attr_names cannot by empty or None')
+            for m in model.modules():
+                for n in inplace_attr_names:
+                    if hasattr(m, n):
+                        setattr(m, n, False)
+
+    def _activation_stats_cb(self, module, inputs, output):
+        def update_mean(old_mean, new_val):
+            return old_mean + (new_val - old_mean) / module.batch_idx
+
+        def update_std(values, old_std, old_mean, new_mean):
+            # See here:
+            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
+            numel = values.numel() if isinstance(values, torch.Tensor) else values.size
+            total_values_so_far = numel * (module.batch_idx - 1)
+            M = (old_std ** 2) * (total_values_so_far - 1)
+            mean_diffs = (values - old_mean) * (values - new_mean)
+            M += mean_diffs.sum()
+            return sqrt((M / (total_values_so_far + numel - 1)).item())
+
+        def update_record(record, tensor):
+            act = tensor.view(tensor.size(0), -1)
+            min_per_sample = act.min(dim=1)[0]
+            max_per_sample = act.max(dim=1)[0]
+            record['min'] = min(record['min'], min_per_sample.min().item())
+            record['max'] = max(record['max'], max_per_sample.max().item())
+            try:
+                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.mean().item())
+                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.mean().item())
+                new_mean = update_mean(record['mean'], act.mean().item())
+                record['std'] = update_std(tensor, record['std'], record['mean'], new_mean)
+            except RuntimeError:
+                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.cpu().numpy().mean().item(0))
+                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.cpu().numpy().mean().item(0))
+                new_mean = update_mean(record['mean'], act.cpu().numpy().mean().item(0))
+                record['std'] = update_std(tensor.cpu().numpy(), record['std'], record['mean'], new_mean)
+            record['mean'] = new_mean
+
+            if not record['shape']:
+                record['shape'] = distiller.size2str(tensor)
+
+        if self.inplace_runtime_check and any([id(input) == id(output) for input in inputs]):
+            raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
+                               'You can either disable this check or make sure no in-place operations occur. '
+                               'See QuantCalibrationStatsCollector class documentation for more info.')
+
+        module.batch_idx += 1
+
+        if not module.quant_stats.inputs:
+            # Delayed initialization of inputs records, because only now we know the # of inputs
+            for i in range(len(inputs)):
+                module.quant_stats.inputs.append(_QuantStatsRecord.create_records_dict())
+
+        for idx, input in enumerate(inputs):
+            update_record(module.quant_stats.inputs[idx], input)
+        update_record(module.quant_stats.output, output)
+
+    def _start_counter(self, module):
+        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+        module.quant_stats = _QuantStatsRecord()
+        module.batch_idx = 0
+
+    def _reset_counter(self, module):
+        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+        module.quant_stats = _QuantStatsRecord()
+        module.batch_idx = 0
+
+    def _collect_activations_stats(self, module, activation_stats, name=):
+        if distiller.utils.has_children(module):
+            return
+        if not hasattr(module, 'quant_stats'):
+            return
+
+        activation_stats[module.distiller_name] = OrderedDict()
+        if module.quant_stats.inputs:
+            activation_stats[module.distiller_name]['inputs'] = OrderedDict()
+            for idx, sr in enumerate(module.quant_stats.inputs):
+                activation_stats[module.distiller_name]['inputs'][idx] = sr
+        activation_stats[module.distiller_name]['output'] = module.quant_stats.output
+
+    def save(self, fname):
+        def ordered_dict_representer(self, value):
+            return self.represent_mapping('tag:yaml.org,2002:map', value.items())
+        yaml.add_representer(OrderedDict, ordered_dict_representer)
+
+        if not fname.endswith('.yaml'):
+            fname = ".".join([fname, 'yaml'])
+        try:
+            os.remove(fname)
+        except OSError:
+            pass
+
+        records_dict = self.value()
+        with open(fname, 'w') as f:
+            yaml.dump(records_dict, f, default_flow_style=False)
 
 
 @contextmanager

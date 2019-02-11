@@ -95,7 +95,7 @@ def dummy_quantize_params(param, param_meta):
 
 
 class DummyQuantizer(Quantizer):
-    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
                  quantize_bias=False, train_with_fp_copy=False):
         super(DummyQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_overrides, quantize_bias,
                                              train_with_fp_copy)
@@ -184,7 +184,7 @@ def test_no_quantization(model):
 
 def test_overrides_ordered_dict(model):
     with pytest.raises(TypeError, message='Expecting TypeError when bits_overrides is not an OrderedDict'):
-        DummyQuantizer(model, bits_overrides={})
+        DummyQuantizer(model, bits_overrides={'testing': '123'})
 
 
 @pytest.mark.parametrize(

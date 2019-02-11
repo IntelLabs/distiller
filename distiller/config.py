@@ -143,10 +143,31 @@ def file_config(model, optimizer, filename, scheduler=None):
     with open(filename, 'r') as stream:
         msglogger.info('Reading compression schedule from: %s', filename)
         try:
-            sched_dict = yaml_ordered_load(stream)
+            sched_dict = distiller.utils.yaml_ordered_load(stream)
             return dict_config(model, optimizer, sched_dict, scheduler)
         except yaml.YAMLError as exc:
             print("\nFATAL parsing error while parsing the schedule configuration file %s" % filename)
+            raise
+
+
+def config_component_from_file_by_class(model, filename, class_name, **extra_args):
+    with open(filename, 'r') as stream:
+        msglogger.info('Reading configuration from: %s', filename)
+        try:
+            config_dict = distiller.utils.yaml_ordered_load(stream)
+            config_dict.pop('policies', None)
+            for section_name, components in config_dict.items():
+                for component_name, component_args in components.items():
+                    if component_args['class'] == class_name:
+                        msglogger.info(
+                            'Found component of class {0}: Name: {1} ; Section: {2}'.format(class_name, component_name,
+                                                                                            section_name))
+                        component_args.update(extra_args)
+                        return build_component(model, component_name, component_args)
+            raise ValueError(
+                'Component of class {0} does not exist in configuration file {1}'.format(class_name, filename))
+        except yaml.YAMLError:
+            print("\nFATAL parsing error while parsing the configuration file %s" % filename)
             raise
 
 
@@ -158,10 +179,8 @@ def __factory(container_type, model, sched_dict, **kwargs):
                 try:
                     cfg_kwargs.update(kwargs)
                     # Instantiate pruners using the 'class' argument
-                    cfg_kwargs['model'] = model
-                    cfg_kwargs['name'] = name
-                    class_ = globals()[cfg_kwargs['class']]
-                    container[name] = class_(**__filter_kwargs(cfg_kwargs, class_.__init__))
+                    instance = build_component(model, name, cfg_kwargs)
+                    container[name] = instance
                 except NameError as error:
                     print("\nFatal error while parsing [section:%s] [item:%s]" % (container_type, name))
                     raise
@@ -175,6 +194,14 @@ def __factory(container_type, model, sched_dict, **kwargs):
             raise
 
     return container
+
+
+def build_component(model, name, cfg_kwargs):
+    cfg_kwargs['model'] = model
+    cfg_kwargs['name'] = name
+    class_ = globals()[cfg_kwargs['class']]
+    instance = class_(**__filter_kwargs(cfg_kwargs, class_.__init__))
+    return instance
 
 
 def __filter_kwargs(dict_to_filter, function_to_call):
@@ -199,22 +226,3 @@ def __policy_params(policy_def, type):
     name = policy_def[type]['instance_name']
     args = policy_def[type].get('args', None)
     return name, args
-
-
-def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
-    """
-    Function to load YAML file using an OrderedDict
-    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
-    """
-    class OrderedLoader(Loader):
-        pass
-
-    def construct_mapping(loader, node):
-        loader.flatten_mapping(node)
-        return object_pairs_hook(loader.construct_pairs(node))
-
-    OrderedLoader.add_constructor(
-        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-        construct_mapping)
-
-    return yaml.load(stream, OrderedLoader)
