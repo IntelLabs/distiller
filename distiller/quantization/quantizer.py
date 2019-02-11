@@ -91,10 +91,13 @@ class Quantizer(object):
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
     """
-    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=OrderedDict(),
+    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
                  quantize_bias=False, train_with_fp_copy=False):
+        if bits_overrides is None:
+            bits_overrides = OrderedDict()
         if not isinstance(bits_overrides, OrderedDict):
-            raise TypeError('bits_overrides must be an instance of collections.OrderedDict')
+            raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
+
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
@@ -150,8 +153,8 @@ class Quantizer(object):
         self.params_to_quantize = []
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
-        if module_type not in [nn.Conv2d, nn.Linear]:
-            # For now we support weights quantization only for Conv and FC layers (so, for example, we don't
+        if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
+            # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
             # support quantization of batch norm scale parameters)
             qbits = QBits(acts=qbits.acts, wts=None)
         self.module_qbits_map[module_name] = qbits

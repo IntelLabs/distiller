@@ -22,7 +22,13 @@ with some random helper functions.
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.backends.cudnn as cudnn
+import random
 from copy import deepcopy
+import yaml
+from collections import OrderedDict
+import argparse
+import operator
 
 
 def model_device(model):
@@ -526,3 +532,43 @@ def make_non_parallel_copy(model):
     replace_data_parallel(new_model)
 
     return new_model
+
+
+def set_deterministic():
+    torch.manual_seed(0)
+    random.seed(0)
+    np.random.seed(0)
+    torch.backends.cudnn.deterministic = True
+
+
+def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
+    """
+    Function to load YAML file using an OrderedDict
+    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
+    """
+    class OrderedLoader(Loader):
+        pass
+
+    def construct_mapping(loader, node):
+        loader.flatten_mapping(node)
+        return object_pairs_hook(loader.construct_pairs(node))
+
+    OrderedLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_mapping)
+
+    return yaml.load(stream, OrderedLoader)
+
+
+def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=False):
+    def checker(val_str):
+        val = float(val_str)
+        min_op, min_op_str = (operator.gt, '>') if exc_min else (operator.ge, '>=')
+        max_op, max_op_str = (operator.lt, '<') if exc_max else (operator.le, '<=')
+        if min_op(val, min_val) and max_op(val, max_val):
+            return val
+        raise argparse.ArgumentTypeError(
+            'Value must be {} {} and {} {} (received {})'.format(min_op_str, min_val, max_op_str, max_val, val))
+    if min_val >= max_val:
+        raise ValueError('min_val must be less than max_val')
+    return checker
