@@ -375,6 +375,16 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 
 ## Citation
 
+Research papers citing Distiller:
+-  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
+   *"Fast Adjustable Threshold For Uniform Neural Network Quantization,"*<br>
+   [arXiv:1812.07872v2](https://arxiv.org/abs/1812.07872v2), 2018
+
+- Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
+  *"Improving Neural Network Quantization without Retraining using Outlier Channel Splitting,"*<br>
+  [arXiv:1901.09504v2](https://arxiv.org/abs/1901.09504v20), 2019
+
+
 If you used Distiller for your work, please use the following citation:
 
 ```
