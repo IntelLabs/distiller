@@ -131,16 +131,6 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
         model.load_state_dict(checkpoint['state_dict'])
 
-        # try:
-        #     convert_scheduler_keys = False
-        #     model.load_state_dict(checkpoint['state_dict'])
-        # except RuntimeError as e:
-        #     # A very common source of this RuntimeError is loading a GPU model on the CPU.
-        #     # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
-        #     checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
-        #     model.load_state_dict(checkpoint['state_dict'])
-        #     convert_scheduler_keys = True
-
         msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, start_epoch-1)
         return model, compression_scheduler, start_epoch
     else:
