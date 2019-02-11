@@ -17,12 +17,15 @@
 import argparse
 
 import distiller
+import distiller.quantization
+from distiller.utils import float_range_argparse_checker as float_range
 import models
 
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 
-def getParser():
+
+def get_parser():
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
@@ -79,8 +82,19 @@ def getParser():
                         'Flag set => overrides the --gpus flag')
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-    parser.add_argument('--validation-size', '--vs', type=float_range, default=0.1,
+    parser.add_argument('--validation-split', '--valid-size', '--vs', dest='validation_split',
+                        type=float_range(exc_max=True), default=0.1,
                         help='Portion of training dataset to set aside for validation')
+    parser.add_argument('--effective-train-size', '--etrs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of training dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-valid-size', '--evs', type=float_range(exc_min=True), default=1.,
+                        help='Portion of validation dataset to be used in each epoch. '
+                             'NOTE: If --validation-split is set, then the value of this argument is applied '
+                             'AFTER the train-validation split according to that argument')
+    parser.add_argument('--effective-test-size', '--etes', type=float_range(exc_min=True), default=1.,
+                        help='Portion of test dataset to be used in each epoch')
     parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
     parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
     parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
@@ -96,46 +110,7 @@ def getParser():
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
 
-    str_to_quant_mode_map = {
-                          'sym': distiller.quantization.LinearQuantMode.SYMMETRIC,
-                          'asym_s': distiller.quantization.LinearQuantMode.ASYMMETRIC_SIGNED,
-                          'asym_u': distiller.quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED,
-                          }
-
-    def linear_quant_mode_str(val_str):
-        try:
-            return str_to_quant_mode_map[val_str]
-        except KeyError:
-            raise argparse.ArgumentError(
-                    'Must be one of {0} (received {1})'.format(
-                      list(str_to_quant_mode_map), val_str))
-
-    quant_group = parser.add_argument_group('Arguments controlling quantization at evaluation time'
-                                            '("post-training quantization)')
-    quant_group.add_argument('--quantize-eval', '--qe', action='store_true',
-                             help='Apply linear quantization to model before evaluation. Applicable only if'
-                                 '--evaluate is also set')
-    quant_group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
-                             help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
-    quant_group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
-                             help='Number of bits for quantization of activations')
-    quant_group.add_argument('--qe-bits-wts', '--qebw', type=int, default=8, metavar='NUM_BITS',
-                             help='Number of bits for quantization of weights')
-    quant_group.add_argument('--qe-bits-accum', type=int, default=32, metavar='NUM_BITS',
-                             help='Number of bits for quantization of the accumulator')
-    quant_group.add_argument('--qe-clip-acts', '--qeca', action='store_true',
-                             help='Enable clipping of activations using min/max values averaging over batch')
-    quant_group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                             help='List of layer names for which not to clip activations. Applicable only if '
-                                  '--qe-clip-acts is also set')
-    quant_group.add_argument('--qe-per-channel', '--qepc', action='store_true',
-                             help='Enable per-channel quantization of weights (per output channel)')
+    distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
+    distiller.quantization.add_post_train_quant_args(parser)
 
     return parser
-
-
-def float_range(val_str):
-    val = float(val_str)
-    if val < 0 or val >= 1:
-        raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
-    return val

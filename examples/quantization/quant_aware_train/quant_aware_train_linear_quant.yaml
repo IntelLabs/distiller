@@ -9,7 +9,7 @@
 #
 # Here's an example run for fine-tuning the ResNet-18 model from torchvision:
 #
-# python compress_classifier.py -a resnet18 -p 50 -b 256 ~/datasets/imagenet --epochs 10 --compress=../quantization/quant_aware_train_linear_quant.yaml --pretrained -j 22 --lr 0.0001 --vs 0
+# python compress_classifier.py -a resnet18 -p 50 -b 256 ~/datasets/imagenet --epochs 10 --compress=../quantization/quant_aware_train/quant_aware_train_linear_quant.yaml --pretrained -j 22 --lr 0.0001 --vs 0
 #
 # After 6 epochs we get:
 #

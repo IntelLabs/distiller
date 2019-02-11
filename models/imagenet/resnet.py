@@ -22,6 +22,8 @@ import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
 
+from distiller.modules import EltwiseAdd
+
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
@@ -56,6 +58,9 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+        # Replace '+=' operator with inplace module
+        self.add = EltwiseAdd(inplace=True)
+
     def forward(self, x):
         residual = x
 
@@ -69,7 +74,8 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
+        # out += residual
+        out = self.add(out, residual)
         out = self.relu2(out)
 
         return out
@@ -93,6 +99,9 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+        # Replace '+=' operator with inplace module
+        self.add = EltwiseAdd(inplace=True)
+
     def forward(self, x):
         residual = x
 
@@ -110,7 +119,8 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
+        # out += residual
+        out = self.add(out, residual)
         out = self.relu3(out)
 
         return out

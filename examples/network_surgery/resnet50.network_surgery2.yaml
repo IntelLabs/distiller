@@ -5,7 +5,7 @@
 # Top1 is 75.518 (on Epoch: 99) vs the published Top1: 76.15 (https://pytorch.org/docs/stable/torchvision/models.html)
 # Total sparsity: 82.6%
 #
-# time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.001 --compress=resnet50.network_surgery2.yaml --validation-size=0  --masks-sparsity --num-best-scores=10
+# time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.001 --compress=resnet50.network_surgery2.yaml --validation-split=0  --masks-sparsity --num-best-scores=10
 #
 #
 # Parameters:
