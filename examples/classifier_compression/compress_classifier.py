@@ -80,18 +80,12 @@ from distiller.data_loggers import *
 import distiller.quantization as quantization
 from models import ALL_MODEL_NAMES, create_model
 import parser
-from energy_report import extract_report
+from report import *
 
 # Logger handle
 msglogger = None
 
-# Report names
-repName = {
-    "repQuantizedtxt":"./report_energy_quantized.txt",
-    "repNotQuantizedtxt":"./report_energy_not_quantized.txt",
-    "repQuantized":"report_energy_quantized",
-    "repNotQuantized":"report_energy_not_quantized"
-}
+
 
 def main():
     global msglogger
@@ -448,30 +442,26 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
     end = time.time()
     validate_time = 0
+    energy = 0
     
     for validation_step, (inputs, target) in enumerate(data_loader):
         with torch.no_grad():
             inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model
              
-            
+            time_val = time.time()
+            energy += gpu_energy()
             output = model(inputs)
+            validate_time += time.time() - time_val
 
             if not args.earlyexit_thresholds:
-                time_val = time.time()
                 # compute loss
                 loss = criterion(output, target)
-                # energy measure
-                if(args.quantize_eval == True):
-                    os.system("nvidia-smi >> ./report_energy_quantized.txt")
-                else:
-                    os.system("nvidia-smi >> ./report_energy_not_quantized.txt")
                 # measure accuracy and record loss
                 losses['objective_loss'].add(loss.item())
                 classerr.add(output.data, target)
                 if args.display_confusion:
                     confusion.add(output.data, target)
-                validate_time += time.time() - time_val
             else:
                 earlyexit_validate_loss(output, target, criterion, args)
 
@@ -505,15 +495,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
 
-    if(args.quantize_eval == True):
-        energy = extract_report(repName["repQuantizedtxt"],repName["repQuantized"])
-        
-    else:
-        energy = extract_report(repName["repNotQuantizedtxt"],repName["repNotQuantized"])
 
     if not args.earlyexit_thresholds:
-        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f Energy: %.3f Watts Time: %.3f\n',
-                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean,energy,validate_time)
+        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f    Time: %.3f    Energy: %.3f\n',
+                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean,validate_time,energy)
 
         if args.display_confusion:
             msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
