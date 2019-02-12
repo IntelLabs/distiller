@@ -51,7 +51,6 @@ models, or with the provided sample models:
 """
 
 import math
-import argparse
 import time
 import os
 import sys
@@ -90,8 +89,7 @@ def main():
     global msglogger
 
     # Parse arguments
-    prsr = parser.getParser()
-    distiller.knowledge_distillation.add_distillation_args(prsr, ALL_MODEL_NAMES, True)
+    prsr = parser.get_parser()
     args = prsr.parse_args()
 
     if not os.path.exists(args.output_dir):
@@ -115,10 +113,7 @@ def main():
             msglogger.error('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
             exit(1)
         # Use a well-known seed, for repeatability of experiments
-        torch.manual_seed(0)
-        random.seed(0)
-        np.random.seed(0)
-        cudnn.deterministic = True
+        distiller.set_deterministic()
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
@@ -171,8 +166,7 @@ def main():
 
     # We can optionally resume from a checkpoint
     if args.resume:
-        model, compression_scheduler, start_epoch = apputils.load_checkpoint(
-            model, chkpt_file=args.resume)
+        model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_file=args.resume)
         model.to(args.device)
 
     # Define loss function (criterion) and optimizer
@@ -191,23 +185,35 @@ def main():
     if args.summary:
         return summarize_model(model, args.dataset, which_summary=args.summary)
 
+    activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
+
+    if args.qe_calibration:
+        msglogger.info('Quantization calibration stats collection enabled:')
+        msglogger.info('\tStats will be collected for {:.1%} of test dataset'.format(args.qe_calibration))
+        msglogger.info('\tSetting constant seeds and converting model to serialized execution')
+        distiller.set_deterministic()
+        model = distiller.make_non_parallel_copy(model)
+        activations_collectors.update(create_quantization_stats_collector(model))
+        args.evaluate = True
+        args.effective_test_size = args.qe_calibration
+
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
-
-    activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     if args.sensitivity is not None:
         sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
         return sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
 
     if args.evaluate:
-        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args, compression_scheduler)
+        return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args,
+                              compression_scheduler)
 
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
@@ -217,6 +223,15 @@ def main():
         model.to(args.device)
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
+
+    if args.thinnify:
+        #zeros_mask_dict = distiller.create_model_masks_dict(model)
+        assert args.resume is not None, "You must use --resume to provide a checkpoint file to thinnify"
+        distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
+        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
+                                 name="{}_thinned".format(args.resume.replace(".pth.tar", "")), dir=msglogger.logdir)
+        print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
+        return
 
     args.kd_policy = None
     if args.kd_teacher:
@@ -568,7 +583,7 @@ def earlyexit_validate_stats(args):
         total_top5 += (top5k_stats[exitnum] * (args.exit_taken[exitnum] / sum_exit_stats))
         msglogger.info("Accuracy Stats for exit %d: top1 = %.3f, top5 = %.3f", exitnum, top1k_stats[exitnum], top5k_stats[exitnum])
     msglogger.info("Totals for entire network with early exits: top1 = %.3f, top5 = %.3f", total_top1, total_top5)
-    return(total_top1, total_top5, losses_exits_stats)
+    return total_top1, total_top5, losses_exits_stats
 
 
 def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args, scheduler=None):
@@ -583,9 +598,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
     if args.quantize_eval:
         model.cpu()
-        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, args.qe_mode, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers, args.qe_per_channel)
+        quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
         quantizer.prepare_model()
         model.to(args.device)
 
@@ -637,7 +650,8 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_size, args.deterministic)
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
     validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
@@ -654,6 +668,12 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     ADC.do_adc(model, args.dataset, args.arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
+class missingdict(dict):
+    """This is a little trick to prevent KeyError"""
+    def __missing__(self, key):
+        return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
+
+
 def create_activation_stats_collectors(model, *phases):
     """Create objects that collect activation statistics.
 
@@ -667,11 +687,6 @@ def create_activation_stats_collectors(model, *phases):
 
     WARNING! Enabling activation statsitics collection will significantly slow down training!
     """
-    class missingdict(dict):
-        """This is a little trick to prevent KeyError"""
-        def __missing__(self, key):
-            return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
-
     distiller.utils.assign_layer_fq_names(model)
 
     genCollectors = lambda: missingdict({
@@ -688,13 +703,20 @@ def create_activation_stats_collectors(model, *phases):
             for k in ('train', 'valid', 'test')}
 
 
+def create_quantization_stats_collector(model):
+    distiller.utils.assign_layer_fq_names(model)
+    return {'test': missingdict({'quantization_stats': QuantCalibrationStatsCollector(model, classes=None,
+                                                                                      inplace_runtime_check=True,
+                                                                                      disable_inplace_attrs=True)})}
+
+
 def save_collectors_data(collectors, directory):
     """Utility function that saves all activation statistics to Excel workbooks
     """
     for name, collector in collectors.items():
         workbook = os.path.join(directory, name)
         msglogger.info("Generating {}".format(workbook))
-        collector.to_xlsx(workbook)
+        collector.save(workbook)
 
 
 def check_pytorch_version():

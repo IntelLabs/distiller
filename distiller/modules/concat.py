@@ -14,12 +14,14 @@
 # limitations under the License.
 #
 
-from .quantizer import Quantizer
-from .range_linear import RangeLinearQuantWrapper, RangeLinearQuantParamLayerWrapper, PostTrainLinearQuantizer, \
-    LinearQuantMode, QuantAwareTrainRangeLinearQuantizer, add_post_train_quant_args,\
-    RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseAddWrapper, RangeLinearQuantEltwiseMultWrapper
-from .clipped_linear import LinearQuantizeSTE, ClippedLinearQuantization, WRPNQuantizer, DorefaQuantizer, PACTQuantizer
+import torch
+import torch.nn as nn
 
-del quantizer
-del range_linear
-del clipped_linear
+
+class Concat(nn.Module):
+    def __init__(self, dim=0):
+        super(Concat, self).__init__()
+        self.dim = dim
+
+    def forward(self, *seq):
+        return torch.cat(seq, dim=self.dim)

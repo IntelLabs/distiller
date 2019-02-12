@@ -1,6 +1,13 @@
-# Post-Training Quantization Examples
+# Post-Training Quantization Command Line Examples
 
-Following are a few examples of invoking post-training quantization on ResNet-50, using Distiller's image classification sample. Note that for post-training quantization we don't use a YAML schedule file, instead we specify command line arguments. The available command line arguments are:
+Following are a few examples of invoking post-training quantization on ResNet-50, using Distiller's image classification sample.  
+
+## Command Line vs. YAML Configuration
+
+Post-training quantization can either be configured straight from the command-line, or using a YAML configuration file. Using a YAML file allows fine-grained control over the quantization parameters of each layer, whereas command-line configuration is "monolithic".   
+All the examples shown below are using command-line configuration. See `resnet18_imagenet_post_train.yaml` in this directory for an example of YAML configuration. 
+
+## Available Arguments for  Command Line Configuration
 
 | Long Form             | Short     | Description                                                              | Default |
 |-----------------------|-----------|--------------------------------------------------------------------------|---------|
@@ -11,7 +18,13 @@ Following are a few examples of invoking post-training quantization on ResNet-50
 | `--qe-bits-accum`     | N/A       | # of bits for quantization of the accumulator                            | 32      |
 | `--qe-clip-acts`      | `--qeca`  | Enable clipping of activations using min/max values averaging over batch | Off     |
 | `--qe-no-clip-layers` | `--qencl` | List of layer names (space-separated) for which not to clip activations  | ''      |
-| `qe-per-channel`      | `--qepc`  | Enable per-channel quantization of weights (per output channel)          | Off     |
+| `--qe-per-channel`    | `--qepc`  | Enable per-channel quantization of weights (per output channel)          | Off     |
+| `--qe-stats-file`     | N/A       | Use stats file to compute static quantization parameters for activations. If not passed, parameters are re-calculated in each batch. | '' |  
+
+To generate a stats file that can be passed with `--qe-stats-file`, use the `--qe-calibration` argument. See `stats/resnet18_quant_stats.yaml` under this directory for more details.  
+All the examples below are using dynamic quantization, that is - no stats file is used.
+
+## Sample Invocations
 
 This table summarizes the settings and results for each run. The command lines for all runs follow in the next table.
 

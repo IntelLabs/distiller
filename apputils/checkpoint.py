@@ -26,6 +26,7 @@ from errno import ENOENT
 import logging
 import torch
 import distiller
+from distiller.utils import normalize_module_name
 msglogger = logging.getLogger()
 
 
@@ -100,7 +101,14 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     compression_scheduler = None
     if 'compression_sched' in checkpoint:
         compression_scheduler = distiller.CompressionScheduler(model)
-        compression_scheduler.load_state_dict(checkpoint['compression_sched'])
+        try:
+            convert_keys = False
+            compression_scheduler.load_state_dict(checkpoint['compression_sched'], convert_scheduler_keys=convert_keys)
+        except KeyError as e:
+            # A very common source of this RuntimeError is loading a GPU model on the CPU.
+            # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
+            convert_keys = True
+            compression_scheduler.load_state_dict(checkpoint['compression_sched'], convert_scheduler_keys=convert_keys)
         msglogger.info("Loaded compression schedule from checkpoint (epoch {})".format(
             checkpoint_epoch))
     else:
@@ -112,6 +120,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         msglogger.info("Loaded a thinning recipe from the checkpoint")
         # Cache the recipes in case we need them later
         model.thinning_recipes = checkpoint['thinning_recipes']
+        if convert_keys:
+            model.thinning_recipes = {normalize_module_name(k): v for k, v in model.thinning_recipes.items()}         
         distiller.execute_thinning_recipes_list(model,
                                                 compression_scheduler.zeros_mask_dict,
                                                 model.thinning_recipes)
@@ -124,6 +134,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
 
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
                                                                    e=checkpoint_epoch))
-
+    if convert_keys:
+            checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
     return (model, compression_scheduler, start_epoch)

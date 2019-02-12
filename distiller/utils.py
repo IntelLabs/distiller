@@ -22,7 +22,13 @@ with some random helper functions.
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.backends.cudnn as cudnn
+import random
 from copy import deepcopy
+import yaml
+from collections import OrderedDict
+import argparse
+import operator
 
 
 def model_device(model):
@@ -78,16 +84,8 @@ def assign_layer_fq_names(container, name=None):
     Sometimes we need to access modules by their names, and we'd like to use
     fully-qualified names for convinience.
     """
-    is_leaf = True
-    for key, module in container._modules.items():
-        try:
-            assign_layer_fq_names(module, ".".join([name, key]) if name is not None else key)
-            is_leaf = False
-        except AttributeError:
-            if module is not None:
-                raise
-    if is_leaf:
-        container.distiller_name = name
+    for name, module in container.named_modules():
+        module.distiller_name = name
 
 
 def find_module_by_fq_name(model, fq_mod_name):
@@ -472,6 +470,10 @@ def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total
         log_freq: The number of steps between logging records
         loggers: A list of loggers to send the log info to
     """
+    if loggers is None:
+        return
+    if not isinstance(loggers, list):
+        loggers = [loggers]
     for logger in loggers:
         logger.log_training_progress(stats_dict, epoch,
                                      steps_completed,
@@ -501,6 +503,16 @@ def has_children(module):
         return False
 
 
+def get_dummy_input(dataset):
+    if dataset == 'imagenet':
+        dummy_input = torch.randn(1, 3, 224, 224)
+    elif dataset == 'cifar10':
+        dummy_input = torch.randn(1, 3, 32, 32)
+    else:
+        raise ValueError("dataset %s is not supported" % dataset)
+    return dummy_input
+
+
 def make_non_parallel_copy(model):
     """Make a non-data-parallel copy of the provided model.
 
@@ -520,3 +532,43 @@ def make_non_parallel_copy(model):
     replace_data_parallel(new_model)
 
     return new_model
+
+
+def set_deterministic():
+    torch.manual_seed(0)
+    random.seed(0)
+    np.random.seed(0)
+    torch.backends.cudnn.deterministic = True
+
+
+def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
+    """
+    Function to load YAML file using an OrderedDict
+    See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
+    """
+    class OrderedLoader(Loader):
+        pass
+
+    def construct_mapping(loader, node):
+        loader.flatten_mapping(node)
+        return object_pairs_hook(loader.construct_pairs(node))
+
+    OrderedLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_mapping)
+
+    return yaml.load(stream, OrderedLoader)
+
+
+def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=False):
+    def checker(val_str):
+        val = float(val_str)
+        min_op, min_op_str = (operator.gt, '>') if exc_min else (operator.ge, '>=')
+        max_op, max_op_str = (operator.lt, '<') if exc_max else (operator.le, '<=')
+        if min_op(val, min_val) and max_op(val, max_val):
+            return val
+        raise argparse.ArgumentTypeError(
+            'Value must be {} {} and {} {} (received {})'.format(min_op_str, min_val, max_op_str, max_val, val))
+    if min_val >= max_val:
+        raise ValueError('min_val must be less than max_val')
+    return checker
