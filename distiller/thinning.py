@@ -61,7 +61,7 @@ __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
            'ChannelRemover', 'remove_channels',
            'FilterRemover',  'remove_filters',
            'find_nonzero_channels', 'find_nonzero_channels_list',
-           'execute_thinning_recipes_list']
+           'execute_thinning_recipes_list', 'get_normalized_recipe']
 
 
 def create_graph(dataset, arch):
@@ -75,6 +75,12 @@ def create_graph(dataset, arch):
     assert model is not None
     dummy_input = dummy_input.to(distiller.model_device(model))
     return SummaryGraph(model, dummy_input)
+
+
+def get_normalized_recipe(recipe):
+    new_recipe = ThinningRecipe(modules={normalize_module_name(k): v for k, v in recipe.modules.items()},
+                                parameters={normalize_module_name(k): v for k, v in recipe.parameters.items()})
+    return new_recipe
 
 
 def param_name_2_layer_name(param_name):
