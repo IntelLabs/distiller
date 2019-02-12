@@ -89,7 +89,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     msglogger.debug("\n\t".join(['Checkpoint keys:'] + list(checkpoint)))
 
     if 'state_dict' not in checkpoint:
-        raise ValueError('checkpoint must contain the layers under state_dict')
+        raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
 
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
