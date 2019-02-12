@@ -85,7 +85,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
 
     msglogger.info("=> loading checkpoint %s", chkpt_file)
-    checkpoint = torch.load(chkpt_file, map_location = lambda storage, loc: storage)
+    checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
     msglogger.debug("\n\t".join(['Checkpoint keys:'] + list(checkpoint)))
 
     if 'state_dict' not in checkpoint:
@@ -121,7 +121,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         # Cache the recipes in case we need them later
         model.thinning_recipes = checkpoint['thinning_recipes']
         if normalize_dataparallel_keys:
-            model.thinning_recipes = {normalize_module_name(k): v for k, v in model.thinning_recipes.items()}         
+            model.thinning_recipes = [distiller.get_normalized_recipe(recipe) for recipe in model.thinning_recipes]
         distiller.execute_thinning_recipes_list(model,
                                                 compression_scheduler.zeros_mask_dict,
                                                 model.thinning_recipes)

@@ -26,7 +26,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 
 import distiller
-from apputils import load_checkpoint
+from apputils import save_checkpoint, load_checkpoint
 from models import create_model
 
 
@@ -38,6 +38,7 @@ def test_load():
     model, compression_scheduler, start_epoch = load_checkpoint(model, '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
+
 
 def test_load_state_dict():
     # prepare lean checkpoint
@@ -52,6 +53,7 @@ def test_load_state_dict():
     assert compression_scheduler is None
     assert start_epoch == 0
 
+
 def test_load_dumb_checkpoint():
     # prepare lean checkpoint
     state_dict_arrays = torch.load('../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar').get('state_dict')
@@ -62,6 +64,7 @@ def test_load_dumb_checkpoint():
         with pytest.raises(ValueError):
             model, compression_scheduler, start_epoch = load_checkpoint(model, tmpfile.name)
 
+
 def test_load_negative():
     with pytest.raises(FileNotFoundError):
         model = create_model(False, 'cifar10', 'resnet20_cifar')
@@ -69,12 +72,42 @@ def test_load_negative():
 
 
 def test_load_gpu_model_on_cpu():
-    model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=-1)
+    # Issue #148
+    CPU_DEVICE_ID = -1
+    model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
     model, compression_scheduler, start_epoch = load_checkpoint(model,
                                                                 '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
     assert distiller.model_device(model) == 'cpu'
+
+
+def test_load_gpu_model_on_cpu_with_thinning():
+    # Issue #148
+    # 1. create a GPU model and remove 50% of the filters in one of the layers (thninning)
+    # 2. save the thinned model in a checkpoint file
+    # 3. load the checkpoint and place it on the CPU
+    CPU_DEVICE_ID = -1
+    gpu_model = create_model(False, 'cifar10', 'resnet20_cifar')
+    conv_pname = "module.layer1.0.conv1.weight"
+    conv_p = distiller.model_find_param(gpu_model, conv_pname)
+    pruner = distiller.pruning.L1RankedStructureParameterPruner("test_pruner", group_type="Filters",
+                                                                desired_sparsity=0.5, weights=conv_pname)
+    zeros_mask_dict = distiller.create_model_masks_dict(gpu_model)
+    pruner.set_param_mask(conv_p, conv_pname, zeros_mask_dict, meta=None)
+
+    # Use the mask to prune
+    zeros_mask_dict[conv_pname].apply_mask(conv_p)
+    distiller.remove_filters(gpu_model, zeros_mask_dict, 'resnet20_cifar', 'cifar10', optimizer=None)
+    assert hasattr(gpu_model, 'thinning_recipes')
+    scheduler = distiller.CompressionScheduler(gpu_model)
+    save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model, scheduler=scheduler, optimizer=None)
+
+    CPU_DEVICE_ID = -1
+    cpu_model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
+    load_checkpoint(cpu_model, "checkpoint.pth.tar")
+    assert distiller.model_device(cpu_model) == 'cpu'
+
 
 if __name__ == '__main__':
     test_load_gpu_model_on_cpu()
