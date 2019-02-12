@@ -74,6 +74,7 @@ def test_load_gpu_model_on_cpu():
                                                                 '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar')
     assert compression_scheduler is not None
     assert start_epoch == 180
+    assert distiller.model_device(model) == 'cpu'
 
 if __name__ == '__main__':
     test_load_gpu_model_on_cpu()
