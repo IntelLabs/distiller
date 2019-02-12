@@ -99,10 +99,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         msglogger.info("   best top@1: %.3f", best_top1)
 
     compression_scheduler = None
+    convert_keys = False
     if 'compression_sched' in checkpoint:
         compression_scheduler = distiller.CompressionScheduler(model)
         try:
-            convert_keys = False
             compression_scheduler.load_state_dict(checkpoint['compression_sched'], convert_scheduler_keys=convert_keys)
         except KeyError as e:
             # A very common source of this RuntimeError is loading a GPU model on the CPU.
