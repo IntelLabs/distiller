@@ -105,7 +105,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         try:
             compression_scheduler.load_state_dict(checkpoint['compression_sched'], convert_scheduler_keys=convert_keys)
         except KeyError as e:
-            # A very common source of this RuntimeError is loading a GPU model on the CPU.
+            # A very common source of this KeyError is loading a GPU model on the CPU.
             # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
             convert_keys = True
             compression_scheduler.load_state_dict(checkpoint['compression_sched'], convert_scheduler_keys=convert_keys)
