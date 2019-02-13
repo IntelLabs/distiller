@@ -31,6 +31,7 @@ from .ranked_structures_pruner import L1RankedStructureParameterPruner, L2Ranked
                                       ActivationAPoZRankedFilterPruner, \
                                       RandomRankedFilterPruner, GradientRankedFilterPruner
 from .baidu_rnn_pruner import BaiduRNNPruner
+from .greedy_filter_pruning import greedy_pruner
 
 del magnitude_pruner
 del automated_gradual_pruner

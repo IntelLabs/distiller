@@ -77,6 +77,7 @@ except ImportError:
 import apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
+import examples.automated_deep_compression as adc
 from models import ALL_MODEL_NAMES, create_model
 import parser
 
@@ -178,8 +179,10 @@ def main():
     msglogger.info('Optimizer Type: %s', type(optimizer))
     msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
-    if args.ADC:
+    if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
+    if args.greedy:
+        return greedy(model, criterion, optimizer, pylogger, args)
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
@@ -421,7 +424,8 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
 def test(test_loader, model, criterion, loggers, activations_collectors, args):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-
+    if activations_collectors is None:
+        activations_collectors = create_activation_stats_collectors(model, None)
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
@@ -640,32 +644,36 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    import examples.automated_deep_compression.ADC as ADC
-    HAVE_COACH_INSTALLED = True
-    if not HAVE_COACH_INSTALLED:
-        raise ValueError("ADC is currently experimental and uses non-public Coach features")
-
-    if not isinstance(loggers, list):
-        loggers = [loggers]
-
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
         args.workers, args.validation_split, args.deterministic,
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args.display_confusion = True
-    validate_fn = partial(validate, val_loader=test_loader, criterion=criterion,
-                          loggers=loggers, args=args)
+    validate_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                          loggers=loggers, args=args, activations_collectors=None)
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
-    if args.ADC_params is not None:
-        ADC.summarize_experiment(args.ADC_params, args.dataset, args.arch, validate_fn)
-        exit()
-
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
-    ADC.do_adc(model, args.dataset, args.arch, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+    adc.ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+
+
+def greedy(model, criterion, optimizer, loggers, args):
+    train_loader, val_loader, test_loader, _ = apputils.load_data(
+        args.dataset, os.path.expanduser(args.data), args.batch_size,
+        args.workers, args.validation_split, args.deterministic,
+        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
+
+    test_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                      loggers=loggers, args=args, activations_collectors=None)
+    train_fn = partial(train, train_loader=train_loader, criterion=criterion, args=args)
+    assert args.greedy_target_density is not None
+    distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args,
+                                                          args.greedy_target_density,
+                                                          args.greedy_pruning_step,
+                                                          test_fn, train_fn)
 
 
 class missingdict(dict):
