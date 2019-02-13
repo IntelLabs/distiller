@@ -88,8 +88,8 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
     """Configure the Python logger.
 
     For each execution of the application, we'd like to create a unique log directory.
-    By default this library is named using the date and time of day, to that directories
-    can be sorted by recency.  You can also name yor experiments and prefix the log
+    By default this directory is named using the date and time of day, so that directories
+    can be sorted by recency.  You can also name your experiments and prefix the log
     directory with this name.  This can be useful when accessing experiment data from
     TensorBoard, for example.
     """
@@ -105,4 +105,16 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
     msglogger.info('Log file for this run: ' + os.path.realpath(log_filename))
+
+    # Create a symbollic link to the last log file created (for easier access)
+    try:
+        os.unlink("latest_log_file")
+    except FileNotFoundError:
+        pass
+    try:
+        os.unlink("latest_log_dir")
+    except FileNotFoundError:
+        pass
+    os.symlink(logdir, "latest_log_dir")
+    os.symlink(log_filename, "latest_log_file")
     return msglogger

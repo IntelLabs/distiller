@@ -18,6 +18,7 @@ import argparse
 
 import distiller
 import distiller.quantization
+import examples.automated_deep_compression as adc
 from distiller.utils import float_range_argparse_checker as float_range
 import models
 
@@ -95,8 +96,6 @@ def get_parser():
                              'AFTER the train-validation split according to that argument')
     parser.add_argument('--effective-test-size', '--etes', type=float_range(exc_min=True), default=1.,
                         help='Portion of test dataset to be used in each epoch')
-    parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
-    parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
     parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
                         help='Display the confusion matrix')
     parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
@@ -112,5 +111,6 @@ def get_parser():
 
     distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
     distiller.quantization.add_post_train_quant_args(parser)
-
+    distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
+    adc.automl_args.add_automl_args(parser)
     return parser
