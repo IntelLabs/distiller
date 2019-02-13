@@ -131,6 +131,8 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-config-file', type=str, metavar='PATH',
                        help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
                             'all other --qe* arguments are ignored)')
+    group.add_argument('--qe-bits-scale', '--qebs', type=int, default=None, metavar='NUM_BITS',
+                             help='Number of bits for scale approximation, default=None fp32 scale.')
 
 
 class RangeLinearQuantWrapper(nn.Module):
@@ -148,7 +150,7 @@ class RangeLinearQuantWrapper(nn.Module):
     """
 
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC,
-                 clip_acts=False, activation_stats=None):
+                 clip_acts=False, activation_stats=None, bits_scale=None):
         super(RangeLinearQuantWrapper, self).__init__()
 
         self.wrapped_module = wrapped_module
@@ -156,6 +158,8 @@ class RangeLinearQuantWrapper(nn.Module):
         self.num_bits_accum = num_bits_accum
         self.mode = mode
         self.clip_acts = clip_acts
+        self.num_bits_scale = bits_scale
+        self.scale_approximation = bits_scale is not None
 
         # Controls whether output is de-quantized at end of forward op. Meant as a debug / test flag only
         # (note that if False, the quantized output will be returned, but without any quantization parameters,
@@ -324,9 +328,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         clip_acts (bool): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
-                 mode=LinearQuantMode.SYMMETRIC, clip_acts=False, per_channel_wts=False, activation_stats=None):
+                 mode=LinearQuantMode.SYMMETRIC, clip_acts=False, per_channel_wts=False, activation_stats=None, bits_scale=None):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
-                                                                clip_acts, activation_stats)
+                                                                clip_acts, activation_stats, bits_scale=bits_scale)
 
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D and Linear modules')
@@ -417,8 +421,18 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         y_f = accumulator / self.accum_scale
         return _get_quant_params_from_tensor(y_f, self.num_bits_acts, self.mode, clip=self.clip_acts)
 
+    def get_scale_approximation(self, q, as_float=False):
+        n = torch.floor(torch.log2((2. ** self.num_bits_scale - 1.) / q))
+        a = torch.floor(q * 2 ** n)
+        if as_float:
+            return a / 2 ** n
+        else:
+            return a, n
+
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
-        return output_scale / self.accum_scale, output_zero_point
+        output_scale = output_scale / self.accum_scale
+        output_scale = self.get_scale_approximation(output_scale, as_float=True) if self.scale_approximation else output_scale
+        return output_scale, output_zero_point
 
     def extra_repr(self):
         tmpstr = 'mode={0}, '.format(str(self.mode).split('.')[1])
@@ -589,10 +603,10 @@ class PostTrainLinearQuantizer(Quantizer):
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32, bits_overrides=None,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None, per_channel_wts=False,
-                 model_activation_stats=None):
+                 model_activation_stats=None, bits_scale=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_overrides=bits_overrides,
-                                                       train_with_fp_copy=False)
+                                                       train_with_fp_copy=False, bits_scale=bits_scale)
 
         mode = verify_mode(mode)
 
@@ -620,7 +634,8 @@ class PostTrainLinearQuantizer(Quantizer):
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip,
                                                      per_channel_wts=per_channel_wts,
-                                                     activation_stats=self.model_activation_stats.get(norm_name, None))
+                                                     activation_stats=self.model_activation_stats.get(norm_name, None),
+                                                     bits_scale=bits_scale)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map):
             norm_name = distiller.utils.normalize_module_name(name)
@@ -653,7 +668,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                                  'PostTrainLinearQuantizer')
         else:
             return cls(model, args.qe_bits_acts, args.qe_bits_wts, args.qe_bits_accum, None, args.qe_mode,
-                       args.qe_clip_acts, args.qe_no_clip_layers, args.qe_per_channel, args.qe_stats_file)
+                       args.qe_clip_acts, args.qe_no_clip_layers, args.qe_per_channel, args.qe_stats_file, args.qe_bits_scale)
 
 
 ###############################################################################

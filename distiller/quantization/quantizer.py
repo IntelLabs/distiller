@@ -92,7 +92,7 @@ class Quantizer(object):
             4. Update fp_weights with gradients calculated in step 3.2
     """
     def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
-                 quantize_bias=False, train_with_fp_copy=False):
+                 quantize_bias=False, train_with_fp_copy=False, bits_scale = None):
         if bits_overrides is None:
             bits_overrides = OrderedDict()
         if not isinstance(bits_overrides, OrderedDict):
