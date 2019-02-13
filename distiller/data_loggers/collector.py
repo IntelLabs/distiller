@@ -358,6 +358,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                         setattr(m, n, False)
 
     def _activation_stats_cb(self, module, inputs, output):
+        if isinstance(module, torch.nn.Dropout):
+            return
+
         def update_mean(old_mean, new_val):
             return old_mean + (new_val - old_mean) / module.batch_idx
 
