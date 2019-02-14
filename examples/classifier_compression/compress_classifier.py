@@ -89,8 +89,7 @@ def main():
     global msglogger
 
     # Parse arguments
-    prsr = parser.get_parser()
-    args = prsr.parse_args()
+    args = parser.get_parser().parse_args()
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -98,7 +97,8 @@ def main():
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
-    apputils.log_execution_env_state(sys.argv, gitroot=module_path)
+    apputils.log_execution_env_state(args.compress,
+        msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0

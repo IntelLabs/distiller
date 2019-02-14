@@ -20,32 +20,36 @@ This is helpful if you want to recreate an experiment at a later time, or if
 you want to understand the environment in which you execute the training.
 """
 
-import sys
-import os
-import time
-import platform
+import contextlib
 import logging
 import logging.config
+import os
+import platform
+import shutil
+import sys
+import time
+
+from git import Repo, InvalidGitRepositoryError
 import numpy as np
 import torch
-from git import Repo, InvalidGitRepositoryError
-HAVE_LSB = True
 try:
     import lsb_release
+    HAVE_LSB = True
 except ImportError:
     HAVE_LSB = False
 
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(app_args, gitroot='.'):
+def log_execution_env_state(config_filename=None, logdir=None, gitroot='.'):
     """Log information about the execution environment.
 
     It is recommeneded to log this information so it can be used for referencing
     at a later time.
 
     Args:
-        app_args (dict): the command line arguments passed to the application
+        config_filename: filename to store in logdir, if logdir is set
+        logdir: log directory
         git_root: the path to the .git root directory
     """
 
@@ -81,7 +85,19 @@ def log_execution_env_state(app_args, gitroot='.'):
     logger.debug("PyTorch: %s", torch.__version__)
     logger.debug("Numpy: %s", np.__version__)
     log_git_state()
-    logger.debug("Command line: %s", " ".join(app_args))
+    logger.debug("Command line: %s", " ".join(sys.argv))
+
+    if (logdir is None) or (config_filename is None):
+        return
+    # clone configuration files to output directory
+    configs_dest = os.path.join(logdir, 'configs')
+    with contextlib.suppress(FileExistsError):
+        os.makedirs(configs_dest)
+    if os.path.exists(os.path.join(configs_dest, config_filename)):
+        logger.debug('{} already exists in logdir'.format(
+            os.path.basename(config_filename) or config_filename))
+    else:
+        shutil.copy(config_filename, configs_dest)
 
 
 def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
