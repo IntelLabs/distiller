@@ -65,7 +65,12 @@ import logging
 import numpy as np
 import torch
 import csv
-import gym
+try:
+    import gym
+except ImportError as e:
+    print("WARNING: to use automated compression you will need to install extra packages")
+    print("See instructions in the header of examples/automated_deep_compression/ADC.py")
+    raise e
 from gym import spaces
 import distiller
 from apputils import SummaryGraph
@@ -183,7 +188,7 @@ def amc_reward_fn(env, top1, top5, vloss, total_macs):
 experimental_reward_fn = harmonic_mean_reward_fn
 
 
-def do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
+def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
     perform_thinning = True  # args.amc_thinning

@@ -657,7 +657,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
-    adc.ADC.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+    adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 def greedy(model, criterion, optimizer, loggers, args):
