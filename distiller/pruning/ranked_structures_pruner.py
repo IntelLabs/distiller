@@ -341,16 +341,16 @@ def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, bin
     return expanded.view(param.shape), binary_map
 
 
-class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
-    """Uses mean APoZ (average percentage of zeros) activation channels to rank structures
-    and prune a specified percentage of structures.
-
-    "Network Trimming: A Data-Driven Neuron Pruning Approach towards Efficient Deep Architectures",
-    Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang, ICLR 2016
-    https://arxiv.org/abs/1607.03250
+class ActivationRankedFilterPruner(RankedStructureParameterPruner):
+    """Base class for pruners ranking convolution filters by some quality criterion of the
+    corresponding feature-map channels (e.g. mean channel activation L1 value).
     """
     def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
+
+    @property
+    def activation_rank_criterion(self):
+        raise NotImplementedError
 
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
@@ -368,11 +368,12 @@ class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
         if module is None:
             raise ValueError("Could not find a layer named %s in the model."
                              "\nMake sure to use assign_layer_fq_names()" % fq_name)
-        if not hasattr(module, 'apoz_channels'):
-            raise ValueError("Could not find attribute \'apoz_channels\' in module %s"
-                             "\nMake sure to use SummaryActivationStatsCollector(\"apoz_channels\")" % fq_name)
+        if not hasattr(module, self.activation_rank_criterion):
+            raise ValueError("Could not find attribute \"{}\" in module %s"
+                             "\nMake sure to use SummaryActivationStatsCollector(\"{}\")".
+                             format(self.activation_rank_criterion, fq_name, self.activation_rank_criterion))
 
-        apoz, std = module.apoz_channels.value()
+        quality_criterion, std = getattr(module, self.activation_rank_criterion).value()
         num_filters = param.size(0)
         num_filters_to_prune = int(fraction_to_prune * num_filters)
         if num_filters_to_prune == 0:
@@ -380,8 +381,8 @@ class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
             return
 
         # Sort from low to high, and remove the bottom 'num_filters_to_prune' filters
-        filters_ordered_by_apoz = np.argsort(apoz)[:-num_filters_to_prune]
-        mask, binary_map = mask_from_filter_order(filters_ordered_by_apoz, param, num_filters, binary_map)
+        filters_ordered_by_criterion = np.argsort(quality_criterion)[:-num_filters_to_prune]
+        mask, binary_map = mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, binary_map)
         zeros_mask_dict[param_name].mask = mask
 
         msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
@@ -391,8 +392,33 @@ class ActivationAPoZRankedFilterPruner(RankedStructureParameterPruner):
         return binary_map
 
 
+class ActivationAPoZRankedFilterPruner(ActivationRankedFilterPruner):
+    """Uses mean APoZ (average percentage of zeros) activation channels to rank filters
+    and prune a specified percentage of filters.
+
+    "Network Trimming: A Data-Driven Neuron Pruning Approach towards Efficient Deep Architectures,"
+    Hengyuan Hu, Rui Peng, Yu-Wing Tai, Chi-Keung Tang. ICLR 2016.
+    https://arxiv.org/abs/1607.03250
+    """
+    @property
+    def activation_rank_criterion(self):
+        return 'apoz_channels'
+
+
+class ActivationMeanRankedFilterPruner(ActivationRankedFilterPruner):
+    """Uses mean value of activation channels to rank filters and prune a specified percentage of filters.
+
+    "Pruning Convolutional Neural Networks for Resource Efficient Inference,"
+    Pavlo Molchanov, Stephen Tyree, Tero Karras, Timo Aila, Jan Kautz. ICLR 2017.
+    https://arxiv.org/abs/1611.06440
+    """
+    @property
+    def activation_rank_criterion(self):
+        return 'mean_channels'
+
+
 class RandomRankedFilterPruner(RankedStructureParameterPruner):
-    """A Random raanking of filters.
+    """A Random ranking of filters.
 
     This is used for sanity testing of other algorithms.
     """
