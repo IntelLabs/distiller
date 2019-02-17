@@ -64,6 +64,7 @@ class SummaryGraph(object):
     Edge = collections.namedtuple('Edge', 'src dst')
 
     def __init__(self, model, dummy_input):
+        model = distiller.make_non_parallel_copy(model)
         with torch.onnx.set_training(model, False):
             trace, _ = jit.get_trace_graph(model, dummy_input.cuda())
 
@@ -113,6 +114,7 @@ class SummaryGraph(object):
         self.add_macs_attr()
         self.add_footprint_attr()
         self.add_arithmetic_intensity_attr()
+        del model
 
     def __create_op(self, onnx_node):
         op = {}

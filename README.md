@@ -152,7 +152,7 @@ Beware.
   - Group Lasso an group variance regularization   
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
-  - Post-training quantization of trained full-precision models
+  - Post-training quantization of trained full-precision models, dynamic and static (statistics-based)
   - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/quantization/index.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
   - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
@@ -374,6 +374,16 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
 ## Citation
+
+Research papers citing Distiller:
+-  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
+   *"Fast Adjustable Threshold For Uniform Neural Network Quantization,"*<br>
+   [arXiv:1812.07872v2](https://arxiv.org/abs/1812.07872v2), 2018
+
+- Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
+  *"Improving Neural Network Quantization without Retraining using Outlier Channel Splitting,"*<br>
+  [arXiv:1901.09504v2](https://arxiv.org/abs/1901.09504v20), 2019
+
 
 If you used Distiller for your work, please use the following citation:
 

@@ -26,6 +26,7 @@ from errno import ENOENT
 import logging
 import torch
 import distiller
+from distiller.utils import normalize_module_name
 msglogger = logging.getLogger()
 
 
@@ -80,45 +81,60 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         chkpt_file: the checkpoint file
         optimizer: the optimizer to which we will load the serialized state
     """
-    compression_scheduler = None
-    start_epoch = 0
-
-    if os.path.isfile(chkpt_file):
-        msglogger.info("=> loading checkpoint %s", chkpt_file)
-        checkpoint = torch.load(chkpt_file, map_location = lambda storage, loc: storage)
-        msglogger.info("Checkpoint keys:\n{}".format("\n\t".join(k for k in checkpoint.keys())))
-        start_epoch = checkpoint['epoch'] + 1
-        best_top1 = checkpoint.get('best_top1', None)
-        if best_top1 is not None:
-            msglogger.info("   best top@1: %.3f", best_top1)
-
-        if 'compression_sched' in checkpoint:
-            compression_scheduler = distiller.CompressionScheduler(model)
-            compression_scheduler.load_state_dict(checkpoint['compression_sched'])
-            msglogger.info("Loaded compression schedule from checkpoint (epoch %d)",
-                           checkpoint['epoch'])
-        else:
-            msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
-
-        if 'thinning_recipes' in checkpoint:
-            if 'compression_sched' not in checkpoint:
-                raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
-            msglogger.info("Loaded a thinning recipe from the checkpoint")
-            # Cache the recipes in case we need them later
-            model.thinning_recipes = checkpoint['thinning_recipes']
-            distiller.execute_thinning_recipes_list(model,
-                                                    compression_scheduler.zeros_mask_dict,
-                                                    model.thinning_recipes)
-
-        if 'quantizer_metadata' in checkpoint:
-            msglogger.info('Loaded quantizer metadata from the checkpoint')
-            qmd = checkpoint['quantizer_metadata']
-            quantizer = qmd['type'](model, **qmd['params'])
-            quantizer.prepare_model()
-
-        msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, checkpoint['epoch'])
-
-        model.load_state_dict(checkpoint['state_dict'])
-        return model, compression_scheduler, start_epoch
-    else:
+    if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
+
+    msglogger.info("=> loading checkpoint %s", chkpt_file)
+    checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
+    msglogger.debug("\n\t".join(['Checkpoint keys:'] + list(checkpoint)))
+
+    if 'state_dict' not in checkpoint:
+        raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
+
+    checkpoint_epoch = checkpoint.get('epoch', None)
+    start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
+
+    best_top1 = checkpoint.get('best_top1', None)
+    if best_top1 is not None:
+        msglogger.info("   best top@1: %.3f", best_top1)
+
+    compression_scheduler = None
+    normalize_dataparallel_keys = False
+    if 'compression_sched' in checkpoint:
+        compression_scheduler = distiller.CompressionScheduler(model)
+        try:
+            compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
+        except KeyError as e:
+            # A very common source of this KeyError is loading a GPU model on the CPU.
+            # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
+            normalize_dataparallel_keys = True
+            compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
+        msglogger.info("Loaded compression schedule from checkpoint (epoch {})".format(
+            checkpoint_epoch))
+    else:
+        msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
+
+    if 'thinning_recipes' in checkpoint:
+        if 'compression_sched' not in checkpoint:
+            raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
+        msglogger.info("Loaded a thinning recipe from the checkpoint")
+        # Cache the recipes in case we need them later
+        model.thinning_recipes = checkpoint['thinning_recipes']
+        if normalize_dataparallel_keys:
+            model.thinning_recipes = [distiller.get_normalized_recipe(recipe) for recipe in model.thinning_recipes]
+        distiller.execute_thinning_recipes_list(model,
+                                                compression_scheduler.zeros_mask_dict,
+                                                model.thinning_recipes)
+
+    if 'quantizer_metadata' in checkpoint:
+        msglogger.info('Loaded quantizer metadata from the checkpoint')
+        qmd = checkpoint['quantizer_metadata']
+        quantizer = qmd['type'](model, **qmd['params'])
+        quantizer.prepare_model()
+
+    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
+                                                                   e=checkpoint_epoch))
+    if normalize_dataparallel_keys:
+            checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
+    model.load_state_dict(checkpoint['state_dict'])
+    return (model, compression_scheduler, start_epoch)

@@ -143,43 +143,17 @@ There is also a [Jupyter notebook](http://localhost:8888/notebooks/sensitivity_a
 
 ## Post-Training Quantization
 
-Distiller supports post-training quantization of trained modules without re-training (using [Range-Based Linear Quantization](algo_quantization.md#range-based-linear-quantization)). So, any model (whether pruned or not) can be quantized. To invoke post-training quantization, use `--quantize-eval` along with `--evaluate`. Additional arguments are available to control parameters of the quantization:
-
-```
-Arguments controlling quantization at evaluation time("post-training quantization"):
-  --quantize-eval, --qe
-                        Apply linear quantization to model before evaluation.
-                        Applicable only if --evaluate is also set
-  --qe-mode QE_MODE, --qem QE_MODE
-                        Linear quantization mode. Choices: asym_s | asym_u |
-                        sym
-  --qe-bits-acts NUM_BITS, --qeba NUM_BITS
-                        Number of bits for quantization of activations
-  --qe-bits-wts NUM_BITS, --qebw NUM_BITS
-                        Number of bits for quantization of weights
-  --qe-bits-accum NUM_BITS
-                        Number of bits for quantization of the accumulator
-  --qe-clip-acts, --qeca
-                        Enable clipping of activations using min/max values
-                        averaging over batch
-  --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
-                        List of fully-qualified layer names for which not to
-                        clip activations. Applicable only if --qe-clip-acts is
-                        also set
-  --qe-per-channel, --qepc
-                        Enable per-channel quantization of weights (per output channel)
-
-```
-
 The following example qunatizes ResNet18 for ImageNet:
 
 ```bash
 $ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize-eval --evaluate
 ```
 
+See [here](schedule.md#post-training-quantization) for more details on how to invoke post-training quantization from the command line.
+
 A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.
 
-For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md)
+For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
 
 ## Summaries
 You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).

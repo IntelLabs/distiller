@@ -16,7 +16,7 @@
 
 from .utils import *
 from .thresholding import GroupThresholdMixin, threshold_mask, group_threshold_mask
-from .config import file_config, dict_config
+from .config import file_config, dict_config, config_component_from_file_by_class
 from .model_summaries import *
 from .scheduler import *
 from .sensitivity import *

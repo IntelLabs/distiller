@@ -1,0 +1,15 @@
+lr_schedulers:
+  training_lr:
+    class: StepLR # ReduceLROnPlateau
+    step_size: 10
+    gamma: 0.3
+    #mode: max
+    #patience: 5
+    #factor: 0.1
+
+policies:
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 200000
+      frequency: 1

@@ -105,6 +105,13 @@ class L1RankedStructureParameterPruner_AGP(StructuredAGP):
                                                        group_dependency=group_dependency, kwargs=kwargs)
 
 
+class L2RankedStructureParameterPruner_AGP(StructuredAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None, kwargs=None):
+        super().__init__(name, initial_sparsity, final_sparsity)
+        self.pruner = L2RankedStructureParameterPruner(name, group_type, desired_sparsity=0, weights=weights,
+                                                       group_dependency=group_dependency, kwargs=kwargs)
+
+
 class ActivationAPoZRankedFilterPruner_AGP(StructuredAGP):
     def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None):
         assert group_type in ['3D', 'Filters']
@@ -112,6 +119,13 @@ class ActivationAPoZRankedFilterPruner_AGP(StructuredAGP):
         self.pruner = ActivationAPoZRankedFilterPruner(name, group_type, desired_sparsity=0,
                                                        weights=weights, group_dependency=group_dependency)
 
+
+class ActivationMeanRankedFilterPruner_AGP(StructuredAGP):
+    def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None):
+        assert group_type in ['3D', 'Filters']
+        super().__init__(name, initial_sparsity, final_sparsity)
+        self.pruner = ActivationMeanRankedFilterPruner(name, group_type, desired_sparsity=0,
+                                                       weights=weights, group_dependency=group_dependency)
 
 class GradientRankedFilterPruner_AGP(StructuredAGP):
     def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None):
