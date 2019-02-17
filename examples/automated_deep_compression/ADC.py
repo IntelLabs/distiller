@@ -214,11 +214,11 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     amc_cfg = distiller.utils.MutableNamedTuple({
             'protocol': args.amc_protocol,
             'agent_algo': args.amc_agent_algo,
-            'compute_reward_every_step': args.amc_reward_every_step,
             'perform_thinning': perform_thinning,
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
-            'conv_cnt': conv_cnt})
+            'conv_cnt': conv_cnt,
+            'reward_frequency': args.amc_reward_frequency})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -239,13 +239,14 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
     steps_per_episode = conv_cnt
-    amc_cfg.heatup_noise = 0.5
-    amc_cfg.initial_training_noise = 0.5
-    amc_cfg.training_noise_decay = 0.996  # 0.998
-    amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
-    amc_cfg.num_training_epochs = args.amc_training_epochs
-    training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-    heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
+    if args.amc_agent_algo == "DDPG":
+        amc_cfg.heatup_noise = 0.5
+        amc_cfg.initial_training_noise = 0.5
+        amc_cfg.training_noise_decay = 0.996  # 0.998
+        amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
+        amc_cfg.num_training_epochs = args.amc_training_epochs
+        training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
+        heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
 
     if amc_cfg.agent_algo == "Random-policy":
         return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
@@ -603,10 +604,10 @@ class DistillerWrapperEnvironment(gym.Env):
             self.episode += 1
         else:
             observation = self.get_obs()
-            reward = 0
-            if self.amc_cfg.compute_reward_every_step:
+            if self.amc_cfg.reward_frequency > 0 and self.current_layer_id % self.amc_cfg.reward_frequency == 0:
                 reward, top1, total_macs, total_nnz = self.compute_reward(False)
-
+            else:
+                reward = 0
         self.prev_action = pruning_action
         info = {}
         return observation, reward, self.episode_is_done(), info

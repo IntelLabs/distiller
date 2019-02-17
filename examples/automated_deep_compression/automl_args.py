@@ -22,8 +22,8 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='The number of epochs for heatup/exploration')
     group.add_argument('--amc-training-epochs', type=int, default=300,
                        help='The number of epochs for training/exploitation')
-    group.add_argument('--amc-reward-every-step', action='store_true', default=False,
-                       help='Compute the reward at every step')
+    group.add_argument('--amc-reward-frequency', type=int, default=-1,
+                       help='Reward computation frequency (measured in agent steps)')
     group.add_argument('--amc-target-density', type=float,
                        help='Target density of the network we are seeking')
     group.add_argument('--amc-agent-algo', choices=["ClippedPPO-continuous",
