@@ -131,6 +131,9 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
         os.unlink("latest_log_dir")
     except FileNotFoundError:
         pass
-    os.symlink(logdir, "latest_log_dir")
-    os.symlink(log_filename, "latest_log_file")
+    try:
+        os.symlink(logdir, "latest_log_dir")
+        os.symlink(log_filename, "latest_log_file")
+    except OSError:
+        msglogger.debug("Failed to create symlinks to latest logs")
     return msglogger
