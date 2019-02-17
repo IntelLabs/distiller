@@ -704,6 +704,8 @@ def create_activation_stats_collectors(model, *phases):
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
                                                          distiller.utils.activation_channels_apoz),
+        "mean_channels": SummaryActivationStatsCollector(model, "mean_channels",
+                                                         distiller.utils.activation_channels_means),
         "records":       RecordsActivationStatsCollector(model, classes=[torch.nn.Conv2d])
     })
 
