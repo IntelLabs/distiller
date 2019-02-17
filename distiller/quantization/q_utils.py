@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+from enum import Enum
 import torch
 
 
@@ -110,6 +111,26 @@ def linear_dequantize(input, scale, zero_point, inplace=False):
     return (input + zero_point) / scale
 
 
+def get_tensor_min(t, per_dim=None):
+    if per_dim is None:
+        return t.min()
+    if per_dim > t.dim():
+        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
+    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
+    tv = t.view(*view_dims)
+    return tv.min(dim=-1)[0]
+
+
+def get_tensor_max(t, per_dim=None):
+    if per_dim is None:
+        return t.max()
+    if per_dim > t.dim():
+        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
+    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
+    tv = t.view(*view_dims)
+    return tv.max(dim=-1)[0]
+
+
 def get_tensor_min_max(t, per_dim=None):
     if per_dim is None:
         return t.min(), t.max()
@@ -133,6 +154,61 @@ def get_tensor_max_abs(t, per_dim=None):
 def get_tensor_avg_max_abs(t, across_dim=None):
     avg_min, avg_max = get_tensor_avg_min_max(t, across_dim=across_dim)
     return torch.max(avg_min.abs_(), avg_max.abs_())
+
+
+class AciqClipper:
+    class AciqClippingType(Enum):
+        Laplace = 1
+        Gauss = 2
+
+    def get_alpha_laplace(self, t, across_dim=None, num_bits=8):
+        alpha_laplace = {2: 2.83, 3: 3.89, 4: 5.03, 5: 6.2, 6: 7.41, 7: 8.64, 8: 9.89}
+        alpha_laplace_positive = {2: 3.89, 3: 5.02, 4: 6.2, 5: 7.41, 6: 8.64, 7: 9.89, 8: 11.16}
+
+        # Mean of means across dims is equavalent to gloabal mean
+        b = torch.mean(torch.abs(t - t.mean()))
+        return b * alpha_laplace[num_bits]
+
+    def get_alpha_gauss(self, t, across_dim=None, num_bits=8):
+        alpha_gaus = {2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
+        alpha_gaus_positive = {2: 2.15, 3: 2.55, 4: 2.93, 5: 3.28, 6: 3.61, 7: 3.92,
+                               8: -1}  # TODO: add 8 bit multiplier
+
+        # Mean of means across dims is equavalent to gloabal mean
+        std = torch.std(t)
+        return std * alpha_gaus[num_bits]
+
+
+class AciqSymetricClipper(AciqClipper):
+    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace):
+        self.num_bits = num_bits
+        self.clip_type = clip_type
+
+    def __call__(self, t, across_dim=None):
+        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
+            alpha = super(AciqSymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
+        else:
+            alpha = super(AciqSymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
+        mean = t.mean()
+        return torch.abs(mean) + alpha
+
+
+class AciqAsymetricClipper(AciqClipper):
+    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace):
+        self.num_bits = num_bits
+        self.clip_type = clip_type
+
+    def __call__(self, t, across_dim=None):
+        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
+            alpha = super(AciqAsymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
+        else:
+            alpha = super(AciqAsymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
+
+        mean = t.mean()
+        min_val = get_tensor_min(t, across_dim).mean()
+        min_val = torch.max(min_val, mean - alpha)
+
+        return min_val, min_val + 2 * alpha
 
 
 def get_quantized_range(num_bits, signed=True):
