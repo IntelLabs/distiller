@@ -1,0 +1,29 @@
+quantizers:
+  linear_quantizer:
+    class: QuantAwareTrainRangeLinearQuantizer
+    bits_activations: 4
+    bits_weights: 4
+    num_bits_inputs: 8
+    act_sat_mode: 'LAPLACE'
+    mode: 'ASYMMETRIC_UNSIGNED'  # Can try "SYMMETRIC" as well
+    ema_decay: 0.999   # Decay value for exponential moving average tracking of activation ranges
+    per_channel_wts: True
+    bits_overrides:
+      conv1:
+        acts: 8
+        wts: 8
+#      .*\.conv1:
+#        acts: null
+#        wts: 4
+      fc:
+        acts: 8
+        wts: 8
+
+policies:
+    - quantizer:
+        instance_name: linear_quantizer
+      # For now putting a large range here, which should cover both training from scratch or resuming from some
+      # pre-trained checkpoint at some unknown epoch
+      starting_epoch: 0
+      ending_epoch: 300
+      frequency: 1
