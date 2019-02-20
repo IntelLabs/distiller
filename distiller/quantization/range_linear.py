@@ -913,7 +913,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
         self.replacement_factory[nn.ReLU] = activation_replace_fn
         self.replacement_factory[nn.BatchNorm2d] = bn_replace_fn
-        # self.replacement_factory[nn.Conv2d] = conv_replace_fn
+        self.replacement_factory[nn.Conv2d] = conv_replace_fn
 
     def _prepare_model_impl(self):
         super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()
