@@ -80,6 +80,7 @@ import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
 from models import ALL_MODEL_NAMES, create_model
 import parser
+from distiller.absorb_bn import search_absorbe_bn
 
 
 # Logger handle
@@ -155,6 +156,11 @@ def main():
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
+
+    # BatchNorm folding
+    if args.bn_fold:
+        search_absorbe_bn(model)
+
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
