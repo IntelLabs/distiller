@@ -10,6 +10,7 @@ with open('requirements.txt','r') as req_file:
     install_reqs = [line.strip() for line in req_file.readlines()]
 
 setup(name='distiller',
+      version='0.3.0',
       packages=packages,
       install_requires=install_reqs
       )
