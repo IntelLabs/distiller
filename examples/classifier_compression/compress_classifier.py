@@ -67,8 +67,6 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
 import distiller
 import distiller.apputils as apputils
 from distiller.data_loggers import *
@@ -83,6 +81,8 @@ msglogger = None
 
 
 def main():
+    script_dir = os.path.dirname(__file__)
+    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     global msglogger
 
     # Parse arguments
@@ -726,11 +726,11 @@ def save_collectors_data(collectors, directory):
 
 
 def check_pytorch_version():
-    if torch.__version__ < '1.0.0':
+    if torch.__version__ < '1.0.1':
         print("\nNOTICE:")
-        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.0 due to "
+        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
               "PyTorch API changes which are not backward-compatible.\n"
-              "Please install PyTorch 1.0.0 or its derivative.\n"
+              "Please install PyTorch 1.0.1 or its derivative.\n"
               "If you are using a virtual environment, do not forget to update it:\n"
               "  1. Deactivate the old environment\n"
               "  2. Install the new environment\n"
