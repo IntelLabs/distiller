@@ -6,7 +6,7 @@ packages = find_packages(
      exclude=['*.__pycache__.*']
     )
 
-with open('distiller/requirements.txt','r') as req_file:
+with open('requirements.txt','r') as req_file:
     install_reqs = [line.strip() for line in req_file.readlines()]
 
 setup(name='distiller',

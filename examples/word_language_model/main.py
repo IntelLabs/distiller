@@ -24,7 +24,7 @@ module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 import distiller
-import apputils
+import distiller.apputils as apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger
 
 
@@ -76,7 +76,7 @@ parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='
 parser.add_argument('--momentum', default=0., type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=0., type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+                    metavar='W', help='weight decay (default: 0)')
 
 args = parser.parse_args()
 
@@ -105,8 +105,8 @@ def draw_lang_model_to_file(model, png_fname, dataset):
         else:
             msglogger.info("Unsupported dataset (%s) - aborting draw operation" % dataset)
             return
-        g = apputils.SummaryGraph(model, dummy_input)
-        apputils.draw_model_to_file(g, png_fname)
+        g = distiller.SummaryGraph(model, dummy_input)
+        distiller.draw_model_to_file(g, png_fname)
         msglogger.info("Network PNG image generation completed")
 
     except FileNotFoundError as e:

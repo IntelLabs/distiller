@@ -30,14 +30,17 @@ import torch
 from torch.autograd import Variable
 import torch.optim
 import distiller
-from distiller import SummaryGraph
+from .summary_graph import SummaryGraph
 from .data_loggers import PythonLogger, CsvLogger
 
 msglogger = logging.getLogger()
 
 __all__ = ['model_summary',
            'weights_sparsity_summary', 'weights_sparsity_tbl_summary',
-           'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary']
+           'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary',
+           'attributes_summary', 'attributes_summary_tbl', 'connectivity_summary',
+           'connectivity_summary_verbose', 'connectivity_tbl_summary', 'create_png', 'create_pydot_graph',
+           'draw_model_to_file', 'draw_img_classifier_to_file']
 
 
 def model_summary(model, what, dataset=None):
@@ -230,6 +233,7 @@ def model_performance_tbl_summary(model, dummy_input, batch_size):
     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
     return t
 
+
 def attributes_summary(sgraph, ignore_attrs):
     """Generate a summary of a graph's attributes.
 
@@ -255,7 +259,7 @@ def attributes_summary(sgraph, ignore_attrs):
 
     df = pd.DataFrame(columns=['Name', 'Type', 'Attributes'])
     pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops):
+    for i, op in enumerate(sgraph.ops.values()):
         df.loc[i] = [op['name'], op['type'], pretty_attrs(op['attrs'], ignore_attrs)]
     return df
 

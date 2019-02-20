@@ -18,12 +18,8 @@
 
 import torch
 import torchvision.models as torch_models
-import os
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import models.cifar10 as cifar10_models
-import models.imagenet as imagenet_extra_models
-sys.path.pop(0)
+from . import cifar10 as cifar10_models
+from . import imagenet as imagenet_extra_models
 
 import logging
 msglogger = logging.getLogger()

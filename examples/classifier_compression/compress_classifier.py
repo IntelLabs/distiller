@@ -69,11 +69,7 @@ import torch.utils.data
 import torchnet.meter as tnt
 script_dir = os.path.dirname(__file__)
 module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-try:
-    import distiller
-except ImportError:
-    sys.path.append(module_path)
-    import distiller
+import distiller
 import distiller.apputils as apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
