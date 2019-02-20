@@ -161,22 +161,22 @@ class AciqClipper:
         Laplace = 1
         Gauss = 2
 
-    def get_alpha_laplace(self, t, across_dim=None, num_bits=8):
+    def get_alpha_laplace(self, t, across_dim=None, num_bits=8, half_range=False):
         alpha_laplace = {2: 2.83, 3: 3.89, 4: 5.03, 5: 6.2, 6: 7.41, 7: 8.64, 8: 9.89}
         alpha_laplace_positive = {2: 3.89, 3: 5.02, 4: 6.2, 5: 7.41, 6: 8.64, 7: 9.89, 8: 11.16}
 
         # Mean of means across dims is equavalent to gloabal mean
         b = torch.mean(torch.abs(t - t.mean()))
-        return b * alpha_laplace[num_bits]
+        return b * (alpha_laplace_positive[num_bits] if half_range else alpha_laplace[num_bits])
 
-    def get_alpha_gauss(self, t, across_dim=None, num_bits=8):
+    def get_alpha_gauss(self, t, across_dim=None, num_bits=8, half_range=False):
         alpha_gaus = {2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
         alpha_gaus_positive = {2: 2.15, 3: 2.55, 4: 2.93, 5: 3.28, 6: 3.61, 7: 3.92,
                                8: -1}  # TODO: add 8 bit multiplier
 
         # Mean of means across dims is equavalent to gloabal mean
         std = torch.std(t)
-        return std * alpha_gaus[num_bits]
+        return std * (alpha_gaus_positive[num_bits] if half_range else alpha_gaus[num_bits])
 
 
 class AciqSymetricClipper(AciqClipper):
@@ -194,15 +194,16 @@ class AciqSymetricClipper(AciqClipper):
 
 
 class AciqAsymetricClipper(AciqClipper):
-    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace):
+    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace, half_range=False):
         self.num_bits = num_bits
         self.clip_type = clip_type
+        self.half_range = half_range
 
     def __call__(self, t, across_dim=None):
         if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqAsymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
+            alpha = super(AciqAsymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits, half_range=self.half_range)
         else:
-            alpha = super(AciqAsymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
+            alpha = super(AciqAsymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
 
         mean = t.mean()
         min_val = get_tensor_min(t, across_dim).mean()
