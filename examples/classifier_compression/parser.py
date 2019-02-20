@@ -108,6 +108,8 @@ def get_parser():
                         help='Load a model without DataParallel wrapping it')
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
+    parser.add_argument('--bn-fold', dest='bn_fold', action='store_true', default=False,
+                        help='Fold batch normalization weights into convolution layer weights.')
 
     distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
     distiller.quantization.add_post_train_quant_args(parser)
