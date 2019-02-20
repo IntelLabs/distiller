@@ -55,6 +55,18 @@ def verify_mode(mode):
         raise TypeError("'mode' argument can be either a string or member of {0}".format(LinearQuantMode.__name__))
 
 
+def verify_sat_mode(sat_mode):
+    if isinstance(sat_mode, str):
+        try:
+            return SaturationMode[sat_mode]
+        except KeyError:
+            raise ValueError('Unknown quantization mode string')
+    elif isinstance(sat_mode, SaturationMode):
+        return sat_mode
+    else:
+        raise TypeError("'mode' argument can be either a string or member of {0}".format(SaturationMode.__name__))
+
+
 def _get_sat_function(quant_range_mode, clip, sat_mode, num_bits):
     if not clip:
         sat_fn = get_tensor_max_abs if quant_range_mode == LinearQuantMode.SYMMETRIC else get_tensor_min_max
@@ -711,13 +723,16 @@ def inputs_quantize_wrapped_forward(self, input):
 
 
 class FakeLinearQuantization(nn.Module):
-    def __init__(self, num_bits=8, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, dequantize=True, inplace=False):
+    def __init__(self, num_bits=8, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, dequantize=True,
+                 inplace=False, half_range=False, act_sat_mode=None):
         super(FakeLinearQuantization, self).__init__()
 
         self.num_bits = num_bits
         self.mode = mode
         self.dequantize = dequantize
         self.inplace = inplace
+        self.half_range = half_range
+        self.act_sat_mode = act_sat_mode
 
         # We track activations ranges with exponential moving average, as proposed by Jacob et al., 2017
         # https://arxiv.org/abs/1712.05877
@@ -744,7 +759,17 @@ class FakeLinearQuantization(nn.Module):
         # It works fine with a single GPU. TODO: Debug...
         if self.training:
             with torch.no_grad():
-                current_min, current_max = get_tensor_min_max(input)
+                if self.act_sat_mode is None:
+                    current_min, current_max = get_tensor_min_max(input)
+                elif self.act_sat_mode == SaturationMode.AVERAGE:
+                    current_min, current_max = get_tensor_avg_min_max(input)
+                elif self.act_sat_mode == SaturationMode.LAPLACE:
+                    clipper = AciqAsymetricClipper(self.num_bits, AciqClipper.AciqClippingType.Laplace, half_range=self.half_range)
+                    current_min, current_max = clipper(input)
+                elif self.act_sat_mode == SaturationMode.GAUSS:
+                    clipper = AciqAsymetricClipper(self.num_bits, AciqClipper.AciqClippingType.Gauss, half_range=self.half_range)
+                    current_min, current_max = clipper(input)
+
             self.iter_count += 1
             self.tracked_min_biased.data, self.tracked_min.data = update_ema(self.tracked_min_biased.data,
                                                                              current_min, self.ema_decay,
@@ -774,15 +799,17 @@ class FakeLinearQuantization(nn.Module):
 
     def extra_repr(self):
         mode_str = str(self.mode).split('.')[1]
-        return 'mode={0}, num_bits={1}, ema_decay={2:.4f})'.format(mode_str, self.num_bits, self.ema_decay)
+        sat_mode_str = str(self.act_sat_mode).split('.')[1] if self.act_sat_mode else 'No'
+        return 'mode={0}, num_bits={1}, ema_decay={2:.4f}, act_sat_mode={3})'.format(mode_str, self.num_bits,
+                                                                                     self.ema_decay, sat_mode_str)
 
 
 class FakeQuantizationWrapper(nn.Module):
-    def __init__(self, wrapped_module, num_bits, quant_mode, ema_decay):
+    def __init__(self, wrapped_module, num_bits, quant_mode, ema_decay, half_range=False, act_sat_mode=None):
         super(FakeQuantizationWrapper, self).__init__()
         self.wrapped_module = wrapped_module
         self.fake_q = FakeLinearQuantization(num_bits, quant_mode, ema_decay, dequantize=True,
-                                             inplace=getattr(wrapped_module, 'inplace', False))
+                                             inplace=getattr(wrapped_module, 'inplace', False), half_range=half_range, act_sat_mode=act_sat_mode)
 
     def forward(self, *input):
         res = self.wrapped_module(*input)
@@ -790,10 +817,34 @@ class FakeQuantizationWrapper(nn.Module):
         return res
 
 
+class FakeSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        return input
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight-through estimator
+        return grad_output, None, None, None, None
+
+
+class FakeMudule(nn.Module):
+    def __init__(self):
+        super(FakeMudule, self).__init__()
+        pass
+
+    def forward(self, input):
+        input = FakeSTE.apply(input)
+        return input
+
+    def __repr__(self):
+        return '{0}'.format(self.__class__.__name__)
+
+
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
     def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides=None,
                  quantize_bias=True, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
-                 quantize_inputs=True, num_bits_inputs=None):
+                 quantize_inputs=True, num_bits_inputs=None, act_sat_mode=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
@@ -806,6 +857,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                'multiple GPUs')
 
         mode = verify_mode(mode)
+        act_sat_mode = verify_sat_mode(act_sat_mode)
 
         self.model.quantizer_metadata['params']['mode'] = str(mode).split('.')[1]
         self.model.quantizer_metadata['params']['ema_decay'] = ema_decay
@@ -838,14 +890,30 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
         def activation_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
-            if bits_acts is None:
+            if bits_acts is None or bits_acts >= 32:
                 return module
-            return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay)
+            return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, half_range=True, act_sat_mode=act_sat_mode)
+
+        def bn_replace_fn(module, name, qbits_map):
+            if hasattr(module, 'absorbed') and module.absorbed:
+                return FakeMudule()
+            else:
+                bits_acts = qbits_map[name].acts
+                if bits_acts is None or bits_acts >= 32:
+                    return module
+                return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, act_sat_mode=act_sat_mode)
+
+        def conv_replace_fn(module, name, qbits_map):
+            bits_acts = qbits_map[name].acts
+            if bits_acts is None or bits_acts >= 32:
+                return module
+            return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, act_sat_mode=act_sat_mode)
 
         self.param_quantization_fn = linear_quantize_param
 
-        self.activation_replace_fn = activation_replace_fn
-        self.replacement_factory[nn.ReLU] = self.activation_replace_fn
+        self.replacement_factory[nn.ReLU] = activation_replace_fn
+        self.replacement_factory[nn.BatchNorm2d] = bn_replace_fn
+        # self.replacement_factory[nn.Conv2d] = conv_replace_fn
 
     def _prepare_model_impl(self):
         super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()
