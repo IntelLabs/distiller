@@ -189,7 +189,7 @@ class CompressionScheduler(object):
         state = {'masks_dict': masks}
         return state
 
-    def load_state_dict(self, state, normalize_dataparallel_keys):
+    def load_state_dict(self, state, normalize_dataparallel_keys=False):
         """Loads the scheduler state.
 
         Currently the scheduler state is comprised only of the set of pruning masks.
