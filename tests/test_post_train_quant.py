@@ -15,15 +15,12 @@
 #
 
 import os
-import sys
 import pytest
 import torch
 import torch.testing
 from collections import OrderedDict
 
 module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 from distiller.quantization import RangeLinearQuantParamLayerWrapper, LinearQuantMode, \
     RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper
 import distiller.modules
