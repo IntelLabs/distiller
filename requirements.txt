@@ -1,4 +1,4 @@
-torch==1.0.0
+torch==1.0.1
 numpy>=1.14.3
 torchvision==0.2.1
 scipy>=1.1.0
