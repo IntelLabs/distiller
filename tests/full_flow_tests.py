@@ -115,13 +115,13 @@ def collateral_checker(log, *collateral_list):
 TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker_args'])
 
 test_configs = [
-    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [48.340, 92.630]),
+    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [48.220, 92.930]),
     TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
                DS_CIFAR, accuracy_checker, [91.640, 99.610]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
-               DS_CIFAR, accuracy_checker, [48.290, 94.460]),
+               DS_CIFAR, accuracy_checker, [54.390, 94.280]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
                DS_CIFAR, collateral_checker, [('sensitivity.csv', 3165), ('sensitivity.png', 96158)])

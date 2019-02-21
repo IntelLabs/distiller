@@ -11,3 +11,6 @@ env/
 logs/
 .DS_Store
 .vscode/
+distiller.egg-info/
+latest_log_dir
+latest_log_file
