@@ -808,6 +808,7 @@ class FakeQuantizationWrapper(nn.Module):
     def __init__(self, wrapped_module, num_bits, quant_mode, ema_decay, half_range=False, act_sat_mode=None):
         super(FakeQuantizationWrapper, self).__init__()
         self.wrapped_module = wrapped_module
+
         self.fake_q = FakeLinearQuantization(num_bits, quant_mode, ema_decay, dequantize=True,
                                              inplace=getattr(wrapped_module, 'inplace', False), half_range=half_range, act_sat_mode=act_sat_mode)
 
@@ -913,7 +914,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
         self.replacement_factory[nn.ReLU] = activation_replace_fn
         self.replacement_factory[nn.BatchNorm2d] = bn_replace_fn
-        self.replacement_factory[nn.Conv2d] = conv_replace_fn
+        # self.replacement_factory[nn.Conv2d] = conv_replace_fn
 
     def _prepare_model_impl(self):
         super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()

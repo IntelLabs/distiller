@@ -10,11 +10,12 @@ quantizers:
     per_channel_wts: True
     bits_overrides:
       conv1:
-        acts: 8
+        acts: null
         wts: 8
-#      .*\.conv1:
-#        acts: null
-#        wts: 4
+      bn1:
+        acts: null
+      .*\.bn1:
+        acts: null
       fc:
         acts: 8
         wts: 8
