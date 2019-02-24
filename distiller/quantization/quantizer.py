@@ -24,7 +24,7 @@ import distiller
 
 msglogger = logging.getLogger()
 
-QBits = namedtuple('QBits', ['acts', 'wts'])
+QBits = namedtuple('QBits', ['acts', 'wts', 'bias'])
 
 FP_BKP_PREFIX = 'float_'
 
@@ -91,18 +91,20 @@ class Quantizer(object):
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
     """
-    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
-                 quantize_bias=False, train_with_fp_copy=False):
-        if bits_overrides is None:
-            bits_overrides = OrderedDict()
-        if not isinstance(bits_overrides, OrderedDict):
-            raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
+    def __init__(self, model, optimizer=None,
+                 bits_activations=None, bits_weights=None, bits_bias=None,
+                 overrides=None,
+                 train_with_fp_copy=False):
+        if overrides is None:
+            overrides = OrderedDict()
+        if not isinstance(overrides, OrderedDict):
+            raise TypeError('overrides must be an instance of collections.OrderedDict or None')
 
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
-        self.default_qbits = QBits(acts=bits_activations, wts=bits_weights)
-        self.quantize_bias = quantize_bias
+        self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
+        bits_overrides = overrides.get('bits', OrderedDict())
 
         self.model = model
         self.optimizer = optimizer
@@ -111,18 +113,20 @@ class Quantizer(object):
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_weights': bits_weights,
-                                                    'bits_overrides': copy.deepcopy(bits_overrides),
-                                                    'quantize_bias': quantize_bias}}
+                                                    'bits_bias': bits_bias,
+                                                    'overrides': copy.deepcopy(overrides)}}
 
         for k, v in bits_overrides.items():
-            qbits = QBits(acts=v.get('acts', self.default_qbits.acts), wts=v.get('wts', self.default_qbits.wts))
+            qbits = QBits(acts=v.get('acts', self.default_qbits.acts),
+                          wts=v.get('wts', self.default_qbits.wts),
+                          bias=v.get('bias', self.default_qbits.bias))
             bits_overrides[k] = qbits
 
         # Prepare explicit mapping from each layer to QBits based on default + overrides
         patterns = []
         regex = None
         if bits_overrides:
-            patterns = list(bits_overrides.keys())
+            patterns = list(overrides.keys())
             regex_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex = re.compile(regex_str)
 
@@ -156,7 +160,7 @@ class Quantizer(object):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
             # support quantization of batch norm scale parameters)
-            qbits = QBits(acts=qbits.acts, wts=None)
+            qbits = QBits(acts=qbits.acts, wts=None, bias=None)
         self.module_qbits_map[module_name] = qbits
 
     def prepare_model(self):
@@ -184,9 +188,7 @@ class Quantizer(object):
                 # TODO: Handle # of bits for bias quantization as "first-class" citizen, similarly to weights
                 n_bits = qbits.wts
                 if param_name.endswith('bias'):
-                    if not self.quantize_bias:
-                        continue
-                    n_bits = 32
+                    n_bits = qbits.bias
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
                     hack_float_backup_parameter(module, param_name, n_bits)
@@ -219,7 +221,7 @@ class Quantizer(object):
                 if not distiller.has_children(module) and distiller.has_children(new_module):
                     for sub_module_name, sub_module in new_module.named_modules():
                         self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
-                    self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None)
+                    self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
             except KeyError:
                 pass
 
