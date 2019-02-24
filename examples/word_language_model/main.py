@@ -15,14 +15,6 @@ import torch.onnx
 from collections import OrderedDict
 import data
 import model
-
-# Distiller imports
-import os
-import sys
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 import distiller
 import distiller.apputils as apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger

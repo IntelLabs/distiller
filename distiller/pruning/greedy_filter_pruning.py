@@ -42,8 +42,8 @@ import os
 import distiller
 from distiller.apputils import save_checkpoint
 from distiller.data_loggers import PythonLogger
+from distiller.summary_graph import SummaryGraph
 from distiller import normalize_module_name
-from ..summary_graph import SummaryGraph
 
 __all__ = ['add_greedy_pruner_args', 'greedy_pruner']
 msglogger = logging.getLogger()

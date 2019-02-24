@@ -16,16 +16,8 @@
 
 import logging
 import torch
-import os
-import sys
 import pytest
-try:
-    import distiller
-except ImportError:
-    module_path = os.path.abspath(os.path.join('..'))
-    if module_path not in sys.path:
-         sys.path.append(module_path)
-    import distiller
+import distiller
 from distiller.models import ALL_MODEL_NAMES, create_model
 from distiller.apputils import *
 from distiller import normalize_module_name, denormalize_module_name, \

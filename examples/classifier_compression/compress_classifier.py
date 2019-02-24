@@ -726,7 +726,8 @@ def save_collectors_data(collectors, directory):
 
 
 def check_pytorch_version():
-    if torch.__version__ < '1.0.1':
+    from pkg_resources import parse_version
+    if parse_version(torch.__version__) < parse_version('1.0.1'):
         print("\nNOTICE:")
         print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
               "PyTorch API changes which are not backward-compatible.\n"
