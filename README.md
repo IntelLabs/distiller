@@ -217,11 +217,12 @@ $ source env/bin/activate
 ```
 
 ### Install dependencies
-Finally, install Distiller's dependency packages using ```pip3```:
+Finally, install Distiller's package using ```pip3```:
 ```
-$ pip3 install -r requirements.txt
+$ cd distiller
+$ pip3 install -e .
 ```
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 0.4.0 for CUDA 8.0.  This is the setup we've used for testing Distiller.
+PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.
 
 ## Getting Started
 

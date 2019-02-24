@@ -2,7 +2,7 @@ torch==1.0.1
 numpy>=1.14.3
 torchvision==0.2.1
 scipy>=1.1.0
-gitpython
+gitpython==2.1.11
 torchnet==0.0.4
 tensorflow>=1.7.0
 pydot==1.2.4
