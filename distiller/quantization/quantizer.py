@@ -126,7 +126,7 @@ class Quantizer(object):
         patterns = []
         regex = None
         if bits_overrides:
-            patterns = list(overrides.keys())
+            patterns = list(bits_overrides.keys())
             regex_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex = re.compile(regex_str)
 
