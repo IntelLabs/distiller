@@ -845,7 +845,7 @@ class FakeMudule(nn.Module):
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
     def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides=None,
                  quantize_bias=True, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
-                 quantize_inputs=True, num_bits_inputs=None, act_sat_mode=None):
+                 quantize_inputs=True, num_bits_inputs=None, act_sat_mode=None, wts_sat_mode=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
@@ -858,7 +858,8 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                'multiple GPUs')
 
         mode = verify_mode(mode)
-        act_sat_mode = verify_sat_mode(act_sat_mode)
+        act_sat_mode = verify_sat_mode(act_sat_mode) if act_sat_mode is not None else None
+        self.wts_sat_mode = verify_sat_mode(wts_sat_mode) if wts_sat_mode is not None else None
 
         self.model.quantizer_metadata['params']['mode'] = str(mode).split('.')[1]
         self.model.quantizer_metadata['params']['ema_decay'] = ema_decay
@@ -882,8 +883,12 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             perch = not isinstance(m, nn.Embedding) and per_channel_wts and param_fp.dim() in [2, 4]
 
             with torch.no_grad():
-                scale, zero_point = _get_quant_params_from_tensor(param_fp, param_meta.num_bits, mode,
-                                                                  per_channel=perch)
+                if param_meta.num_bits < 8:
+                    scale, zero_point = _get_quant_params_from_tensor(param_fp, param_meta.num_bits, mode,
+                                          clip=self.wts_sat_mode is not None, per_channel=perch, sat_mode=self.wts_sat_mode)
+                else:
+                    scale, zero_point = _get_quant_params_from_tensor(param_fp, param_meta.num_bits, mode,
+                                                                      per_channel=perch)
             setattr(m, param_meta.q_attr_name + '_scale', scale)
             setattr(m, param_meta.q_attr_name + '_zero_point', zero_point)
             out = LinearQuantizeSTE.apply(param_fp, scale, zero_point, True, False)
