@@ -81,16 +81,13 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 instance_name, args = __policy_params(policy_def, 'regularizer')
                 assert instance_name in regularizers, "Regularizer {} was not defined in the list of regularizers".format(instance_name)
                 regularizer = regularizers[instance_name]
-                if args is None:
-                    policy = distiller.RegularizationPolicy(regularizer)
-                else:
-                    policy = distiller.RegularizationPolicy(regularizer, **args)
+                policy = distiller.RegularizationPolicy(regularizer, args)
 
             elif 'quantizer' in policy_def:
                 instance_name, args = __policy_params(policy_def, 'quantizer')
                 assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
                 quantizer = quantizers[instance_name]
-                policy = distiller.QuantizationPolicy(quantizer)
+                policy = distiller.QuantizationPolicy(quantizer, args)
 
             elif 'lr_scheduler' in policy_def:
                 # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
@@ -102,7 +99,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
                 instance_name, args = __policy_params(policy_def, 'extension')
                 assert instance_name in extensions, "Extension {} was not defined in the list of extensions".format(instance_name)
                 extension = extensions[instance_name]
-                policy = extension
+                policy = distiller.ScheduledTrainingPolicy(extension, args)
 
             else:
                 raise ValueError("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]".format(policy_def))
@@ -130,12 +127,16 @@ def dict_config(model, optimizer, sched_dict, scheduler=None):
 
 
 def add_policy_to_scheduler(policy, policy_def, scheduler):
-    if 'epochs' in policy_def:
-        scheduler.add_policy(policy, epochs=policy_def['epochs'])
-    else:
-        scheduler.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
-                            ending_epoch=policy_def['ending_epoch'],
-                            frequency=policy_def['frequency'])
+    try:
+        epochs = policy_def['epochs']
+    except KeyError:
+        epochs = range(
+            policy_def.get('starting_epoch', 0),
+            policy_def.get('ending_epoch', 1),
+            policy_def.get('frequency', 1),
+            )
+
+    scheduler.add_policy(policy, epochs)
 
 
 def file_config(model, optimizer, filename, scheduler=None):
