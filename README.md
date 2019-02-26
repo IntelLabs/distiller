@@ -34,6 +34,11 @@
 **Distiller** is an open-source Python package for neural network compression research.
 
 Network compression can reduce the memory footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low-precision arithmetic.
+
+#### Note on Release 0.3 - Possible BREAKING Changes
+
+As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.0.1, which might also cause older code to break due to some API changes.  
+If updating from an earlier revision of the code, please make sure to follow the instructions in the [install](#install-the-package) section to make sure proper installation of Distiller and all dependencies.
 <details><summary><b>What's New in November?</b></summary>
 <p>
   
@@ -109,7 +114,7 @@ Beware.
     - [Using virtualenv](#using-virtualenv)
     - [Using venv](#using-venv)
     - [Activate the environment](#activate-the-environment)
-  - [Install dependencies](#install-dependencies)
+  - [Install the package](#install-the-package)
 - [Getting Started](#getting-started)
   - [Example invocations of the sample application](#example-invocations-of-the-sample-application)
     - [Training-only](#training-only)
@@ -216,12 +221,16 @@ The environment activation and deactivation commands for ```venv``` and ```virtu
 $ source env/bin/activate
 ```
 
-### Install dependencies
-Finally, install Distiller's package using ```pip3```:
+
+### Install the package
+Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
 $ cd distiller
 $ pip3 install -e .
 ```
+
+This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
+
 PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.
 
 ## Getting Started

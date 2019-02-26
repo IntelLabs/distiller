@@ -41,14 +41,17 @@ except ImportError:
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(config_filename=None, logdir=None, gitroot='.'):
+
+def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
     """Log information about the execution environment.
 
-    It is recommeneded to log this information so it can be used for referencing
-    at a later time.
+    File 'config_path' will be copied to directory 'logdir'. A common use-case
+    is passing the path to a (compression) schedule YAML file. Storing a copy
+    of the schedule file, with the experiment logs, is useful in order to
+    reproduce experiments.
 
     Args:
-        config_filename: filename to store in logdir, if logdir is set
+        config_path: path to config file, used only when logdir is set
         logdir: log directory
         git_root: the path to the .git root directory
     """
@@ -87,17 +90,22 @@ def log_execution_env_state(config_filename=None, logdir=None, gitroot='.'):
     log_git_state()
     logger.debug("Command line: %s", " ".join(sys.argv))
 
-    if (logdir is None) or (config_filename is None):
+
+    if (logdir is None) or (config_path is None):
         return
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
     with contextlib.suppress(FileExistsError):
         os.makedirs(configs_dest)
-    if os.path.exists(os.path.join(configs_dest, config_filename)):
+    if os.path.exists(os.path.join(configs_dest,
+                                   os.path.basename(config_path))):
         logger.debug('{} already exists in logdir'.format(
-            os.path.basename(config_filename) or config_filename))
+            os.path.basename(config_path) or config_path))
     else:
-        shutil.copy(config_filename, configs_dest)
+        try:
+            shutil.copy(config_path, configs_dest)
+        except OSError as e:
+            logger.debug('Failed to copy of config file: {}'.format(str(e)))
 
 
 def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
