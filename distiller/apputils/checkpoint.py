@@ -74,12 +74,17 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None):
-    """Load a pytorch training checkpoint
+    """Load a pytorch training checkpoint.
+
+    Failure to retrieve optimizer from checkpoint will not
+    fail to call, it will return optimizer=None instead.
 
     Args:
         model: the pytorch model to which we will load the parameters
         chkpt_file: the checkpoint file
-        optimizer: the optimizer to which we will load the serialized state
+        optimizer: the optimizer to which we will load the serialized state.
+            This is optional, by default, optimizer is not loaded
+    :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
@@ -132,9 +137,21 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model()
 
-    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
-                                                                   e=checkpoint_epoch))
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
-    return (model, compression_scheduler, start_epoch)
+
+    if (optimizer is not None) and ('optimizer' in checkpoint):
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
+            type=type(optimizer)))
+        msglogger.debug('Optimizer state_dict: {}'.format(optimizer.state_dict()))
+    elif optimizer is not None:
+        # instead of raising an error, set optimizer to None
+        # caller needs to check this value
+        optimizer = None
+        msglogger.warning('Failed to load optimizer')
+
+    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
+                                                                   e=checkpoint_epoch))
+    return (model, compression_scheduler, optimizer, start_epoch)

@@ -1,0 +1,14 @@
+# python3 compress_classifier.py  --lr=0.1 --arch=resnet20_cifar ../../../data.cifar10 --compress=../../tests/full_flow_tests/steplr_training_resnet20_cifar.yaml
+
+lr_schedulers:
+  training_lr:
+    class: StepLR
+    step_size: 1
+    gamma: 0.10
+
+policies:
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 10
+      frequency: 1
