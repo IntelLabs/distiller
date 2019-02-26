@@ -73,7 +73,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         shutil.copyfile(fullpath, fullpath_best)
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None):
+def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False):
     """Load a pytorch training checkpoint.
 
     Failure to retrieve optimizer from checkpoint will not
@@ -84,6 +84,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         chkpt_file: the checkpoint file
         optimizer: the optimizer to which we will load the serialized state.
             This is optional, by default, optimizer is not loaded
+        lean_checkpoint: if set, read into model only 'state_dict' field
     :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
@@ -119,7 +120,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     else:
         msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
 
-    if 'thinning_recipes' in checkpoint:
+    if (not lean_checkpoint) and ('thinning_recipes' in checkpoint):
         if 'compression_sched' not in checkpoint:
             raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
         msglogger.info("Loaded a thinning recipe from the checkpoint")
@@ -131,7 +132,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
                                                 compression_scheduler.zeros_mask_dict,
                                                 model.thinning_recipes)
 
-    if 'quantizer_metadata' in checkpoint:
+    if (not lean_checkpoint) and ('quantizer_metadata' in checkpoint):
         msglogger.info('Loaded quantizer metadata from the checkpoint')
         qmd = checkpoint['quantizer_metadata']
         quantizer = qmd['type'](model, **qmd['params'])
@@ -140,6 +141,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
+
+    if lean_checkpoint:
+        msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
+        return (model, None, None, 0)
 
     if (optimizer is not None) and ('optimizer' in checkpoint):
         optimizer.load_state_dict(checkpoint['optimizer'])
