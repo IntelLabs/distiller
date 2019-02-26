@@ -48,6 +48,8 @@ def get_parser():
                     metavar='M', help='momentum')
     optimizer_args.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
+    parser.add_argument('--reset-optimizer', '--reset-lr', action='store_true',
+                        help='Flag to override optimizer if resumed from checkpoint')
 
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
