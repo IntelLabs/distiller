@@ -99,18 +99,11 @@ class PruningPolicy(ScheduledTrainingPolicy):
         """
         super(PruningPolicy, self).__init__(classes, layers)
         self.pruner = pruner
-        self.levels = None
-        self.keep_mask = False
-        self.mini_batch_pruning_frequency = 0
-        self.mask_on_forward_only = False
-        self.use_double_copies = False
-        if pruner_args is not None:
-            if 'levels' in pruner_args:
-                self.levels = pruner_args['levels']
-            self.keep_mask = pruner_args.get('keep_mask', False)
-            self.mini_batch_pruning_frequency = pruner_args.get('mini_batch_pruning_frequency', 0)
-            self.mask_on_forward_only = pruner_args.get('mask_on_forward_only', False)
-            self.use_double_copies = pruner_args.get('use_double_copies', False)
+        self.levels = getattr(pruner_args, 'levels', None)
+        self.keep_mask = getattr(pruner_args, 'keep_mask', False)
+        self.mini_batch_pruning_frequency = getattr(pruner_args, 'mini_batch_pruning_frequency', 0)
+        self.mask_on_forward_only = getattr(pruner_args, 'mask_on_forward_only', False)
+        self.use_double_copies = getattr(pruner_args, 'use_double_copies', False)
         self.is_last_epoch = False
         self.mini_batch_id = 0          # The ID of the mini_batch within the present epoch
         self.global_mini_batch_id = 0   # The ID of the mini_batch within the present training session
