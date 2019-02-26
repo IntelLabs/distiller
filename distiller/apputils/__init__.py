@@ -19,13 +19,11 @@ when working with distiller.
 
 """
 from .data_loaders import *
-from .model_summaries import *
 from .checkpoint import *
 from .execution_env import *
 from .dataset_summaries import *
 
 del data_loaders
-del model_summaries
 del checkpoint
 del execution_env
 del dataset_summaries

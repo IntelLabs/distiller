@@ -24,6 +24,7 @@ from .directives import *
 from .policy import *
 from .thinning import *
 from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLossWeights
+from .summary_graph import SummaryGraph, onnx_name_2_pytorch_name
 
 
 del dict_config

@@ -24,7 +24,6 @@ if module_path not in sys.path:
 import distiller
 import pytest
 import common  # common test code
-import apputils
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -38,8 +37,8 @@ def test_png_generation():
     ARCH = "resnet20_cifar"
     model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
     # 2 different ways to create a PNG
-    apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, True)
-    apputils.draw_img_classifier_to_file(model, 'model.png', DATASET, False)
+    distiller.draw_img_classifier_to_file(model, 'model.png', DATASET, True)
+    distiller.draw_img_classifier_to_file(model, 'model.png', DATASET, False)
 
 
 def test_negative():

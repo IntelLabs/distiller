@@ -67,18 +67,12 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-try:
-    import distiller
-except ImportError:
-    sys.path.append(module_path)
-    import distiller
-import apputils
+import distiller
+import distiller.apputils as apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
-from models import ALL_MODEL_NAMES, create_model
+from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 
 
@@ -87,6 +81,8 @@ msglogger = None
 
 
 def main():
+    script_dir = os.path.dirname(__file__)
+    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     global msglogger
 
     # Parse arguments
@@ -730,11 +726,12 @@ def save_collectors_data(collectors, directory):
 
 
 def check_pytorch_version():
-    if torch.__version__ < '0.4.0':
+    from pkg_resources import parse_version
+    if parse_version(torch.__version__) < parse_version('1.0.1'):
         print("\nNOTICE:")
-        print("The Distiller \'master\' branch now requires at least PyTorch version 0.4.0 due to "
+        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
               "PyTorch API changes which are not backward-compatible.\n"
-              "Please install PyTorch 0.4.0 or its derivative.\n"
+              "Please install PyTorch 1.0.1 or its derivative.\n"
               "If you are using a virtual environment, do not forget to update it:\n"
               "  1. Deactivate the old environment\n"
               "  2. Install the new environment\n"

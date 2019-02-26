@@ -32,8 +32,8 @@ import torch
 from .policy import ScheduledTrainingPolicy
 import distiller
 from distiller import normalize_module_name, denormalize_module_name
-from apputils import SummaryGraph
-from models import create_model
+from distiller.models import create_model
+from .summary_graph import SummaryGraph
 msglogger = logging.getLogger(__name__)
 
 ThinningRecipe = namedtuple('ThinningRecipe', ['modules', 'parameters'])

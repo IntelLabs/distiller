@@ -14,25 +14,12 @@
 # limitations under the License.
 #
 
-"""This module provides various model summary information.
-
-This code is proven to work on CNN image classification models using PyTorch 04.
-RNNs are currently not working well.
-"""
-
-import os
+import distiller
 import re
 import numpy as np
 import collections
-from copy import deepcopy
 import torch
-import torchvision
-from torch.autograd import Variable
 import torch.jit as jit
-import pandas as pd
-from tabulate import tabulate
-import pydot
-import distiller
 import logging
 msglogger = logging.getLogger(__name__)
 
@@ -44,7 +31,7 @@ def onnx_name_2_pytorch_name(name, op_type):
 
     # First see if there's an instance identifier
     instance = 
-    if name.find('.') > 0:
+    if name.find('.') >= 0:
         instance = name[name.find('.')+1:]
 
     # Next, split by square brackets
@@ -100,7 +87,8 @@ class SummaryGraph(object):
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
-            torch.onnx._optimize_trace(trace, False)
+            torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
+
             graph = trace.graph()
             self.ops = {}
             self.params = {}
@@ -182,7 +170,7 @@ class SummaryGraph(object):
         tensor['id'] = n.uniqueName()
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
-            s = str(n.type())
+            s = str(n.node())
             s = s[s.find('(')+1: s.find(')')]
             tensor['shape'] = tuple(map(lambda x: int(x), s.split(',')))
         except ValueError:
@@ -288,7 +276,7 @@ class SummaryGraph(object):
             node_is_an_op = False
             node = self.find_param(node_name)
             if node is None:
-                msglogger.warn("predecessors_f: Could not find node {}".format(node_name))
+                msglogger.warning("predecessors_f: Could not find node {}".format(node_name))
                 return []
 
         if done_list is None:
@@ -386,248 +374,3 @@ class SummaryGraph(object):
         for successor in succs:
             ret += self.successors_f(successor, successors_types, done_list, logging)
         return ret
-
-
-def attributes_summary(sgraph, ignore_attrs):
-    """Generate a summary of a graph's attributes.
-
-    Args:
-        sgraph: a SummaryGraph instance
-        ignore_attrs: a list of attributes to ignore in the output datafraem
-
-    Output:
-        A Pandas dataframe
-    """
-    def pretty_val(val):
-        if type(val) == int:
-            return format(val, ",d")
-        return str(val)
-
-    def pretty_attrs(attrs, ignore_attrs):
-        ret = 
-        for key, val in attrs.items():
-            if key in ignore_attrs:
-                continue
-            ret += key + ': ' + pretty_val(val) + '\n'
-        return ret
-
-    df = pd.DataFrame(columns=['Name', 'Type', 'Attributes'])
-    pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops):
-        df.loc[i] = [op['name'], op['type'], pretty_attrs(op['attrs'], ignore_attrs)]
-    return df
-
-
-def attributes_summary_tbl(sgraph, ignore_attrs):
-    df = attributes_summary(sgraph, ignore_attrs)
-    return tabulate(df, headers='keys', tablefmt='psql')
-
-
-def connectivity_summary(sgraph):
-    """Generate a summary of each node's connectivity.
-
-    Args:
-        sgraph: a SummaryGraph instance
-    """
-    df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
-    pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops.values()):
-        df.loc[i] = [op['name'], op['type'], op['inputs'], op['outputs']]
-    return df
-
-
-def connectivity_summary_verbose(sgraph):
-    """Generate a summary of each node's connectivity, with details
-    about the parameters.
-
-    Args:
-        sgraph: a SummaryGraph instance
-    """
-    def format_list(l):
-        ret = 
-        for i in l: ret += str(i) + '\n'
-        return ret[:-1]
-
-    df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
-    pd.set_option('precision', 5)
-    for i, op in enumerate(sgraph.ops.values()):
-        outputs = []
-        for blob in op['outputs']:
-            if blob in sgraph.params:
-                outputs.append(blob + ": " + str(sgraph.params[blob]['shape']))
-        inputs = []
-        for blob in op['inputs']:
-            if blob in sgraph.params:
-                inputs.append(blob + ": " + str(sgraph.params[blob]['shape']))
-        inputs = format_list(inputs)
-        outputs = format_list(outputs)
-        df.loc[i] = [op['name'], op['type'], inputs, outputs]
-
-    return df
-
-
-def connectivity_tbl_summary(sgraph, verbose=False):
-    if verbose:
-        df = connectivity_summary_verbose(sgraph)
-    else:
-        df = connectivity_summary(sgraph)
-    return tabulate(df, headers='keys', tablefmt='psql')
-
-
-def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', styles=None):
-    """Low-level API to create a PyDot graph (dot formatted).
-    """
-    pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir=rankdir)
-
-    op_node_style = {'shape': 'record',
-                     'fillcolor': '#6495ED',
-                     'style': 'rounded, filled'}
-
-    for op_node in op_nodes:
-        style = op_node_style
-        # Check if we should override the style of this node.
-        if styles is not None and op_node[0] in styles:
-            style = styles[op_node[0]]
-        pydot_graph.add_node(pydot.Node(op_node[0], **style, label="\n".join(op_node)))
-
-    for data_node in data_nodes:
-        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node[1:])))
-
-    node_style = {'shape': 'oval',
-                  'fillcolor': 'gray',
-                  'style': 'rounded, filled'}
-
-    if param_nodes is not None:
-        for param_node in param_nodes:
-            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node[1:])))
-
-    for edge in edges:
-        pydot_graph.add_edge(pydot.Edge(edge[0], edge[1]))
-
-    return pydot_graph
-
-
-def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
-    """Create a PNG object containing a graphiz-dot graph of the network,
-    as represented by SummaryGraph 'sgraph'.
-
-    Args:
-        sgraph (SummaryGraph): the SummaryGraph instance to draw.
-        display_param_nodes (boolean): if True, draw the parameter nodes
-        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
-                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
-        styles: a dictionary of styles.  Key is module name.  Value is
-                a legal pydot style dictionary.  For example:
-                styles['conv1'] = {'shape': 'oval',
-                                   'fillcolor': 'gray',
-                                   'style': 'rounded, filled'}
-    """
-
-    op_nodes = [op['name'] for op in sgraph.ops.values()]
-    data_nodes = []
-    param_nodes = []
-    for id, param in sgraph.params.items():
-        n_data = (id, str(distiller.volume(param['shape'])), str(param['shape']))
-        if data_node_has_parent(sgraph, id):
-            data_nodes.append(n_data)
-        else:
-            param_nodes.append(n_data)
-    edges = sgraph.edges
-
-    if not display_param_nodes:
-        # Use only the edges that don't have a parameter source
-        non_param_ids = op_nodes + [dn[0] for dn in data_nodes]
-        edges = [edge for edge in sgraph.edges if edge.src in non_param_ids]
-        param_nodes = None
-
-    op_nodes = [(op['name'], op['type']) for op in sgraph.ops.values()]
-    pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir, styles)
-    png = pydot_graph.create_png()
-    return png
-
-
-def draw_model_to_file(sgraph, png_fname, display_param_nodes=False, rankdir='TB', styles=None):
-    """Create a PNG file, containing a graphiz-dot graph of the netowrk represented
-    by SummaryGraph 'sgraph'
-
-    Args:
-        sgraph (SummaryGraph): the SummaryGraph instance to draw.
-        png_fname (string): PNG file name
-        display_param_nodes (boolean): if True, draw the parameter nodes
-        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
-                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
-        styles: a dictionary of styles.  Key is module name.  Value is
-                a legal pydot style dictionary.  For example:
-                styles['conv1'] = {'shape': 'oval',
-                                   'fillcolor': 'gray',
-                                   'style': 'rounded, filled'}
-        """
-    png = create_png(sgraph, display_param_nodes=display_param_nodes)
-    with open(png_fname, 'wb') as fid:
-        fid.write(png)
-
-
-def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=False,
-                                rankdir='TB', styles=None):
-    """Draw a PyTorch image classifier to a PNG file.  This a helper function that
-    simplifies the interface of draw_model_to_file().
-
-    Args:
-        model: PyTorch model instance
-        png_fname (string): PNG file name
-        dataset (string): one of 'imagenet' or 'cifar10'.  This is required in order to
-                          create a dummy input of the correct shape.
-        display_param_nodes (boolean): if True, draw the parameter nodes
-        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
-                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
-        styles: a dictionary of styles.  Key is module name.  Value is
-                a legal pydot style dictionary.  For example:
-                styles['conv1'] = {'shape': 'oval',
-                                   'fillcolor': 'gray',
-                                   'style': 'rounded, filled'}
-    """
-    try:
-        dummy_input = dataset_dummy_input(dataset)
-        model = distiller.make_non_parallel_copy(model)
-        g = SummaryGraph(model, dummy_input)
-        draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
-        print("Network PNG image generation completed")
-    except FileNotFoundError:
-        print("An error has occured while generating the network PNG image.")
-        print("Please check that you have graphviz installed.")
-        print("\t$ sudo apt-get install graphviz")
-
-
-def dataset_dummy_input(dataset):
-    if dataset == 'imagenet':
-        dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
-    elif dataset == 'cifar10':
-        dummy_input = Variable(torch.randn(1, 3, 32, 32))
-    else:
-        raise ValueError("Unsupported dataset (%s) - aborting draw operation" % dataset)
-    return dummy_input
-
-
-def export_img_classifier_to_onnx(model, onnx_fname, dataset, export_params=True, add_softmax=True):
-    """Export a PyTorch image classifier to ONNX.
-
-    """
-    dummy_input = dataset_dummy_input(dataset).to('cuda')
-    # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
-    model = distiller.make_non_parallel_copy(model)
-
-    with torch.onnx.set_training(model, False):
-        if add_softmax:
-            # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
-            model.original_forward = model.forward
-            softmax = torch.nn.Softmax(dim=-1)
-            model.forward = lambda input: softmax(model.original_forward(input))
-        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=export_params)
-        msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
-
-
-def data_node_has_parent(g, id):
-    for edge in g.edges:
-        if edge.dst == id:
-            return True
-    return False
