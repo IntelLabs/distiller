@@ -268,6 +268,11 @@ def main():
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
 
+    if getattr(compression_scheduler, 'global_policy_end_epoch', None) is not None:
+        if compression_scheduler.global_policy_end_epoch >= (start_epoch + args.epochs):
+            msglogger.warning('scheduler requires at least {} epochs, but only {} are sanctioned'.format(
+                compression_scheduler.global_policy_end_epoch, args.epochs))
+
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
         msglogger.info('\n')
@@ -301,15 +306,17 @@ def main():
         if compression_scheduler:
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
-        # Update the list of top scores achieved so far, and save the checkpoint
-        if top1 > 0:
-            best_epochs.append(distiller.MutableNamedTuple({'top1': top1, 'top5': top5, 'epoch': epoch}))
-        # Keep best_epochs sorted from best to worst
-        # Sort by top1 first, secondary sort by top5, and so forth
-        best_epochs.sort(key=operator.attrgetter('top1', 'top5', 'epoch'), reverse=True)
-        for score in best_epochs[:args.num_best_scores]:
-            msglogger.info('==> Best Top1: %.3f Top5: %.3f on epoch: %d',
-                           score.top1, score.top5, score.epoch)
+        if getattr(compression_scheduler, 'global_policy_end_epoch', None) is None or (
+                compression_scheduler.global_policy_end_epoch <= epoch):
+            # Update the list of top scores achieved since all policies have concluded
+            if top1 > 0:
+                best_epochs.append(distiller.MutableNamedTuple({'top1': top1, 'top5': top5, 'epoch': epoch}))
+            # Keep best_epochs sorted from best to worst
+            # Sort by top1 first, secondary sort by top5, and so forth
+            best_epochs.sort(key=operator.attrgetter('top1', 'top5', 'epoch'), reverse=True)
+            for score in best_epochs[:args.num_best_scores]:
+                msglogger.info('==> Best Top1: %.3f Top5: %.3f on epoch: %d',
+                               score.top1, score.top5, score.epoch)
 
         is_best = best_epochs and (epoch == best_epochs[0].epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,

@@ -85,8 +85,10 @@ class KnowledgeDistillationPolicy(ScheduledTrainingPolicy):
 
     """
     def __init__(self, student_model, teacher_model, temperature=1.0,
-                 loss_weights=DistillationLossWeights(0.5, 0.5, 0)):
-        super(KnowledgeDistillationPolicy, self).__init__()
+                 loss_weights=DistillationLossWeights(0.5, 0.5, 0),
+                 defer_best_checkpoint=False):
+        super(KnowledgeDistillationPolicy, self).__init__(
+                defer_best_checkpoint=defer_best_checkpoint)
 
         if loss_weights.teacher != 0:
             raise NotImplementedError('Using teacher vs. labels loss is not supported yet, '

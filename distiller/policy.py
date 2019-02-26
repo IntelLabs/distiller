@@ -38,9 +38,10 @@ class ScheduledTrainingPolicy(object):
 
     The CompressionScheduler invokes these methods as the training progresses.
     """
-    def __init__(self, classes=None, layers=None):
+    def __init__(self, classes=None, layers=None, defer_best_checkpoint=True):
         self.classes = classes
         self.layers = layers
+        self.defer_best_checkpoint = defer_best_checkpoint
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
         """A new epcoh is about to begin"""
@@ -76,7 +77,7 @@ class ScheduledTrainingPolicy(object):
 class PruningPolicy(ScheduledTrainingPolicy):
     """Base class for pruning policies.
     """
-    def __init__(self, pruner, pruner_args, classes=None, layers=None):
+    def __init__(self, pruner, pruner_args, classes=None, layers=None, defer_best_checkpoint=True):
         """
         Arguments:
             mask_on_forward_only: controls what we do after the weights are updated by the backward pass.
@@ -97,7 +98,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
             When setting 'mini_batch_pruning_frequency' to a value other than zero, make sure to configure the policy's
             schedule to once-every-epoch.
         """
-        super(PruningPolicy, self).__init__(classes, layers)
+        super(PruningPolicy, self).__init__(classes, layers, defer_best_checkpoint)
         self.pruner = pruner
         self.levels = getattr(pruner_args, 'levels', None)
         self.keep_mask = getattr(pruner_args, 'keep_mask', False)
@@ -156,8 +157,8 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
     """Regularization policy.
 
     """
-    def __init__(self, regularizer, keep_mask=False):
-        super(RegularizationPolicy, self).__init__()
+    def __init__(self, regularizer, keep_mask=False, defer_best_checkpoint=False):
+        super(RegularizationPolicy, self).__init__(defer_best_checkpoint=defer_best_checkpoint)
         self.regularizer = regularizer
         self.keep_mask = keep_mask
         self.is_last_epoch = False
@@ -198,8 +199,8 @@ class LRPolicy(ScheduledTrainingPolicy):
     """ Learning-rate decay scheduling policy.
 
     """
-    def __init__(self, lr_scheduler):
-        super(LRPolicy, self).__init__()
+    def __init__(self, lr_scheduler, defer_best_checkpoint=False):
+        super(LRPolicy, self).__init__(defer_best_checkpoint=defer_best_checkpoint)
         self.lr_scheduler = lr_scheduler
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta):
@@ -207,8 +208,8 @@ class LRPolicy(ScheduledTrainingPolicy):
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):
-    def __init__(self, quantizer):
-        super(QuantizationPolicy, self).__init__()
+    def __init__(self, quantizer, defer_best_checkpoint=True):
+        super(QuantizationPolicy, self).__init__(defer_best_checkpoint=defer_best_checkpoint)
         self.quantizer = quantizer
         self.quantizer.prepare_model()
         self.quantizer.quantize_params()
