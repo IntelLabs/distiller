@@ -164,8 +164,9 @@ def main():
     # We can optionally resume from a checkpoint
     optimizer = None
     if args.resume:
-        # initiate SGD with dummy lr
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
+        if not args.reset_optimizer:
+            # initiate SGD with dummy lr
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
             model, args.resume, optimizer=optimizer)
         model.to(args.device)
@@ -236,7 +237,7 @@ def main():
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
-            (start_epoch-1) if args.resume else None)
+            (start_epoch-1) if (args.resume and not args.reset_optimizer) else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
     elif compression_scheduler is None:
