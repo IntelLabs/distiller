@@ -20,7 +20,7 @@ import distiller
 import distiller.quantization
 import examples.automated_deep_compression as adc
 from distiller.utils import float_range_argparse_checker as float_range
-import models
+import distiller.models as models
 
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']

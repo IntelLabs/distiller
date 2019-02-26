@@ -50,9 +50,12 @@ The environment activation and deactivation commands for ```venv``` and ```virtu
 $ source env/bin/activate
 ```
 
-## Install dependencies
-Finally, install Distiller's dependency packages using ```pip3```:
+## Install the package
+Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
-$ pip3 install -r requirements.txt
+$ cd distiller
+$ pip3 install -e .
 ```
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 3.1 for CUDA 8.0.  This is the setup we've used for testing Distiller.
+This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
+
+PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.

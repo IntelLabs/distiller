@@ -32,7 +32,7 @@ def dataset_summary(data_loader):
     from statistics import mean
     print('Dataset contains {} items'.format(len(data_loader.sampler)))
     print('Found {} classes'.format(nclasses))
-    for data_class, size in hist.iteritems():
+    for data_class, size in hist.items():
         print('\tClass {} = {}'.format(data_class, size))
 
     print('mean: ', mean(list(hist.values())))

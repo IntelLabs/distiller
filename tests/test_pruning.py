@@ -19,16 +19,11 @@ import logging
 import torch
 import os
 import sys
-try:
-    import distiller
-except ImportError:
-    module_path = os.path.abspath(os.path.join('..'))
-    sys.path.append(module_path)
-    import distiller
+import distiller
 import common
 import pytest
-from models import create_model
-from apputils import save_checkpoint, load_checkpoint
+from distiller.models import create_model
+from distiller.apputils import save_checkpoint, load_checkpoint
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)

@@ -66,7 +66,7 @@
         
             <li><a class="toctree-l3" href="#create-a-python-virtual-environment">Create a Python virtual environment</a></li>
         
-            <li><a class="toctree-l3" href="#install-dependencies">Install dependencies</a></li>
+            <li><a class="toctree-l3" href="#install-the-package">Install the package</a></li>
         
         </ul>
     
@@ -236,12 +236,14 @@ Before creating the virtual environment, make sure you are located in directory 
 <pre><code>$ source env/bin/activate
 </code></pre>
 
-<h2 id="install-dependencies">Install dependencies</h2>
-<p>Finally, install Distiller's dependency packages using <code>pip3</code>:</p>
-<pre><code>$ pip3 install -r requirements.txt
+<h2 id="install-the-package">Install the package</h2>
+<p>Finally, install the Distiller package and its dependencies using <code>pip3</code>:</p>
+<pre><code>$ cd distiller
+$ pip3 install -e .
 </code></pre>
 
-<p>PyTorch is included in the <code>requirements.txt</code> file, and will currently download PyTorch version 3.1 for CUDA 8.0.  This is the setup we've used for testing Distiller.</p>
+<p>This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).</p>
+<p>PyTorch is included in the <code>requirements.txt</code> file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.</p>
               
             </div>
           </div>

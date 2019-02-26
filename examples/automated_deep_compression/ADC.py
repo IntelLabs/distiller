@@ -73,10 +73,9 @@ except ImportError as e:
     raise e
 from gym import spaces
 import distiller
-from apputils import SummaryGraph
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
-from distiller import normalize_module_name
+from distiller import normalize_module_name, SummaryGraph
 from examples.automated_deep_compression.adc_random_env import random_agent
 
 # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI

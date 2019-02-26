@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
 import logging
 import os
 import sys
@@ -21,13 +20,16 @@ import tempfile
 
 import torch
 import pytest
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
-
+try:
+    import distiller
+except ImportError:
+    module_path = os.path.abspath(os.path.join('..'))
+    if module_path not in sys.path:
+        sys.path.append(module_path)
+    import distiller
 import distiller
-from apputils import save_checkpoint, load_checkpoint
-from models import create_model
+from distiller.apputils import save_checkpoint, load_checkpoint
+from distiller.models import create_model
 
 
 def test_load():

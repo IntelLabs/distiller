@@ -16,15 +16,12 @@
 
 import torch
 import os
-import sys
 import torch.nn as nn
 from copy import deepcopy
 from collections import OrderedDict
 import pytest
 
 module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 from distiller.quantization import Quantizer
 from distiller.quantization.quantizer import QBits, _ParamToQuant
 from distiller.quantization.quantizer import FP_BKP_PREFIX
