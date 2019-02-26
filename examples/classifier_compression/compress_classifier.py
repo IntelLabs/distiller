@@ -163,12 +163,12 @@ def main():
 
     # We can optionally resume from a checkpoint
     optimizer = None
-    if args.resume:
-        if not args.reset_optimizer:
+    if args.resume or args.load_state_dict:
+        if args.resume and not args.reset_optimizer:
             # initiate SGD with dummy lr
             optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.resume, optimizer=optimizer)
+            model, args.resume or args.load_state_dict, optimizer=optimizer)
         model.to(args.device)
 
     # Define loss function (criterion) and optimizer
