@@ -37,7 +37,7 @@ Network compression can reduce the memory footprint of a neural network, increas
 
 #### Note on Release 0.3 - Possible BREAKING Changes
 
-As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.0.0, which might also cause older code to break due to some API changes.  
+As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.0.1, which might also cause older code to break due to some API changes.  
 If updating from an earlier revision of the code, please make sure to follow the instructions in the [install](#install-the-package) section to make sure proper installation of Distiller and all dependencies.
 <details><summary><b>What's New in November?</b></summary>
 <p>
