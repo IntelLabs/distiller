@@ -53,12 +53,17 @@ def get_parser():
 
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
-    parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                        help='path to latest checkpoint (default: none)')
-    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                        help='evaluate model on validation set')
+
+    load_checkpoint_group = parser.add_mutually_exclusive_group()
+    load_checkpoint_group.add_argument('--resume', '--load-checkpoint', default='', type=str,
+                        metavar='PATH', help='path to latest checkpoint')
+    load_checkpoint_group.add_argument('--load-state-dict', default='', type=str, metavar='PATH',
+                        help='path to checkpoint to load weights from (excluding other fields)')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
+
+    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                        help='evaluate model on validation set')
     parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')

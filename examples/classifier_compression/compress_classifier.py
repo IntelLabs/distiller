@@ -167,6 +167,9 @@ def main():
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
             model, args.resume, optimizer=optimizer)
         model.to(args.device)
+    elif args.load_state_dict:
+        model = apputils.load_lean_checkpoint(model, args.load_state_dict)
+        model.to(args.device)
 
     # Define loss function (criterion)
     criterion = nn.CrossEntropyLoss().to(args.device)

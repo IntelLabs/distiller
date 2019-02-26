@@ -28,7 +28,7 @@ except ImportError:
         sys.path.append(module_path)
     import distiller
 import distiller
-from distiller.apputils import save_checkpoint, load_checkpoint
+from distiller.apputils import save_checkpoint, load_checkpoint, load_lean_checkpoint
 from distiller.models import create_model
 
 
@@ -59,7 +59,7 @@ def test_load():
     assert start_epoch == 180
 
 
-def test_load_state_dict():
+def test_load_state_dict_implicit():
     # prepare lean checkpoint
     state_dict_arrays = torch.load('../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar').get('state_dict')
 
@@ -72,6 +72,29 @@ def test_load_state_dict():
     assert compression_scheduler is None
     assert optimizer is None
     assert start_epoch == 0
+
+
+def test_load_lean_checkpoint_1():
+    # prepare lean checkpoint
+    state_dict_arrays = torch.load('../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar').get('state_dict')
+
+    with tempfile.NamedTemporaryFile() as tmpfile:
+        torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
+        model = create_model(False, 'cifar10', 'resnet20_cifar')
+        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+            model, tmpfile.name, torch.optim.SGD(model.parameters(), lr=0.36787944117),
+            lean_checkpoint=True)
+
+    assert compression_scheduler is None
+    assert optimizer is None
+    assert start_epoch == 0
+
+
+def test_load_lean_checkpoint_2():
+    checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
+
+    model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
+    model = load_lean_checkpoint(model, checkpoint_filename)
 
 
 def test_load_dumb_checkpoint():
@@ -91,6 +114,7 @@ def test_load_negative():
         model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model,
             'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
 
+
 def test_load_gpu_model_on_cpu():
     # Issue #148
     CPU_DEVICE_ID = -1
@@ -103,6 +127,19 @@ def test_load_gpu_model_on_cpu():
     assert compression_scheduler is not None
     assert optimizer is None
     assert start_epoch == 180
+    assert distiller.model_device(model) == 'cpu'
+
+
+def test_load_gpu_model_on_cpu_lean_checkpoint():
+    CPU_DEVICE_ID = -1
+    checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
+
+    model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
+    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+        model, checkpoint_filename, lean_checkpoint=True)
+
+    assert compression_scheduler is None
+    assert optimizer is None
     assert distiller.model_device(model) == 'cpu'
 
 

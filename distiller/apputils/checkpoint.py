@@ -73,7 +73,11 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         shutil.copyfile(fullpath, fullpath_best)
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None):
+def load_lean_checkpoint(model, chkpt_file):
+    return load_checkpoint(model, chkpt_file, lean_checkpoint=True)[0]
+
+
+def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False):
     """Load a pytorch training checkpoint.
 
     Args:
@@ -81,6 +85,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         chkpt_file: the checkpoint file
         optimizer: the optimizer to which we will load the serialized state.
             This is optional, by default, optimizer is not loaded
+        lean_checkpoint: if set, read into model only 'state_dict' field
     :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
@@ -137,6 +142,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
+
+    if lean_checkpoint:
+        msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
+        return (model, None, None, 0)
 
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint['optimizer'])
