@@ -283,7 +283,8 @@ def main():
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
-            train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
+            train(train_loader, model, criterion, optimizer, epoch,
+                  accumulated_training_steps, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
@@ -304,8 +305,7 @@ def main():
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
-        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
-                                        loggers=[tflogger])
+        tflogger.log_training_progress(stats, epoch, None)
 
         if compression_scheduler:
             compression_scheduler.on_epoch_end(epoch, optimizer)
@@ -336,6 +336,7 @@ OBJECTIVE_LOSS_KEY = 'Objective Loss'
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
+          accumulated_training_steps,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
     losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter()),
@@ -432,13 +433,12 @@ def train(train_loader, model, criterion, optimizer, epoch,
             stats = ('Peformance/Training/', stats_dict)
 
             params = model.named_parameters() if args.log_params_histograms else None
-            distiller.log_training_progress(stats,
-                                            params,
-                                            epoch, steps_completed,
-                                            steps_per_epoch, args.print_freq,
-                                            loggers)
+            current_training_step = accumulated_training_steps + steps_completed
+            distiller.log_training_and_weights_dist(
+                stats, params, epoch, current_training_step, steps_completed,
+                *loggers, train_steps_per_epoch=steps_per_epoch,
+                log_period=args.print_freq)
         end = time.time()
-
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     """Model validation"""
@@ -480,7 +480,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     batch_size = data_loader.batch_size
     if args.display_confusion:
         confusion = tnt.ConfusionMeter(args.num_classes)
-    total_steps = total_samples / batch_size
+    steps_per_epoch = math.ceil(total_samples / batch_size)
     msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
     # Switch to evaluation mode
@@ -506,7 +506,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
             # measure elapsed time
             batch_time.add(time.time() - end)
-            end = time.time()
 
             steps_completed = (validation_step+1)
             if steps_completed % args.print_freq == 0:
@@ -531,8 +530,11 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                             stats_dict[t5] = args.exiterrors[exitnum].value(5)
                     stats = ('Performance/Validation/', stats_dict)
 
-                distiller.log_training_progress(stats, None, epoch, steps_completed,
-                                                total_steps, args.print_freq, loggers)
+                for logger in loggers:
+                    logger.log_training_progress(stats, epoch, steps_completed,
+                        steps_completed, train_steps_per_epoch=steps_per_epoch)
+            end = time.time()
+
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)

@@ -265,8 +265,11 @@ def train(epoch, optimizer, compression_scheduler=None):
                     ('Batch Time', elapsed * 1000)])
                 )
             steps_completed = batch + 1
-            distiller.log_training_progress(stats, model.named_parameters(), epoch, steps_completed,
-                                            steps_per_epoch, args.log_interval, [tflogger])
+            absolute_train_step = epoch*steps_per_epoch + steps_completed
+            distiller.log_training_and_weights_dist(
+                stats, model.named_parameters(), epoch,
+                absolute_train_step, steps_completed, tflogger,
+                train_steps_per_epoch=steps_per_epoch, log_period=args.log_interval)
 
 
 def export_onnx(path, batch_size, seq_len):
@@ -339,7 +342,7 @@ try:
             OrderedDict([
                 ('Loss', val_loss),
                 ('Perplexity', math.exp(val_loss))]))
-        tflogger.log_training_progress(stats, epoch, 0, total=1, freq=1)
+        tflogger.log_training_progress(stats, epoch, None)
 
         with open(args.save, 'wb') as f:
             torch.save(model, f)

@@ -587,10 +587,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
         stats = ('Peformance/Validation/',
                  OrderedDict([('requested_action', pruning_action)]))
-
-        distiller.log_training_progress(stats, None,
-                                        self.episode, steps_completed=self.current_layer_id,
-                                        total_steps=self.amc_cfg.conv_cnt, log_freq=1, loggers=[self.tflogger])
+        self.tflogger.log_training_progress(stats, self.episode, None)
 
         if self.episode_is_done():
             msglogger.info("Episode is ending")
@@ -733,8 +730,10 @@ class DistillerWrapperEnvironment(gym.Env):
                                   ('macs_normalized', macs_normalized*100),
                                   ('log(total_macs)', math.log(total_macs)),
                                   ('total_nnz', int(total_nnz))]))
-            distiller.log_training_progress(stats, None, self.episode, steps_completed=0, total_steps=1,
-                                            log_freq=1, loggers=[self.tflogger, self.pylogger])
+            for logger in [self.tflogger, self.pylogger]:
+                logger.log_training_progress(stats, self.episode, self.episode,
+                    0, train_steps_per_epoch=1)
+
         return reward, top1, total_macs, total_nnz
 
     def create_network_record_file(self):

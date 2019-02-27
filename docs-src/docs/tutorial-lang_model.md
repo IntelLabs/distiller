@@ -193,8 +193,11 @@ if batch % args.log_interval == 0 and batch > 0:
             ('Batch Time', elapsed * 1000)])
         )
     steps_completed = batch + 1
-    distiller.log_training_progress(stats, model.named_parameters(), epoch, steps_completed,
-                                    steps_per_epoch, args.log_interval, [tflogger])
+    absolute_train_step = epoch*steps_per_epoch + steps_completed
+    distiller.log_training_and_weights_dist(
+        stats, model.named_parameters(), epoch,
+        absolute_train_step, steps_completed, tflogger,
+        train_steps_per_epoch=steps_per_epoch, log_period=args.log_interval)
 </code></pre>
 
 
