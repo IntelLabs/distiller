@@ -185,7 +185,7 @@ def main():
             ]
         if user_optim_args:
             msglogger.warning('{} optimizer arguments are ignored.'.format(user_optim_args))
-            msglogger.info('setting optimizer arguments when optimizer is resumed'
+            msglogger.info('setting optimizer arguments when optimizer is resumed '
                 'from checkpoint is forbidden.')
     else:
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
