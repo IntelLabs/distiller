@@ -31,7 +31,8 @@ msglogger = logging.getLogger()
 
 
 def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    best_top1=None, is_best=False, name=None, dir='.'):
+                    best_top1=None, is_best=False,
+                    name=None, dir='.', train_steps=None):
     """Save a pytorch training checkpoint
 
     Args:
@@ -44,6 +45,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         is_best: True if this is the best (top1 accuracy) model so far
         name: the name of the checkpoint file
         dir: directory in which to save the checkpoint
+        train_steps: the number of training steps
     """
     if not os.path.isdir(dir):
         raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
@@ -52,6 +54,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     checkpoint['epoch'] = epoch
     checkpoint['arch'] = arch
     checkpoint['state_dict'] = model.state_dict()
+    if train_steps is not None:
+        checkpoint['train_steps'] = train_steps
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
     if optimizer is not None:
@@ -100,6 +104,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
 
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
+    train_steps = checkpoint.get('train_steps', None)
+    if train_steps is not None:
+        msglogger.debug('Loaded train_steps: {}'.format(train_steps))
 
     best_top1 = checkpoint.get('best_top1', None)
     if best_top1 is not None:
@@ -145,7 +152,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
 
     if lean_checkpoint:
         msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
-        return (model, None, None, 0)
+        return (model, None, None, 0, None)
 
     if (optimizer is not None) and ('optimizer' in checkpoint):
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -160,4 +167,4 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
 
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
                                                                    e=checkpoint_epoch))
-    return (model, compression_scheduler, optimizer, start_epoch)
+    return (model, compression_scheduler, optimizer, start_epoch, train_steps)

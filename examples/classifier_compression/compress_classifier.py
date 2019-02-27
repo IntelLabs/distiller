@@ -163,11 +163,12 @@ def main():
 
     # We can optionally resume from a checkpoint
     optimizer = None
+    resumed_training_steps = None
     if args.resume or args.load_state_dict:
         if args.resume and not args.reset_optimizer:
             # initiate SGD with dummy lr
             optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
-        model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
+        model, compression_scheduler, optimizer, start_epoch, resumed_training_steps = apputils.load_checkpoint(
             model, args.resume or args.load_state_dict, optimizer=optimizer)
         model.to(args.device)
 
@@ -273,6 +274,7 @@ def main():
             msglogger.warning('scheduler requires at least {} epochs, but only {} are sanctioned'.format(
                 compression_scheduler.global_policy_end_epoch, args.epochs))
 
+    accumulated_training_steps = resumed_training_steps if resumed_training_steps is not None else 0
     for epoch in range(start_epoch, start_epoch + args.epochs):
         # This is the main training loop.
         msglogger.info('\n')
@@ -288,6 +290,8 @@ def main():
                                                 collector=collectors["sparsity"])
             if args.masks_sparsity:
                 msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
+        accumulated_training_steps += math.ceil(
+            len(train_loader.sampler) / train_loader.batch_size)
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
@@ -321,7 +325,7 @@ def main():
         is_best = best_epochs and (epoch == best_epochs[0].epoch)
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
                                  best_epochs[0].top1 if best_epochs else None, is_best,
-                                 args.name, msglogger.logdir)
+                                 args.name, msglogger.logdir, accumulated_training_steps)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
