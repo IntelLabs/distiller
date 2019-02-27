@@ -29,7 +29,7 @@ SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_para
 def get_parser():
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
-    parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
+    parser.add_argument('--arch', '-a', metavar='ARCH', default=None, type=lambda s: s.lower(),
                         choices=models.ALL_MODEL_NAMES,
                         help='model architecture: ' +
                         ' | '.join(models.ALL_MODEL_NAMES) +

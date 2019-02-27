@@ -147,10 +147,6 @@ def main():
         args.losses_exits = []
         args.exiterrors = []
 
-    # Create the model
-    model = create_model(args.pretrained, args.dataset, args.arch,
-                         parallel=not args.load_serialized, device_ids=args.gpus)
-    compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
     tflogger = TensorBoardLogger(msglogger.logdir)
@@ -168,14 +164,33 @@ def main():
             args.reset_optimizer = True
         args.resumed_checkpoint_path = args.deprecated_resume
 
-    # We can optionally resume from a checkpoint
+    model = None
+    model_create_params = {'parallel': not args.load_serialized, 'device_ids': args.gpus}
+    if args.deprecated_resume or not args.resumed_checkpoint_path:
+        if args.arch is None:
+            args.arch = 'resnet18'
+        model = create_model(args.pretrained, args.dataset, args.arch, **model_create_params)
+
+    compression_scheduler = None
     optimizer = None
+    accumulated_training_steps = 0
+
+    # We can optionally resume from a checkpoint
     if args.resumed_checkpoint_path:
-        model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.resumed_checkpoint_path, model_device=args.device)
+        loaded_checkpoint = apputils.load_checkpoint(
+            args.resumed_checkpoint_path, args.device, model,
+            model_create_params=model_create_params)
+        model = loaded_checkpoint['model']
+        compression_scheduler = loaded_checkpoint['compression_sched']
+        optimizer = loaded_checkpoint['optimizer']
+        start_epoch = loaded_checkpoint['start_epoch']
+        accumulated_training_steps = loaded_checkpoint.get('train_steps', accumulated_training_steps)
+        args.dataset = loaded_checkpoint.get('dataset', args.dataset)
+        args.arch = loaded_checkpoint.get('arch', args.arch)
     elif args.load_model_path:
-        model = apputils.load_lean_checkpoint(model, args.load_model_path,
-                                              model_device=args.device)
+        model = apputils.load_lean_checkpoint(
+            args.load_model_path, args.device,
+            model_create_params=model_create_params)
     if args.reset_optimizer:
         start_epoch = 0
         if optimizer is not None:
@@ -245,7 +260,8 @@ def main():
         assert args.resumed_checkpoint_path is not None, \
             "You must use --resume-from to provide a checkpoint file to thinnify"
         distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
-        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
+        apputils.save_checkpoint(model, arch=args.arch, dataset=args.dataset, epoch=0,
+                                 optimizer=None, compression_sched=compression_scheduler,
                                  name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")),
                                  dir=msglogger.logdir)
         print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
@@ -255,7 +271,7 @@ def main():
     if args.kd_teacher:
         teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
         if args.kd_resume:
-            teacher = apputils.load_lean_checkpoint(teacher, args.kd_resume)
+            teacher = apputils.load_lean_checkpoint(args.kd_resume, model=teacher)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
@@ -289,6 +305,8 @@ def main():
                                                 collector=collectors["sparsity"])
             if args.masks_sparsity:
                 msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
+        accumulated_training_steps += math.ceil(
+            len(train_loader.sampler) / train_loader.batch_size)
 
         # evaluate on validation set
         with collectors_context(activations_collectors["valid"]) as collectors:
@@ -301,6 +319,7 @@ def main():
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
+        vals_to_save = dict(**(stats[-1]))
         distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
                                         loggers=[tflogger])
 
@@ -309,12 +328,15 @@ def main():
 
         # Update the list of top scores achieved so far, and save the checkpoint
         update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
-        is_best = epoch == perf_scores_history[0].epoch
-        checkpoint_extras = {'current_top1': top1,
-                             'best_top1': perf_scores_history[0].top1,
-                             'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
-                                 extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
+        apputils.save_checkpoint(model, optimizer, compression_scheduler,
+                                 arch=args.arch, dataset=args.dataset,
+                                 is_best=(epoch == perf_scores_history[0].epoch),
+                                 name=args.name, dir=msglogger.logdir,
+                                 best_top1=perf_scores_history[0].top1,
+                                 best_epoch=perf_scores_history[0].epoch,
+                                 epoch=epoch,
+                                 train_steps=accumulated_training_steps,
+                                 **vals_to_save)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
@@ -642,13 +664,13 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
         quantizer.prepare_model()
         model.to(args.device)
 
-    top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
+    top1 = test(test_loader, model, criterion, loggers, activations_collectors, args=args)[0]
 
     if args.quantize_eval:
         checkpoint_name = 'quantized'
-        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=scheduler,
+        apputils.save_checkpoint(model, arch=args.arch, dataset=args.dataset, compression_sched=scheduler,
                                  name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
-                                 dir=msglogger.logdir, extras={'quantized_top1': top1})
+                                 dir=msglogger.logdir, quantized_top1=top1)
 
 
 def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsities):
@@ -679,7 +701,8 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
-    save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
+    save_checkpoint_fn = partial(apputils.save_checkpoint,
+        arch=args.arch, dataset=args.dataset, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
     adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 

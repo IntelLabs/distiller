@@ -814,7 +814,7 @@ class DistillerWrapperEnvironment(gym.Env):
             fname = "adc_episode_{}".format(episode)
 
         self.services.save_checkpoint_fn(epoch=0, model=self.model,
-                                         scheduler=scheduler, name=fname)
+                                         compression_sched=scheduler, name=fname)
         del scheduler
         return fname
 
@@ -909,5 +909,5 @@ def sample_networks(net_wrapper, services):
         total_macs, _ = net_wrapper.get_model_resources_requirements(model)
         fname = "{}_top1_{:2f}__density_{:2f}_sampled".format(net_wrapper.arch, top1, total_macs/dense_macs)
         services.save_checkpoint_fn(epoch=0, model=net_wrapper.model,
-                                    scheduler=scheduler, name=fname)
+                                    compression_sched=scheduler, name=fname)
         del scheduler

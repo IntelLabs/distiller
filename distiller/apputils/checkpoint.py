@@ -20,6 +20,7 @@ Adding the schedule information in the model checkpoint is helpful in resuming
 a pruning session, or for querying the pruning schedule of a sparse model.
 """
 
+import contextlib
 import os
 import shutil
 from errno import ENOENT
@@ -28,64 +29,71 @@ from numbers import Number
 from tabulate import tabulate
 import torch
 import distiller
-from distiller.utils import normalize_module_name
+from distiller.utils import normalize_module_name, getModuleFromModel, inferDatasetNameFromModel
+
 msglogger = logging.getLogger()
 
 
-def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    extras=None, is_best=False, name=None, dir='.'):
+def save_checkpoint(model, optimizer=None, compression_sched=None,
+                    arch=None, dataset=None, is_best=False,
+                    name=None, dir='.', file_ext='pth.tar',
+                    **extras):
     """Save a pytorch training checkpoint
 
     Args:
-        epoch: current epoch number
-        arch: name of the network architecture/topology
         model: a pytorch model
         optimizer: the optimizer used in the training session
-        scheduler: the CompressionScheduler instance used for training, if any
-        extras: optional dict with additional user-defined data to be saved in the checkpoint.
+        compression_sched: the CompressionScheduler instance used for training, if any
+        arch [str]: name of the network architecture/topology. e.g. 'resnet18'
+        dataset [str]: dataset. e.g. 'imagenet'
+        is_best [bool]: If true, will save a copy of the checkpoint with the suffix 'best'
+        name [str]: the name of the checkpoint file
+        dir [str]: directory in which to save the checkpoint
+        file_ext [str]: file extension, defaults to 'pth.tar'
+        extras: optional values with additional user-defined data to be saved in the checkpoint.
             Will be saved under the key 'extras'
-        is_best: If true, will save a copy of the checkpoint with the suffix 'best'
-        name: the name of the checkpoint file
-        dir: directory in which to save the checkpoint
     """
     if not os.path.isdir(dir):
         raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
 
-    if extras is None:
-        extras = {}
-    if not isinstance(extras, dict):
-        raise TypeError('extras must be either a dict or None')
+    # the current method to extract the arch argument from model isn't perfected yet
+    # thus, arch is mandatory argument for some topologies
+    if arch is None:
+        model_arch_list = type(getModuleFromModel(model)).__name__.lower().split()
+        if model_arch_list[-1] not in distiller.models.ALL_MODEL_NAMES:
+            raise NotImplementedError(
+                'Implicit arch is not supported for this model. Please specify arch=ARCH')
 
-    filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
-    fullpath = os.path.join(dir, filename)
-    msglogger.info("Saving checkpoint to: %s" % fullpath)
-    filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
-    fullpath_best = os.path.join(dir, filename_best)
-
-    checkpoint = {}
-    checkpoint['epoch'] = epoch
-    checkpoint['arch'] = arch
+    checkpoint = {'extras': extras}
+    checkpoint['arch'] = arch or type(getModuleFromModel(model))
+    checkpoint['dataset'] = dataset or inferDatasetNameFromModel(model)
     checkpoint['state_dict'] = model.state_dict()
     if optimizer is not None:
         checkpoint['optimizer_state_dict'] = optimizer.state_dict()
         checkpoint['optimizer_type'] = type(optimizer)
-    if scheduler is not None:
-        checkpoint['compression_sched'] = scheduler.state_dict()
+    if compression_sched is not None:
+        checkpoint['compression_sched'] = compression_sched.state_dict()
     if hasattr(model, 'thinning_recipes'):
         checkpoint['thinning_recipes'] = model.thinning_recipes
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    checkpoint['extras'] = extras
-
-    torch.save(checkpoint, fullpath)
+    checkpoint_names = ['checkpoint']
     if is_best:
-        shutil.copyfile(fullpath, fullpath_best)
+        checkpoint_names.append('best')
+    for s in checkpoint_names:
+        # construct full path
+        filename = s if name is None else '_'.join((name, s))
+        filename = '.'.join((filename, file_ext))
+        fullpath = os.path.join(dir, filename)
 
+        torch.save(checkpoint, fullpath)
+        msglogger.info("Saving checkpoint to: %s" % fullpath)
 
-def load_lean_checkpoint(model, chkpt_file, model_device=None):
-    return load_checkpoint(model, chkpt_file, model_device=model_device,
-                           lean_checkpoint=True)[0]
+def load_lean_checkpoint(chkpt_path, model_device=None, model=None,
+                         model_create_params=None):
+    return load_checkpoint(chkpt_path, model_device, model,
+        model_create_params, lean_checkpoint=True)['model']
 
 
 def get_contents_table(d):
@@ -101,23 +109,24 @@ def get_contents_table(d):
     return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
+def load_checkpoint(chkpt_path, model_device=None, model=None,
+        model_create_params=None, *, lean_checkpoint=False):
     """Load a pytorch training checkpoint.
 
     Args:
-        model: the pytorch model to which we will load the parameters
-        chkpt_file: the checkpoint file
-        lean_checkpoint: if set, read into model only 'state_dict' field
-        optimizer: [deprecated argument]
+        chkpt_path: path to checkpoint file
         model_device [str]: if set, call model.to($model_device)
                 This should be set to either 'cpu' or 'cuda'.
-    :returns: updated model, compression_scheduler, optimizer, start_epoch
+        model: the pytorch model to which we will load the parameters
+        model_create_params [dict] - parameters to pass to create_model()
+        lean_checkpoint: if set, read into model only 'state_dict' field
+    :returns: dict(updated model, compression_scheduler, optimizer, start_epoch, ...)
     """
-    if not os.path.isfile(chkpt_file):
-        raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
+    if not os.path.isfile(chkpt_path):
+        raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_path)
 
-    msglogger.info("=> loading checkpoint %s", chkpt_file)
-    checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
+    msglogger.info("=> loading checkpoint %s", chkpt_path)
+    checkpoint = torch.load(chkpt_path, map_location=lambda storage, loc: storage)
 
     msglogger.info('=> Checkpoint contents:\n{}\n'.format(get_contents_table(checkpoint)))
     if 'extras' in checkpoint:
@@ -126,8 +135,15 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
     if 'state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
 
-    checkpoint_epoch = checkpoint.get('epoch', None)
-    start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
+    model_created_during_load = model is None
+    if model_created_during_load:
+        if 'arch' not in checkpoint:
+            raise ValueError('Failed to recreate model from checkpoint.')
+        model_arch_name = checkpoint['arch'].split('.')[-1]
+        model_dataset = checkpoint.get('dataset',
+            'cifar10' if 'cifar' in model_arch_name else 'imagenet')
+        model = distiller.models.create_model(False, model_dataset, model_arch_name,
+                                              **(model_create_params or dict()))
 
     compression_scheduler = None
     normalize_dataparallel_keys = False
@@ -140,8 +156,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
             # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
             normalize_dataparallel_keys = True
             compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
-        msglogger.info("Loaded compression schedule from checkpoint (epoch {})".format(
-            checkpoint_epoch))
+        msglogger.info("Loaded compression schedule from checkpoint")
     else:
         msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
 
@@ -170,8 +185,12 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         model.to(model_device)
 
     if lean_checkpoint:
-        msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
-        return (model, None, None, 0)
+        msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_path)))
+        return {'model': model}
+
+    checkpoint_epoch = -1
+    with contextlib.suppress(KeyError):
+        checkpoint_epoch = checkpoint['extras']['epoch']
 
     def _load_optimizer(cls, src_state_dict, model):
         """Initiate optimizer with model parameters and load src_state_dict"""
@@ -199,6 +218,20 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
     else:
         msglogger.warning('Optimizer could not be loaded from checkpoint.')
 
-    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
+    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_path),
                                                                    e=checkpoint_epoch))
-    return (model, compression_scheduler, optimizer, start_epoch)
+
+    # extract additional optional fields
+    res = checkpoint.get('extras', dict())
+    excluded_keys = ['state_dict', 'optimizer_state_dict', 'optimizer_type',
+                     'compression_sched', 'thinning_recipes', 'quantizer_metadata',
+                     'epoch']
+    res.update({k:v for k,v in checkpoint.items() if k not in excluded_keys})
+    res.update({
+        'model': model,
+        'compression_sched': compression_scheduler,
+        'optimizer': optimizer,
+        'start_epoch': checkpoint_epoch+1,
+    })
+
+    return res
