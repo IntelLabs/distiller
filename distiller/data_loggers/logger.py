@@ -50,7 +50,7 @@ class DataLogger(object):
     def __init__(self):
         pass
 
-    def log_training_progress(self, model, epoch, i, set_size, batch_time, data_time, classerr, losses, print_freq, collectors):
+    def log_training_progress(self, model, epoch, current_train_step, *args, **kwargs):
         raise NotImplementedError
 
     def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
@@ -59,8 +59,8 @@ class DataLogger(object):
     def log_weights_sparsity(self, model, epoch):
         raise NotImplementedError
 
-    def log_weights_distribution(self, named_params, steps_completed):
-        pass
+    def log_weights_distribution(self, named_params, current_train_step):
+        raise NotImplementedError
 
 
 class PythonLogger(DataLogger):
@@ -68,12 +68,15 @@ class PythonLogger(DataLogger):
         super(PythonLogger, self).__init__()
         self.pylogger = logger
 
-    def log_training_progress(self, stats_dict, epoch, completed, total, freq):
+    def log_training_progress(self, stats_dict, epoch,
+            absolute_train_step, train_step_in_epoch, train_steps_per_epoch,
+            **kwargs):
         stats_dict = stats_dict[1]
         if epoch > -1:
-            log = 'Epoch: [{}][{:5d}/{:5d}]    '.format(epoch, completed, int(total))
+            log = 'Epoch: [{}][{:5d}/{:5d}]    '.format(epoch, train_step_in_epoch,
+                                                        train_steps_per_epoch)
         else:
-            log = 'Test: [{:5d}/{:5d}]    '.format(completed, int(total))
+            log = 'Test: [{:5d}/{:5d}]    '.format(train_step_in_epoch, train_steps_per_epoch)
         for name, val in stats_dict.items():
             if isinstance(val, int):
                 log = log + '{name} {val}    '.format(name=name, val=distiller.pretty_int(val))
@@ -93,6 +96,9 @@ class PythonLogger(DataLogger):
         msglogger.info("\nParameters:\n" + str(t))
         msglogger.info('Total sparsity: {:0.2f}\n'.format(total))
 
+    def log_weights_distribution(*args, **kwargs):
+        pass
+
 
 class TensorBoardLogger(DataLogger):
     def __init__(self, logdir):
@@ -107,15 +113,15 @@ class TensorBoardLogger(DataLogger):
         self.log_gradients = False      # True
         self.logged_params = ['weight'] # ['weight', 'bias']
 
-    def log_training_progress(self, stats_dict, epoch, completed, total, freq):
-        def total_steps(total, epoch, completed):
-            return total*epoch + completed
-
+    def log_training_progress(self, stats_dict, epoch,
+            absolute_train_step, *args, **kwargs):
         prefix = stats_dict[0]
         stats_dict = stats_dict[1]
+        if absolute_train_step is None:
+            absolute_train_step = epoch
 
         for tag, value in stats_dict.items():
-            self.tblogger.scalar_summary(prefix+tag, value, total_steps(total, epoch, completed))
+            self.tblogger.scalar_summary(prefix+tag, value, absolute_train_step)
         self.tblogger.sync_to_file()
 
     def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
@@ -138,7 +144,8 @@ class TensorBoardLogger(DataLogger):
                 self.tblogger.scalar_summary('sparsity-2D/weights/' + name,
                                              sparsity_2D(param)*100, epoch)
 
-        self.tblogger.scalar_summary("sparsity/weights/total", 100*(1 - sparse_params_size/params_size), epoch)
+        self.tblogger.scalar_summary("sparsity/weights/total",
+            100*(1 - sparse_params_size/params_size), epoch)
         self.tblogger.sync_to_file()
 
     def log_weights_filter_magnitude(self, model, epoch, multi_graphs=False):
@@ -150,15 +157,15 @@ class TensorBoardLogger(DataLogger):
                                            list(to_np(norm_filters(param))), epoch, multi_graphs)
         self.tblogger.sync_to_file()
 
-    def log_weights_distribution(self, named_params, steps_completed):
+    def log_weights_distribution(self, named_params, current_train_step):
         if named_params is None:
             return
         for tag, value in named_params:
             tag = tag.replace('.', '/')
             if any(substring in tag for substring in self.logged_params):
-                self.tblogger.histogram_summary(tag, to_np(value), steps_completed)
+                self.tblogger.histogram_summary(tag, to_np(value), current_train_step)
             if self.log_gradients:
-                self.tblogger.histogram_summary(tag+'/grad', to_np(value.grad), steps_completed)
+                self.tblogger.histogram_summary(tag+'/grad', to_np(value.grad), current_train_step)
         self.tblogger.sync_to_file()
 
 

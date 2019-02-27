@@ -452,7 +452,9 @@ def activation_channels_apoz(activation):
     return 100 - featuremap_apoz_mat.mean(dim=0).mul(100).cpu()
 
 
-def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total_steps, log_freq, loggers):
+def log_training_and_weights_dist(stats_dict, params_dict,
+        epoch, steps_completed, step_in_current_epoch, *loggers,
+        train_steps_per_epoch=None, log_period=1):
     """Log information about the training progress, and the distribution of the weight tensors.
 
     Args:
@@ -465,19 +467,16 @@ def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total
                                     ('Top5', top5)]))
         params_dict: A parameter dictionary, such as the one returned by model.named_parameters()
         epoch: The current epoch
-        steps_completed: The current step in the epoch
-        total_steps: The total number of training steps taken so far
-        log_freq: The number of steps between logging records
-        loggers: A list of loggers to send the log info to
+        steps_completed: training steps since the begining of time
+        step_in_current_epoch: training steps in current epoch
+        loggers [logger.DataLogger iterable]: logger(s) to send the log info to
+        train_steps_per_epoch: number of mini-batches in current epoch (used by Pylogger exclusively)
+        log_period: The number of steps between logging records
     """
-    if loggers is None:
-        return
-    if not isinstance(loggers, list):
-        loggers = [loggers]
     for logger in loggers:
-        logger.log_training_progress(stats_dict, epoch,
-                                     steps_completed,
-                                     total_steps, freq=log_freq)
+        logger.log_training_progress(
+            stats_dict, epoch, steps_completed, step_in_current_epoch,
+            train_steps_per_epoch=train_steps_per_epoch)
         logger.log_weights_distribution(params_dict, steps_completed)
 
 
