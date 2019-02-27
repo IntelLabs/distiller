@@ -257,7 +257,7 @@ def train(epoch, optimizer, compression_scheduler=None):
                 elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
-            stats = ('Peformance/Training/',
+            stats = ('Performance/Training/',
                 OrderedDict([
                     ('Loss', cur_loss),
                     ('Perplexity', math.exp(cur_loss)),
@@ -338,7 +338,7 @@ try:
 
         distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
             OrderedDict([
                 ('Loss', val_loss),
                 ('Perplexity', math.exp(val_loss))]))
