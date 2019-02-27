@@ -96,8 +96,12 @@ class DummyQuantizer(Quantizer):
                  bits_activations=None, bits_weights=None, bits_bias=None,
                  overrides=None,
                  train_with_fp_copy=False):
-        super(DummyQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_bias, overrides,
-                                             train_with_fp_copy)
+        super(DummyQuantizer, self).__init__(model, optimizer,
+                                             bits_activations=bits_activations,
+                                             bits_weights=bits_weights,
+                                             bits_bias=bits_bias,
+                                             overrides=overrides,
+                                             train_with_fp_copy=train_with_fp_copy)
 
         self.replacement_factory[nn.Conv2d] = lambda module, name, qbits_map: DummyWrapperLayer(module, qbits_map[name])
         self.replacement_factory[nn.ReLU] = lambda module, name, qbits_map: DummyQuantLayer(qbits_map[name])

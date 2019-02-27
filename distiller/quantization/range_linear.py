@@ -587,11 +587,13 @@ class PostTrainLinearQuantizer(Quantizer):
         model_activation_stats (str / dict / OrderedDict): Either a path to activation stats YAML file, or a dictionary
             containing the stats. If None then stats will be calculated dynamically.
     """
-    def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32, bits_overrides=None,
+    def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
+                 overrides=None, bits_overrides=None,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None, per_channel_wts=False,
                  model_activation_stats=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
-                                                       bits_weights=bits_parameters, bits_overrides=bits_overrides,
+                                                       bits_weights=bits_parameters, bits_bias=bits_accum,
+                                                       overrides=overrides, bits_overrides=bits_overrides,
                                                        train_with_fp_copy=False)
 
         mode = verify_mode(mode)
@@ -652,8 +654,15 @@ class PostTrainLinearQuantizer(Quantizer):
             return distiller.config_component_from_file_by_class(model, args.qe_config_file,
                                                                  'PostTrainLinearQuantizer')
         else:
-            return cls(model, args.qe_bits_acts, args.qe_bits_wts, args.qe_bits_accum, None, args.qe_mode,
-                       args.qe_clip_acts, args.qe_no_clip_layers, args.qe_per_channel, args.qe_stats_file)
+            return cls(model,
+                       bits_activations=args.qe_bits_acts,
+                       bits_parameters=args.qe_bits_wts,
+                       bits_accum=args.qe_bits_accum,
+                       mode=args.qe_mode,
+                       clip_acts=args.qe_clip_acts,
+                       no_clip_layers=args.qe_no_clip_layers,
+                       per_channel_wts=args.qe_per_channel,
+                       model_activation_stats=args.qe_stats_file)
 
 
 ###############################################################################
@@ -753,14 +762,16 @@ class FakeQuantizationWrapper(nn.Module):
 
 
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
-    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_overrides=None,
-                 quantize_bias=True, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
+    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
+                 overrides=None, bits_overrides=None,
+                 mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
                  quantize_inputs=True, num_bits_inputs=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
+                                                                  bits_bias=bits_bias,
                                                                   bits_overrides=bits_overrides,
-                                                                  quantize_bias=quantize_bias,
+                                                                  overrides=overrides,
                                                                   train_with_fp_copy=True)
 
         if isinstance(model, nn.DataParallel) and len(model.device_ids) > 1:

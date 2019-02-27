@@ -21,6 +21,7 @@ import logging
 import torch
 import torch.nn as nn
 import distiller
+import warnings
 
 msglogger = logging.getLogger()
 
@@ -93,18 +94,25 @@ class Quantizer(object):
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
-                 overrides=None,
+                 overrides=None, bits_overrides=None,
                  train_with_fp_copy=False):
         if overrides is None:
             overrides = OrderedDict()
         if not isinstance(overrides, OrderedDict):
             raise TypeError('overrides must be an instance of collections.OrderedDict or None')
 
+        if bits_overrides is not None:
+            warnmsg = """'bits_overrides' argument is deprecated! 
+            Use the 'overrides' OrderedDict with a 'bits' item in it instead."""
+            warnings.warn(warnmsg, DeprecationWarning)
+            if not isinstance(bits_overrides,OrderedDict):
+                raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
+
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
-        bits_overrides = overrides.get('bits', OrderedDict())
+        bits_overrides = bits_overrides or overrides.get('bits', OrderedDict())
 
         self.model = model
         self.optimizer = optimizer
@@ -184,11 +192,8 @@ class Quantizer(object):
             curr_parameters = dict(module.named_parameters())
             for param_name, param in curr_parameters.items():
                 # Bias is usually quantized according to the accumulator's number of bits
-                # Temporary hack: Assume that number is 32 bits and hard-code it here
-                # TODO: Handle # of bits for bias quantization as "first-class" citizen, similarly to weights
-                n_bits = qbits.wts
-                if param_name.endswith('bias'):
-                    n_bits = qbits.bias
+                # Handle # of bits for bias quantization as "first-class" citizen, similarly to weights
+                n_bits = qbits.bias if param_name.endswith('bias') else qbits.wts
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
                     hack_float_backup_parameter(module, param_name, n_bits)
