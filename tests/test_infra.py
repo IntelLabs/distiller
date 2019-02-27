@@ -49,7 +49,7 @@ def test_load():
     src_optimizer = torch.load(checkpoint_filename)['optimizer']
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
-    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+    model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
         model, checkpoint_filename,
         torch.optim.SGD(model.parameters(), lr=0.36787944117))
     assert compression_scheduler is not None
@@ -57,6 +57,7 @@ def test_load():
     if not _is_similar_param_groups(src_optimizer, optimizer.state_dict()):
         assert src_optimizer == optimizer.state_dict() # this will always fail
     assert start_epoch == 180
+    assert train_steps == None # the field isn't present in current checkpoint
 
 
 def test_load_state_dict_implicit():
@@ -66,7 +67,8 @@ def test_load_state_dict_implicit():
     with tempfile.NamedTemporaryFile() as tmpfile:
         torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
         model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model, tmpfile.name)
+        model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
+            model, tmpfile.name)
 
     assert len(list(model.named_modules())) >= len([x for x in state_dict_arrays if x.endswith('weight')]) > 0
     assert compression_scheduler is None
@@ -81,7 +83,7 @@ def test_load_lean_checkpoint_1():
     with tempfile.NamedTemporaryFile() as tmpfile:
         torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
         model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+        model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
             model, tmpfile.name, torch.optim.SGD(model.parameters(), lr=0.36787944117),
             lean_checkpoint=True)
 
@@ -94,7 +96,7 @@ def test_load_lean_checkpoint_2():
     checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
-    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+    model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
         model, checkpoint_filename,
         torch.optim.SGD(model.parameters(), lr=0.36787944117),
         lean_checkpoint=True)
@@ -112,13 +114,13 @@ def test_load_dumb_checkpoint():
         torch.save(state_dict_arrays, tmpfile.name)
         model = create_model(False, 'cifar10', 'resnet20_cifar')
         with pytest.raises(ValueError):
-            model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model, tmpfile.name)
+            model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(model, tmpfile.name)
 
 
 def test_load_negative():
     with pytest.raises(FileNotFoundError):
         model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model,
+        model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(model,
             'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
 
 
@@ -128,7 +130,7 @@ def test_load_gpu_model_on_cpu():
     checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
-    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+    model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
         model, checkpoint_filename)
 
     assert compression_scheduler is not None
@@ -142,7 +144,7 @@ def test_load_gpu_model_on_cpu_lean_checkpoint():
     checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
-    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
+    model, compression_scheduler, optimizer, start_epoch, train_steps = load_checkpoint(
         model, checkpoint_filename, lean_checkpoint=True)
 
     assert compression_scheduler is None
