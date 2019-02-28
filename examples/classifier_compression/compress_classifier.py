@@ -257,18 +257,6 @@ def main():
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
-
-
-
-            # if epoch > 15:
-            #     for name, module in model.named_modules():
-            #         if (isinstance(module, nn.Conv2d)):
-            #             module.p_mask = max(0.6, module.p_mask-0.005)
-            #             #module.p_mask = max(0.5, module.p_mask-0.02)
-            #             msglogger.info("setting filter drop probability to %.2f", module.p_mask)
-
-
-
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
