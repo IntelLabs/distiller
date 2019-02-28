@@ -1,18 +1,21 @@
 quantizers:
   linear_quantizer:
     class: QuantAwareTrainRangeLinearQuantizer
-    bits_activations: 8
+    bits_activations: 4
     bits_weights: 4
     num_bits_inputs: 8
-    act_sat_mode: 'AVERAGE'
-    wts_sat_mode: 'GAUSS'
+    act_sat_mode: 'LAPLACE'
+#    wts_sat_mode: 'GAUSS'
     mode: 'ASYMMETRIC_UNSIGNED'  # Can try "SYMMETRIC" as well
     ema_decay: 0.999   # Decay value for exponential moving average tracking of activation ranges
     per_channel_wts: True
+    clip_acts: True
     bits_overrides:
       conv1:
         acts: null
         wts: 8
+      relu:
+        acts: 8
       bn1:
         acts: null
       .*\.bn1:
