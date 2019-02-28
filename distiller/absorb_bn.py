@@ -31,11 +31,11 @@ def is_absorbing(m):
     return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(m, nn.Linear)
 
 
-def search_absorbe_bn(model):
+def search_absorb_bn(model):
     prev = None
     for m in model.children():
         if is_bn(m) and is_absorbing(prev):
             m.absorbed = True
             absorb_bn(prev, m)
-        search_absorbe_bn(m)
+        search_absorb_bn(m)
         prev = m

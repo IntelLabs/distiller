@@ -30,6 +30,7 @@ import distiller.modules
 
 msglogger = logging.getLogger()
 
+BN_FOLDING = False
 
 class LinearQuantMode(Enum):
     SYMMETRIC = 1
@@ -691,6 +692,9 @@ class PostTrainLinearQuantizer(Quantizer):
             return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
                                 activation_stats=self.model_activation_stats.get(norm_name, None))
 
+        def dummy_bn_layer(module, name, qbits_map):
+            return DummyMudule(ste_bprop=False)
+
         self.clip_acts = clip_acts
         self.no_clip_layers = [] or no_clip_layers
         self.model_activation_stats = model_activation_stats or {}
@@ -700,6 +704,8 @@ class PostTrainLinearQuantizer(Quantizer):
         self.wts_sat_mode = verify_sat_mode(wts_sat_mode) if wts_sat_mode is not None else None
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
+        if BN_FOLDING:
+            self.replacement_factory[nn.BatchNorm2d] = dummy_bn_layer
         # self.replacement_factory[distiller.modules.Concat] = partial(
         #     replace_non_param_layer, RangeLinearQuantConcatWrapper)
         # self.replacement_factory[distiller.modules.EltwiseAdd] = partial(
@@ -845,13 +851,15 @@ class FakeSTE(torch.autograd.Function):
         return grad_output, None, None, None, None
 
 
-class FakeMudule(nn.Module):
-    def __init__(self):
-        super(FakeMudule, self).__init__()
+class DummyMudule(nn.Module):
+    def __init__(self, ste_bprop=True):
+        super(DummyMudule, self).__init__()
+        self.ste_bprop = ste_bprop
         pass
 
     def forward(self, input):
-        input = FakeSTE.apply(input)
+        if self.ste_bprop:
+            input = FakeSTE.apply(input)
         return input
 
     def __repr__(self):
@@ -919,7 +927,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
         def bn_replace_fn(module, name, qbits_map):
             if hasattr(module, 'absorbed') and module.absorbed:
-                return FakeMudule()
+                return DummyMudule()
             else:
                 bits_acts = qbits_map[name].acts
                 if bits_acts is None or bits_acts >= 32:

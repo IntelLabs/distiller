@@ -37,13 +37,14 @@
 quantizers:
   post_train_quantizer:
     class: PostTrainLinearQuantizer
-    bits_activations: 16
-#    num_bits_inputs: 8
+    bits_activations: 4
+    num_bits_inputs: 8
     bits_parameters: 4
     bits_accum: 32
     mode: ASYMMETRIC_UNSIGNED
     # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
-    model_activation_stats: logs/res18_W4A8/quantization_stats.yaml
+#    act_sat_mode: 'LAPLACE'
+    model_activation_stats: logs/res18_W4A4_Alaplace/quantization_stats_fixed.yaml
 #    model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True
     clip_acts: False
@@ -52,10 +53,10 @@ quantizers:
     # First and last layers + element-wise add layers in 8-bits
       conv1:
         wts: 8
-#        acts: 8
+        acts: 8
 #      .*add:
 #        wts: 8
 #        acts: 8
       fc:
         wts: 8
-#        acts: 8
+        acts: 8
