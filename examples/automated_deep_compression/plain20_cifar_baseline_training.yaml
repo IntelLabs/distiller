@@ -149,13 +149,13 @@
 
 lr_schedulers:
   training_lr:
-    class: StepLR
-    step_size: 45
-    gamma: 0.10
+    class: MultiStepLR
+    milestones: [60, 120, 160]
+    gamma: 0.20
 
 policies:
     - lr_scheduler:
         instance_name: training_lr
-      starting_epoch: 45
+      starting_epoch: 0
       ending_epoch: 200
       frequency: 1
