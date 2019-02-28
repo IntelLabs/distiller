@@ -257,6 +257,18 @@ def main():
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
+
+
+
+            # if epoch > 15:
+            #     for name, module in model.named_modules():
+            #         if (isinstance(module, nn.Conv2d)):
+            #             module.p_mask = max(0.6, module.p_mask-0.005)
+            #             #module.p_mask = max(0.5, module.p_mask-0.02)
+            #             msglogger.info("setting filter drop probability to %.2f", module.p_mask)
+
+
+
             train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
                   loggers=[tflogger, pylogger], args=args)
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
@@ -327,8 +339,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     # Switch to train mode
     model.train()
+    acc_stats = []
     end = time.time()
-
     for train_step, (inputs, target) in enumerate(train_loader):
         # Measure data loading time
         data_time.add(time.time() - end)
@@ -345,12 +357,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         if not args.earlyexit_lossweights:
             loss = criterion(output, target)
-            # Measure accuracy and record loss
+            # Measure accuracy
             classerr.add(output.data, target)
+            acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
-
+        # Record loss
         losses[OBJECTIVE_LOSS_KEY].add(loss.item())
 
         if compression_scheduler:
@@ -406,6 +419,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
         end = time.time()
+    return acc_stats
 
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):

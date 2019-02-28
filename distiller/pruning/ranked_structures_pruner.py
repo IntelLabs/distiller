@@ -199,6 +199,9 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
                        param_name,
                        distiller.sparsity(mask),
                        fraction_to_prune)
+
+        # Compensate for dropping filters
+        #param.data /= float(distiller.sparsity(mask))
         return binary_map
 
     @staticmethod
