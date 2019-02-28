@@ -746,7 +746,7 @@ def inputs_quantize_wrapped_forward(self, input):
 
 class FakeLinearQuantization(nn.Module):
     def __init__(self, num_bits=8, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, dequantize=True,
-                 inplace=False, half_range=False, act_sat_mode=None):
+                 inplace=False, half_range=False, act_sat_mode=None, do_decay=True):
         super(FakeLinearQuantization, self).__init__()
 
         self.num_bits = num_bits
@@ -755,6 +755,7 @@ class FakeLinearQuantization(nn.Module):
         self.inplace = inplace
         self.half_range = half_range
         self.act_sat_mode = act_sat_mode
+        self.do_decay = do_decay
 
         # We track activations ranges with exponential moving average, as proposed by Jacob et al., 2017
         # https://arxiv.org/abs/1712.05877
@@ -793,12 +794,16 @@ class FakeLinearQuantization(nn.Module):
                     current_min, current_max = clipper(input)
 
             self.iter_count += 1
-            self.tracked_min_biased.data, self.tracked_min.data = update_ema(self.tracked_min_biased.data,
-                                                                             current_min, self.ema_decay,
-                                                                             self.iter_count)
-            self.tracked_max_biased.data, self.tracked_max.data = update_ema(self.tracked_max_biased.data,
-                                                                             current_max, self.ema_decay,
-                                                                             self.iter_count)
+            if self.do_decay:
+                self.tracked_min_biased.data, self.tracked_min.data = update_ema(self.tracked_min_biased.data,
+                                                                                 current_min, self.ema_decay,
+                                                                                 self.iter_count)
+                self.tracked_max_biased.data, self.tracked_max.data = update_ema(self.tracked_max_biased.data,
+                                                                                 current_max, self.ema_decay,
+                                                                                 self.iter_count)
+            else:
+                self.tracked_min.data = current_min
+                self.tracked_max.data = current_max
 
         if self.mode == LinearQuantMode.SYMMETRIC:
             max_abs = max(abs(self.tracked_min), abs(self.tracked_max))
@@ -957,8 +962,9 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             else:
                 m = self.model
 
+            # do not decay on the input
             m.inputs_quant = FakeLinearQuantization(self.num_bits_inputs, self.mode, self.decay,
-                                                    dequantize=True, inplace=False)
+                                                    dequantize=True, inplace=False, do_decay=False)
             m.__class__.original_forward = m.__class__.forward
             m.__class__.forward = inputs_quantize_wrapped_forward
 
