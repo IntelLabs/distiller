@@ -915,7 +915,9 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                                                       per_channel=perch)
             setattr(m, param_meta.q_attr_name + '_scale', scale)
             setattr(m, param_meta.q_attr_name + '_zero_point', zero_point)
-            out = LinearQuantizeSTE.apply(param_fp, scale, zero_point, True, False)
+            clamp_min = -2**(param_meta.num_bits-1) if mode == LinearQuantMode.SYMMETRIC else 0
+            clamp_max = 2**(param_meta.num_bits-1) - 1 if mode == LinearQuantMode.SYMMETRIC else 2**param_meta.num_bits - 1
+            out = LinearQuantizeSTE.apply(param_fp, scale, zero_point, True, False, clamp_min, clamp_max)
             return out
 
         def activation_replace_fn(module, name, qbits_map):

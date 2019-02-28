@@ -221,10 +221,13 @@ def get_quantized_range(num_bits, signed=True):
 
 class LinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, scale, zero_point, dequantize, inplace):
+    def forward(ctx, input, scale, zero_point, dequantize, inplace, clamp_minq=None, clamp_maxq=None):
         if inplace:
             ctx.mark_dirty(input)
-        output = linear_quantize(input, scale, zero_point, inplace)
+        if clamp_minq is not None and clamp_maxq is not None:
+            output = linear_quantize_clamp(input, scale, zero_point, clamp_minq, clamp_maxq, inplace)
+        else:
+            output = linear_quantize(input, scale, zero_point, inplace)
         if dequantize:
             output = linear_dequantize(output, scale, zero_point, inplace)
         return output
@@ -232,4 +235,4 @@ class LinearQuantizeSTE(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         # Straight-through estimator
-        return grad_output, None, None, None, None
+        return grad_output, None, None, None, None, None, None
