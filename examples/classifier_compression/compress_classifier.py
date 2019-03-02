@@ -293,9 +293,17 @@ def main():
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
-            train(train_loader, model, criterion, optimizer, epoch,
-                  accumulated_training_steps, compression_scheduler,
-                  loggers=[tflogger, pylogger], args=args)
+            try:
+                train(train_loader, model, criterion, optimizer, epoch,
+                      accumulated_training_steps, compression_scheduler,
+                      loggers=[tflogger, pylogger], args=args)
+            except RuntimeError as e:
+                if ('cuda out of memory' in str(e).lower()):
+                    msglogger.error('CUDA memory failure has been detected.\n'
+                        'Sometimes it helps to decrease batch size.\n'
+                        'e.g. Add the following flag to your call: --batch-size={}'.format(
+                            args.batch_size//10))
+                raise
             distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
                                                 collector=collectors["sparsity"])
