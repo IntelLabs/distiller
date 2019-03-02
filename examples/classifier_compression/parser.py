@@ -102,8 +102,7 @@ def get_parser():
                         'Flag set => overrides the --gpus flag')
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-    parser.add_argument('--validation-split', '--valid-size', '--vs', dest='validation_split',
-                        type=float_range(exc_max=True), default=0.1,
+    parser.add_argument('--validation-split', '--vs', type=float_range(exc_max=True), default=0, metavar='FRACTION',
                         help='Portion of training dataset to set aside for validation')
     parser.add_argument('--effective-train-size', '--etrs', type=float_range(exc_min=True), default=1.,
                         help='Portion of training dataset to be used in each epoch. '
@@ -138,6 +137,11 @@ def get_parser():
         else:
             msglogger.warning('Some arguments have been deprecated and ignored.')
 
+    parser.add_argument('--valid-size', '--validation-size',
+                        type=functools.partial(deprecation_warning,
+                            old_keys=['--valid-size', '--validation-size'],
+                            new_keys=['--validation-split', '--vs']),
+                        help=argparse.SUPPRESS)
     parser.add_argument('--print-freq', '-p',
                         type=functools.partial(deprecation_warning,
                             old_keys=['--print-freq', '-p'],

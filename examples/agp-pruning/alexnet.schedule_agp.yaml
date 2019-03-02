@@ -1,6 +1,6 @@
 # This schedule performs element-wise (fine grain) pruning, following the Automated Gradual Pruner (Zhu-Gupta) schedule.
 #
-# time python3 compress_classifier.py -a=alexnet --lr=0.005 --print-period=50 ../../../data.imagenet -j 22 --epochs 90 --pretrained --compress=../agp-pruning/alexnet.schedule_agp.yaml
+# time python3 compress_classifier.py -a=alexnet --lr=0.005 --print-period=50 ../../../data.imagenet -j 22 --epochs 90 --pretrained --compress=../agp-pruning/alexnet.schedule_agp.yaml --validation-split=0.1
 #
 # Parameters:
 #

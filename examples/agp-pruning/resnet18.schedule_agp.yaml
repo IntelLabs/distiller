@@ -2,7 +2,7 @@
 # 1. The Top1 result (69.872) is better than the TorchVision baseline (69.76) from which we start.
 # 2. Note the high rate of 2D sparsity in some conv 3x3 layers; and module.layer1.0.conv1.weight even removes 8 channels of 64.
 #
-# time python3 compress_classifier.py -a=resnet18 --print-period=50 ../../../data.imagenet/ -j=22   --epochs=100 --lr=0.001 --compress=../agp-pruning/resnet18.schedule_agp.yaml --pretrained
+# time python3 compress_classifier.py -a=resnet18 --print-period=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.001 --compress=../agp-pruning/resnet18.schedule_agp.yaml --pretrained --validation-split=0.1
 #
 # Parameters:
 # +----+-------------------------------------+------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+

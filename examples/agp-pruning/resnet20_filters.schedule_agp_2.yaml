@@ -14,7 +14,7 @@
 #     Total sparsity: 41.84
 #     # of parameters: 143,488 (=53% of the baseline parameters)
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 --print-period=50 --lr=0.1 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp_2.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 --print-period=50 --lr=0.1 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp_2.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar --validation-split=0.1
 #
 #
 # Parameters:
