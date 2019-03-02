@@ -119,7 +119,7 @@ def main():
         # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
         cudnn.benchmark = True
 
-    if args.cpu or not torch.cuda.is_available():
+    if args.use_cpu or (args.gpus is None and not torch.cuda.is_available()) or (args.gpus == ''):
         # Set GPU index to -1 if using CPU
         args.device = 'cpu'
         args.gpus = -1

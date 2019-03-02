@@ -96,12 +96,13 @@ def get_parser():
                         help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
-    parser.add_argument('--gpus', metavar='DEV_ID', default=None,
-                        help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
-    parser.add_argument('--cpu', action='store_true', default=False,
-                        help='Use CPU only. \n'
-                        'Flag not set => uses GPUs according to the --gpus flag value.'
-                        'Flag set => overrides the --gpus flag')
+
+    device_group = parser.add_mutually_exclusive_group()
+    device_group.add_argument('--gpus', metavar='DEV_ID', default=None,
+                        help='Comma-separated list of GPU device IDs to be used (default: use all available devices)')
+    device_group.add_argument('--use-cpu', action='store_true', default=False,
+                        help='Force use of CPU only')
+
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
     parser.add_argument('--validation-split', '--vs', type=float_range(exc_max=True), default=0, metavar='FRACTION',
