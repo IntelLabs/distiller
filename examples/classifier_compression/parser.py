@@ -15,6 +15,8 @@
 #
 
 import argparse
+import functools
+import logging
 
 import distiller
 import distiller.quantization
@@ -22,6 +24,7 @@ import examples.automated_deep_compression as adc
 from distiller.utils import float_range_argparse_checker as float_range
 import distiller.models as models
 
+msglogger = logging.getLogger()
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 
@@ -43,16 +46,16 @@ def get_parser():
 
     optimizer_args = parser.add_argument_group('optimizer_arguments')
     optimizer_args.add_argument('--lr', '--learning-rate', default=0.1,
-                    type=float, metavar='LR', help='initial learning rate')
+                        type=float, metavar='LR', help='initial learning rate')
     optimizer_args.add_argument('--momentum', default=0.9, type=float,
-                    metavar='M', help='momentum')
+                        metavar='M', help='momentum')
     optimizer_args.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+                        metavar='W', help='weight decay (default: 1e-4)')
     parser.add_argument('--reset-optimizer', '--reset-lr', action='store_true',
                         help='Flag to override optimizer if resumed from checkpoint')
 
-    parser.add_argument('--print-freq', '-p', default=10, type=int,
-                        metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('--print-period', default=10, type=int,
+                        metavar='N', help='print period (default: print every 10 batches)')
 
     load_checkpoint_group = parser.add_mutually_exclusive_group()
     load_checkpoint_group.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -118,6 +121,23 @@ def get_parser():
                         help='Load a model without DataParallel wrapping it')
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
+
+    # deprecations
+    def deprecation_warning(*args, old_keys=None, new_keys=None, **kwargs):
+        if old_keys and new_keys:
+            msglogger.warning('{okey} have been deprecated. Try {nkey} instead.'.format(
+                okey=old_keys, nkey=new_keys))
+        elif old_keys:
+            msglogger.warning('{okey} have been deprecated.'.format(okey=old_keys))
+        else:
+            msglogger.warning('Some arguments have been deprecated and ignored.')
+
+    parser.add_argument('--print-freq', '-p',
+                        type=functools.partial(deprecation_warning,
+                            old_keys=['--print-freq', '-p'],
+                            new_keys=['--print-period']),
+                        help=argparse.SUPPRESS)
+
 
     distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
     distiller.quantization.add_post_train_quant_args(parser)

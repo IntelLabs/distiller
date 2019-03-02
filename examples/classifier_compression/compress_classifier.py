@@ -413,7 +413,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         batch_time.add(time.time() - end)
         steps_completed = (train_step+1)
 
-        if steps_completed % args.print_freq == 0:
+        if steps_completed % args.print_period == 0:
             # Log some statistics
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
@@ -438,7 +438,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             distiller.log_training_and_weights_dist(
                 stats, params, epoch, current_training_step, steps_completed,
                 *loggers, train_steps_per_epoch=steps_per_epoch,
-                log_period=args.print_freq)
+                log_period=args.print_period)
         end = time.time()
     return acc_stats
 
@@ -510,7 +510,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             batch_time.add(time.time() - end)
 
             steps_completed = (validation_step+1)
-            if steps_completed % args.print_freq == 0:
+            if steps_completed % args.print_period == 0:
                 if not args.earlyexit_thresholds:
                     stats = ('',
                             OrderedDict([('Loss', losses['objective_loss'].mean),

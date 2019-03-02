@@ -7,7 +7,7 @@
 # The Linear (fully-connected) layer is pruned to 87% because we have empirical evidence that the classifier layers
 # are prune-friendly.
 #
-# time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=80 --lr=0.001 --compress=resnet50.schedule_agp.yaml
+# time python3 compress_classifier.py -a=resnet50 --pretrained --print-period=50 ../../../data.imagenet/ -j=22 --epochs=80 --lr=0.001 --compress=resnet50.schedule_agp.yaml
 #
 # Parameters:
 # +----+-------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
