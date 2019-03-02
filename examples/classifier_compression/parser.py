@@ -30,6 +30,7 @@ msglogger = logging.getLogger()
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
 DEFAULT_PRINT_FREQUENCY = 10
+DEFAULT_LOADERS_COUNT = 5
 
 
 def get_parser():
@@ -40,8 +41,9 @@ def get_parser():
                         help='model architecture: ' +
                         ' | '.join(models.ALL_MODEL_NAMES) +
                         ' (default: resnet18)')
-    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                        help='number of data loading workers (default: 4)')
+    parser.add_argument('--loaders', type=int, metavar='N',
+                        help='number of data loading workers (default: max({}, {} per GPU). 1 if deterministic is set.)'.format(
+                            DEFAULT_LOADERS_COUNT, DEFAULT_LOADERS_COUNT))
     parser.add_argument('--epochs', default=90, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -146,6 +148,11 @@ def get_parser():
                         type=functools.partial(deprecation_warning,
                             old_keys=['--print-freq', '-p'],
                             new_keys=['--print-period']),
+                        help=argparse.SUPPRESS)
+    parser.add_argument('-j', '--workers',
+                        type=functools.partial(deprecation_warning,
+                            old_keys=['-j', '--workers'],
+                            new_keys=['--loaders']),
                         help=argparse.SUPPRESS)
 
 

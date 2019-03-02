@@ -1,4 +1,4 @@
-# time python3 compress_classifier.py -a=mobilenet --print-period=50 --lr=0.001 ../../../data.imagenet/ -j=22 --resume=mobilenet_sgd_68.848.pth.tar --epochs=96 --compress=../agp-pruning//mobilenet.imagenet.schedule_agp.yaml --validation-split=0.1
+# time python3 compress_classifier.py -a=mobilenet --print-period=50 --lr=0.001 ../../../data.imagenet/ --loaders=22 --resume=mobilenet_sgd_68.848.pth.tar --epochs=96 --compress=../agp-pruning//mobilenet.imagenet.schedule_agp.yaml --validation-split=0.1
 #
 # A pretrained MobileNet (width=1) can be downloaded from: https://github.com/marvis/pytorch-mobilenet (top1: 68.848; top5: 88.740)
 #

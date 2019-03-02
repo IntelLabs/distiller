@@ -5,7 +5,7 @@
 # No. of Parameters: 17,329,344 (of 25,502,912) = 67.95% dense (32.05% sparse)
 # Total MACs: 2,753,298,432 (of 4,089,184,256) = 67.33% compute = 1.49x
 #
-# time python3 compress_classifier.py -a=resnet50 --pretrained --print-period=50 ../../../data.imagenet/ -j=22 --epochs=100 --lr=0.0005 --compress=resnet50.schedule_agp.filters_3.yaml --validation-split=0 --num-best-scores=10
+# time python3 compress_classifier.py -a=resnet50 --pretrained --print-period=50 ../../../data.imagenet/ --loaders=22 --epochs=100 --lr=0.0005 --compress=resnet50.schedule_agp.filters_3.yaml --num-best-scores=10
 #
 # Parameters:
 # +----+-------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+

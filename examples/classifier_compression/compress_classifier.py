@@ -103,11 +103,13 @@ def main():
     best_epochs = list()
 
     if args.deterministic:
+        if args.loaders is None:
+            args.loaders = 1
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
         # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
         # In Pytorch, support for deterministic execution is still a bit clunky.
-        if args.workers > 1:
-            msglogger.error('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
+        if args.loaders > 1:
+            msglogger.error('ERROR: Setting --deterministic requires setting --loaders to 0 or 1')
             exit(1)
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
@@ -137,6 +139,11 @@ def main():
                     exit(1)
             # Set default device in case the first one on the list != 0
             torch.cuda.set_device(args.gpus[0])
+
+    if args.loaders is None:
+        active_gpus = args.gpus if args.gpus is not None else torch.cuda.device_count()
+        args.loaders = max(parser.DEFAULT_LOADERS_COUNT, parser.DEFAULT_LOADERS_COUNT*active_gpus)
+    msglogger.debug('Number of data loaders set to: {}'.format(args.loaders))
 
     # Infer the dataset from the model name
     args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
@@ -221,7 +228,7 @@ def main():
     # substring "_cifar", then cifar10 is used.
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
+        args.loaders, args.validation_split, args.deterministic,
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
@@ -682,7 +689,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
+        args.loaders, args.validation_split, args.deterministic,
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     args = parser.setPrintPeriod(args, len(train_loader.sampler), args.batch_size)
@@ -700,7 +707,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 def greedy(model, criterion, optimizer, loggers, args):
     train_loader, val_loader, test_loader, _ = apputils.load_data(
         args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
+        args.loaders, args.validation_split, args.deterministic,
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
