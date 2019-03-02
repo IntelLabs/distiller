@@ -964,7 +964,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
             # do not decay on the input
             m.inputs_quant = FakeLinearQuantization(self.num_bits_inputs, self.mode, self.decay,
-                                                    dequantize=True, inplace=False, do_decay=False)
+                                                    dequantize=True, inplace=False)
             m.__class__.original_forward = m.__class__.forward
             m.__class__.forward = inputs_quantize_wrapped_forward
 
