@@ -15,8 +15,10 @@
 #
 
 import argparse
+import contextlib
 import functools
 import logging
+import math
 
 import distiller
 import distiller.quantization
@@ -27,6 +29,7 @@ import distiller.models as models
 msglogger = logging.getLogger()
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
+DEFAULT_PRINT_FREQUENCY = 10
 
 
 def get_parser():
@@ -54,8 +57,11 @@ def get_parser():
     parser.add_argument('--reset-optimizer', '--reset-lr', action='store_true',
                         help='Flag to override optimizer if resumed from checkpoint')
 
-    parser.add_argument('--print-period', default=10, type=int,
-                        metavar='N', help='print period (default: print every 10 batches)')
+    print_freq_group = parser.add_mutually_exclusive_group()
+    print_freq_group.add_argument('--print-frequency', type=int, metavar='N',
+                        help='print frequency (default: {} prints per epoch)'.format(DEFAULT_PRINT_FREQUENCY))
+    print_freq_group.add_argument('--print-period', type=int,
+                        metavar='N', help='print every N mini-batches')
 
     load_checkpoint_group = parser.add_mutually_exclusive_group()
     load_checkpoint_group.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -144,3 +150,28 @@ def get_parser():
     distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
     adc.automl_args.add_automl_args(parser)
     return parser
+
+
+def getPrintPeriod(namespace, samples_number, batch_size):
+    """Compute the appropriate print period.
+
+    If print_period is set explicitly, use it. Otherwise, use print_frequency
+    to compute the print period.
+    """
+    print_period = namespace.print_period
+    if print_period is None:
+        prints_per_epoch = (namespace.print_frequency if namespace.print_frequency
+            is not None else DEFAULT_PRINT_FREQUENCY)
+        batches = math.ceil(samples_number / batch_size)
+        with contextlib.suppress(ZeroDivisionError):
+            print_period = batches // prints_per_epoch
+
+    # enforce value of period >= 1
+    if print_period < 1:
+        if (namespace.print_period is None) and (namespace.print_frequency is None):
+            # both related arguments are unset by the user
+            print_period = 1
+        else:
+            raise ValueError('print_period argument must be greater or equal to 1')
+
+    return print_period

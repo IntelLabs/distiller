@@ -225,6 +225,9 @@ def main():
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+    args.trainset_print_period = parser.getPrintPeriod(args, len(train_loader.sampler), args.batch_size)
+    args.validset_print_period = parser.getPrintPeriod(args, len(val_loader.sampler), args.batch_size)
+    args.testset_print_period = parser.getPrintPeriod(args, len(test_loader.sampler), args.batch_size)
 
     if args.sensitivity is not None:
         sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
@@ -413,7 +416,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         batch_time.add(time.time() - end)
         steps_completed = (train_step+1)
 
-        if steps_completed % args.print_period == 0:
+        if steps_completed % args.trainset_print_period == 0:
             # Log some statistics
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
@@ -438,7 +441,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             distiller.log_training_and_weights_dist(
                 stats, params, epoch, current_training_step, steps_completed,
                 *loggers, train_steps_per_epoch=steps_per_epoch,
-                log_period=args.print_period)
+                log_period=args.trainset_print_period)
         end = time.time()
     return acc_stats
 
@@ -457,6 +460,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     if activations_collectors is None:
         activations_collectors = create_activation_stats_collectors(model, None)
     with collectors_context(activations_collectors["test"]) as collectors:
+        args.validset_print_period = args.testset_print_period
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
         save_collectors_data(collectors, msglogger.logdir)
@@ -510,7 +514,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             batch_time.add(time.time() - end)
 
             steps_completed = (validation_step+1)
-            if steps_completed % args.print_period == 0:
+            if steps_completed % args.validset_print_period == 0:
                 if not args.earlyexit_thresholds:
                     stats = ('',
                             OrderedDict([('Loss', losses['objective_loss'].mean),
@@ -681,6 +685,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
         args.workers, args.validation_split, args.deterministic,
         args.effective_train_size, args.effective_valid_size, args.effective_test_size)
 
+    args = parser.setPrintPeriod(args, len(train_loader.sampler), args.batch_size)
     args.display_confusion = True
     validate_fn = partial(test, test_loader=test_loader, criterion=criterion,
                           loggers=loggers, args=args, activations_collectors=None)
