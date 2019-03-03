@@ -21,7 +21,7 @@ import collections
 import torch
 import torch.jit as jit
 import logging
-msglogger = logging.getLogger(__name__)
+msglogger = logging.getLogger()
 
 
 def onnx_name_2_pytorch_name(name, op_type):
@@ -196,8 +196,15 @@ class SummaryGraph(object):
                 conv_in = op['inputs'][0]
                 conv_w = op['attrs']['kernel_shape']
                 ofm_vol = self.param_volume(conv_out)
-                # MACs = volume(OFM) * (#IFM * K^2)
-                op['attrs']['MACs'] = ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1]
+                try:
+                    # MACs = volume(OFM) * (#IFM * K^2)
+                    op['attrs']['MACs'] = ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1]
+                except IndexError as e:
+                    # Todo: change the method for calculating MACs
+                    msglogger.error("An input to a Convolutional layer is missing shape information "
+                                    "(MAC values will be wrong)")
+                    msglogger.error("For details see https://github.com/NervanaSystems/distiller/issues/168")
+                    op['attrs']['MACs'] = 0
             elif op['type'] == 'Gemm':
                 conv_out = op['outputs'][0]
                 conv_in = op['inputs'][0]
