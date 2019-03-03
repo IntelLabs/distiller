@@ -172,7 +172,7 @@ class AciqClipper:
     def get_alpha_gauss(self, t, across_dim=None, num_bits=8, half_range=False):
         alpha_gaus = {2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
         alpha_gaus_positive = {2: 2.15, 3: 2.55, 4: 2.93, 5: 3.28, 6: 3.61, 7: 3.92,
-                               8: -1}  # TODO: add 8 bit multiplier
+                               8: 4.1}  # TODO: add 8 bit multiplier
 
         # Mean of means across dims is equavalent to gloabal mean
         std = torch.std(t)
