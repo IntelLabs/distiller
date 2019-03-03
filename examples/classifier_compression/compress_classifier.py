@@ -69,6 +69,7 @@ import torch.utils.data
 import torchnet.meter as tnt
 import distiller
 import distiller.apputils as apputils
+import distiller.model_summaries as model_summaries
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
@@ -615,9 +616,9 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
 def summarize_model(model, dataset, which_summary):
     if which_summary.startswith('png'):
-        apputils.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
+        model_summaries.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
     elif which_summary == 'onnx':
-        apputils.export_img_classifier_to_onnx(model, 'model.onnx', dataset)
+        model_summaries.export_img_classifier_to_onnx(model, 'model.onnx', dataset)
     else:
         distiller.model_summary(model, which_summary, dataset)
 
