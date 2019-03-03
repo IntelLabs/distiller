@@ -53,8 +53,6 @@ models, or with the provided sample models:
 import math
 import time
 import os
-import sys
-import random
 import traceback
 import logging
 from collections import OrderedDict
@@ -75,6 +73,7 @@ import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
 from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
+import operator
 
 
 # Logger handle
@@ -95,14 +94,11 @@ def main():
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
-    apputils.log_execution_env_state(args.compress,
-        msglogger.logdir, gitroot=module_path)
+    apputils.log_execution_env_state(args.compress, msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
-                   for i in range(args.num_best_scores)]
-
+    perf_scores_history = []
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
         # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
@@ -284,17 +280,19 @@ def main():
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # Update the list of top scores achieved so far, and save the checkpoint
-        is_best = top1 > best_epochs[-1].top1
-        if top1 > best_epochs[0].top1:
-            best_epochs[0].epoch = epoch
-            best_epochs[0].top1 = top1
-            # Keep best_epochs sorted such that best_epochs[0] is the lowest top1 in the best_epochs list
-            best_epochs = sorted(best_epochs, key=lambda score: score.top1)
-        for score in reversed(best_epochs):
-            if score.top1 > 0:
-                msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
+        sparsity = distiller.model_sparsity(model)
+        perf_scores_history.append(distiller.MutableNamedTuple({'sparsity': sparsity, 'top1': top1,
+                                                                'top5': top5, 'epoch': epoch}))
+        # Keep perf_scores_history sorted from best to worst
+        # Sort by sparsity as main sort key, then sort by top1, top5 and epoch
+        perf_scores_history.sort(key=operator.attrgetter('sparsity', 'top1', 'top5', 'epoch'), reverse=True)
+        for score in perf_scores_history[:args.num_best_scores]:
+            msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity: %.2f on epoch: %d]',
+                           score.top1, score.top5, score.sparsity, score.epoch)
+
+        is_best = epoch == perf_scores_history[0].epoch
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
-                                 best_epochs[-1].top1, is_best, args.name, msglogger.logdir)
+                                 perf_scores_history[0].top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
