@@ -212,9 +212,6 @@ def amc_reward_fn(env, top1, top5, vloss, total_macs):
     return reward
 
 
-experimental_reward_fn = harmonic_mean_reward_fn
-
-
 def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
@@ -245,7 +242,8 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
             'conv_cnt': conv_cnt,
-            'reward_frequency': args.amc_reward_frequency})
+            'reward_frequency': args.amc_reward_frequency,
+            'ft_frequency': args.amc_ft_frequency})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -260,7 +258,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
         amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = experimental_reward_fn
+        amc_cfg.reward_fn = amc_reward_fn
         amc_cfg.action_constrain_fn = None
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
@@ -330,19 +328,21 @@ resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight
                    "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
                    "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
 
-resnet20_params = ["module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
-                   "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
-                   "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight"]
+resnet20_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
+                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
+                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight"]
 
-resnet56_params = [ "module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
-                    "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
-                    "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight",
-                    "module.layer1.3.conv1.weight", "module.layer2.3.conv1.weight", "module.layer3.3.conv1.weight",
-                    "module.layer1.4.conv1.weight", "module.layer2.4.conv1.weight", "module.layer3.4.conv1.weight",
-                    "module.layer1.5.conv1.weight", "module.layer2.5.conv1.weight", "module.layer3.5.conv1.weight",
-                    "module.layer1.6.conv1.weight", "module.layer2.6.conv1.weight", "module.layer3.6.conv1.weight",
-                    "module.layer1.7.conv1.weight", "module.layer2.7.conv1.weight", "module.layer3.7.conv1.weight",
-                    "module.layer1.8.conv1.weight", "module.layer2.8.conv1.weight", "module.layer3.8.conv1.weight"]
+resnet56_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
+                   "module.layer1.3.conv1.weight", "module.layer1.4.conv1.weight", "module.layer1.5.conv1.weight",
+                   "module.layer1.6.conv1.weight", "module.layer1.7.conv1.weight", "module.layer1.8.conv1.weight",
+
+                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
+                   "module.layer2.3.conv1.weight", "module.layer2.4.conv1.weight", "module.layer2.5.conv1.weight",
+                   "module.layer2.6.conv1.weight", "module.layer2.7.conv1.weight", "module.layer2.8.conv1.weight",
+
+                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight",
+                   "module.layer3.3.conv1.weight", "module.layer3.4.conv1.weight", "module.layer3.5.conv1.weight",
+                   "module.layer3.6.conv1.weight", "module.layer3.7.conv1.weight", "module.layer3.8.conv1.weight"]
 
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
@@ -633,11 +633,12 @@ class DistillerWrapperEnvironment(gym.Env):
             normalized_nnz = total_nnz / self.dense_model_size * 100
             self.finalize_episode(top1, reward, total_macs, normalized_macs,
                                   normalized_nnz, self.action_history, self.agent_action_history)
-
             self.episode += 1
         else:
+            if self.amc_cfg.ft_frequency is not None and self.current_layer_id % self.amc_cfg.ft_frequency == 0:
+                self.net_wrapper.train(1, self.episode)
             observation = self.get_obs()
-            if self.amc_cfg.reward_frequency > 0 and self.current_layer_id % self.amc_cfg.reward_frequency == 0:
+            if self.amc_cfg.reward_frequency is not None and self.current_layer_id % self.amc_cfg.reward_frequency == 0:
                 reward, top1, total_macs, total_nnz = self.compute_reward(False)
             else:
                 reward = 0
