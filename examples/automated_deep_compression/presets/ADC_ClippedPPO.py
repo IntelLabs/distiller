@@ -1,10 +1,9 @@
 from rl_coach.agents.clipped_ppo_agent import ClippedPPOAgentParameters
 from rl_coach.architectures.layers import Dense
-from rl_coach.base_parameters import VisualizationParameters, PresetValidationParameters, DistributedCoachSynchronizationType
-from rl_coach.core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps, RunPhase
-from rl_coach.environments.gym_environment import GymVectorEnvironment, mujoco_v2
-from rl_coach.exploration_policies.additive_noise import AdditiveNoiseParameters
-from rl_coach.exploration_policies.e_greedy import EGreedyParameters
+from rl_coach.base_parameters import VisualizationParameters, DistributedCoachSynchronizationType
+from rl_coach.core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps
+from rl_coach.environments.gym_environment import GymVectorEnvironment
+from rl_coach.architectures.head_parameters import PPOHeadParameters, VHeadParameters
 from rl_coach.filters.filter import InputFilter
 from rl_coach.filters.observation.observation_normalization_filter import ObservationNormalizationFilter
 from rl_coach.graph_managers.basic_rl_graph_manager import BasicRLGraphManager
