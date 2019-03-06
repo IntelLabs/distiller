@@ -367,6 +367,13 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
 
 
 def test_overridable_args(model, optimizer, train_with_fp_copy):
+    with pytest.raises(ValueError, message='Expecting ValueError when overriding args without overriding bits.'):
+        model_copy = deepcopy(model)
+        conv_override = OrderedDict([('bits', {'acts': None, 'wts': None, 'bias': None}), ('prop', 123)])
+        overrides = OrderedDict([('conv1', conv_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
     with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
         model_copy = deepcopy(model)
         conv_override = OrderedDict([('bits', {'acts': 8, 'wts': 8, 'bias': 32}), ('prop', 123), ('unexpetcted_prop', 456)])
