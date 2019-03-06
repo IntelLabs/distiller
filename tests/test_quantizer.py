@@ -109,7 +109,7 @@ class DummyQuantizer(Quantizer):
             return DummyWrapperLayer(module, qbits_map[name], prop)
 
         def _dummy_quant_layer(module, name, qbits_map, overridable_prop=False):
-            return DummyQuantLayer(qbits_map[name],overridable_prop)
+            return DummyQuantLayer(qbits_map[name], overridable_prop)
 
         self._add_replacement_factory(nn.Conv2d, _dummy_wrapper_layer, prop=False)
         self._add_replacement_factory(nn.ReLU, _dummy_quant_layer, overridable_prop=False)
@@ -364,3 +364,35 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
             expected = dummy_quantize_params(pre_quant_param,
                                              _ParamToQuant(None, None, None, None, num_bits)) if quantizable else pre_quant_param
             assert torch.equal(quant_param, expected)
+
+
+def test_overridable_args(model, optimizer, train_with_fp_copy):
+    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
+        model_copy = deepcopy(model)
+        conv_override = OrderedDict([('bits', {'acts': 8, 'wts': 8, 'bias': 32}), ('prop', 123), ('unexpetcted_prop', 456)])
+        overrides = OrderedDict([('conv1', conv_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
+    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
+        model_copy = deepcopy(model)
+        relu_override = OrderedDict([('bits', {'acts': 8, 'wts': None, 'bias': None}),
+                                     ('overridable_prop', 123), ('unexpetcted_prop', 456)])
+        overrides = OrderedDict([('relu1', relu_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([('bits', {'acts': 8, 'wts': 8, 'bias': 32}), ('prop', 123)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    q.prepare_model()
+    assert model_copy.conv1.prop == 123
+
+    model_copy = deepcopy(model)
+    relu_override = OrderedDict([('bits', {'acts': 8, 'wts': None, 'bias': None}),
+                                ('overridable_prop', 123)])
+    overrides = OrderedDict([('relu1', relu_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    q.prepare_model()
+    assert model_copy.relu1.overridable_prop == 123

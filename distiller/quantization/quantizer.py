@@ -245,6 +245,8 @@ class Quantizer(object):
             full_name = prefix + name
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
+                if self.module_overrides_map[full_name]:
+                    raise ValueError("Adding overrides while not quantizing is not allowed.")
                 continue
             try:
                 overridable_kwargs = self.replacement_factory_overridable_kwargs[type(module)]
