@@ -159,18 +159,27 @@ def main():
         msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
     # We can optionally resume from a checkpoint
+    optimizer = None
     if args.resume:
-        model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_file=args.resume)
+        # initiate SGD with dummy lr
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
+        try:
+            model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
+                model, args.resume, optimizer=optimizer)
+        except KeyError:
+            # try to load without optimizer
+            model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
+                model, args.resume)
         model.to(args.device)
 
-    # Define loss function (criterion) and optimizer
+    # Define loss function (criterion)
     criterion = nn.CrossEntropyLoss().to(args.device)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-    msglogger.info('Optimizer Type: %s', type(optimizer))
-    msglogger.info('Optimizer Args: %s', optimizer.defaults)
+    if optimizer is None:
+        optimizer = torch.optim.SGD(model.parameters(),
+            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        msglogger.info('Optimizer Type: %s', type(optimizer))
+        msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
@@ -214,7 +223,8 @@ def main():
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
+            (start_epoch-1) if args.resume else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
     elif compression_scheduler is None:
@@ -233,7 +243,7 @@ def main():
     if args.kd_teacher:
         teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
         if args.kd_resume:
-            teacher, _, _ = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)
+            teacher = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)[0]
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,

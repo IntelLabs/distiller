@@ -74,12 +74,14 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None):
-    """Load a pytorch training checkpoint
+    """Load a pytorch training checkpoint.
 
     Args:
         model: the pytorch model to which we will load the parameters
         chkpt_file: the checkpoint file
-        optimizer: the optimizer to which we will load the serialized state
+        optimizer: the optimizer to which we will load the serialized state.
+            This is optional, by default, optimizer is not loaded
+    :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
@@ -132,9 +134,16 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model()
 
-    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
-                                                                   e=checkpoint_epoch))
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
-    return (model, compression_scheduler, start_epoch)
+
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
+            type=type(optimizer)))
+        msglogger.debug('Optimizer state_dict: {}'.format(optimizer.state_dict()))
+
+    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
+                                                                   e=checkpoint_epoch))
+    return (model, compression_scheduler, optimizer, start_epoch)

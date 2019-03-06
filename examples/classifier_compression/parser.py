@@ -40,12 +40,15 @@ def get_parser():
                         help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N', help='mini-batch size (default: 256)')
-    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                        metavar='LR', help='initial learning rate')
-    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                        help='momentum')
-    parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                        metavar='W', help='weight decay (default: 1e-4)')
+
+    optimizer_args = parser.add_argument_group('Optimizer arguments')
+    optimizer_args.add_argument('--lr', '--learning-rate', default=0.1,
+                    type=float, metavar='LR', help='initial learning rate')
+    optimizer_args.add_argument('--momentum', default=0.9, type=float,
+                    metavar='M', help='momentum')
+    optimizer_args.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
+                    metavar='W', help='weight decay (default: 1e-4)')
+
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
