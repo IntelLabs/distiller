@@ -33,19 +33,21 @@ from distiller import has_children
 #############################
 
 class DummyQuantLayer(nn.Module):
-    def __init__(self, qbits):
+    def __init__(self, qbits, overridable_prop=False):
         super(DummyQuantLayer, self).__init__()
         self.qbits = qbits
+        self.overridable_prop = overridable_prop
 
     def forward(self, *input):
         return input
 
 
 class DummyWrapperLayer(nn.Module):
-    def __init__(self, module, qbits):
+    def __init__(self, module, qbits, prop=False):
         super(DummyWrapperLayer, self).__init__()
         self.qbits = qbits
         self.inner = module
+        self.prop = prop
 
     def forward(self, *input):
         return input
@@ -103,8 +105,14 @@ class DummyQuantizer(Quantizer):
                                              overrides=overrides,
                                              train_with_fp_copy=train_with_fp_copy)
 
-        self.replacement_factory[nn.Conv2d] = lambda module, name, qbits_map: DummyWrapperLayer(module, qbits_map[name])
-        self.replacement_factory[nn.ReLU] = lambda module, name, qbits_map: DummyQuantLayer(qbits_map[name])
+        def _dummy_wrapper_layer(module, name, qbits_map, prop=False):
+            return DummyWrapperLayer(module, qbits_map[name], prop)
+
+        def _dummy_quant_layer(module, name, qbits_map, overridable_prop=False):
+            return DummyQuantLayer(qbits_map[name],overridable_prop)
+
+        self._add_replacement_factory(nn.Conv2d, _dummy_wrapper_layer, prop=False)
+        self._add_replacement_factory(nn.ReLU, _dummy_quant_layer, overridable_prop=False)
         self.param_quantization_fn = dummy_quantize_params
 
 
@@ -182,7 +190,7 @@ def test_no_quantization(model):
 
 def test_overrides_ordered_dict(model):
     with pytest.raises(TypeError, message='Expecting TypeError when overrides is not an OrderedDict'):
-        DummyQuantizer(model, overrides={'bits':{'testing': '123'}})
+        DummyQuantizer(model, overrides={'bits': {'testing': '123'}})
 
 
 @pytest.mark.parametrize(
@@ -226,7 +234,11 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
 
     # Build expected QBits
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
-    overrides = OrderedDict([('bits', deepcopy(bits_overrides))])
+    overrides = OrderedDict()
+    if bits_overrides:
+        overrides = OrderedDict(
+            [(k, OrderedDict([('bits', v)])) for k, v in bits_overrides.items()]
+        )
 
     # Initialize Quantizer
     q = DummyQuantizer(model, optimizer=optimizer,
@@ -288,8 +300,10 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
     "qbits, bits_overrides, explicit_expected_overrides",
     [
         (QBits(8, 8, 32),
-         OrderedDict([('conv1', {'acts': None, 'wts': None}), ('relu1', {'acts': None, 'wts': None}),
-                      ('sub.*conv1', {'acts': 8, 'wts': 4}), ('sub.*conv2', {'acts': 4, 'wts': 4})]),
+         OrderedDict([('conv1', {'acts': None, 'wts': None, 'bias': None}),
+                      ('relu1', {'acts': None, 'wts': None, 'bias': None}),
+                      ('sub.*conv1', {'acts': 8, 'wts': 4, 'bias': 32}),
+                      ('sub.*conv2', {'acts': 4, 'wts': 4, 'bias': 32})]),
          {'conv1': QBits(None, None, None), 'relu1': QBits(None, None, None),
           'sub1.conv1': QBits(8, 4, 32), 'sub1.conv2': QBits(4, 4, 32), 'sub2.conv1': QBits(8, 4, 32),
           'sub2.conv2': QBits(4, 4, 32)}),
@@ -299,7 +313,11 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
                             train_with_fp_copy):
     # Build expected QBits
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
-    overrides = OrderedDict([('bits', deepcopy(bits_overrides))])
+    overrides = OrderedDict()
+    if bits_overrides:
+        overrides = OrderedDict(
+            [(k, OrderedDict([('bits', v)])) for k, v in bits_overrides.items()]
+        )
 
     q = DummyQuantizer(model, optimizer=optimizer,
                        bits_activations=qbits.acts, bits_weights=qbits.wts, bits_bias=qbits.bias,

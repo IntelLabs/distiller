@@ -616,7 +616,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'no_clip_layers': no_clip_layers,
                                                     'per_channel_wts': per_channel_wts}}
         
-        def replace_param_layer(module, name, qbits_map):
+        def replace_param_layer(module, name, qbits_map, **kwargs):
             norm_name = distiller.utils.normalize_module_name(name)
             clip = self.clip_acts and norm_name not in self.no_clip_layers
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
@@ -635,14 +635,21 @@ class PostTrainLinearQuantizer(Quantizer):
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
         self.mode = mode
-        self.replacement_factory[nn.Conv2d] = replace_param_layer
-        self.replacement_factory[nn.Linear] = replace_param_layer
-        self.replacement_factory[distiller.modules.Concat] = partial(
-            replace_non_param_layer, RangeLinearQuantConcatWrapper)
-        self.replacement_factory[distiller.modules.EltwiseAdd] = partial(
-            replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
-        self.replacement_factory[distiller.modules.EltwiseMult] = partial(
-            replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+
+        self._add_replacement_factory(nn.Conv2d, replace_param_layer,
+                                      per_channel_wts=per_channel_wts,
+                                      mode=mode,
+                                      clip_acts=clip_acts)
+        self._add_replacement_factory(nn.Linear, replace_param_layer,
+                                      per_channel_wts=per_channel_wts,
+                                      mode=mode,
+                                      clip_acts=clip_acts)
+        self._add_replacement_factory(distiller.modules.Concat,
+                                      partial(replace_non_param_layer, RangeLinearQuantConcatWrapper))
+        self._add_replacement_factory(distiller.modules.EltwiseAdd,
+                                      partial(replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper))
+        self._add_replacement_factory(distiller.modules.EltwiseMult,
+                                      partial( replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper))
 
     @classmethod
     def from_args(cls, model, args):

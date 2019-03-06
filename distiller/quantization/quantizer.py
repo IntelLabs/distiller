@@ -63,6 +63,9 @@ class _ParamToQuant(object):
         self.q_attr_name = q_attr_name
         self.num_bits = num_bits
 
+    def __repr__(self):
+        return "ParamToQuant(module_name=%s,num_bits=%s)" % (self.module_name, self.num_bits)
+
 
 class Quantizer(object):
     r"""
@@ -105,14 +108,20 @@ class Quantizer(object):
             warnmsg = """'bits_overrides' argument is deprecated! 
             Use the 'overrides' OrderedDict with a 'bits' item in it instead."""
             warnings.warn(warnmsg, DeprecationWarning)
-            if not isinstance(bits_overrides,OrderedDict):
+            if not isinstance(bits_overrides, OrderedDict):
                 raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
 
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
-        bits_overrides = bits_overrides or overrides.get('bits', OrderedDict())
+        self.overrides = overrides
+        bits_overrides = bits_overrides or OrderedDict(((k, v['bits']) for k, v in overrides.items() if 'bits' in v))
+
+        # Remove the 'bits' key from the dictionary, since `bits_overrides` contains all this information already.
+        for k in self.overrides.keys():
+            if 'bits' in self.overrides[k].keys():
+                del self.overrides[k]['bits']
 
         self.model = model
         self.optimizer = optimizer
@@ -137,26 +146,43 @@ class Quantizer(object):
             patterns = list(bits_overrides.keys())
             regex_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex = re.compile(regex_str)
+        regex_overrides = None
+        if overrides:
+            regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in overrides.keys()])
+            regex_overrides = re.compile(regex_overrides_str)
 
         self.module_qbits_map = {}
+        self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
+            # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
+            # module with a wrapper module called 'module' :)
+            name_to_match = module_full_name.replace('module.', '', 1)
             qbits = self.default_qbits
+            override_entry = self.overrides.get(name_to_match, OrderedDict())
             if regex:
-                # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
-                # module with a wrapper module called 'module' :)
-                name_to_match = module_full_name.replace('module.', '', 1)
-                m = regex.match(name_to_match)
-                if m:
+                m_bits = regex.match(name_to_match)
+                if m_bits:
                     group_idx = 0
-                    groups = m.groups()
+                    groups = m_bits.groups()
                     while groups[group_idx] is None:
                         group_idx += 1
                     qbits = bits_overrides[patterns[group_idx]]
+            if regex_overrides:
+                m_overrides = regex_overrides.match(name_to_match)
+                if m_overrides:
+                    group_idx = 0
+                    groups = m_overrides.groups()
+                    while groups[group_idx] is None:
+                        group_idx += 1
+                    override_entry = override_entry or self.overrides[patterns[group_idx]]
             self._add_qbits_entry(module_full_name, type(module), qbits)
+            self._add_override_entry(module_full_name, override_entry)
 
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         self.replacement_factory = {}
+        # Stores the OVERRIDABLE kwargs that can be passed to each of the factories above.
+        self.replacement_factory_overridable_kwargs = {}
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -170,6 +196,9 @@ class Quantizer(object):
             # support quantization of batch norm scale parameters)
             qbits = QBits(acts=qbits.acts, wts=None, bias=None)
         self.module_qbits_map[module_name] = qbits
+
+    def _add_override_entry(self, module_name, entry):
+        self.module_overrides_map[module_name] = entry
 
     def prepare_model(self):
         self._prepare_model_impl()
@@ -218,7 +247,15 @@ class Quantizer(object):
             if current_qbits.acts is None and current_qbits.wts is None:
                 continue
             try:
-                new_module = self.replacement_factory[type(module)](module, full_name, self.module_qbits_map)
+                overridable_kwargs = self.replacement_factory_overridable_kwargs[type(module)]
+                for k, v in self.module_overrides_map[full_name].items():
+                    if k not in overridable_kwargs:
+                        raise TypeError("""Quantizer of type %s doesn't accept \"%s\" 
+                                        as an override argument for %s. Allowed kwargs: %s"""
+                                        % (type(self), k, type(module), list(overridable_kwargs)))
+                    overridable_kwargs[k] = v
+                new_module = self.replacement_factory[type(module)](module, full_name,
+                                                                    self.module_qbits_map, **overridable_kwargs)
                 msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
                 setattr(container, name, new_module)
 
@@ -233,6 +270,16 @@ class Quantizer(object):
             if distiller.has_children(module):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
+
+    def _add_replacement_factory(self, t: type, factory, **overridable_kwargs):
+        """
+        Adds a replacement factory to the Quantizer.
+        :param t: Module Type
+        :param factory: Replacement Factory
+        :param overridable_kwargs: Additional arguments that will be passed to the factory.
+        """
+        self.replacement_factory[t] = factory
+        self.replacement_factory_overridable_kwargs[t] = overridable_kwargs
 
     def _get_updated_optimizer_params_groups(self):
         """
