@@ -72,6 +72,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = imagenet_extra_models.__dict__[arch]()
         elif arch in pretrainedmodels.model_names:
             model = pretrainedmodels.__dict__[arch](
+                        num_classes=1000,
                         pretrained=(dataset if pretrained else None))
         else:
             error_message = ''
