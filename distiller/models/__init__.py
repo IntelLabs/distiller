@@ -20,6 +20,7 @@ import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
 from . import imagenet as imagenet_extra_models
+import pretrainedmodels
 
 import logging
 msglogger = logging.getLogger()
@@ -34,12 +35,14 @@ IMAGENET_MODEL_NAMES = sorted(name for name in torch_models.__dict__
 IMAGENET_MODEL_NAMES.extend(sorted(name for name in imagenet_extra_models.__dict__
                                    if name.islower() and not name.startswith("__")
                                    and callable(imagenet_extra_models.__dict__[name])))
+IMAGENET_MODEL_NAMES.extend(pretrainedmodels.model_names)
 
 CIFAR10_MODEL_NAMES = sorted(name for name in cifar10_models.__dict__
                              if name.islower() and not name.startswith("__")
                              and callable(cifar10_models.__dict__[name]))
 
-ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(), set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES)))
+ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
+                            set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES)))
 
 
 def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
@@ -60,17 +63,20 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
 
     model = None
     if dataset == 'imagenet':
-        str_pretrained = 'pretrained ' if pretrained else ''
-        msglogger.info("=> using %s%s model for ImageNet" % (str_pretrained, arch))
-        assert arch in torch_models.__dict__ or arch in imagenet_extra_models.__dict__, \
+        assert arch in IMAGENET_MODEL_NAMES, \
             "Model %s is not supported for dataset %s" % (arch, 'ImageNet')
         if arch in RESNET_SYMS:
             model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
         elif arch in torch_models.__dict__:
             model = torch_models.__dict__[arch](pretrained=pretrained)
+        elif arch in pretrainedmodels.model_names:
+            model = pretrainedmodels.__dict__[arch](
+                        pretrained=(dataset if pretrained else None))
         else:
             assert not pretrained, "Model %s (ImageNet) does not have a pretrained model" % arch
             model = imagenet_extra_models.__dict__[arch]()
+        msglogger.info("=> using {p}{a} model for ImageNet".format(a=arch,
+            p=('pretrained ' if pretrained else '')))
     elif dataset == 'cifar10':
         msglogger.info("=> creating %s model for CIFAR10" % arch)
         assert arch in cifar10_models.__dict__, "Model %s is not supported for dataset CIFAR10" % arch
