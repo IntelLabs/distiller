@@ -30,6 +30,39 @@ except ImportError:
 import distiller
 from distiller.apputils import save_checkpoint, load_checkpoint
 from distiller.models import create_model
+import pretrainedmodels
+
+
+
+def test_create_model_cifar():
+    pretrained = False
+    model = create_model(pretrained, 'cifar10', 'resnet20_cifar')
+    with pytest.raises(ValueError):
+        # only cifar _10_ is currently supported
+        model = create_model(pretrained, 'cifar100', 'resnet20_cifar')
+    with pytest.raises(ValueError):
+        model = create_model(pretrained, 'cifar10', 'no_such_model!')
+
+    pretrained = True
+    with pytest.raises(ValueError):
+        # no pretrained models of cifar10
+        model = create_model(pretrained, 'cifar10', 'resnet20_cifar')
+
+
+def test_create_model_imagenet():
+    model = create_model(False, 'imagenet', 'resnet50')
+    model = create_model(True, 'imagenet', 'resnet50')
+
+    with pytest.raises(ValueError):
+        model = create_model(False, 'imagenet', 'resnet50' * 10)
+
+
+def test_create_model_pretrainedmodels():
+    premodel_name = 'resnext101_32x4d'
+    model = create_model(True, 'imagenet', premodel_name)
+
+    with pytest.raises(ValueError):
+        model = create_model(False, 'imagenet', 'no_such_model!')
 
 
 def test_load():
