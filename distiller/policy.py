@@ -21,6 +21,7 @@
 - LRPolicy: learning-rate decay scheduling
 """
 import torch
+import torch.optim.lr_scheduler
 from collections import namedtuple
 
 import logging
@@ -210,7 +211,11 @@ class LRPolicy(ScheduledTrainingPolicy):
         self.lr_scheduler = lr_scheduler
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
-        self.lr_scheduler.step(**kwargs)
+        if isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            # Note: ReduceLROnPlateau doesn't inherit from _LRScheduler
+            self.lr_scheduler.step(**kwargs)
+        else:
+            self.lr_scheduler.step(epoch=kwargs.get('epoch', None))
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):
