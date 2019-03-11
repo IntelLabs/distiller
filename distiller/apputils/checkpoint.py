@@ -151,6 +151,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
         optimizer.load_state_dict(checkpoint['optimizer'])
         msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
             type=type(optimizer)))
+        msglogger.info('Optimizer Args: %s', optimizer.defaults)
         msglogger.debug('Optimizer state_dict: {}'.format(optimizer.state_dict()))
 
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),

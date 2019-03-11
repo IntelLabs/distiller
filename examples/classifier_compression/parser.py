@@ -55,8 +55,11 @@ def get_parser():
                         metavar='N', help='print frequency (default: 10)')
 
     load_checkpoint_group = parser.add_mutually_exclusive_group()
-    load_checkpoint_group.add_argument('--resume', '--load-checkpoint', default='', type=str,
-                        metavar='PATH', help='path to latest checkpoint')
+    # TODO(barrh): args.resume is deprecated since v0.3
+    load_checkpoint_group.add_argument('--resume', default='', type=str,
+                        metavar='PATH', help=argparse.SUPPRESS)
+    load_checkpoint_group.add_argument('--load-checkpoint', dest='checkpoint_path', default='',
+                        type=str, metavar='PATH', help='path to latest checkpoint')
     load_checkpoint_group.add_argument('--load-state-dict', default='', type=str, metavar='PATH',
                         help='path to checkpoint to load weights from (excluding other fields)')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
