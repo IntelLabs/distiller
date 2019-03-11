@@ -267,7 +267,8 @@ def main():
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
-            compression_scheduler.on_epoch_begin(epoch)
+            compression_scheduler.on_epoch_begin(epoch,
+                metrics=(vloss if (epoch != start_epoch) else 10**6))
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:

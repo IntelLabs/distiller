@@ -42,7 +42,7 @@ class ScheduledTrainingPolicy(object):
         self.classes = classes
         self.layers = layers
 
-    def on_epoch_begin(self, model, zeros_mask_dict, meta):
+    def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         """A new epcoh is about to begin"""
         pass
 
@@ -115,7 +115,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
         self.mini_batch_id = 0          # The ID of the mini_batch within the present epoch
         self.global_mini_batch_id = 0   # The ID of the mini_batch within the present training session
 
-    def on_epoch_begin(self, model, zeros_mask_dict, meta):
+    def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         msglogger.debug("Pruner {} is about to prune".format(self.pruner.name))
         self.mini_batch_id = 0
         self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
@@ -169,7 +169,7 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
         self.keep_mask = keep_mask
         self.is_last_epoch = False
 
-    def on_epoch_begin(self, model, zeros_mask_dict, meta):
+    def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
 
     def before_backward_pass(self, model, epoch, minibatch_id, minibatches_per_epoch, loss,
@@ -202,15 +202,15 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
 
 
 class LRPolicy(ScheduledTrainingPolicy):
-    """ Learning-rate decay scheduling policy.
+    """Learning-rate decay scheduling policy.
 
     """
     def __init__(self, lr_scheduler):
         super(LRPolicy, self).__init__()
         self.lr_scheduler = lr_scheduler
 
-    def on_epoch_begin(self, model, zeros_mask_dict, meta):
-        self.lr_scheduler.step()
+    def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
+        self.lr_scheduler.step(**kwargs)
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):
