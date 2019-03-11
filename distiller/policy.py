@@ -213,9 +213,9 @@ class LRPolicy(ScheduledTrainingPolicy):
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         if isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             # Note: ReduceLROnPlateau doesn't inherit from _LRScheduler
-            self.lr_scheduler.step(**kwargs)
+            self.lr_scheduler.step(kwargs['metrics'], epoch=meta['current_epoch'])
         else:
-            self.lr_scheduler.step(epoch=kwargs.get('epoch', None))
+            self.lr_scheduler.step(epoch=meta['current_epoch'])
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):

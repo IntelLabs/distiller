@@ -111,7 +111,7 @@ class CompressionScheduler(object):
             meta = self.sched_metadata[policy]
             meta['current_epoch'] = epoch
             policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta,
-                                  epoch=epoch, **kwargs)
+                                  **kwargs)
 
     def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         if epoch in self.policies:
