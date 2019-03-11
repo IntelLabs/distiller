@@ -50,11 +50,12 @@ def test_create_model_cifar():
 
 
 def test_create_model_imagenet():
+    model = create_model(False, 'imagenet', 'alexnet')
     model = create_model(False, 'imagenet', 'resnet50')
     model = create_model(True, 'imagenet', 'resnet50')
 
     with pytest.raises(ValueError):
-        model = create_model(False, 'imagenet', 'resnet50' * 10)
+        model = create_model(False, 'imagenet', 'no_such_model!')
 
 
 def test_create_model_pretrainedmodels():
