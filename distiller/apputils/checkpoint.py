@@ -22,6 +22,7 @@ a pruning session, or for querying the pruning schedule of a sparse model.
 
 import os
 import shutil
+import pickle
 from errno import ENOENT
 import logging
 import torch
@@ -60,7 +61,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
     if optimizer is not None:
-        checkpoint['optimizer'] = optimizer.state_dict()
+        checkpoint['optimizer'] = pickle.dumps(optimizer)
     if scheduler is not None:
         checkpoint['compression_sched'] = scheduler.state_dict()
     if hasattr(model, 'thinning_recipes'):
@@ -83,9 +84,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
     Args:
         model: the pytorch model to which we will load the parameters
         chkpt_file: the checkpoint file
-        optimizer: the optimizer to which we will load the serialized state.
-            This is optional, by default, optimizer is not loaded
         lean_checkpoint: if set, read into model only 'state_dict' field
+        optimizer: [deprecated argument]
     :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
@@ -147,12 +147,28 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
         msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
         return (model, None, None, 0)
 
+    def _load_pickled_optimizer(src_optimizer, model):
+        """Copy source optimizer and override its parameters with model's parameters"""
+        # initiate the dest_optimizer with a dummy learning rate,
+        # this is required to support SGD.__init__()
+        dest_optimizer = type(src_optimizer)(model.parameters(), lr=1)
+        dest_optimizer.load_state_dict(src_optimizer.state_dict())
+        return dest_optimizer
+
+    try:
+        optimizer = _load_pickled_optimizer(pickle.loads(checkpoint['optimizer']), model)
+    except TypeError:
+        # older checkpoints didn't save pickled optimizers
+        optimizer = None
+
     if optimizer is not None:
-        optimizer.load_state_dict(checkpoint['optimizer'])
         msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
             type=type(optimizer)))
-        msglogger.info('Optimizer Args: %s', optimizer.defaults)
-        msglogger.debug('Optimizer state_dict: {}'.format(optimizer.state_dict()))
+        msglogger.info('Optimizer Args: {}'.format(
+            dict((k,v) for k,v in optimizer.state_dict()['param_groups'][0].items()
+                            if k != 'params')))
+    else:
+        msglogger.warning('Optimizer could not be loaded from checkpoint.')
 
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
                                                                    e=checkpoint_epoch))

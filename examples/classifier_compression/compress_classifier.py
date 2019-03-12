@@ -170,11 +170,8 @@ def main():
     # We can optionally resume from a checkpoint
     optimizer = None
     if args.resumed_checkpoint_path:
-        if not args.reset_optimizer:
-            # initiate SGD with dummy lr
-            optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.resumed_checkpoint_path, optimizer=optimizer)
+            model, args.resumed_checkpoint_path)
         model.to(args.device)
     elif args.load_model_path:
         model = apputils.load_lean_checkpoint(model, args.load_model_path)
@@ -183,7 +180,9 @@ def main():
     # Define loss function (criterion)
     criterion = nn.CrossEntropyLoss().to(args.device)
 
-    if optimizer is None:
+    if optimizer is None or args.reset_optimizer:
+        if args.reset_optimizer and optimizer:
+            msglogger.info('Overriding resumed optimizer')
         optimizer = torch.optim.SGD(model.parameters(),
             lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.info('Optimizer Type: %s', type(optimizer))

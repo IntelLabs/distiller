@@ -15,6 +15,7 @@
 #
 import logging
 import os
+import pickle
 import sys
 import tempfile
 
@@ -45,18 +46,17 @@ def test_load():
     logger = logging.getLogger('simple_example')
     logger.setLevel(logging.INFO)
 
-    checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
-    src_optimizer = torch.load(checkpoint_filename)['optimizer']
+    checkpoint_filename = 'checkpoints/resnet20_cifar10_checkpoint.pth.tar'
+    src_optimizer = pickle.loads(torch.load(checkpoint_filename)['optimizer'])
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
     model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
-        model, checkpoint_filename,
-        torch.optim.SGD(model.parameters(), lr=0.36787944117))
+        model, checkpoint_filename)
     assert compression_scheduler is not None
     assert optimizer is not None, 'Failed to load the optimizer'
-    if not _is_similar_param_groups(src_optimizer, optimizer.state_dict()):
+    if not _is_similar_param_groups(src_optimizer.state_dict(), optimizer.state_dict()):
         assert src_optimizer == optimizer.state_dict() # this will always fail
-    assert start_epoch == 180
+    assert start_epoch == 1
 
 
 def test_load_state_dict_implicit():
@@ -66,12 +66,8 @@ def test_load_state_dict_implicit():
     with tempfile.NamedTemporaryFile() as tmpfile:
         torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
         model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model, tmpfile.name)
-
-    assert len(list(model.named_modules())) >= len([x for x in state_dict_arrays if x.endswith('weight')]) > 0
-    assert compression_scheduler is None
-    assert optimizer is None
-    assert start_epoch == 0
+        with pytest.raises(KeyError):
+            model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model, tmpfile.name)
 
 
 def test_load_lean_checkpoint_1():
@@ -82,8 +78,7 @@ def test_load_lean_checkpoint_1():
         torch.save({'state_dict': state_dict_arrays}, tmpfile.name)
         model = create_model(False, 'cifar10', 'resnet20_cifar')
         model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
-            model, tmpfile.name, torch.optim.SGD(model.parameters(), lr=0.36787944117),
-            lean_checkpoint=True)
+            model, tmpfile.name, lean_checkpoint=True)
 
     assert compression_scheduler is None
     assert optimizer is None
@@ -162,9 +157,10 @@ def test_load_gpu_model_on_cpu_with_thinning():
     distiller.remove_filters(gpu_model, zeros_mask_dict, 'resnet20_cifar', 'cifar10', optimizer=None)
     assert hasattr(gpu_model, 'thinning_recipes')
     scheduler = distiller.CompressionScheduler(gpu_model)
-    save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model, scheduler=scheduler, optimizer=None)
+    save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model, scheduler=scheduler, optimizer=None,
+        dir='checkpoints')
 
     CPU_DEVICE_ID = -1
     cpu_model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
-    load_checkpoint(cpu_model, "checkpoint.pth.tar")
+    load_lean_checkpoint(cpu_model, "checkpoints/checkpoint.pth.tar")
     assert distiller.model_device(cpu_model) == 'cpu'
