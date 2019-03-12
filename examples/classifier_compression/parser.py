@@ -48,19 +48,24 @@ def get_parser():
                     metavar='M', help='momentum')
     optimizer_args.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
-    parser.add_argument('--reset-optimizer', '--reset-lr', action='store_true',
-                        help='Flag to override optimizer if resumed from checkpoint')
+    parser.add_argument('--exp-reset-optimizer', dest='reset_optimizer', action='store_true',
+                        help='Flag to override optimizer if resumed from checkpoint (experimental)')
+    parser.add_argument('--exp-reset-epochs', dest='reset_epochs', action='store_true',
+                        help='Flag to train for another N epochs (instead of N in total), '
+                            'if resumed from checkpoint (experimental)')
 
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
 
     load_checkpoint_group = parser.add_mutually_exclusive_group()
-    # TODO(barrh): args.resume is deprecated since v0.3
-    load_checkpoint_group.add_argument('--resume', default='', type=str,
+    # TODO(barrh): args.deprecated_resume is deprecated since v0.3
+    load_checkpoint_group.add_argument('--resume', dest='deprecated_resume', default='', type=str,
                         metavar='PATH', help=argparse.SUPPRESS)
-    load_checkpoint_group.add_argument('--load-checkpoint', dest='checkpoint_path', default='',
-                        type=str, metavar='PATH', help='path to latest checkpoint')
-    load_checkpoint_group.add_argument('--load-state-dict', default='', type=str, metavar='PATH',
+    load_checkpoint_group.add_argument('--resume-from', dest='resumed_checkpoint_path', default='',
+                        type=str, metavar='PATH',
+                        help='path to latest checkpoint. Use to resume paused training session.')
+    load_checkpoint_group.add_argument('--exp-load-weights-from', dest='load_model_path',
+                        default='', type=str, metavar='PATH',
                         help='path to checkpoint to load weights from (excluding other fields)')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')

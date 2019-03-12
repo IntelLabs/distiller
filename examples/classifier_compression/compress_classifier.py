@@ -158,25 +158,26 @@ def main():
     if args.earlyexit_thresholds:
         msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
-    # TODO(barrh): args.resume is deprecated since v0.3
-    if args.resume:
-        msglogger.warning('The "--resume" flag is deprecated. Please use "--load-checkpoint" instead.')
-        if not args.reset_optimizer:
-            msglogger.warning('If you wish to also reset the learning rate, call with --reset-lr')
+    # TODO(barrh): args.deprecated_resume is deprecated since v0.3
+    if args.deprecated_resume:
+        msglogger.warning('The "--resume" flag is deprecated. Please use "--resume-from=YOUR_PATH" instead.')
+        if (not args.reset_optimizer) or (not args.reset_epochs):
+            msglogger.warning('If you wish to also reset the optimizer, call with: --exp-reset-optimizer')
             args.reset_optimizer = True
-        args.checkpoint_path = args.resume
+        args.reset_epochs = True
+        args.resumed_checkpoint_path = args.deprecated_resume
 
     # We can optionally resume from a checkpoint
     optimizer = None
-    if args.checkpoint_path:
+    if args.resumed_checkpoint_path:
         if not args.reset_optimizer:
             # initiate SGD with dummy lr
             optimizer = torch.optim.SGD(model.parameters(), lr=0.36787944117)
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.checkpoint_path, optimizer=optimizer)
+            model, args.resumed_checkpoint_path, optimizer=optimizer)
         model.to(args.device)
-    elif args.load_state_dict:
-        model = apputils.load_lean_checkpoint(model, args.load_state_dict)
+    elif args.load_model_path:
+        model = apputils.load_lean_checkpoint(model, args.load_model_path)
         model.to(args.device)
 
     # Define loss function (criterion)
@@ -231,7 +232,7 @@ def main():
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
-            (start_epoch-1) if (args.checkpoint_path and not args.reset_optimizer) else None)
+            (start_epoch-1) if (args.resumed_checkpoint_path and not args.reset_optimizer) else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
     elif compression_scheduler is None:
@@ -239,10 +240,10 @@ def main():
 
     if args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)
-        assert args.checkpoint_path is not None, "You must use --load-checkpoint to provide a checkpoint file to thinnify"
+        assert args.resumed_checkpoint_path is not None, "You must use --resume-from to provide a checkpoint file to thinnify"
         distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
-                                 name="{}_thinned".format(args.checkpoint_path.replace(".pth.tar", "")), dir=msglogger.logdir)
+                                 name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")), dir=msglogger.logdir)
         print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
         return
 
@@ -263,7 +264,10 @@ def main():
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
 
-    for epoch in range(start_epoch, start_epoch + args.epochs):
+    ending_epoch = args.epochs if not args.reset_epochs else start_epoch + args.epochs
+    if start_epoch >= ending_epoch:
+        raise ValueError('epoch count is too low, ')
+    for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
@@ -610,7 +614,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
     # For example:
-    # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --load-checkpoint=checkpoint.pth.tar --evaluate
+    # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --resume-from=checkpoint.pth.tar --evaluate
 
     if not isinstance(loggers, list):
         loggers = [loggers]
