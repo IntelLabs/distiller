@@ -618,7 +618,7 @@ class DistillerWrapperEnvironment(gym.Env):
         msglogger.info("self._removed_macs={}".format(self._removed_macs))
         assert math.isclose(layer_macs_after_action / layer_macs, 1 - pruning_action)
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
                  OrderedDict([('requested_action', pruning_action)]))
 
         distiller.log_training_progress(stats, None,
@@ -761,7 +761,7 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.info("Total parameters left: %.2f%%" % (compression*100))
             msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
 
-            stats = ('Peformance/EpisodeEnd/',
+            stats = ('Performance/EpisodeEnd/',
                      OrderedDict([('Loss', vloss),
                                   ('Top1', top1),
                                   ('Top5', top5),
