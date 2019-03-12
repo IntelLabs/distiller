@@ -265,7 +265,9 @@ def main():
 
     ending_epoch = args.epochs if not args.reset_epochs else start_epoch + args.epochs
     if start_epoch >= ending_epoch:
-        raise ValueError('epoch count is too low, ')
+        msglogger.error(
+            'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
+            start_epoch, ending_epoch))
     for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
