@@ -93,26 +93,34 @@ class CompressionScheduler(object):
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
 
-    def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
+    def add_policy(self, policy, epochs):
         """Add a new policy to the schedule.
 
+        Current implementation supports only ranges or
+        iterables that can be translated into Python range.
+
         Args:
-            epochs (list): A list, or range, of epochs in which to apply the policy
+            epochs (range, iterable): epochs in which to apply the policy
         """
-
-        if epochs is None:
-            epochs = list(range(starting_epoch, ending_epoch, frequency))
-
         for epoch in epochs:
-            if epoch not in self.policies:
-                self.policies[epoch] = [policy]
-            else:
+            try:
                 self.policies[epoch].append(policy)
-            assert len(self.policies[epoch]) > 0
+            except KeyError:
+                self.policies[epoch] = [policy]
 
-        self.sched_metadata[policy] = {'starting_epoch': starting_epoch,
-                                       'ending_epoch': ending_epoch,
-                                       'frequency': frequency}
+        # if isinstance(epochs, range), then getattr, otherwise assume iterable
+        starting_epoch = getattr(epochs, 'start', epochs[0])
+        ending_epoch = getattr(epochs, 'stop', max(epochs[-1], epochs[0]+1))
+        epoch_step = getattr(epochs, 'step', (ending_epoch - starting_epoch) // len(epochs))
+        self.sched_metadata[policy] = {
+            'starting_epoch': starting_epoch,
+            'ending_epoch': ending_epoch,
+            'frequency': epoch_step,
+            }
+
+        if list(range(starting_epoch, ending_epoch, epoch_step)) != list(epochs):
+            msglogger.warning('irregular scheduling of policy {} is not supported.'.format(
+                policy.__class__.__name__))
 
     def on_epoch_begin(self, epoch, optimizer=None, **kwargs):
         for policy in self.policies.get(epoch, list()):

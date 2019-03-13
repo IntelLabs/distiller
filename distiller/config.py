@@ -131,12 +131,16 @@ def dict_config(model, optimizer, sched_dict, scheduler=None, resumed_epoch=None
 
 
 def add_policy_to_scheduler(policy, policy_def, scheduler):
-    if 'epochs' in policy_def:
-        scheduler.add_policy(policy, epochs=policy_def['epochs'])
-    else:
-        scheduler.add_policy(policy, starting_epoch=policy_def['starting_epoch'],
-                            ending_epoch=policy_def['ending_epoch'],
-                            frequency=policy_def['frequency'])
+    try:
+        epochs = policy_def['epochs']
+    except KeyError:
+        epochs = range(
+            policy_def.get('starting_epoch', 0),
+            policy_def.get('ending_epoch', 1),
+            policy_def.get('frequency', 1),
+            )
+
+    scheduler.add_policy(policy, epochs)
 
 
 def file_config(model, optimizer, filename, scheduler=None, resumed_epoch=None):
