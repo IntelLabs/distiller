@@ -99,6 +99,10 @@ class Quantizer(object):
                  bits_activations=None, bits_weights=None, bits_bias=None,
                  overrides=None, bits_overrides=None,
                  train_with_fp_copy=False):
+        if overrides is not None and bits_overrides is not None:
+            raise TypeError('\'bits_overrides\' argument is deprecated. '
+                            'Cannot pass both \'overrides\' and \'bits_overrides\' arguments.')
+
         if overrides is None:
             overrides = OrderedDict()
         if not isinstance(overrides, OrderedDict):
@@ -110,18 +114,15 @@ class Quantizer(object):
             warnings.warn(warnmsg, DeprecationWarning)
             if not isinstance(bits_overrides, OrderedDict):
                 raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
+            for k, v in bits_overrides.items():
+                # overrides is empty since passing both overrides and bits_overrides is not allowed
+                overrides[k] = OrderedDict([('bits', v)])
 
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
         self.overrides = overrides
-        bits_overrides = bits_overrides or OrderedDict(((k, v['bits']) for k, v in overrides.items() if 'bits' in v))
-
-        # Remove the 'bits' key from the dictionary, since `bits_overrides` contains all this information already.
-        for k in self.overrides.keys():
-            if 'bits' in self.overrides[k].keys():
-                del self.overrides[k]['bits']
 
         self.model = model
         self.optimizer = optimizer
@@ -133,22 +134,21 @@ class Quantizer(object):
                                                     'bits_bias': bits_bias,
                                                     'overrides': copy.deepcopy(overrides)}}
 
-        for k, v in bits_overrides.items():
+        for k in self.overrides.keys():
+            if 'bits' not in self.overrides[k].keys():
+                continue
+            v = self.overrides[k]['bits']
             qbits = QBits(acts=v.get('acts', self.default_qbits.acts),
                           wts=v.get('wts', self.default_qbits.wts),
                           bias=v.get('bias', self.default_qbits.bias))
-            bits_overrides[k] = qbits
+            self.overrides[k]['bits'] = qbits
 
         # Prepare explicit mapping from each layer to QBits based on default + overrides
         patterns = []
-        regex = None
-        if bits_overrides:
-            patterns = list(bits_overrides.keys())
-            regex_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
-            regex = re.compile(regex_str)
         regex_overrides = None
         if overrides:
-            regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in overrides.keys()])
+            patterns = list(overrides.keys())
+            regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex_overrides = re.compile(regex_overrides_str)
 
         self.module_qbits_map = {}
@@ -159,14 +159,6 @@ class Quantizer(object):
             name_to_match = module_full_name.replace('module.', '', 1)
             qbits = self.default_qbits
             override_entry = self.overrides.get(name_to_match, OrderedDict())
-            if regex:
-                m_bits = regex.match(name_to_match)
-                if m_bits:
-                    group_idx = 0
-                    groups = m_bits.groups()
-                    while groups[group_idx] is None:
-                        group_idx += 1
-                    qbits = bits_overrides[patterns[group_idx]]
             if regex_overrides:
                 m_overrides = regex_overrides.match(name_to_match)
                 if m_overrides:
@@ -174,7 +166,9 @@ class Quantizer(object):
                     groups = m_overrides.groups()
                     while groups[group_idx] is None:
                         group_idx += 1
-                    override_entry = override_entry or self.overrides[patterns[group_idx]]
+                    override_entry = copy.deepcopy(override_entry or self.overrides[patterns[group_idx]])
+                    qbits = override_entry.pop('bits', self.default_qbits)
+
             self._add_qbits_entry(module_full_name, type(module), qbits)
             self._add_override_entry(module_full_name, override_entry)
 
