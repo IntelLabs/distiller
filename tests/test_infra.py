@@ -133,11 +133,8 @@ def test_load_gpu_model_on_cpu_lean_checkpoint():
     checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
-    model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
-        model, checkpoint_filename, model_device=CPU_DEVICE_NAME, lean_checkpoint=True)
-
-    assert compression_scheduler is None
-    assert optimizer is None
+    model = load_lean_checkpoint(model, checkpoint_filename,
+                                 model_device=CPU_DEVICE_NAME)
     assert distiller.model_device(model) == CPU_DEVICE_NAME
 
 
