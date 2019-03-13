@@ -88,7 +88,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         lean_checkpoint: if set, read into model only 'state_dict' field
         optimizer: [deprecated argument]
         model_device [str]: if set, call model.to($model_device)
-                This should be set to either 'cpu' or 'gpu'.
+                This should be set to either 'cpu' or 'cuda'.
     :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
