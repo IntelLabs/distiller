@@ -78,7 +78,7 @@ def load_lean_checkpoint(model, chkpt_file):
     return load_checkpoint(model, chkpt_file, lean_checkpoint=True)[0]
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False):
+def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
     """Load a pytorch training checkpoint.
 
     Args:
@@ -86,6 +86,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
         chkpt_file: the checkpoint file
         lean_checkpoint: if set, read into model only 'state_dict' field
         optimizer: [deprecated argument]
+        model_device [str]: if set, call model.to($model_device)
+                This should be set to either 'cpu' or 'gpu'.
     :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
@@ -142,6 +144,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, *, lean_checkpoint=False)
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
+    if model_device is not None:
+        model.to(model_device)
 
     if lean_checkpoint:
         msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))

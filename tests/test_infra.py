@@ -113,29 +113,32 @@ def test_load_negative():
 def test_load_gpu_model_on_cpu():
     # Issue #148
     CPU_DEVICE_ID = -1
-    checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
+    CPU_DEVICE_NAME = 'cpu'
+    checkpoint_filename = 'checkpoints/resnet20_cifar10_checkpoint.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
     model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
         model, checkpoint_filename)
 
     assert compression_scheduler is not None
-    assert optimizer is None
-    assert start_epoch == 180
-    assert distiller.model_device(model) == 'cpu'
+    assert optimizer is not None
+    assert distiller.utils.optimizer_device_name(optimizer) == CPU_DEVICE_NAME
+    assert start_epoch == 1
+    assert distiller.model_device(model) == CPU_DEVICE_NAME
 
 
 def test_load_gpu_model_on_cpu_lean_checkpoint():
     CPU_DEVICE_ID = -1
+    CPU_DEVICE_NAME = 'cpu'
     checkpoint_filename = '../examples/ssl/checkpoints/checkpoint_trained_dense.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
     model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
-        model, checkpoint_filename, lean_checkpoint=True)
+        model, checkpoint_filename, model_device=CPU_DEVICE_NAME, lean_checkpoint=True)
 
     assert compression_scheduler is None
     assert optimizer is None
-    assert distiller.model_device(model) == 'cpu'
+    assert distiller.model_device(model) == CPU_DEVICE_NAME
 
 
 def test_load_gpu_model_on_cpu_with_thinning():

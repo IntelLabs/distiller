@@ -39,6 +39,10 @@ def model_device(model):
     return 'cpu'
 
 
+def optimizer_device_name(opt):
+    return str(list(list(opt.state)[0])[0].device)
+
+
 def to_np(var):
     return var.data.cpu().numpy()
 
