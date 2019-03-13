@@ -22,7 +22,6 @@ a pruning session, or for querying the pruning schedule of a sparse model.
 
 import os
 import shutil
-import pickle
 from errno import ENOENT
 import logging
 import torch
@@ -61,7 +60,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
     if optimizer is not None:
-        checkpoint['optimizer'] = pickle.dumps(optimizer)
+        checkpoint['optimizer_state_dict'] = optimizer.state_dict()
+        checkpoint['optimizer_type'] = type(optimizer)
     if scheduler is not None:
         checkpoint['compression_sched'] = scheduler.state_dict()
     if hasattr(model, 'thinning_recipes'):
@@ -152,18 +152,22 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
         return (model, None, None, 0)
 
-    def _load_pickled_optimizer(src_optimizer, model):
-        """Copy source optimizer and override its parameters with model's parameters"""
+    def _load_optimizer(cls, src_state_dict, model):
+        """Initiate optimizer with model parameters and load src_state_dict"""
         # initiate the dest_optimizer with a dummy learning rate,
         # this is required to support SGD.__init__()
-        dest_optimizer = type(src_optimizer)(model.parameters(), lr=1)
-        dest_optimizer.load_state_dict(src_optimizer.state_dict())
+        dest_optimizer = cls(model.parameters(), lr=1)
+        dest_optimizer.load_state_dict(src_state_dict)
         return dest_optimizer
 
     try:
-        optimizer = _load_pickled_optimizer(pickle.loads(checkpoint['optimizer']), model)
-    except TypeError:
-        # older checkpoints didn't save pickled optimizers
+        optimizer = _load_optimizer(checkpoint['optimizer_type'],
+            checkpoint['optimizer_state_dict'], model)
+    except KeyError:
+        if 'optimizer' not in checkpoint:
+            raise
+        # older checkpoints didn't support this feature
+        # they had the 'optimizer' field instead
         optimizer = None
 
     if optimizer is not None:

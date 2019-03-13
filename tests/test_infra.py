@@ -15,7 +15,6 @@
 #
 import logging
 import os
-import pickle
 import sys
 import tempfile
 
@@ -47,15 +46,15 @@ def test_load():
     logger.setLevel(logging.INFO)
 
     checkpoint_filename = 'checkpoints/resnet20_cifar10_checkpoint.pth.tar'
-    src_optimizer = pickle.loads(torch.load(checkpoint_filename)['optimizer'])
+    src_optimizer_state_dict = torch.load(checkpoint_filename)['optimizer_state_dict']
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
     model, compression_scheduler, optimizer, start_epoch = load_checkpoint(
         model, checkpoint_filename)
     assert compression_scheduler is not None
     assert optimizer is not None, 'Failed to load the optimizer'
-    if not _is_similar_param_groups(src_optimizer.state_dict(), optimizer.state_dict()):
-        assert src_optimizer == optimizer.state_dict() # this will always fail
+    if not _is_similar_param_groups(src_optimizer_state_dict, optimizer.state_dict()):
+        assert src_optimizer_state_dict == optimizer.state_dict() # this will always fail
     assert start_epoch == 1
 
 
