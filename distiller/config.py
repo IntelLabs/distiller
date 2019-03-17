@@ -134,9 +134,14 @@ def add_policy_to_scheduler(policy, policy_def, scheduler):
     try:
         epochs = policy_def['epochs']
     except KeyError:
+        if isinstance(policy, distiller.LRPolicy):
+            # ending epoch is optional argument only for lr policies
+            ending_epoch = policy_def.get('ending_epoch', 10**6)
+        else:
+            ending_epoch = policy_def.get('ending_epoch')
         epochs = range(
             policy_def.get('starting_epoch', 0),
-            policy_def.get('ending_epoch', 1),
+            ending_epoch,
             policy_def.get('frequency', 1),
             )
 
