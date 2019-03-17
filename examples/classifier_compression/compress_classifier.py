@@ -269,7 +269,7 @@ def main():
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
@@ -388,7 +388,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             stats_dict.update(errs)
             stats_dict['LR'] = optimizer.param_groups[0]['lr']
             stats_dict['Time'] = batch_time.mean
-            stats = ('Peformance/Training/', stats_dict)
+            stats = ('Performance/Training/', stats_dict)
 
             params = model.named_parameters() if args.log_params_histograms else None
             distiller.log_training_progress(stats,

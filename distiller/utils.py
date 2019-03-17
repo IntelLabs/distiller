@@ -431,7 +431,7 @@ def activation_channels_means(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its L1 magnitudes (i.e. over all of the
     activations in the mini-batch, compute the mean of the L1 magnitude of each channel).
@@ -457,7 +457,7 @@ def activation_channels_apoz(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its sparsity.
     """
