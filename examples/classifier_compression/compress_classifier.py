@@ -104,8 +104,7 @@ def main():
         # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
         # In Pytorch, support for deterministic execution is still a bit clunky.
         if args.workers > 1:
-            msglogger.error('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
-            exit(1)
+            raise ValueError('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
     else:
@@ -124,14 +123,12 @@ def main():
             try:
                 args.gpus = [int(s) for s in args.gpus.split(',')]
             except ValueError:
-                msglogger.error('ERROR: Argument --gpus must be a comma-separated list of integers only')
-                exit(1)
+                raise ValueError('ERROR: Argument --gpus must be a comma-separated list of integers only')
             available_gpus = torch.cuda.device_count()
             for dev_id in args.gpus:
                 if dev_id >= available_gpus:
-                    msglogger.error('ERROR: GPU device ID {0} requested, but only {1} devices available'
-                                    .format(dev_id, available_gpus))
-                    exit(1)
+                    raise ValueError('ERROR: GPU device ID {0} requested, but only {1} devices available'
+                                     .format(dev_id, available_gpus))
             # Set default device in case the first one on the list != 0
             torch.cuda.set_device(args.gpus[0])
 
