@@ -15,6 +15,6 @@
 #
 
 from .eltwise import EltwiseAdd, EltwiseMult
-from .concat import Concat
+from .concat import *
 
-__all__ = ['EltwiseAdd', 'EltwiseMult', 'Concat']
+__all__ = ['EltwiseAdd', 'EltwiseMult', 'Concat', 'Chunk', 'Split', 'Stack']
