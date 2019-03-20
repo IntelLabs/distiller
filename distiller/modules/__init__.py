@@ -15,7 +15,7 @@
 #
 
 from .eltwise import EltwiseAdd, EltwiseMult
-from .slice_and_join import *
+from .grouping import *
 from .rnn import *
 
 __all__ = ['EltwiseAdd', 'EltwiseMult',
