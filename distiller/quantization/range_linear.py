@@ -832,12 +832,10 @@ class FakeLinearQuantization(nn.Module):
 
 
 class FakeQuantizationWrapper(nn.Module):
-    def __init__(self, wrapped_module, num_bits, quant_mode, ema_decay, half_range=False, act_sat_mode=None):
+    def __init__(self, wrapped_module, fake_q):
         super(FakeQuantizationWrapper, self).__init__()
         self.wrapped_module = wrapped_module
-
-        self.fake_q = FakeLinearQuantization(num_bits, quant_mode, ema_decay, dequantize=True,
-                                             inplace=getattr(wrapped_module, 'inplace', False), half_range=half_range, act_sat_mode=act_sat_mode)
+        self.fake_q = fake_q
 
     def forward(self, *input):
         res = self.wrapped_module(*input)
@@ -929,8 +927,8 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             bits_acts = qbits_map[name].acts
             if bits_acts is None or bits_acts >= 32:
                 return module
-
-            return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, half_range=True, act_sat_mode=act_sat_mode)
+            return FakeQuantizationWrapper(module, FakeLinearQuantization(bits_acts, mode, ema_decay, dequantize=True,
+                                inplace=getattr(module, 'inplace', False), half_range=True, act_sat_mode=act_sat_mode))
 
         def bn_replace_fn(module, name, qbits_map):
             if hasattr(module, 'absorbed') and module.absorbed:
@@ -939,13 +937,15 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                 bits_acts = qbits_map[name].acts
                 if bits_acts is None or bits_acts >= 32:
                     return module
-                return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, act_sat_mode=act_sat_mode)
+            return FakeQuantizationWrapper(module, FakeLinearQuantization(bits_acts, mode, ema_decay, dequantize=True,
+                                inplace=getattr(module, 'inplace', False), half_range=False, act_sat_mode=act_sat_mode))
 
         def conv_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
             if bits_acts is None or bits_acts >= 32:
                 return module
-            return FakeQuantizationWrapper(module, bits_acts, mode, ema_decay, act_sat_mode=act_sat_mode)
+            return FakeQuantizationWrapper(module, FakeLinearQuantization(bits_acts, mode, ema_decay, dequantize=True,
+                                inplace=getattr(module, 'inplace', False), half_range=False, act_sat_mode=act_sat_mode))
 
         self.param_quantization_fn = linear_quantize_param
 

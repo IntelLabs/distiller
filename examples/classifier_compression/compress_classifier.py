@@ -81,7 +81,7 @@ import examples.automated_deep_compression as adc
 from models import ALL_MODEL_NAMES, create_model
 import parser
 from distiller.absorb_bn import search_absorb_bn
-
+from models.imagenet.resnet import resnet18
 
 # Logger handle
 msglogger = None
@@ -154,8 +154,9 @@ def main():
         args.exiterrors = []
 
     # Create the model
-    model = create_model(args.pretrained, args.dataset, args.arch,
-                         parallel=not args.load_serialized, device_ids=args.gpus)
+    # model = create_model(args.pretrained, args.dataset, args.arch,
+    #                      parallel=not args.load_serialized, device_ids=args.gpus)
+    model = resnet18(pretrained=True)
 
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
@@ -232,8 +233,8 @@ def main():
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
-    elif compression_scheduler is None:
-        compression_scheduler = distiller.CompressionScheduler(model)
+    # elif compression_scheduler is None:
+    #     compression_scheduler = distiller.CompressionScheduler(model)
 
     if args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)
@@ -291,8 +292,8 @@ def main():
         distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
                                         loggers=[tflogger])
 
-        if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch, optimizer)
+        # if compression_scheduler:
+        #     compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # Update the list of top scores achieved so far, and save the checkpoint
         is_best = top1 > best_epochs[-1].top1
@@ -384,8 +385,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if compression_scheduler:
-            compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
+        # if compression_scheduler:
+        #     compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
 
         # measure elapsed time
         batch_time.add(time.time() - end)
@@ -417,6 +418,36 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             epoch, steps_completed,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
+
+            q_val_params = [(n, p) for n, p in model.named_parameters() if 'q_gate' in n]
+            if len(q_val_params) > 0:
+                stats_dict = OrderedDict()
+                stats_dict['global/LR'] = optimizer.param_groups[1]['lr']
+                stats_dict['global/weight_decay'] = optimizer.param_groups[1]['weight_decay']
+                for name, param in q_val_params:
+                    stats_dict[name + '/min'] = param.min()
+                    stats_dict[name + '/max'] = param.max()
+                stats = ('Q_gate/', stats_dict)
+                distiller.log_training_progress(stats,
+                                                params,
+                                                epoch, steps_completed,
+                                                steps_per_epoch, args.print_freq,
+                                                loggers[0])
+
+                stats_dict = OrderedDict()
+                tract_min = [(k, model.state_dict()[k]) for k in model.state_dict() if 'tracked_min' in k and 'biased' not in k]
+                tract_max = [(k, model.state_dict()[k]) for k in model.state_dict() if 'tracked_max' in k and 'biased' not in k]
+                for name, param in tract_min:
+                    stats_dict[name] = param.item()
+                for name, param in tract_max:
+                    stats_dict[name] = param.item()
+                stats = ('Range/', stats_dict)
+                distiller.log_training_progress(stats,
+                                                params,
+                                                epoch, steps_completed,
+                                                steps_per_epoch, args.print_freq,
+                                                loggers[0])
+
         end = time.time()
 
 
