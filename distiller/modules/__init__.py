@@ -15,6 +15,9 @@
 #
 
 from .eltwise import EltwiseAdd, EltwiseMult
-from .concat import *
+from .slice_and_join import *
+from .rnn import *
 
-__all__ = ['EltwiseAdd', 'EltwiseMult', 'Concat', 'Chunk', 'Split', 'Stack']
+__all__ = ['EltwiseAdd', 'EltwiseMult',
+           'Concat', 'Chunk', 'Split', 'Stack',
+           'LSTMCell', 'LSTM']
