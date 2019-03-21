@@ -19,16 +19,22 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
+
+import argparse
+from collections import OrderedDict
+from copy import deepcopy
+import logging
+import operator
+import random
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import random
-from copy import deepcopy
 import yaml
-from collections import OrderedDict
-import argparse
-import operator
+
+
+msglogger = logging.getLogger()
 
 
 def model_device(model):
@@ -555,10 +561,12 @@ def make_non_parallel_copy(model):
 
 
 def set_deterministic():
+    msglogger.debug('set_deterministic is called')
     torch.manual_seed(0)
     random.seed(0)
     np.random.seed(0)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
