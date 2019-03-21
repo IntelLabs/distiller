@@ -19,18 +19,22 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
-import inspect
+import argparse
+from collections import OrderedDict
+from copy import deepcopy
+import logging
+import operator
+import random
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import random
-from copy import deepcopy
 import yaml
-from collections import OrderedDict
-import argparse
-import operator
+
+import inspect
+
+msglogger = logging.getLogger()
 
 
 def model_device(model):
@@ -584,10 +588,12 @@ def make_non_parallel_copy(model):
 
 
 def set_deterministic():
+    msglogger.debug('set_deterministic is called')
     torch.manual_seed(0)
     random.seed(0)
     np.random.seed(0)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
@@ -623,7 +629,6 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     return checker
 
 
-
 def filter_kwargs(dict_to_filter, function_to_call):
     """Utility to check which arguments in the passed dictionary exist in a function's signature
 
@@ -642,6 +647,7 @@ def filter_kwargs(dict_to_filter, function_to_call):
         else:
             invalid_args[key] = dict_to_filter[key]
     return valid_args, invalid_args
+
 
 def convert_tensors_recursively_to(val, *args, **kwargs):
     """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""

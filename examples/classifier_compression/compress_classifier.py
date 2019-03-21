@@ -103,12 +103,10 @@ def main():
     start_epoch = 0
     ending_epoch = args.epochs
     perf_scores_history = []
+
+    if args.evaluate:
+        args.deterministic = True
     if args.deterministic:
-        # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
-        # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
-        # In Pytorch, support for deterministic execution is still a bit clunky.
-        if args.workers > 1:
-            raise ValueError('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
     else:
