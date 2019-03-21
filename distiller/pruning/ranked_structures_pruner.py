@@ -365,6 +365,7 @@ def mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, bin
     if binary_map is None:
         binary_map = torch.zeros(num_filters).cuda()
         binary_map[filters_ordered_by_criterion] = 1
+    binary_map = binary_map.detach()
     expanded = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t().contiguous()
     return expanded.view(param.shape), binary_map
 
@@ -509,6 +510,7 @@ class BernoulliFilterPruner(RankedStructureParameterPruner):
         # Compensate for dropping filters
         pruning_factor = binary_map.sum() / num_filters
         mask.div_(pruning_factor)
+
         zeros_mask_dict[param_name].mask = mask
         msglogger.debug("BernoulliFilterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                         param_name,
