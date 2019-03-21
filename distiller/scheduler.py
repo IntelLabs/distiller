@@ -39,27 +39,32 @@ class ParameterMasker(object):
         self.mask_on_forward_only = False
         self.unmasked_copy = None
 
-    def apply_mask(self, tensor):
-        """Apply a mask on the weights tensor."""
+    def apply_mask(self, parameter):
+        """Apply a mask on the weights tensor (parameter)."""
         if self.mask is None:
             msglogger.debug('No mask for parameter {0}'.format(self.param_name))
             return
-        msglogger.debug('Masking parameter {0}'.format(self.param_name))
         if self.use_double_copies:
-            self.unmasked_copy = tensor.clone()
-        tensor.data.mul_(self.mask)
+            self.unmasked_copy = parameter.clone().detach()
+        self.mask_tensor(parameter)
         if self.is_regularization_mask:
             self.mask = None
-        return tensor
+        return parameter
 
-    def remove_mask(self, tensor):
-        if self.mask is None:
-            msglogger.debug('No mask for parameter {0}'.format(self.param_name))
-            return
-        if not self.use_double_copies:
+    def mask_tensor(self, tensor, is_gradient=False):
+        if self.mask is not None:
+            if not is_gradient:
+                msglogger.debug('Masking parameter {0}'.format(self.param_name))
+            else:
+                msglogger.debug('Masking gradient {0}'.format(self.param_name))
+            tensor.data.mul_(self.mask)
+
+    def revert_weights(self, parameter):
+        if not self.use_double_copies or self.unmasked_copy is None:
             msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
             return
-        tensor.data = self.unmasked_copy.data
+        parameter.data.copy_(self.unmasked_copy)
+        self.unmasked_copy = None
 
 
 def create_model_masks_dict(model):
@@ -84,6 +89,8 @@ class CompressionScheduler(object):
         for name, param in self.model.named_parameters():
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
+            # register for the backward hook of the parameters
+            param.register_hook(partial(masker.mask_tensor, is_gradient=True))
 
     def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
         """Add a new policy to the schedule.
@@ -140,6 +147,14 @@ class CompressionScheduler(object):
 
         return overall_loss
 
+    def before_parameter_optimization(self, epoch, minibatch_id, minibatches_per_epoch, optimizer):
+        if epoch in self.policies:
+            for policy in self.policies[epoch]:
+                meta = self.sched_metadata[policy]
+                meta['current_epoch'] = epoch
+                policy.before_parameter_optimization(self.model, epoch, minibatch_id, minibatches_per_epoch,
+                                                     self.zeros_mask_dict, meta, optimizer)
+
     def on_minibatch_end(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         # When we get to this point, the weights are no longer masked.  This is because during the backward
         # pass, the weights may have been updated.  This is true even when the gradients are zero, for some
@@ -168,7 +183,8 @@ class CompressionScheduler(object):
                 if is_forward or not self.zeros_mask_dict[name].mask_on_forward_only:
                     # When we mask on forward-pass only, we allow the gradients to change
                     # the weights.
-                    self.zeros_mask_dict[name].apply_mask(param)
+                    masker = self.zeros_mask_dict[name]
+                    masker.mask_tensor(param)
             except KeyError:
                 # Quantizers for training might modify model parameters in a couple of ways:
                 #   1. By adding a prefix to the parameter tensor name
@@ -220,7 +236,7 @@ class CompressionScheduler(object):
             loaded_masks = state['masks_dict']
         except KeyError as exception:
             msglogger.error('could not load the CompressionScheduler state.'
-                ' masks_dict is missing from state')
+                            ' masks_dict is missing from state')
             with contextlib.suppress(TypeError):
                 msglogger.debug('Scheduler state keys are: {}'.format(', '.join(state)))
             raise
