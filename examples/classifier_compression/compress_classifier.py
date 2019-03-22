@@ -157,6 +157,8 @@ def main():
     # model = create_model(args.pretrained, args.dataset, args.arch,
     #                      parallel=not args.load_serialized, device_ids=args.gpus)
     model = resnet18(pretrained=True)
+    if len(args.gpus) > 1:
+        model = torch.nn.DataParallel(model, device_ids=args.gpus)
 
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
@@ -419,29 +421,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
 
-            q_val_params = [(n, p) for n, p in model.named_parameters() if 'q_gate' in n]
-            if len(q_val_params) > 0:
-                stats_dict = OrderedDict()
-                stats_dict['global/LR'] = optimizer.param_groups[1]['lr']
-                stats_dict['global/weight_decay'] = optimizer.param_groups[1]['weight_decay']
-                for name, param in q_val_params:
-                    stats_dict[name + '/min'] = param.min()
-                    stats_dict[name + '/max'] = param.max()
-                stats = ('Q_gate/', stats_dict)
-                distiller.log_training_progress(stats,
-                                                params,
-                                                epoch, steps_completed,
-                                                steps_per_epoch, args.print_freq,
-                                                loggers[0])
-
-                stats_dict = OrderedDict()
-                tract_min = [(k, model.state_dict()[k]) for k in model.state_dict() if 'tracked_min' in k and 'biased' not in k]
-                tract_max = [(k, model.state_dict()[k]) for k in model.state_dict() if 'tracked_max' in k and 'biased' not in k]
-                for name, param in tract_min:
-                    stats_dict[name] = param.item()
-                for name, param in tract_max:
-                    stats_dict[name] = param.item()
-                stats = ('Range/', stats_dict)
+            quantizer = compression_scheduler.policies[0][0].quantizer
+            stats_list = quantizer.get_loger_stats(model, optimizer)
+            for stats in stats_list:
                 distiller.log_training_progress(stats,
                                                 params,
                                                 epoch, steps_completed,

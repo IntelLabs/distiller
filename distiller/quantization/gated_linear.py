@@ -15,7 +15,7 @@
 #
 
 import torch.nn as nn
-
+from collections import OrderedDict
 from .quantizer import Quantizer
 from .q_utils import *
 from distiller.quantization.range_linear import LinearQuantMode, SaturationMode, FakeQuantizationWrapper
@@ -133,9 +133,9 @@ class GatedSTEQuatizer(Quantizer):
                                                                   quantize_bias=quantize_bias,
                                                                   train_with_fp_copy=True)
 
-        if isinstance(model, nn.DataParallel) and len(model.device_ids) > 1:
-            raise RuntimeError('QuantAwareTrainRangeLinearQuantizer currently does not support running with '
-                               'multiple GPUs')
+        # if isinstance(model, nn.DataParallel) and len(model.device_ids) > 1:
+        #     raise RuntimeError('QuantAwareTrainRangeLinearQuantizer currently does not support running with '
+        #                        'multiple GPUs')
 
         mode = verify_mode(mode)
         self.act_sat_mode = verify_sat_mode(act_sat_mode) if act_sat_mode is not None else None
@@ -173,3 +173,146 @@ class GatedSTEQuatizer(Quantizer):
         q_val_group['weight_decay'] = 0.01
         # q_val_group['lr'] = 0.001
         return [base_group, q_val_group]
+
+
+# Currently clamp with 0 from the bottom
+# TODO: generic version with two parameters clamp_min, clamp_max
+class LearnedClamp(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, clamp_max):
+        ctx.save_for_backward(input, clamp_max)
+        output = clamp(input, 0, clamp_max.item())
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, clip_val = ctx.saved_tensors
+        grad_input = grad_output.clone()
+        grad_input[input.le(0)] = 0
+        grad_input[input.ge(clip_val.item())] = 0
+
+        grad_alpha = grad_output.clone()
+        grad_alpha[input.lt(clip_val.item())] = 0
+        grad_alpha = grad_alpha.sum().expand_as(clip_val)
+
+        return grad_input, grad_alpha, None
+
+
+class LearnedClippedGatedLinearQuantization(nn.Module):
+    def __init__(self, size, num_bits, dequantize=True, inplace=False, half_range=False):
+        super(LearnedClippedGatedLinearQuantization, self).__init__()
+        self.size = size
+        self.num_bits = num_bits
+        self.clip_val = nn.Parameter(torch.Tensor([0]))
+        self.q_gate = nn.Parameter(torch.Tensor(self.size))
+        self.q_gate.data = 1 * torch.ones(self.size)
+        self.dequantize = dequantize
+        self.inplace = inplace
+        self.half_range = half_range
+        self.clip_value_initialized = False
+        self.init_sat_factor = 0.5
+
+        self.register_buffer('tracked_min', torch.zeros(1))
+        self.register_buffer('tracked_max', torch.zeros(1))
+        self.register_buffer('delta_norm', torch.tensor([0]))
+
+    def forward(self, input):
+        current_min, current_max = get_tensor_min_max(input)
+        self.tracked_min.data = current_min
+        self.tracked_max.data = current_max
+
+        if not self.clip_value_initialized:
+            # Initialize using Laplace clipping
+            with torch.no_grad():
+                clipper = AciqAsymetricClipper(self.num_bits, AciqClipper.AciqClippingType.Laplace,
+                                               half_range=self.half_range)
+
+                _, clipped_max = clipper(input)
+                _, initial_max = get_tensor_min_max(input)
+                initial_clipping_val = self.init_sat_factor * clipped_max + (1 - self.init_sat_factor) * initial_max
+                self.clip_val.copy_(torch.tensor([initial_clipping_val]))
+
+            self.clip_value_initialized = True
+
+        scale, zero_point = asymmetric_linear_quantization_params(self.num_bits, 0, self.clip_val.item(), signed=False)
+        input = LearnedClamp.apply(input, self.clip_val)
+        input_q = LinearQuantizeSTE.apply(input, scale, zero_point, self.dequantize, False)
+        delta = input_q - input
+
+        self.delta_norm.data = torch.norm(delta) / delta.numel()
+
+        output = input + (1. - torch.clamp(self.q_gate, 0., 1.).view(1, self.size, 1, 1)) * delta
+        return output
+
+    def __repr__(self):
+        inplace_str = ', inplace' if self.inplace else 
+        return '{0}(num_bits={1}, clip_val={2}{3})'.format(self.__class__.__name__, self.num_bits, self.clip_val,
+                                                           inplace_str)
+
+
+class GatedPactSTEQuatizer(Quantizer):
+    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=None,
+                 quantize_bias=False, act_clip_decay=None):
+        super(GatedPactSTEQuatizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
+                                            bits_weights=bits_weights, bits_overrides=bits_overrides,
+                                            train_with_fp_copy=True, quantize_bias=quantize_bias)
+
+        def relu_replace_fn(module, name, qbits_map):
+            bits_acts = qbits_map[name].acts
+            if bits_acts is None:
+                return module
+            return FakeQuantizationWrapper(module, LearnedClippedGatedLinearQuantization(module.num_features, bits_acts, dequantize=True,
+                                                    inplace=module.inplace))
+
+        self.replacement_factory[nn.ReLU] = relu_replace_fn
+        self.act_clip_decay = act_clip_decay
+
+    def get_loger_stats(self, model, optimizer):
+        q_val_params = [(n, p) for n, p in model.named_parameters() if 'q_gate' in n]
+        stats_dict = OrderedDict()
+        stats_dict['global/LR'] = optimizer.param_groups[1]['lr']
+        stats_dict['global/weight_decay'] = optimizer.param_groups[1]['weight_decay']
+        for name, param in q_val_params:
+            stats_dict[name + '/min'] = param.min()
+            stats_dict[name + '/max'] = param.max()
+        stats1 = ('Q_gate/', stats_dict)
+
+        stats_dict = OrderedDict()
+        stats_dict['global/LR'] = optimizer.param_groups[2]['lr']
+        stats_dict['global/weight_decay'] = optimizer.param_groups[1]['weight_decay']
+        clip_val_params = [(n, p) for n, p in model.named_parameters() if 'clip_val' in n]
+        for name, param in clip_val_params:
+            stats_dict[name + '/clip_val'] = param.item()
+        stats2 = ('Clip/', stats_dict)
+
+        stats_dict = OrderedDict()
+        tract_min = [(k, model.state_dict()[k]) for k in model.state_dict() if
+                     'tracked_min' in k and 'biased' not in k]
+        tract_max = [(k, model.state_dict()[k]) for k in model.state_dict() if
+                     'tracked_max' in k and 'biased' not in k]
+        for name, param in tract_min:
+            stats_dict[name] = param.item()
+        for name, param in tract_max:
+            stats_dict[name] = param.item()
+        stats3 = ('Range/', stats_dict)
+
+        stats_dict = OrderedDict()
+        delta = [(k, model.state_dict()[k]) for k in model.state_dict() if
+                     'delta_norm' in k]
+        for name, param in delta:
+            stats_dict[name] = param.item()
+        stats4 = ('Q_delta/', stats_dict)
+
+        return [stats1, stats2, stats3, stats4]
+
+    def _get_updated_optimizer_params_groups(self):
+        base_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' not in name and 'clip_val' not in name]}
+        q_val_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' in name]}
+        clip_val_group = {'params': [param for name, param in self.model.named_parameters() if 'clip_val' in name]}
+
+        q_val_group['weight_decay'] = 0.01
+        clip_val_group['lr'] = 0.001
+        clip_val_group['weight_decay'] = 0.0001
+        if self.act_clip_decay is not None:
+            clip_val_group['weight_decay'] = self.act_clip_decay
+        return [base_group, q_val_group, clip_val_group]
