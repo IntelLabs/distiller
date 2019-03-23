@@ -279,7 +279,7 @@ class GatedPactSTEQuatizer(Quantizer):
 
         stats_dict = OrderedDict()
         stats_dict['global/LR'] = optimizer.param_groups[2]['lr']
-        stats_dict['global/weight_decay'] = optimizer.param_groups[1]['weight_decay']
+        stats_dict['global/weight_decay'] = optimizer.param_groups[2]['weight_decay']
         clip_val_params = [(n, p) for n, p in model.named_parameters() if 'clip_val' in n]
         for name, param in clip_val_params:
             stats_dict[name + '/clip_val'] = param.item()
