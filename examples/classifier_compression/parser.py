@@ -36,8 +36,8 @@ def get_parser():
                         ' (default: resnet18)')
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=90, type=int, metavar='N',
-                        help='number of total epochs to run')
+    parser.add_argument('--epochs', type=int, metavar='N',
+                        help='number of total epochs to run (default: 90')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N', help='mini-batch size (default: 256)')
 
@@ -48,27 +48,25 @@ def get_parser():
                     metavar='M', help='momentum')
     optimizer_args.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
-    parser.add_argument('--exp-reset-optimizer', dest='reset_optimizer', action='store_true',
-                        help='Flag to override optimizer if resumed from checkpoint (experimental)')
-    parser.add_argument('--exp-reset-epochs', dest='reset_epochs', action='store_true',
-                        help='Flag to train for another N epochs (instead of N in total), '
-                            'if resumed from checkpoint (experimental)')
 
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
 
-    load_checkpoint_group = parser.add_mutually_exclusive_group()
+    load_checkpoint_group = parser.add_argument_group('Resuming arguments')
+    load_checkpoint_group_exc = parser.add_mutually_exclusive_group()
     # TODO(barrh): args.deprecated_resume is deprecated since v0.3
-    load_checkpoint_group.add_argument('--resume', dest='deprecated_resume', default='', type=str,
+    load_checkpoint_group_exc.add_argument('--resume', dest='deprecated_resume', default='', type=str,
                         metavar='PATH', help=argparse.SUPPRESS)
-    load_checkpoint_group.add_argument('--resume-from', dest='resumed_checkpoint_path', default='',
+    load_checkpoint_group_exc.add_argument('--resume-from', dest='resumed_checkpoint_path', default='',
                         type=str, metavar='PATH',
                         help='path to latest checkpoint. Use to resume paused training session.')
-    load_checkpoint_group.add_argument('--exp-load-weights-from', dest='load_model_path',
+    load_checkpoint_group_exc.add_argument('--exp-load-weights-from', dest='load_model_path',
                         default='', type=str, metavar='PATH',
-                        help='path to checkpoint to load weights from (excluding other fields)')
-    parser.add_argument('--pretrained', dest='pretrained', action='store_true',
+                        help='path to checkpoint to load weights from (excluding other fields) (experimental)')
+    load_checkpoint_group.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
+    load_checkpoint_group.add_argument('--reset-optimizer', action='store_true',
+                        help='Flag to override optimizer if resumed from checkpoint. This will reset epochs count.')
 
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')

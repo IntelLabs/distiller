@@ -87,6 +87,8 @@ def main():
 
     # Parse arguments
     args = parser.get_parser().parse_args()
+    if args.epochs is None:
+        args.epochs = 90
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -98,6 +100,7 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
+    ending_epoch = args.epochs
     perf_scores_history = []
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -161,10 +164,9 @@ def main():
     # TODO(barrh): args.deprecated_resume is deprecated since v0.3
     if args.deprecated_resume:
         msglogger.warning('The "--resume" flag is deprecated. Please use "--resume-from=YOUR_PATH" instead.')
-        if (not args.reset_optimizer) or (not args.reset_epochs):
-            msglogger.warning('If you wish to also reset the optimizer, call with: --exp-reset-optimizer')
+        if not args.reset_optimizer:
+            msglogger.warning('If you wish to also reset the optimizer, call with: --reset-optimizer')
             args.reset_optimizer = True
-        args.reset_epochs = True
         args.resumed_checkpoint_path = args.deprecated_resume
 
     # We can optionally resume from a checkpoint
@@ -175,13 +177,16 @@ def main():
     elif args.load_model_path:
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
+    if args.reset_optimizer:
+        start_epoch = 0
+        if optimizer is not None:
+            optimizer = None
+            msglogger.info('Overriding resumed optimizer')
 
     # Define loss function (criterion)
     criterion = nn.CrossEntropyLoss().to(args.device)
 
-    if optimizer is None or args.reset_optimizer:
-        if args.reset_optimizer and optimizer:
-            msglogger.info('Overriding resumed optimizer')
+    if optimizer is None:
         optimizer = torch.optim.SGD(model.parameters(),
             lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.info('Optimizer Type: %s', type(optimizer))
@@ -230,7 +235,7 @@ def main():
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
-            (start_epoch-1) if (args.resumed_checkpoint_path and not args.reset_optimizer) else None)
+            (start_epoch-1) if args.resumed_checkpoint_path else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
     elif compression_scheduler is None:
@@ -262,17 +267,16 @@ def main():
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
 
-    ending_epoch = args.epochs if not args.reset_epochs else start_epoch + args.epochs
     if start_epoch >= ending_epoch:
         msglogger.error(
             'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
             start_epoch, ending_epoch))
+        raise ValueError('Epochs parameter is too low. Nothing to do.')
     for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
-            compression_scheduler.on_epoch_begin(
-                epoch if not args.reset_optimizer else epoch - start_epoch,
+            compression_scheduler.on_epoch_begin(epoch,
                 metrics=(vloss if (epoch != start_epoch) else 10**6))
 
         # Train for one epoch
