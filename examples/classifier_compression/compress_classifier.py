@@ -99,6 +99,9 @@ def main():
 
     start_epoch = 0
     perf_scores_history = []
+
+    if args.evaluate:
+        args.deterministic = True
     if args.deterministic:
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
