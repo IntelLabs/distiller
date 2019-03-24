@@ -8,6 +8,9 @@ quantizers:
     ema_decay: 0.999   # Decay value for exponential moving average tracking of activation ranges
     per_channel_wts: True
     quantize_inputs: False
+    q_gate_decay: 0.01
+    act_clip_decay: 0.0001
+    act_clip_lr: 0.001
     bits_overrides:
       conv1:
         acts: null

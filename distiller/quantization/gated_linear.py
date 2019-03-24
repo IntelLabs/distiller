@@ -252,10 +252,15 @@ class LearnedClippedGatedLinearQuantization(nn.Module):
 
 class GatedPactSTEQuatizer(Quantizer):
     def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=None,
-                 quantize_bias=False, act_clip_decay=None):
+                 quantize_bias=False, act_clip_decay=None, act_clip_lr=None, q_gate_decay=None, q_gate_lr=None):
         super(GatedPactSTEQuatizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
                                             bits_weights=bits_weights, bits_overrides=bits_overrides,
                                             train_with_fp_copy=True, quantize_bias=quantize_bias)
+
+        self.act_clip_decay = act_clip_decay
+        self.act_clip_lr = act_clip_lr
+        self.q_gate_decay = q_gate_decay
+        self.q_gate_lr = q_gate_lr
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -265,7 +270,6 @@ class GatedPactSTEQuatizer(Quantizer):
                                                     inplace=module.inplace))
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
-        self.act_clip_decay = act_clip_decay
 
     def get_loger_stats(self, model, optimizer):
         q_val_params = [(n, p) for n, p in model.named_parameters() if 'q_gate' in n]
@@ -307,12 +311,17 @@ class GatedPactSTEQuatizer(Quantizer):
 
     def _get_updated_optimizer_params_groups(self):
         base_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' not in name and 'clip_val' not in name]}
-        q_val_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' in name]}
+        q_gate_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' in name]}
         clip_val_group = {'params': [param for name, param in self.model.named_parameters() if 'clip_val' in name]}
 
-        q_val_group['weight_decay'] = 0.01
-        clip_val_group['lr'] = 0.001
-        clip_val_group['weight_decay'] = 0.0001
+        if self.q_gate_lr is not None:
+            q_gate_group['lr'] = self.q_gate_lr
+        if self.q_gate_decay is not None:
+            q_gate_group['weight_decay'] = self.q_gate_decay
+
+        if self.act_clip_lr is not None:
+            clip_val_group['lr'] = self.act_clip_lr
         if self.act_clip_decay is not None:
             clip_val_group['weight_decay'] = self.act_clip_decay
-        return [base_group, q_val_group, clip_val_group]
+
+        return [base_group, q_gate_group, clip_val_group]
