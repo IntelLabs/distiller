@@ -218,7 +218,7 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
     test_sampler = SwitchingSubsetRandomSampler(test_indices, effective_test_size)
     test_loader = torch.utils.data.DataLoader(test_dataset,
                                               batch_size=batch_size, sampler=test_sampler,
-                                              num_workers=min(num_workers, 1), pin_memory=True)
+                                              num_workers=num_workers, pin_memory=True)
 
     input_shape = __image_size(train_dataset)
 
