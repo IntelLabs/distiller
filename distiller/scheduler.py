@@ -19,14 +19,13 @@
 This implements the scheduling of the compression policies.
 """
 import contextlib
-from functools import partial
 import logging
-
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
 from .policy import PolicyLoss, LossComponent
 from .utils import model_device, normalize_module_name
 msglogger = logging.getLogger()
+import distiller
 
 
 class ParameterMasker(object):
@@ -38,6 +37,7 @@ class ParameterMasker(object):
         self.use_double_copies = False
         self.mask_on_forward_only = False
         self.unmasked_copy = None
+        self.backward_hook_handle = None
 
     def apply_mask(self, parameter):
         """Apply a mask on the weights tensor (parameter)."""
@@ -51,19 +51,21 @@ class ParameterMasker(object):
             self.mask = None
         return parameter
 
-    def mask_tensor(self, tensor, is_gradient=False):
+    def mask_tensor(self, tensor):
         if self.mask is not None:
-            if not is_gradient:
-                msglogger.debug('Masking parameter {0}'.format(self.param_name))
-            else:
-                msglogger.debug('Masking gradient {0}'.format(self.param_name))
             tensor.data.mul_(self.mask)
+
+    def mask_gradient(self, gradient):
+        if self.mask is not None:
+            return gradient.mul(self.mask)
 
     def revert_weights(self, parameter):
         if not self.use_double_copies or self.unmasked_copy is None:
             msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
             return
+        #msglogger.info('Parameter {} before {}'.format(self.param_name, distiller.sparsity(parameter)))
         parameter.data.copy_(self.unmasked_copy)
+        #msglogger.info('Parameter {} after {}'.format(self.param_name, distiller.sparsity(parameter)))
         self.unmasked_copy = None
 
 
@@ -86,11 +88,10 @@ class CompressionScheduler(object):
         self.policies = {}
         self.sched_metadata = {}
         self.zeros_mask_dict = {}
+        # Create the masker objects and place them in a dictionary indexed by the parameter name
         for name, param in self.model.named_parameters():
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
-            # register for the backward hook of the parameters
-            param.register_hook(partial(masker.mask_tensor, is_gradient=True))
 
     def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
         """Add a new policy to the schedule.
@@ -163,7 +164,7 @@ class CompressionScheduler(object):
         #
         # Therefore we choose to always apply the pruning mask.  In the future we may optimize this by applying
         # the mask only if the some policy is actually using the mask.
-        self.apply_mask(is_forward=False)
+        self.mask_all_weights(is_forward=False)
         if epoch in self.policies:
             for policy in self.policies[epoch]:
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
@@ -177,13 +178,13 @@ class CompressionScheduler(object):
                 meta['optimizer'] = optimizer
                 policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
 
-    def apply_mask(self, is_forward=True):
+    def mask_all_weights(self, is_forward=True):
         for name, param in self.model.named_parameters():
             try:
-                if is_forward or not self.zeros_mask_dict[name].mask_on_forward_only:
+                masker = self.zeros_mask_dict[name]
+                if is_forward or not masker.mask_on_forward_only:
                     # When we mask on forward-pass only, we allow the gradients to change
                     # the weights.
-                    masker = self.zeros_mask_dict[name]
                     masker.mask_tensor(param)
             except KeyError:
                 # Quantizers for training might modify model parameters in a couple of ways:

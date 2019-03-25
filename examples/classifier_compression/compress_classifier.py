@@ -39,6 +39,7 @@ train():
         loss = criterion(output, target)
         compression_scheduler.before_backward_pass(epoch)
         loss.backward()
+        compression_scheduler.before_parameter_optimization(epoch)
         optimizer.step()
         compression_scheduler.on_minibatch_end(epoch)
 
