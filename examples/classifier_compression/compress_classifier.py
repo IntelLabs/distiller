@@ -161,7 +161,7 @@ def main():
     if args.earlyexit_thresholds:
         msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
-    # TODO(barrh): args.deprecated_resume is deprecated since v0.3
+    # TODO(barrh): args.deprecated_resume is deprecated since v0.3.1
     if args.deprecated_resume:
         msglogger.warning('The "--resume" flag is deprecated. Please use "--resume-from=YOUR_PATH" instead.')
         if not args.reset_optimizer:
