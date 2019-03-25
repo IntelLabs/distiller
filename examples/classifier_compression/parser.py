@@ -53,7 +53,7 @@ def get_parser():
                         metavar='N', help='print frequency (default: 10)')
 
     load_checkpoint_group = parser.add_argument_group('Resuming arguments')
-    load_checkpoint_group_exc = parser.add_mutually_exclusive_group()
+    load_checkpoint_group_exc = load_checkpoint_group.add_mutually_exclusive_group()
     # TODO(barrh): args.deprecated_resume is deprecated since v0.3
     load_checkpoint_group_exc.add_argument('--resume', dest='deprecated_resume', default='', type=str,
                         metavar='PATH', help=argparse.SUPPRESS)
