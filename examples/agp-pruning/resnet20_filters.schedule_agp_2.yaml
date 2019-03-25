@@ -103,20 +103,20 @@ extensions:
 policies:
   - pruner:
       instance_name : low_pruner
-    starting_epoch: 180
-    ending_epoch: 200
+    starting_epoch: 0
+    ending_epoch: 20
     frequency: 2
 
   - pruner:
       instance_name : fine_pruner
-    starting_epoch: 200
-    ending_epoch: 220
+    starting_epoch: 20
+    ending_epoch: 40
     frequency: 2
 
 # After completeing the pruning, we perform network thinning and continue fine-tuning.
   - extension:
       instance_name: net_thinner
-    epochs: [202]
+    epochs: [22]
 
   - lr_scheduler:
       instance_name: pruning_lr
