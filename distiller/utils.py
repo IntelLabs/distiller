@@ -289,9 +289,6 @@ def sparsity_blocks(tensor, block_shape):
 
     # Next, compute the sums of each column (block)
     block_sums = view1.abs().sum(dim=1)
-
-    # Next, compute the sums of each column (block)
-    block_sums = view1.abs().sum(dim=1)
     nonzero_blocks = len(torch.nonzero(block_sums))
     return 1 - nonzero_blocks/num_super_blocks
 
