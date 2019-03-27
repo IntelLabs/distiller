@@ -181,7 +181,6 @@ def main():
         start_epoch = 0
         if optimizer is not None:
             optimizer = None
-            msglogger.info()
             msglogger.info('reset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
     # Define loss function (criterion)
