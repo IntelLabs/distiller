@@ -470,7 +470,7 @@ def optimizer_thinning(optimizer, param, dim, indices, new_shape=None):
             if id(p) != id(param):
                 continue
             param_state = optimizer.state[p]
-            if ('momentum_buffer' in param_state) and (param_state['momentum_buffer'] is not None):
+            if param_state.get('momentum_buffer', None) is not None:
                 param_state['momentum_buffer'] = torch.index_select(param_state['momentum_buffer'], dim, indices)
                 if new_shape is not None:
                     msglogger.debug("optimizer_thinning: new shape {}".format(*new_shape))
