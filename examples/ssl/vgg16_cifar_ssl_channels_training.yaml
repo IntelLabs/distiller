@@ -5,7 +5,7 @@
 # time python3 compress_classifier.py --arch vgg16_cifar  ../../../data.cifar10 -p=50 --lr=0.05 --epochs=180 --compress=../ssl/vgg16_cifar_ssl_channels_training.yaml -j=1 --deterministic
 #
 # The results below are from the SSL training session, and you can follow-up with some fine-tuning:
-# time python3 compress_classifier.py --arch vgg16_cifar  ../../../data.cifar10 --resume=checkpoint.vgg16_cifar.pth.tar --lr=0.01 --epochs=20
+# time python3 compress_classifier.py --arch vgg16_cifar  ../../../data.cifar10 --resume-from=checkpoint.vgg16_cifar.pth.tar  --reset-optimizer --lr=0.01 --epochs=20
 # ==> Top1: 91.010    Top5: 99.480    Loss: 0.513
 #
 # Parameters:
@@ -74,14 +74,13 @@ extensions:
 policies:
   - lr_scheduler:
       instance_name: training_lr
-    starting_epoch: 45
+    starting_epoch: 0
     ending_epoch: 300
     frequency: 1
 
-# After completeing the regularization, we perform network thinning and exit.
   - extension:
       instance_name: net_thinner
-    epochs: [179]
+    epochs: [0]
 
   - regularizer:
       instance_name: Channels_groups_regularizer
