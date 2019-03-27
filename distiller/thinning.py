@@ -542,7 +542,7 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                                   new_shape=directive[3] if len(directive)==4 else None):
                 msglogger.debug("Updated velocity buffer %s" % param_name)
             else:
-                msglogger.debug('Failed to update the optimizer by thinnig directive')
+                msglogger.debug('Failed to update the optimizer by thinning directive')
 
             if not loaded_from_file:
                 # If the masks are loaded from a checkpoint file, then we don't need to change
