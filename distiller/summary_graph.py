@@ -83,15 +83,9 @@ class SummaryGraph(object):
     def __init__(self, model, dummy_input):
         model = distiller.make_non_parallel_copy(model)
         with torch.onnx.set_training(model, False):
-            def _tupletree2device(obj, device):
-                if isinstance(obj, torch.Tensor):
-                    return obj.to(device)
-                if not isinstance(obj, tuple):
-                    raise TypeError("obj has to be a tree of tuples.")
-                return tuple(_tupletree2device(child, device) for child in obj)
-
+            
             device = next(model.parameters()).device
-            dummy_input = _tupletree2device(dummy_input, device)
+            dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
             trace, _ = jit.get_trace_graph(model, dummy_input)
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
