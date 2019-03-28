@@ -142,8 +142,9 @@ class DorefaParamsBinarizationSTE(torch.autograd.Function):
         if inplace:
             ctx.mark_dirty(input)
         E = input.abs().mean()
-        output = input.sign() * E
+        output = input.sign()
         output[output == 0] = 1
+        output = output * E
         return output
     
     @staticmethod
