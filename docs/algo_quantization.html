@@ -7,25 +7,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
-  <link rel="shortcut icon" href="../img/favicon.ico">
+  <link rel="shortcut icon" href="img/favicon.ico">
   <title>Quantization - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
-  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="../css/highlight.css">
-  <link href="../extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
   
   <script>
     // Current page data
     var mkdocs_page_name = "Quantization";
     var mkdocs_page_input_path = "algo_quantization.md";
-    var mkdocs_page_url = "/algo_quantization/index.html";
+    var mkdocs_page_url = null;
   </script>
   
-  <script src="../js/jquery-2.1.1.min.js"></script>
-  <script src="../js/modernizr-2.8.3.min.js"></script>
-  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
 
@@ -36,10 +37,10 @@
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
       <div class="wy-side-nav-search">
-        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
-  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
   </form>
 </div>
       </div>
@@ -50,22 +51,22 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../index.html">Home</a>
+    <a class="" href="index.html">Home</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../install/index.html">Installation</a>
+    <a class="" href="install.html">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../usage/index.html">Usage</a>
+    <a class="" href="usage.html">Usage</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../schedule/index.html">Compression Scheduling</a>
+    <a class="" href="schedule.html">Compression Scheduling</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -74,23 +75,23 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../pruning/index.html">Pruning</a>
+    <a class="" href="pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../regularization/index.html">Regularization</a>
+    <a class="" href="regularization.html">Regularization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../quantization/index.html">Quantization</a>
+    <a class="" href="quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
                 </li>
     </ul>
 	    </li>
@@ -101,11 +102,11 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../algo_pruning/index.html">Pruning</a>
+    <a class="" href="algo_pruning.html">Pruning</a>
                 </li>
                 <li class=" current">
                     
-    <a class="current" href="index.html">Quantization</a>
+    <a class="current" href="algo_quantization.html">Quantization</a>
     <ul class="subnav">
             
     <li class="toctree-l3"><a href="#quantization-algorithms">Quantization Algorithms</a></li>
@@ -127,24 +128,24 @@
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
                 </li>
     </ul>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+    <a class="" href="model_zoo.html">Model Zoo</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../design/index.html">Design</a>
+    <a class="" href="design.html">Design</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -153,11 +154,11 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../tutorial-struct_pruning/index.html">Pruning Filters and Channels</a>
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../tutorial-lang_model/index.html">Pruning a Language Model</a>
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
                 </li>
     </ul>
 	    </li>
@@ -172,7 +173,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="../index.html">Neural Network Distiller</a>
+        <a href="index.html">Neural Network Distiller</a>
       </nav>
 
       
@@ -180,7 +181,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="../index.html">Docs</a> &raquo;</li>
+    <li><a href="index.html">Docs</a> &raquo;</li>
     
       
         
@@ -200,7 +201,7 @@
               
                 <h1 id="quantization-algorithms">Quantization Algorithms</h1>
 <p><strong>Note:</strong><br />
-For any of the methods below that require quantization-aware training, please see <a href="../schedule/index.html#quantization">here</a> for details on how to invoke it using Distiller's scheduling mechanism.</p>
+For any of the methods below that require quantization-aware training, please see <a href="schedule.html#quantization">here</a> for details on how to invoke it using Distiller's scheduling mechanism.</p>
 <h2 id="range-based-linear-quantization">Range-Based Linear Quantization</h2>
 <p>Let's break down the terminology we use here:</p>
 <ul>
@@ -261,7 +262,7 @@ For any of the methods below that require quantization-aware training, please se
 </ul>
 <h3 id="other-features">Other Features</h3>
 <ul>
-<li><strong>Removing Outliers:</strong> As discussed <a href="../quantization/index.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
+<li><strong>Removing Outliers:</strong> As discussed <a href="quantization.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="../imgs/quant_clipped.png"/>
    </p>
@@ -281,9 +282,9 @@ For any of the methods below that require quantization-aware training, please se
 </ul>
 </li>
 <li>All other layers are unaffected and are executed using their original FP32 implementation.</li>
-<li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For details on ways to invoke the quantizer see <a href="../schedule/index.html#post-training-quantization">here</a>.</li>
+<li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For details on ways to invoke the quantizer see <a href="schedule.html#post-training-quantization">here</a>.</li>
 <li>The transform performed by the Quantizer only works on sub-classes of <code>torch.nn.Module</code>. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the <code>torch</code> namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/distiller/modules">here</a>. It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified <a href="https://github.com/NervanaSystems/distiller/blob/quantization_updates/models/imagenet/resnet.py">ResNet implementation</a>.</li>
-<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that <a href="../schedule/index.html#collecting-statistics-for-quantization">here</a>.</li>
+<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that <a href="schedule.html#collecting-statistics-for-quantization">here</a>.</li>
 <li>The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.</li>
 </ul>
 <h4 id="quantization-aware-training">Quantization-Aware Training</h4>
@@ -309,7 +310,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <p>
 <script type="math/tex; mode=display">w_q = 2 quantize_k \left( f(w_f) \right) - 1</script>
 </p>
-<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/index.html#quantization-aware-training">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
 <h3 id="notes">Notes:</h3>
 <ul>
 <li>Gradients quantization as proposed in the paper is not supported yet.</li>
@@ -318,7 +319,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <h2 id="pact">PACT</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1805.06085">PACT: Parameterized Clipping Activation for Quantized Neural Networks</a>)</p>
 <p>This method is similar to DoReFa, but the upper clipping values, <script type="math/tex">\alpha</script>, of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, <script type="math/tex">\alpha</script> is shared per layer.</p>
-<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization/#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
 <h2 id="wrpn">WRPN</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1709.01134">WRPN: Wide Reduced-Precision Networks</a>)  </p>
 <p>In this method, activations are clipped to <script type="math/tex">[0, 1]</script> and quantized as follows (<script type="math/tex">k</script> is the number of bits used for quantization):</p>
@@ -330,7 +331,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <script type="math/tex; mode=display">w_q = \frac{1}{2^{k-1}-1} round \left( \left(2^{k-1} - 1 \right)w_f \right)</script>
 </p>
 <p>Note that <script type="math/tex">k-1</script> bits are used to quantize weights, leaving one bit for sign.</p>
-<p>This method requires training the model with quantization-aware training, as discussed <a href="../quantization/#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization/#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
 <h3 id="notes_1">Notes:</h3>
 <ul>
 <li>The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of <code>WRPNQuantizer</code> at the moment. To experiment with this, modify your model implementation to have wider layers.</li>
@@ -343,10 +344,10 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../algo_earlyexit/index.html" class="btn btn-neutral float-right" title="Early Exit">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="algo_earlyexit.html" class="btn btn-neutral float-right" title="Early Exit">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../algo_pruning/index.html" class="btn btn-neutral" title="Pruning"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="algo_pruning.html" class="btn btn-neutral" title="Pruning"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -372,18 +373,17 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../algo_pruning/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="algo_pruning.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../algo_earlyexit/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="algo_earlyexit.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
-    <script>var base_url = '..';</script>
-    <script src="../js/theme.js"></script>
-      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
-      <script src="../search/require.js"></script>
-      <script src="../search/search.js"></script>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
 
 </body>
 </html>

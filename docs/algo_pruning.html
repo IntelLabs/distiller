@@ -7,25 +7,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
-  <link rel="shortcut icon" href="../img/favicon.ico">
+  <link rel="shortcut icon" href="img/favicon.ico">
   <title>Pruning - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
-  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="../css/highlight.css">
-  <link href="../extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
   
   <script>
     // Current page data
     var mkdocs_page_name = "Pruning";
     var mkdocs_page_input_path = "algo_pruning.md";
-    var mkdocs_page_url = "/algo_pruning/index.html";
+    var mkdocs_page_url = null;
   </script>
   
-  <script src="../js/jquery-2.1.1.min.js"></script>
-  <script src="../js/modernizr-2.8.3.min.js"></script>
-  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
 
@@ -36,10 +37,10 @@
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
       <div class="wy-side-nav-search">
-        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
-  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
   </form>
 </div>
       </div>
@@ -50,22 +51,22 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../index.html">Home</a>
+    <a class="" href="index.html">Home</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../install/index.html">Installation</a>
+    <a class="" href="install.html">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../usage/index.html">Usage</a>
+    <a class="" href="usage.html">Usage</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../schedule/index.html">Compression Scheduling</a>
+    <a class="" href="schedule.html">Compression Scheduling</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -74,23 +75,23 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../pruning/index.html">Pruning</a>
+    <a class="" href="pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../regularization/index.html">Regularization</a>
+    <a class="" href="regularization.html">Regularization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../quantization/index.html">Quantization</a>
+    <a class="" href="quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
                 </li>
     </ul>
 	    </li>
@@ -101,7 +102,7 @@
     <ul class="subnav">
                 <li class=" current">
                     
-    <a class="current" href="index.html">Pruning</a>
+    <a class="current" href="algo_pruning.html">Pruning</a>
     <ul class="subnav">
             
     <li class="toctree-l3"><a href="#weights-pruning-algorithms">Weights Pruning Algorithms</a></li>
@@ -140,28 +141,28 @@
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_quantization/index.html">Quantization</a>
+    <a class="" href="algo_quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
                 </li>
     </ul>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+    <a class="" href="model_zoo.html">Model Zoo</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../design/index.html">Design</a>
+    <a class="" href="design.html">Design</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -170,11 +171,11 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../tutorial-struct_pruning/index.html">Pruning Filters and Channels</a>
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../tutorial-lang_model/index.html">Pruning a Language Model</a>
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
                 </li>
     </ul>
 	    </li>
@@ -189,7 +190,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="../index.html">Neural Network Distiller</a>
+        <a href="index.html">Neural Network Distiller</a>
       </nav>
 
       
@@ -197,7 +198,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="../index.html">Docs</a> &raquo;</li>
+    <li><a href="index.html">Docs</a> &raquo;</li>
     
       
         
@@ -216,7 +217,7 @@
             <div class="section">
               
                 <h1 id="weights-pruning-algorithms">Weights Pruning Algorithms</h1>
-<p><center><img alt="algorithms" src="../imgs/algorithms-pruning.png" /></center></p>
+<p><center><img alt="algorithms" src="imgs/algorithms-pruning.png" /></center></p>
 <h2 id="magnitude-pruner">Magnitude Pruner</h2>
 <p>This is the most basic pruner: it applies a thresholding function, \(thresh(.)\), on each element, \(w_i\), of a weights tensor.  A different threshold can be used for each layer's weights tensor.<br>
 Because the threshold is applied on individual elements, this pruner belongs to the element-wise pruning algorithm family.</p>
@@ -227,7 +228,7 @@ Because the threshold is applied on individual elements, this pruner belongs to 
 <p>Finding a threshold magnitude per layer is daunting, especially since each layer's elements have different average absolute values.  We can take advantage of the fact that the weights of convolutional and fully connected layers exhibit a Gaussian distribution with a mean value roughly zero, to avoid using a direct threshold based on the values of each specific tensor.
 <br>
 The diagram below shows the distribution the weights tensor of the first convolutional layer, and first fully-connected layer in TorchVision's pre-trained Alexnet model.  You can see that they have an approximate Gaussian distribution.<br>
-<center><img alt="conv1" src="../imgs/alexnet-conv1-hist.png" /> <img alt="fc1" src="../imgs/alexnet-fc1-hist.png" /></center>
+<center><img alt="conv1" src="imgs/alexnet-conv1-hist.png" /> <img alt="fc1" src="imgs/alexnet-fc1-hist.png" /></center>
 <center>The distributions of Alexnet conv1 and fc1 layers</center></p>
 <p>We use the standard deviation of the weights tensor as a sort of normalizing factor between the different weights tensors.  For example, if a tensor is Normally distributed, then about 68% of the elements have an absolute value less than the standard deviation (\(\sigma\)) of the tensor.  Thus, if we set the threshold to \(s*\sigma\), then basically we are thresholding \(s * 68\%\) of the tensor elements.  </p>
 <p>\[ thresh(w_i)=\left\lbrace
@@ -250,7 +251,7 @@ The diagram below shows the distribution the weights tensor of the first convolu
 <h3 id="schedule">Schedule</h3>
 <p>In their <a href="https://arxiv.org/abs/1506.02626">paper</a> Song Han et al. use iterative pruning and change the value of the \(s\) multiplier at each pruning step.  Distiller's <code>SensitivityPruner</code> works differently: the value \(s\) is set once based on a one-time calculation of the standard-deviation of the tensor (the first time we prune), and relies on the fact that as the tensor is pruned, more elements are "pulled" toward the center of the distribution and thus more elements gets pruned.</p>
 <p>This actually works quite well as we can see in the diagram below.  This is a TensorBoard screen-capture from Alexnet training, which shows how this method starts off pruning very aggressively, but then slowly reduces the pruning rate.
-<center><img alt="conv1" src="../imgs/alexnet-fc1-training-plot.png" /></center></p>
+<center><img alt="conv1" src="imgs/alexnet-fc1-training-plot.png" /></center></p>
 <p>We use a simple iterative-pruning schedule such as: <em>Prune every second epoch starting at epoch 0, and ending at epoch 38.</em>  This excerpt from <code>alexnet.schedule_sensitivity.yaml</code> shows how this iterative schedule is conveyed in Distiller scheduling configuration YAML:</p>
 <pre><code>pruners:
   my_pruner:
@@ -287,13 +288,13 @@ This pruner is much more stable compared to <code>SensitivityPruner</code> becau
 <p>In <a href="https://arxiv.org/abs/1600.604493">Dynamic Network Surgery for Efficient DNNs</a> Guo et. al propose that network pruning and splicing work in tandem.  A <code>SpilicingPruner</code> is a pruner that both prunes and splices connections and works best with a Dynamic Network Surgery schedule, which, for example, configures the <code>PruningPolicy</code> to mask weights only during the forward pass.</p>
 <h2 id="automated-gradual-pruner-agp">Automated Gradual Pruner (AGP)</h2>
 <p>In <a href="https://arxiv.org/abs/1710.01878">To prune, or not to prune: exploring the efficacy of pruning for model compression</a>, authors Michael Zhu and Suyog Gupta provide an algorithm to schedule a Level Pruner which Distiller implements in <code>AutomatedGradualPruner</code>.
-<center><img alt="agp formula" src="../imgs/agp_formula.png" /></center></p>
+<center><img alt="agp formula" src="imgs/agp_formula.png" /></center></p>
 <blockquote>
 <p>"We introduce a new automated gradual pruning algorithm in which the sparsity is increased from an initial sparsity value \(s_i\) (usually 0) to a ﬁnal sparsity value \(s_f\) over a span of n pruning steps.
 The intuition behind this sparsity function in equation (1)  is to prune the network rapidly in the initial phase when the redundant connections are
 abundant and gradually reduce the number of weights being pruned each time as there are fewer and fewer weights remaining in the network.""</p>
 </blockquote>
-<p><center><img alt="Gradual Pruning" src="../imgs/gradual_pruning.png" /></center></p>
+<p><center><img alt="Gradual Pruning" src="imgs/gradual_pruning.png" /></center></p>
 <p>You can play with the scheduling parameters in the <a href="https://github.com/NervanaSystems/distiller/blob/master/jupyter/agp_schedule.ipynb">agp_schedule.ipynb notebook</a>.</p>
 <p>The authors describe AGP:</p>
 <blockquote>
@@ -307,7 +308,7 @@ abundant and gradually reduce the number of weights being pruned each time as th
 <h2 id="rnn-pruner">RNN Pruner</h2>
 <p>The authors of <a href="https://arxiv.org/abs/1704.05119">Exploring Sparsity in Recurrent Neural Networks</a>, Sharan Narang, Erich Elsen, Gregory Diamos, and Shubho Sengupta, "propose a technique to reduce the parameters of a network by pruning weights during the initial training of the network."  They use a gradual pruning schedule which is reminiscent of the schedule used in AGP, for element-wise pruning of RNNs, which they also employ during training.  They show pruning of RNN, GRU, LSTM and embedding layers.</p>
 <p>Distiller's distiller.pruning.BaiduRNNPruner class implements this pruning algorithm.</p>
-<p><center><img alt="Baidu RNN Pruning" src="../imgs/baidu_rnn_pruning.png" /></center></p>
+<p><center><img alt="Baidu RNN Pruning" src="imgs/baidu_rnn_pruning.png" /></center></p>
 <h1 id="structure-pruners">Structure Pruners</h1>
 <p>Element-wise pruning can create very sparse models which can be compressed to consume less memory footprint and bandwidth, but without specialized hardware that can compute using the sparse representation of the tensors, we don't gain any speedup of the computation.  Structure pruners, remove entire "structures", such as kernels, filters, and even entire feature-maps.</p>
 <h2 id="structure-ranking-pruners">Structure Ranking Pruners</h2>
@@ -347,10 +348,10 @@ This method is called <em>Network Trimming</em> from the research paper:
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../algo_quantization/index.html" class="btn btn-neutral float-right" title="Quantization">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="algo_quantization.html" class="btn btn-neutral float-right" title="Quantization">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../conditional_computation/index.html" class="btn btn-neutral" title="Conditional Computation"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="conditional_computation.html" class="btn btn-neutral" title="Conditional Computation"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -376,18 +377,17 @@ This method is called <em>Network Trimming</em> from the research paper:
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../conditional_computation/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="conditional_computation.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../algo_quantization/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="algo_quantization.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
-    <script>var base_url = '..';</script>
-    <script src="../js/theme.js"></script>
-      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
-      <script src="../search/require.js"></script>
-      <script src="../search/search.js"></script>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
 
 </body>
 </html>
