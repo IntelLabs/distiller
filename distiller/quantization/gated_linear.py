@@ -214,8 +214,8 @@ class LearnedClippedGatedLinearQuantization(nn.Module):
 
         self.register_buffer('tracked_min', torch.zeros(1))
         self.register_buffer('tracked_max', torch.zeros(1))
-        self.register_buffer('delta_norm', torch.tensor([0]))
-        self.register_buffer('delta_8bit_mse', torch.tensor([0]))
+        self.register_buffer('delta_mse', torch.tensor([0]))
+        # self.register_buffer('delta_8bit_mse', torch.tensor([0]))
 
     def forward(self, input):
         current_min, current_max = get_tensor_min_max(input)
@@ -236,15 +236,16 @@ class LearnedClippedGatedLinearQuantization(nn.Module):
             self.clip_value_initialized = True
 
         # Clamp
-        input = LearnedClamp.apply(input, self.clip_val)
+        # input = LearnedClamp.apply(input, self.clip_val)
+        input = torch.where(input < self.clip_val, input, self.clip_val)
 
         # Quantize
         scale, zero_point = asymmetric_linear_quantization_params(self.num_bits, 0, self.clip_val.item(), signed=False)
         input_q = LinearQuantizeSTE.apply(input, scale, zero_point, self.dequantize, False)
         delta = input_q - input
 
-        self.delta_norm.data = torch.norm(delta) / delta.numel()
-        self.delta_8bit_mse.data = self._qmse(input_q, input, ref_bits=8)
+        self.delta_mse.data = torch.norm(delta) / delta.numel()
+        # self.delta_8bit_mse.data = self._qmse(input_q, input, ref_bits=8)
 
         output = input + (1. - torch.clamp(self.q_gate, 0., 1.).view(1, self.size, 1, 1)) * delta
         return output
@@ -313,13 +314,13 @@ class GatedPactSTEQuatizer(Quantizer):
 
         stats_dict = OrderedDict()
         delta = [(k, model.state_dict()[k]) for k in model.state_dict() if
-                     'delta_norm' in k]
-        delta_8bit = [(k, model.state_dict()[k]) for k in model.state_dict() if
-                 'delta_8bit_mse' in k]
+                     'delta_mse' in k]
         for name, param in delta:
             stats_dict[name] = param.item()
-        for name, param in delta_8bit:
-            stats_dict[name] = param.item()
+        # delta_8bit = [(k, model.state_dict()[k]) for k in model.state_dict() if
+        #          'delta_8bit_mse' in k]
+        # for name, param in delta_8bit:
+        #     stats_dict[name] = param.item()
         stats4 = ('Q_delta/', stats_dict)
 
         return [stats1, stats2, stats3, stats4]
