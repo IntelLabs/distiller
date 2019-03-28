@@ -111,8 +111,8 @@ class DummyQuantizer(Quantizer):
         def _dummy_quant_layer(module, name, qbits_map, overridable_prop=False):
             return DummyQuantLayer(qbits_map[name], overridable_prop)
 
-        self._add_replacement_factory(nn.Conv2d, _dummy_wrapper_layer, prop=False)
-        self._add_replacement_factory(nn.ReLU, _dummy_quant_layer, overridable_prop=False)
+        self.replacement_factory[nn.Conv2d] = _dummy_wrapper_layer
+        self.replacement_factory[nn.ReLU] = _dummy_quant_layer
         self.param_quantization_fn = dummy_quantize_params
 
 

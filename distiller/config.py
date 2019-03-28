@@ -33,17 +33,10 @@ When a YAML file is loaded, its dictionary is extracted and passed to ```dictCon
 """
 
 import logging
-from collections import OrderedDict
 import yaml
 import json
-import inspect
-from torch.optim.lr_scheduler import *
 import distiller
-from distiller.thinning import *
-from distiller.pruning import *
-from distiller.regularization import *
-from distiller.learning_rate import *
-from distiller.quantization import *
+from distiller.utils import filter_kwargs
 
 msglogger = logging.getLogger()
 app_cfg_logger = logging.getLogger("app_cfg")
@@ -195,7 +188,7 @@ def build_component(model, name, user_args, **extra_args):
         raise ValueError("Class named '{0}' does not exist".format(class_name)) from ex
 
     # First we check that the user defined dict itself does not contain invalid args
-    valid_args, invalid_args = __filter_kwargs(user_args, class_.__init__)
+    valid_args, invalid_args = filter_kwargs(user_args, class_.__init__)
     if invalid_args:
         raise ValueError(
             '{0} does not accept the following arguments: {1}'.format(class_name, list(invalid_args.keys())))
@@ -205,29 +198,9 @@ def build_component(model, name, user_args, **extra_args):
     valid_args.update(extra_args)
     valid_args['model'] = model
     valid_args['name'] = name
-    final_valid_args, _ = __filter_kwargs(valid_args, class_.__init__)
+    final_valid_args, _ = filter_kwargs(valid_args, class_.__init__)
     instance = class_(**final_valid_args)
     return instance
-
-
-def __filter_kwargs(dict_to_filter, function_to_call):
-    """Utility to check which arguments in the passed dictionary exist in a function's signature
-
-    The function returns two dicts, one with just the valid args from the input and one with the invalid args.
-    The caller can then decide to ignore the existence of invalid args, depending on context.
-    """
-
-    sig = inspect.signature(function_to_call)
-    filter_keys = [param.name for param in sig.parameters.values() if (param.kind == param.POSITIONAL_OR_KEYWORD)]
-    valid_args = {}
-    invalid_args = {}
-
-    for key in dict_to_filter:
-        if key in filter_keys:
-            valid_args[key] = dict_to_filter[key]
-        else:
-            invalid_args[key] = dict_to_filter[key]
-    return valid_args, invalid_args
 
 
 def __policy_params(policy_def, type):

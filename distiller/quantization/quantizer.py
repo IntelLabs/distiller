@@ -175,8 +175,6 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         self.replacement_factory = {}
-        # Stores the OVERRIDABLE kwargs that can be passed to each of the factories above.
-        self.replacement_factory_overridable_kwargs = {}
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -243,15 +241,14 @@ class Quantizer(object):
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
                 continue
             try:
-                overridable_kwargs = self.replacement_factory_overridable_kwargs[type(module)]
-                for k, v in self.module_overrides_map[full_name].items():
-                    if k not in overridable_kwargs:
-                        raise TypeError("""Quantizer of type %s doesn't accept \"%s\" 
-                                        as an override argument for %s. Allowed kwargs: %s"""
-                                        % (type(self), k, type(module), list(overridable_kwargs)))
-                    overridable_kwargs[k] = v
+                replace_fn = self.replacement_factory[type(module)]
+                valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name], replace_fn)
+                if invalid_kwargs:
+                    raise TypeError("""Quantizer of type %s doesn't accept \"%s\" 
+                                        as override arguments for %s. Allowed kwargs: %s"""
+                                    % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
                 new_module = self.replacement_factory[type(module)](module, full_name,
-                                                                    self.module_qbits_map, **overridable_kwargs)
+                                                                    self.module_qbits_map, **valid_kwargs)
                 msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
                 setattr(container, name, new_module)
 
@@ -266,16 +263,6 @@ class Quantizer(object):
             if distiller.has_children(module):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
-
-    def _add_replacement_factory(self, t: type, factory, **overridable_kwargs):
-        """
-        Adds a replacement factory to the Quantizer.
-        :param t: Module Type
-        :param factory: Replacement Factory
-        :param overridable_kwargs: Additional arguments that will be passed to the factory.
-        """
-        self.replacement_factory[t] = factory
-        self.replacement_factory_overridable_kwargs[t] = overridable_kwargs
 
     def _get_updated_optimizer_params_groups(self):
         """
