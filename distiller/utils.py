@@ -591,12 +591,12 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     return checker
 
 
-def convert_recursively_to(val, *args, **kwargs):
+def convert_tensors_recursively_to(val, *args, **kwargs):
     """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""
     if isinstance(val, torch.Tensor):
         return val.to(*args, **kwargs)
 
     if isinstance(val, (tuple, list)):
-        return type(val)(convert_recursively_to(item, *args, **kwargs) for item in val)
+        return type(val)(convert_tensors_recursively_to(item, *args, **kwargs) for item in val)
 
     return val

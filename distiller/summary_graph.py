@@ -85,7 +85,7 @@ class SummaryGraph(object):
         with torch.onnx.set_training(model, False):
             
             device = next(model.parameters()).device
-            dummy_input = distiller.convert_recursively_to(dummy_input, device=device)
+            dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
             trace, _ = jit.get_trace_graph(model, dummy_input)
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
