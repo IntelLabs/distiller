@@ -25,14 +25,11 @@ Note that not all loggers implement all logging methods.
 """
 
 import torch
-import numpy as np
 import tabulate
 import distiller
 from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np, norm_filters
 # TensorBoard logger
 from .tbbackend import TBBackend
-# Visdom logger
-from torchnet.logger import VisdomPlotLogger, VisdomLogger
 import csv
 import logging
 msglogger = logging.getLogger()

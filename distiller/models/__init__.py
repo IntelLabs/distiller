@@ -20,6 +20,7 @@ import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
 from . import imagenet as imagenet_extra_models
+import pretrainedmodels
 
 import logging
 msglogger = logging.getLogger()
@@ -34,51 +35,63 @@ IMAGENET_MODEL_NAMES = sorted(name for name in torch_models.__dict__
 IMAGENET_MODEL_NAMES.extend(sorted(name for name in imagenet_extra_models.__dict__
                                    if name.islower() and not name.startswith("__")
                                    and callable(imagenet_extra_models.__dict__[name])))
+IMAGENET_MODEL_NAMES.extend(pretrainedmodels.model_names)
 
 CIFAR10_MODEL_NAMES = sorted(name for name in cifar10_models.__dict__
                              if name.islower() and not name.startswith("__")
                              and callable(cifar10_models.__dict__[name]))
 
-ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(), set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES)))
+ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
+                            set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES)))
 
 
 def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     """Create a pytorch model based on the model architecture and dataset
 
     Args:
-        pretrained: True is you wish to load a pretrained model.  Only torchvision models
-          have a pretrained model.
-        dataset:
-        arch:
-        parallel:
+        pretrained [boolean]: True is you wish to load a pretrained model.
+            Some models do not have a pretrained version.
+        dataset: dataset name (only 'imagenet' and 'cifar10' are supported)
+        arch: architecture name
+        parallel [boolean]: if set, use torch.nn.DataParallel
         device_ids: Devices on which model should be created -
             None - GPU if available, otherwise CPU
             -1 - CPU
             >=0 - GPU device IDs
     """
-    msglogger.info('==> using %s dataset' % dataset)
-
     model = None
+    dataset = dataset.lower()
     if dataset == 'imagenet':
-        str_pretrained = 'pretrained ' if pretrained else ''
-        msglogger.info("=> using %s%s model for ImageNet" % (str_pretrained, arch))
-        assert arch in torch_models.__dict__ or arch in imagenet_extra_models.__dict__, \
-            "Model %s is not supported for dataset %s" % (arch, 'ImageNet')
         if arch in RESNET_SYMS:
             model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
         elif arch in torch_models.__dict__:
             model = torch_models.__dict__[arch](pretrained=pretrained)
+        elif (arch in imagenet_extra_models.__dict__) and not pretrained:
+            model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
+        elif arch in pretrainedmodels.model_names:
+            model = pretrainedmodels.__dict__[arch](
+                        num_classes=1000,
+                        pretrained=(dataset if pretrained else None))
         else:
-            assert not pretrained, "Model %s (ImageNet) does not have a pretrained model" % arch
-            model = imagenet_extra_models.__dict__[arch]()
+            error_message = ''
+            if arch not in IMAGENET_MODEL_NAMES:
+                error_message = "Model {} is not supported for dataset ImageNet".format(arch)
+            elif pretrained:
+                error_message = "Model {} (ImageNet) does not have a pretrained model".format(arch)
+            raise ValueError(error_message or 'Failed to find model {}'.format(arch))
+
+        msglogger.info("=> using {p}{a} model for ImageNet".format(a=arch,
+            p=('pretrained ' if pretrained else '')))
     elif dataset == 'cifar10':
+        if pretrained:
+            raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
+        try:
+            model = cifar10_models.__dict__[arch]()
+        except KeyError:
+            raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
         msglogger.info("=> creating %s model for CIFAR10" % arch)
-        assert arch in cifar10_models.__dict__, "Model %s is not supported for dataset CIFAR10" % arch
-        assert not pretrained, "Model %s (CIFAR10) does not have a pretrained model" % arch
-        model = cifar10_models.__dict__[arch]()
     else:
-        print("FATAL ERROR: create_model does not support models for dataset %s" % dataset)
-        exit()
+        raise ValueError('Could not recognize dataset {}'.format(dataset))
 
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
