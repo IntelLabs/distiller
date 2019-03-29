@@ -7,25 +7,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
-  <link rel="shortcut icon" href="../img/favicon.ico">
+  <link rel="shortcut icon" href="img/favicon.ico">
   <title>Pruning Filters and Channels - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
-  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="../css/highlight.css">
-  <link href="../extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
   
   <script>
     // Current page data
     var mkdocs_page_name = "Pruning Filters and Channels";
     var mkdocs_page_input_path = "tutorial-struct_pruning.md";
-    var mkdocs_page_url = "/tutorial-struct_pruning/index.html";
+    var mkdocs_page_url = null;
   </script>
   
-  <script src="../js/jquery-2.1.1.min.js"></script>
-  <script src="../js/modernizr-2.8.3.min.js"></script>
-  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
 
@@ -36,10 +37,10 @@
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
       <div class="wy-side-nav-search">
-        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
-  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
   </form>
 </div>
       </div>
@@ -50,22 +51,22 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../index.html">Home</a>
+    <a class="" href="index.html">Home</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../install/index.html">Installation</a>
+    <a class="" href="install.html">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../usage/index.html">Usage</a>
+    <a class="" href="usage.html">Usage</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../schedule/index.html">Compression Scheduling</a>
+    <a class="" href="schedule.html">Compression Scheduling</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -74,23 +75,23 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../pruning/index.html">Pruning</a>
+    <a class="" href="pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../regularization/index.html">Regularization</a>
+    <a class="" href="regularization.html">Regularization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../quantization/index.html">Quantization</a>
+    <a class="" href="quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
                 </li>
     </ul>
 	    </li>
@@ -101,32 +102,32 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../algo_pruning/index.html">Pruning</a>
+    <a class="" href="algo_pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_quantization/index.html">Quantization</a>
+    <a class="" href="algo_quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
                 </li>
     </ul>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+    <a class="" href="model_zoo.html">Model Zoo</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../design/index.html">Design</a>
+    <a class="" href="design.html">Design</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -135,7 +136,7 @@
     <ul class="subnav">
                 <li class=" current">
                     
-    <a class="current" href="index.html">Pruning Filters and Channels</a>
+    <a class="current" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
     <ul class="subnav">
             
     <li class="toctree-l3"><a href="#pruning-filters-channels">Pruning Filters &amp; Channels</a></li>
@@ -155,7 +156,7 @@
                 </li>
                 <li class="">
                     
-    <a class="" href="../tutorial-lang_model/index.html">Pruning a Language Model</a>
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
                 </li>
     </ul>
 	    </li>
@@ -170,7 +171,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="../index.html">Neural Network Distiller</a>
+        <a href="index.html">Neural Network Distiller</a>
       </nav>
 
       
@@ -178,7 +179,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="../index.html">Docs</a> &raquo;</li>
+    <li><a href="index.html">Docs</a> &raquo;</li>
     
       
         
@@ -210,7 +211,7 @@ Convolution weights are 4D: (F, C, K, K) where F is the number of filters, C is 
 In filter pruning we use some criterion to determine which filters are <strong>important</strong> and which are not.  Researchers came up with all sorts of pruning criteria: the L1-magnitude of the filters (citation), the entropy of the activations (citation), and the classification accuracy reduction (citation) are just some examples.  Disregarding how we chose the filters to prune, let’s imagine that in the diagram below, we chose to prune (remove) the green and orange filters (the circle with the “*” designates a Convolution operation).</p>
 <p>Since we have two less filters operating on the input, we must have two less output feature-maps.  So when we prune filters, besides changing the physical size of the weight tensors, we also need to reconfigure the immediate Convolution layer (change its <code>out_channels</code>) and the following Convolution layer (change its <code>in_channels</code>).  And finally, because the next layer’s input is now smaller (has fewer channels),  we should also shrink the next layer’s weights tensors, by removing the channels corresponding to the filters we pruned.  We say that there is a <strong>data-dependency</strong> between the two Convolution layers.  I didn’t make any mention of the activation function that usually follows Convolution, because these functions are parameter-less and are not sensitive to the shape of their input.
 There are some other dependencies that Distiller resolves (such as Optimizer parameters tightly-coupled to the weights) that I won’t discuss here, because they are implementation details.
-<center><img alt="Example 1" src="../imgs/pruning_structs_ex1.png" /></center></p>
+<center><img alt="Example 1" src="imgs/pruning_structs_ex1.png" /></center></p>
 <p>The scheduler YAML syntax for this example is pasted below.  We use L1-norm ranking of weight filters, and the pruning-rate is set by the AGP algorithm (Automatic Gradual Pruning).  The Convolution layers are conveniently named <code>conv1</code> and <code>conv2</code> in this example.</p>
 <pre><code>pruners:
   example_pruner:
@@ -222,17 +223,17 @@ There are some other dependencies that Distiller resolves (such as Optimizer par
 </code></pre>
 
 <p>Now let’s add a Batch Normalization layer between the two convolutions:
-<center><img alt="Example 2" src="../imgs/pruning_structs_ex2.png" /></center></p>
+<center><img alt="Example 2" src="imgs/pruning_structs_ex2.png" /></center></p>
 <p>The Batch Normalization layer is parameterized by a couple of tensors that contain information per input-channel (i.e. scale and shift).  Because our Convolution produces less output FMs, and these are the input to the Batch Normalization layer, we also need to reconfigure the Batch Normalization layer.  And we also need to physically shrink the Batch Normalization layer’s scale and shift tensors, which are coefficients in the BN input transformation.  Moreover, the scale and shift coefficients that we remove from the tensors, must correspond to the filters (or output feature-maps channels) that we removed from the Convolution weight tensors.  This small nuance will prove to be a large pain, but we’ll get to that in later examples.
 The presence of a Batch Normalization layer in the example above is transparent to us, and in fact, the YAML schedule does not change.  Distiller detects the presence of Batch Normalization layers and adjusts their parameters automatically.</p>
 <p>Let’s look at another example, with non-serial data-dependencies.  Here, the output of <code>conv1</code> is the input for <code>conv2</code> and <code>conv3</code>.  This is an example of parallel data-dependency, since both <code>conv2</code> and <code>conv3</code> depend on <code>conv1</code>.
-<center><img alt="Example 3" src="../imgs/pruning_structs_ex3.png" /></center></p>
+<center><img alt="Example 3" src="imgs/pruning_structs_ex3.png" /></center></p>
 <p>Note that the Distiller YAML schedule is unchanged from the previous two examples, since we are still only explicitly pruning the weight filters of <code>conv1</code>.  The weight channels of <code>conv2</code> and <code>conv3</code> are pruned implicitly by Distiller in a process called “Thinning” (on which I will expand in a different post).</p>
 <p>Next, let’s look at another example also involving three Convolutions, but this time we want to prune the filters of two convolutional layers, whose outputs are element-wise-summed and fed into a third Convolution.
 In this example <code>conv3</code> is dependent on both <code>conv1</code> and <code>conv2</code>, and there are two implications to this dependency.  The first, and more obvious implication, is that we need to prune the same number of filters from both <code>conv1</code> and <code>conv2</code>.  Since we apply element-wise addition on the outputs of <code>conv1</code> and <code>conv2</code>, they must have the same shape - and they can only have the same shape if <code>conv1</code> and <code>conv2</code> prune the same number of filters.  The second implication of this triangular data-dependency is that both <code>conv1</code> and <code>conv2</code> must prune the <strong>same</strong> filters!  Let’s imagine for a moment, that we ignore this second constraint.  The diagram below illustrates the dilemma that arises: how should we prune the channels of the weights of <code>conv3</code>?  Obviously, we can’t.
-<center><img alt="Example 4" src="../imgs/pruning_structs_ex4.png" /></center></p>
+<center><img alt="Example 4" src="imgs/pruning_structs_ex4.png" /></center></p>
 <p>We must apply the second constraint – and that means that we now need to be proactive: we need to decide whether to use the prune <code>conv1</code> and <code>conv2</code> according to the filter-pruning choices of <code>conv1</code> or of <code>conv2</code>.  The diagram below illustrates the pruning scheme after deciding to follow the pruning choices of <code>conv1</code>.
-<center><img alt="Example 5" src="../imgs/pruning_structs_ex5.png" /></center></p>
+<center><img alt="Example 5" src="imgs/pruning_structs_ex5.png" /></center></p>
 <p>The YAML compression schedule syntax needs to be able to express the two dependencies (or constraints) discussed above.  First we need to tell the Filter Pruner that we there is a dependency of type <strong>Leader</strong>.  This means that all of the tensors listed in the <code>weights</code> field are pruned together, to the same extent at each iteration, and that to prune the filters we will use the pruning decisions of the first tensor listed.  In the example below <code>module.conv1.weight</code> and <code>module.conv2.weight</code> are pruned together according to the pruning choices for <code>module.conv1.weight</code>.</p>
 <pre><code>pruners:
   example_pruner:
@@ -257,7 +258,7 @@ In this example <code>conv3</code> is dependent on both <code>conv1</code> and <
 </code></pre>
 
 <p>As the diagram shows, <code>conv1</code> is now dependent on <code>conv2</code> and its weights filters will be implicitly pruned according to the channels removed from the weights of <code>conv2</code>.
-<center><img alt="Example 1" src="../imgs/pruning_structs_ex1.png" /></center></p>
+<center><img alt="Example 1" src="imgs/pruning_structs_ex1.png" /></center></p>
 <p>Geek On.</p>
               
             </div>
@@ -266,10 +267,10 @@ In this example <code>conv3</code> is dependent on both <code>conv1</code> and <
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../tutorial-lang_model/index.html" class="btn btn-neutral float-right" title="Pruning a Language Model">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="tutorial-lang_model.html" class="btn btn-neutral float-right" title="Pruning a Language Model">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../design/index.html" class="btn btn-neutral" title="Design"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="design.html" class="btn btn-neutral" title="Design"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -295,18 +296,17 @@ In this example <code>conv3</code> is dependent on both <code>conv1</code> and <
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../design/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="design.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../tutorial-lang_model/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="tutorial-lang_model.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
-    <script>var base_url = '..';</script>
-    <script src="../js/theme.js"></script>
-      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
-      <script src="../search/require.js"></script>
-      <script src="../search/search.js"></script>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
 
 </body>
 </html>
