@@ -36,6 +36,7 @@ import logging
 from collections import OrderedDict
 import yaml
 import json
+from torch.optim.lr_scheduler import *
 import distiller
 from distiller.thinning import *
 from distiller.pruning import *
