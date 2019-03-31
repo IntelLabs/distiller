@@ -593,7 +593,6 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     return checker
 
 
-
 def filter_kwargs(dict_to_filter, function_to_call):
     """Utility to check which arguments in the passed dictionary exist in a function's signature
 
@@ -612,6 +611,7 @@ def filter_kwargs(dict_to_filter, function_to_call):
         else:
             invalid_args[key] = dict_to_filter[key]
     return valid_args, invalid_args
+
 
 def convert_tensors_recursively_to(val, *args, **kwargs):
     """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""
