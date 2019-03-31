@@ -588,13 +588,11 @@ class PostTrainLinearQuantizer(Quantizer):
             containing the stats. If None then stats will be calculated dynamically.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
-                 overrides=None, bits_overrides=None,
-                 mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None, per_channel_wts=False,
-                 model_activation_stats=None):
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None,
+                 per_channel_wts=False, model_activation_stats=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
-                                                       overrides=overrides, bits_overrides=bits_overrides,
-                                                       train_with_fp_copy=False)
+                                                       overrides=overrides, train_with_fp_copy=False)
 
         mode = verify_mode(mode)
 
@@ -616,10 +614,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'no_clip_layers': no_clip_layers,
                                                     'per_channel_wts': per_channel_wts}}
         
-        def replace_param_layer(module, name, qbits_map,
-                                per_channel_wts=per_channel_wts,
-                                mode=mode,
-                                clip_acts=clip_acts):
+        def replace_param_layer(module, name, qbits_map):
             norm_name = distiller.utils.normalize_module_name(name)
             clip = clip_acts and norm_name not in self.no_clip_layers
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
@@ -770,14 +765,12 @@ class FakeQuantizationWrapper(nn.Module):
 
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
     def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
-                 overrides=None, bits_overrides=None,
-                 mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
                  quantize_inputs=True, num_bits_inputs=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
                                                                   bits_bias=bits_bias,
-                                                                  bits_overrides=bits_overrides,
                                                                   overrides=overrides,
                                                                   train_with_fp_copy=True)
 

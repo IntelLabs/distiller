@@ -76,16 +76,21 @@ class Quantizer(object):
         optimizer (torch.optim.Optimizer): An optimizer instance, required in cases where the quantizer is going
             to perform changes to existing model parameters and/or add new ones.
             Specifically, when train_with_fp_copy is True, this cannot be None.
-        bits_activations/weights (int): Default number of bits to use when quantizing each tensor type.
+        bits_activations/weights/bias (int): Default number of bits to use when quantizing each tensor type.
             Value of None means do not quantize.
-        bits_overrides (OrderedDict): Dictionary mapping regular expressions of layer name patterns to dictionary with
-            values for 'acts' and/or 'wts' to override the default values.
+        overrides (OrderedDict): Dictionary mapping regular expressions of layer name patterns to dictionary with
+            overrides of default values.
+            The keys in the overrides dictionary should be parameter names that the Quantizer accepts default values
+            for in its init function.
+            The parameters 'bits_activations', 'bits_weights', and 'bits_bias' which are accepted by the base Quantizer
+            are supported by default.
+            Other than those, each sub-class of Quantizer defines the set of parameter for which it supports
+            over-riding.
             OrderedDict is used to enable handling of overlapping name patterns. So, for example, one could define
             certain override parameters for a group of layers, e.g. 'conv*', but also define different parameters for
             specific layers in that group, e.g. 'conv1'.
             The patterns are evaluated eagerly - the first match wins. Therefore, the more specific patterns must
             come before the broad patterns.
-        quantize_bias (bool): Flag indicating whether to quantize bias (w. same number of bits as weights) or not.
         train_with_fp_copy (bool): If true, will modify layers with weights to keep both a quantized and
             floating-point copy, such that the following flow occurs in each training iteration:
             1. q_weights = quantize(fp_weights)
@@ -97,26 +102,11 @@ class Quantizer(object):
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
-                 overrides=None, bits_overrides=None,
-                 train_with_fp_copy=False):
-        if overrides is not None and bits_overrides is not None:
-            raise TypeError('\'bits_overrides\' argument is deprecated. '
-                            'Cannot pass both \'overrides\' and \'bits_overrides\' arguments.')
-
+                 overrides=None, train_with_fp_copy=False):
         if overrides is None:
             overrides = OrderedDict()
         if not isinstance(overrides, OrderedDict):
             raise TypeError('overrides must be an instance of collections.OrderedDict or None')
-
-        if bits_overrides is not None:
-            warnmsg = """'bits_overrides' argument is deprecated! 
-            Use the 'overrides' OrderedDict with a 'bits' item in it instead."""
-            warnings.warn(warnmsg, DeprecationWarning)
-            if not isinstance(bits_overrides, OrderedDict):
-                raise TypeError('bits_overrides must be an instance of collections.OrderedDict or None')
-            for k, v in bits_overrides.items():
-                # overrides is empty since passing both overrides and bits_overrides is not allowed
-                overrides[k] = OrderedDict([('bits', v)])
 
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
@@ -134,14 +124,15 @@ class Quantizer(object):
                                                     'bits_bias': bits_bias,
                                                     'overrides': copy.deepcopy(overrides)}}
 
-        for k in self.overrides.keys():
-            if 'bits' not in self.overrides[k].keys():
-                continue
-            v = self.overrides[k]['bits']
-            qbits = QBits(acts=v.get('acts', self.default_qbits.acts),
-                          wts=v.get('wts', self.default_qbits.wts),
-                          bias=v.get('bias', self.default_qbits.bias))
-            self.overrides[k]['bits'] = qbits
+        for k, v in self.overrides.items():
+            if any(old_bits_key in v.keys() for old_bits_key in ['acts', 'wts', 'bias']):
+                raise ValueError("Using 'acts' / 'wts' / 'bias' to specify bit-width overrides is deprecated.\n"
+                                 "Please use the full parameter names: "
+                                 "'bits_activations' / 'bits_weights' / 'bits_bias'")
+            qbits = QBits(acts=v.pop('bits_activations', self.default_qbits.acts),
+                          wts=v.pop('bits_weights', self.default_qbits.wts),
+                          bias=v.pop('bits_bias', self.default_qbits.bias))
+            v['bits'] = qbits
 
         # Prepare explicit mapping from each layer to QBits based on default + overrides
         patterns = []

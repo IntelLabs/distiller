@@ -3,20 +3,20 @@ quantizers:
     class: DorefaQuantizer
     bits_activations: 8
     bits_weights: 3
-    bits_overrides:
+    overrides:
     # Don't quantize first and last layer
       features.0:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       features.1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       classifier.5:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       classifier.6:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
 
 lr_schedulers:
   training_lr:
