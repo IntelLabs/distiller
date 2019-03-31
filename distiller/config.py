@@ -33,9 +33,15 @@ When a YAML file is loaded, its dictionary is extracted and passed to ```dictCon
 """
 
 import logging
+from collections import OrderedDict
 import yaml
 import json
 import distiller
+from distiller.thinning import *
+from distiller.pruning import *
+from distiller.regularization import *
+from distiller.learning_rate import *
+from distiller.quantization import *
 from distiller.utils import filter_kwargs
 
 msglogger = logging.getLogger()
