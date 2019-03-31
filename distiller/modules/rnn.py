@@ -51,24 +51,24 @@ class LSTMCell(nn.Module):
     def to_pytorch_impl(self):
         module = nn.LSTMCell(self.input_size, self.hidden_size)
         module.weight_hh, module.weight_ih, module.bias_hh, module.bias_ih = \
-            nn.Parameter(self.fc_gate_h.weight.detach()), \
-            nn.Parameter(self.fc_gate_x.weight.detach()), \
-            nn.Parameter(self.fc_gate_h.bias.detach()), \
-            nn.Parameter(self.fc_gate_x.bias.detach())
+            nn.Parameter(self.fc_gate_h.weight.clone().detach()), \
+            nn.Parameter(self.fc_gate_x.weight.clone().detach()), \
+            nn.Parameter(self.fc_gate_h.bias.clone().detach()), \
+            nn.Parameter(self.fc_gate_x.bias.clone().detach())
         return module
 
     @staticmethod
     def from_pytorch_impl(lstmcell: nn.LSTMCell):
         module = LSTMCell(input_size=lstmcell.input_size, hidden_size=lstmcell.hidden_size)
-        module.fc_gate_x.weight = nn.Parameter(lstmcell.weight_ih.detach())
-        module.fc_gate_x.bias = nn.Parameter(lstmcell.bias_ih.detach())
-        module.fc_gate_h.weight = nn.Parameter(lstmcell.weight_hh.detach())
-        module.fc_gate_h.bias = nn.Parameter(lstmcell.bias_hh.detach())
+        module.fc_gate_x.weight = nn.Parameter(lstmcell.weight_ih.clone().detach())
+        module.fc_gate_x.bias = nn.Parameter(lstmcell.bias_ih.clone().detach())
+        module.fc_gate_h.weight = nn.Parameter(lstmcell.weight_hh.clone().detach())
+        module.fc_gate_h.bias = nn.Parameter(lstmcell.bias_hh.clone().detach())
 
         return module
 
     def __repr__(self):
-        return "%s(%d, %d)" % (type(self), self.input_size, self.hidden_size)
+        return "%s(%d, %d)" % (self.__class__.__name__, self.input_size, self.hidden_size)
 
 
 class LSTM(nn.Module):
@@ -150,10 +150,12 @@ class LSTM(nn.Module):
                 lstm_pth_param_name = "%s_%sh_l%d" % (ptype, pgate, i)  # e.g. `weight_ih_l0`
                 gate_name = "fc_gate_%s" % ('x' if pgate == 'i' else 'h')  # `fc_gate_x` or `fc_gate_h`
                 gate = getattr(cell, gate_name)  # e.g. `cell.fc_gate_x`
-                param = nn.Parameter(getattr(lstm, lstm_pth_param_name).detach())  # e.g. `lstm.weight_ih_l0.detach()`
+                param = nn.Parameter(
+                    getattr(lstm, lstm_pth_param_name).clone().detach())  # e.g. `lstm.weight_ih_l0.detach()`
                 setattr(gate, ptype, param)
 
         return module
 
     def __repr__(self):
-        return "%s(%d, %d, num_layers=%d)" % (type(self), self.input_size, self.hidden_size, self.n_layers)
+        return "%s(%d, %d, num_layers=%d, dropout=%8.2f)" % \
+               (self.__class__.__name__, self.input_size, self.hidden_size, self.n_layers, self.dropout_factor)
