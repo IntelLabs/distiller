@@ -90,6 +90,34 @@ LayerDescLen = len(LayerDesc._fields)
 ALMOST_ONE = 0.9999
 
 
+class CSVFile(object):
+    def __init__(self, fname, headers):
+        """Create the CSV file and write the column names"""
+        with open(fname, 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+        self.fname = fname
+
+    def add_record(self, fields):
+        # We close the file each time to flush on every write, and protect against data-loss on crashes
+        with open(self.fname, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+
+
+class AMCStatsFile(CSVFile):
+    def __init__(self, fname):
+        headers = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs',
+                   'normalized_nnz', 'ckpt_name', 'action_history', 'agent_action_history']
+        super().__init__(fname, headers)
+
+
+class FineTuneStatsFile(CSVFile):
+    def __init__(self, fname):
+        headers = ['episode', 'ft_top1_list']
+        super().__init__(fname, headers)
+
+
 def is_using_continuous_action_space(agent):
     return agent in ("DDPG", "ClippedPPO-continuous", "Random-policy")
 
@@ -184,9 +212,6 @@ def amc_reward_fn(env, top1, top5, vloss, total_macs):
     return reward
 
 
-experimental_reward_fn = harmonic_mean_reward_fn
-
-
 def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
@@ -217,7 +242,8 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
             'conv_cnt': conv_cnt,
-            'reward_frequency': args.amc_reward_frequency})
+            'reward_frequency': args.amc_reward_frequency,
+            'ft_frequency': args.amc_ft_frequency})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -232,7 +258,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
         amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = experimental_reward_fn
+        amc_cfg.reward_fn = amc_reward_fn
         amc_cfg.action_constrain_fn = None
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
@@ -302,19 +328,21 @@ resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight
                    "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
                    "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
 
-resnet20_params = ["module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
-                   "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
-                   "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight"]
+resnet20_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
+                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
+                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight"]
 
-resnet56_params = [ "module.layer1.0.conv1.weight", "module.layer2.0.conv1.weight", "module.layer3.0.conv1.weight",
-                    "module.layer1.1.conv1.weight", "module.layer2.1.conv1.weight", "module.layer3.1.conv1.weight",
-                    "module.layer1.2.conv1.weight", "module.layer2.2.conv1.weight", "module.layer3.2.conv1.weight",
-                    "module.layer1.3.conv1.weight", "module.layer2.3.conv1.weight", "module.layer3.3.conv1.weight",
-                    "module.layer1.4.conv1.weight", "module.layer2.4.conv1.weight", "module.layer3.4.conv1.weight",
-                    "module.layer1.5.conv1.weight", "module.layer2.5.conv1.weight", "module.layer3.5.conv1.weight",
-                    "module.layer1.6.conv1.weight", "module.layer2.6.conv1.weight", "module.layer3.6.conv1.weight",
-                    "module.layer1.7.conv1.weight", "module.layer2.7.conv1.weight", "module.layer3.7.conv1.weight",
-                    "module.layer1.8.conv1.weight", "module.layer2.8.conv1.weight", "module.layer3.8.conv1.weight"]
+resnet56_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
+                   "module.layer1.3.conv1.weight", "module.layer1.4.conv1.weight", "module.layer1.5.conv1.weight",
+                   "module.layer1.6.conv1.weight", "module.layer1.7.conv1.weight", "module.layer1.8.conv1.weight",
+
+                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
+                   "module.layer2.3.conv1.weight", "module.layer2.4.conv1.weight", "module.layer2.5.conv1.weight",
+                   "module.layer2.6.conv1.weight", "module.layer2.7.conv1.weight", "module.layer2.8.conv1.weight",
+
+                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight",
+                   "module.layer3.3.conv1.weight", "module.layer3.4.conv1.weight", "module.layer3.5.conv1.weight",
+                   "module.layer3.6.conv1.weight", "module.layer3.7.conv1.weight", "module.layer3.8.conv1.weight"]
 
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
@@ -437,11 +465,14 @@ class NetworkWrapper(object):
         optimizer = torch.optim.SGD(self.model.parameters(), lr=opt_cfg['lr'],
                                     momentum=opt_cfg['momentum'], weight_decay=opt_cfg['weight_decay'])
         compression_scheduler = self.create_scheduler()
+        acc_list = []
         for _ in range(num_epochs):
             # Fine-tune the model
-            self.services.train_fn(model=self.model, compression_scheduler=compression_scheduler,
-                                   optimizer=optimizer, epoch=episode)
+            accuracies = self.services.train_fn(model=self.model, compression_scheduler=compression_scheduler,
+                                                optimizer=optimizer, epoch=episode)
+            acc_list.extend(accuracies)
         del compression_scheduler
+        return acc_list
 
 
 class DistillerWrapperEnvironment(gym.Env):
@@ -476,7 +507,9 @@ class DistillerWrapperEnvironment(gym.Env):
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
         #self.observation_space = spaces.Box(0, float("inf"), shape=(LayerDescLen * self.num_layers(), ))
-        self.create_network_record_file()
+        #self.create_network_record_file()
+        self.stats_file = AMCStatsFile(os.path.join(msglogger.logdir, 'amc.csv'))
+        self.ft_stats_file = FineTuneStatsFile(os.path.join(msglogger.logdir, 'ft_top1.csv'))
 
     def reset(self, init_only=False):
         """Reset the environment.
@@ -585,7 +618,7 @@ class DistillerWrapperEnvironment(gym.Env):
         msglogger.info("self._removed_macs={}".format(self._removed_macs))
         assert math.isclose(layer_macs_after_action / layer_macs, 1 - pruning_action)
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
                  OrderedDict([('requested_action', pruning_action)]))
 
         distiller.log_training_progress(stats, None,
@@ -598,12 +631,14 @@ class DistillerWrapperEnvironment(gym.Env):
             reward, top1, total_macs, total_nnz = self.compute_reward()
             normalized_macs = total_macs / self.dense_model_macs * 100
             normalized_nnz = total_nnz / self.dense_model_size * 100
-            self.record_network_details(top1, reward, total_macs, normalized_macs,
-                                        normalized_nnz, self.action_history, self.agent_action_history)
+            self.finalize_episode(top1, reward, total_macs, normalized_macs,
+                                  normalized_nnz, self.action_history, self.agent_action_history)
             self.episode += 1
         else:
+            if self.amc_cfg.ft_frequency is not None and self.current_layer_id % self.amc_cfg.ft_frequency == 0:
+                self.net_wrapper.train(1, self.episode)
             observation = self.get_obs()
-            if self.amc_cfg.reward_frequency > 0 and self.current_layer_id % self.amc_cfg.reward_frequency == 0:
+            if self.amc_cfg.reward_frequency is not None and self.current_layer_id % self.amc_cfg.reward_frequency == 0:
                 reward, top1, total_macs, total_nnz = self.compute_reward(False)
             else:
                 reward = 0
@@ -715,7 +750,9 @@ class DistillerWrapperEnvironment(gym.Env):
             # What a hack!
             total_nnz *= compression
 
-        self.net_wrapper.train(self.amc_cfg.num_ft_epochs, self.episode)
+        accuracies = self.net_wrapper.train(self.amc_cfg.num_ft_epochs, self.episode)
+        self.ft_stats_file.add_record([self.episode, accuracies])
+
         top1, top5, vloss = self.net_wrapper.validate()
         reward = self.amc_cfg.reward_fn(self, top1, top5, vloss, total_macs)
 
@@ -724,7 +761,7 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.info("Total parameters left: %.2f%%" % (compression*100))
             msglogger.info("Total compute left: %.2f%%" % (total_macs/self.dense_model_macs*100))
 
-            stats = ('Peformance/EpisodeEnd/',
+            stats = ('Performance/EpisodeEnd/',
                      OrderedDict([('Loss', vloss),
                                   ('Top1', top1),
                                   ('Top5', top5),
@@ -737,16 +774,8 @@ class DistillerWrapperEnvironment(gym.Env):
                                             log_freq=1, loggers=[self.tflogger, self.pylogger])
         return reward, top1, total_macs, total_nnz
 
-    def create_network_record_file(self):
-        """Create the CSV file and write the column names"""
-        fields = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs',
-                  'normalized_nnz', 'ckpt_name', 'action_history', 'agent_action_history']
-        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
-
-    def record_network_details(self, top1, reward, total_macs, normalized_macs,
-                               normalized_nnz, action_history, agent_action_history):
+    def finalize_episode(self, top1, reward, total_macs, normalized_macs,
+                         normalized_nnz, action_history, agent_action_history):
         """Write the details of one network to a CSV file and create a checkpoint file"""
         if reward > self.best_reward:
             self.best_reward = reward
@@ -757,9 +786,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
         fields = [self.episode, top1, reward, total_macs, normalized_macs,
                   normalized_nnz, ckpt_name, action_history, agent_action_history]
-        with open(os.path.join(msglogger.logdir, 'amc.csv'), 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
+        self.stats_file.add_record(fields)
 
     def save_checkpoint(self, is_best=False):
         """Save the learned-model checkpoint"""
@@ -856,7 +883,7 @@ def sample_networks(net_wrapper, services):
             sparsity_level = min(max(0, sparsity_level), ALMOST_ONE)
             net_wrapper.remove_structures(layer_id,
                                           fraction_to_prune=sparsity_level,
-                                          prune_what="filters")
+                                          prune_what="channels")
 
         net_wrapper.train(1)
         top1, top5, vloss = net_wrapper.validate()

@@ -2,7 +2,7 @@ lr_schedulers:
   training_lr:
     class: StepLR # ReduceLROnPlateau
     step_size: 10
-    gamma: 0.3
+    gamma: 0.2
     #mode: max
     #patience: 5
     #factor: 0.1

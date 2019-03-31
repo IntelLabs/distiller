@@ -19,6 +19,8 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
+import inspect
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -289,9 +291,6 @@ def sparsity_blocks(tensor, block_shape):
 
     # Next, compute the sums of each column (block)
     block_sums = view1.abs().sum(dim=1)
-
-    # Next, compute the sums of each column (block)
-    block_sums = view1.abs().sum(dim=1)
     nonzero_blocks = len(torch.nonzero(block_sums))
     return 1 - nonzero_blocks/num_super_blocks
 
@@ -341,15 +340,35 @@ def density_rows(tensor, transposed=True):
 
 
 def model_sparsity(model, param_dims=[2, 4]):
-    params_size = 0
-    sparse_params_size = 0
+    """Returns the model sparsity as a fraction in [0..1]"""
+    sparsity, _, _ = model_params_stats(model, param_dims)
+    return sparsity
+
+
+def model_params_size(model, param_dims=[2, 4]):
+    """Returns the model sparsity as a fraction in [0..1]"""
+    _, _, sparse_params_cnt = model_params_stats(model, param_dims)
+    return sparse_params_cnt
+
+
+def model_params_stats(model, param_dims=[2, 4]):
+    """Returns the model sparsity, weights count, and the count of weights in the sparse model.
+
+    Returns:
+        model_sparsity - the model weights sparsity (in percent)
+        params_cnt - the number of weights in the entire model (incl. zeros)
+        params_nnz_cnt - the number of weights in the entire model, excluding zeros.
+                         nnz stands for non-zeros.
+    """
+    params_cnt = 0
+    params_nnz_cnt = 0
     for name, param in model.state_dict().items():
         if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
             _density = density(param)
-            params_size += torch.numel(param)
-            sparse_params_size += param.numel() * _density
-    total_sparsity = (1 - sparse_params_size/params_size)*100
-    return total_sparsity
+            params_cnt += torch.numel(param)
+            params_nnz_cnt += param.numel() * _density
+    model_sparsity = (1 - params_nnz_cnt/params_cnt)*100
+    return model_sparsity, params_cnt, params_nnz_cnt
 
 
 def norm_filters(weights, p=1):
@@ -411,7 +430,7 @@ def activation_channels_means(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its L1 magnitudes (i.e. over all of the
     activations in the mini-batch, compute the mean of the L1 magnitude of each channel).
@@ -437,7 +456,7 @@ def activation_channels_apoz(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its sparsity.
     """
@@ -572,3 +591,35 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     if min_val >= max_val:
         raise ValueError('min_val must be less than max_val')
     return checker
+
+
+
+def filter_kwargs(dict_to_filter, function_to_call):
+    """Utility to check which arguments in the passed dictionary exist in a function's signature
+
+    The function returns two dicts, one with just the valid args from the input and one with the invalid args.
+    The caller can then decide to ignore the existence of invalid args, depending on context.
+    """
+
+    sig = inspect.signature(function_to_call)
+    filter_keys = [param.name for param in sig.parameters.values() if (param.kind == param.POSITIONAL_OR_KEYWORD)]
+    valid_args = {}
+    invalid_args = {}
+
+    for key in dict_to_filter:
+        if key in filter_keys:
+            valid_args[key] = dict_to_filter[key]
+        else:
+            invalid_args[key] = dict_to_filter[key]
+    return valid_args, invalid_args
+
+def convert_tensors_recursively_to(val, *args, **kwargs):
+    """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""
+    if isinstance(val, torch.Tensor):
+        return val.to(*args, **kwargs)
+
+    if isinstance(val, (tuple, list)):
+        return type(val)(convert_tensors_recursively_to(item, *args, **kwargs) for item in val)
+
+    return val
+

@@ -53,8 +53,6 @@ models, or with the provided sample models:
 import math
 import time
 import os
-import sys
-import random
 import traceback
 import logging
 from collections import OrderedDict
@@ -69,11 +67,13 @@ import torch.utils.data
 import torchnet.meter as tnt
 import distiller
 import distiller.apputils as apputils
+import distiller.model_summaries as model_summaries
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
 from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
+import operator
 
 
 # Logger handle
@@ -94,21 +94,17 @@ def main():
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
-    apputils.log_execution_env_state(args.compress,
-        msglogger.logdir, gitroot=module_path)
+    apputils.log_execution_env_state(args.compress, msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
-    best_epochs = [distiller.MutableNamedTuple({'epoch': 0, 'top1': 0, 'sparsity': 0})
-                   for i in range(args.num_best_scores)]
-
+    perf_scores_history = []
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
         # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
         # In Pytorch, support for deterministic execution is still a bit clunky.
         if args.workers > 1:
-            msglogger.error('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
-            exit(1)
+            raise ValueError('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
         # Use a well-known seed, for repeatability of experiments
         distiller.set_deterministic()
     else:
@@ -127,14 +123,12 @@ def main():
             try:
                 args.gpus = [int(s) for s in args.gpus.split(',')]
             except ValueError:
-                msglogger.error('ERROR: Argument --gpus must be a comma-separated list of integers only')
-                exit(1)
+                raise ValueError('ERROR: Argument --gpus must be a comma-separated list of integers only')
             available_gpus = torch.cuda.device_count()
             for dev_id in args.gpus:
                 if dev_id >= available_gpus:
-                    msglogger.error('ERROR: GPU device ID {0} requested, but only {1} devices available'
-                                    .format(dev_id, available_gpus))
-                    exit(1)
+                    raise ValueError('ERROR: GPU device ID {0} requested, but only {1} devices available'
+                                     .format(dev_id, available_gpus))
             # Set default device in case the first one on the list != 0
             torch.cuda.set_device(args.gpus[0])
 
@@ -272,7 +266,7 @@ def main():
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
                  OrderedDict([('Loss', vloss),
                               ('Top1', top1),
                               ('Top5', top5)]))
@@ -283,17 +277,10 @@ def main():
             compression_scheduler.on_epoch_end(epoch, optimizer)
 
         # Update the list of top scores achieved so far, and save the checkpoint
-        is_best = top1 > best_epochs[-1].top1
-        if top1 > best_epochs[0].top1:
-            best_epochs[0].epoch = epoch
-            best_epochs[0].top1 = top1
-            # Keep best_epochs sorted such that best_epochs[0] is the lowest top1 in the best_epochs list
-            best_epochs = sorted(best_epochs, key=lambda score: score.top1)
-        for score in reversed(best_epochs):
-            if score.top1 > 0:
-                msglogger.info('==> Best Top1: %.3f on Epoch: %d', score.top1, score.epoch)
+        update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
+        is_best = epoch == perf_scores_history[0].epoch
         apputils.save_checkpoint(epoch, args.arch, model, optimizer, compression_scheduler,
-                                 best_epochs[-1].top1, is_best, args.name, msglogger.logdir)
+                                 perf_scores_history[0].top1, is_best, args.name, msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
@@ -327,8 +314,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     # Switch to train mode
     model.train()
+    acc_stats = []
     end = time.time()
-
     for train_step, (inputs, target) in enumerate(train_loader):
         # Measure data loading time
         data_time.add(time.time() - end)
@@ -345,12 +332,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         if not args.earlyexit_lossweights:
             loss = criterion(output, target)
-            # Measure accuracy and record loss
+            # Measure accuracy
             classerr.add(output.data, target)
+            acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
-
+        # Record loss
         losses[OBJECTIVE_LOSS_KEY].add(loss.item())
 
         if compression_scheduler:
@@ -397,7 +385,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             stats_dict.update(errs)
             stats_dict['LR'] = optimizer.param_groups[0]['lr']
             stats_dict['Time'] = batch_time.mean
-            stats = ('Peformance/Training/', stats_dict)
+            stats = ('Performance/Training/', stats_dict)
 
             params = model.named_parameters() if args.log_params_histograms else None
             distiller.log_training_progress(stats,
@@ -406,6 +394,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
         end = time.time()
+    return acc_stats
 
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):
@@ -513,6 +502,21 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
 
 
+def update_training_scores_history(perf_scores_history, model, top1, top5, epoch, num_best_scores):
+    """ Update the list of top training scores achieved so far, and log the best scores so far"""
+
+    model_sparsity, _, params_nnz_cnt = distiller.model_params_stats(model)
+    perf_scores_history.append(distiller.MutableNamedTuple({'params_nnz_cnt': -params_nnz_cnt,
+                                                            'sparsity': model_sparsity,
+                                                            'top1': top1, 'top5': top5, 'epoch': epoch}))
+    # Keep perf_scores_history sorted from best to worst
+    # Sort by sparsity as main sort key, then sort by top1, top5 and epoch
+    perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'), reverse=True)
+    for score in perf_scores_history[:num_best_scores]:
+        msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d on epoch: %d]',
+                       score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
+
+
 def earlyexit_loss(output, target, criterion, args):
     loss = 0
     sum_lossweights = 0
@@ -613,9 +617,9 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
 def summarize_model(model, dataset, which_summary):
     if which_summary.startswith('png'):
-        apputils.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
+        model_summaries.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
     elif which_summary == 'onnx':
-        apputils.export_img_classifier_to_onnx(model, 'model.onnx', dataset)
+        model_summaries.export_img_classifier_to_onnx(model, 'model.onnx', dataset)
     else:
         distiller.model_summary(model, which_summary, dataset)
 

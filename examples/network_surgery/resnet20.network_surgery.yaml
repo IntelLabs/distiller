@@ -17,7 +17,7 @@
 # will be updated to a non-zero value, even if their gradients are masked (e.g. when using SGD with momentum).
 # Therefore, to circumvent this weights-update performed by the backward pass, we usually mask the weights again -
 # right after the backward pass.  To disable this masking set:
-#   mask_on_forward_only: False
+#   mask_on_forward_only: True
 #
 #
 # Baseline results:
