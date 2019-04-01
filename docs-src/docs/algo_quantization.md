@@ -92,6 +92,7 @@ For post-training quantization, this method is implemented by wrapping existing 
     - Element-wise addition
     - Element-wise multiplication
     - Concatenation
+    - Embedding
 - All other layers are unaffected and are executed using their original FP32 implementation.
 - To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For details on ways to invoke the quantizer see [here](schedule.md#post-training-quantization).
 - The transform performed by the Quantizer only works on sub-classes of `torch.nn.Module`. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the `torch` namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/distiller/modules). It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified [ResNet implementation](https://github.com/NervanaSystems/distiller/blob/quantization_updates/models/imagenet/resnet.py).

@@ -8,7 +8,7 @@ quantizers:
     # Don't quantize first and last layers
       conv1:
         bits_weights: null
-        acts: null
+        bits_activations: null
       layer1.0.pre_relu:
         bits_weights: null
         bits_activations: null
