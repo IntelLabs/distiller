@@ -33,19 +33,21 @@ from distiller import has_children
 #############################
 
 class DummyQuantLayer(nn.Module):
-    def __init__(self, qbits):
+    def __init__(self, qbits, overridable_prop=False):
         super(DummyQuantLayer, self).__init__()
         self.qbits = qbits
+        self.overridable_prop = overridable_prop
 
     def forward(self, *input):
         return input
 
 
 class DummyWrapperLayer(nn.Module):
-    def __init__(self, module, qbits):
+    def __init__(self, module, qbits, prop=False):
         super(DummyWrapperLayer, self).__init__()
         self.qbits = qbits
         self.inner = module
+        self.prop = prop
 
     def forward(self, *input):
         return input
@@ -92,13 +94,25 @@ def dummy_quantize_params(param, param_meta):
 
 
 class DummyQuantizer(Quantizer):
-    def __init__(self, model, optimizer=None, bits_activations=None, bits_weights=None, bits_overrides=None,
-                 quantize_bias=False, train_with_fp_copy=False):
-        super(DummyQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_overrides, quantize_bias,
-                                             train_with_fp_copy)
+    def __init__(self, model, optimizer=None,
+                 bits_activations=None, bits_weights=None, bits_bias=None,
+                 overrides=None,
+                 train_with_fp_copy=False):
+        super(DummyQuantizer, self).__init__(model, optimizer,
+                                             bits_activations=bits_activations,
+                                             bits_weights=bits_weights,
+                                             bits_bias=bits_bias,
+                                             overrides=overrides,
+                                             train_with_fp_copy=train_with_fp_copy)
 
-        self.replacement_factory[nn.Conv2d] = lambda module, name, qbits_map: DummyWrapperLayer(module, qbits_map[name])
-        self.replacement_factory[nn.ReLU] = lambda module, name, qbits_map: DummyQuantLayer(qbits_map[name])
+        def _dummy_wrapper_layer(module, name, qbits_map, prop=False):
+            return DummyWrapperLayer(module, qbits_map[name], prop)
+
+        def _dummy_quant_layer(module, name, qbits_map, overridable_prop=False):
+            return DummyQuantLayer(qbits_map[name], overridable_prop)
+
+        self.replacement_factory[nn.Conv2d] = _dummy_wrapper_layer
+        self.replacement_factory[nn.ReLU] = _dummy_quant_layer
         self.param_quantization_fn = dummy_quantize_params
 
 
@@ -118,14 +132,14 @@ def get_expected_qbits(model, qbits, expected_overrides):
     post_prepare_changes = {}
     prefix = 'module.' if isinstance(model, torch.nn.DataParallel) else ''
     for orig_name, orig_module in model.named_modules():
-        bits_a, bits_w = expected_overrides.get(orig_name.replace(prefix, '', 1), qbits)
+        bits_a, bits_w, bits_b = expected_overrides.get(orig_name.replace(prefix, '', 1), qbits)
         if not params_quantizable(orig_module):
-            bits_w = None
-        expected_qbits[orig_name] = QBits(bits_a, bits_w)
+            bits_w = bits_b = None
+        expected_qbits[orig_name] = QBits(bits_a, bits_w, bits_b)
 
         # We're testing replacement of module with container
         if isinstance(orig_module, nn.Conv2d):
-            post_prepare_changes[orig_name] = QBits(bits_a, None)
+            post_prepare_changes[orig_name] = QBits(bits_a, None, None)
             post_prepare_changes[orig_name + '.inner'] = expected_qbits[orig_name]
 
     return expected_qbits, post_prepare_changes
@@ -151,11 +165,6 @@ def fixture_train_with_fp_copy(request):
     return request.param
 
 
-@pytest.fixture(name='quantize_bias', params=[False, True], ids=['bias_off', 'bias_on'])
-def fixture_quantize_bias(request):
-    return request.param
-
-
 @pytest.fixture(name='parallel', params=[False, True], ids=['parallel_off', 'parallel_on'])
 def fixture_parallel(request):
     return request.param
@@ -169,7 +178,7 @@ def test_no_quantization(model):
     m_orig = deepcopy(model)
 
     q = DummyQuantizer(model)
-    assert all(qbits.acts is None and qbits.wts is None for qbits in q.module_qbits_map.values())
+    assert all(qbits.acts is None and qbits.wts is None and qbits.bias is None for qbits in q.module_qbits_map.values())
 
     q.prepare_model()
     assert len(q.params_to_quantize) == 0
@@ -180,32 +189,36 @@ def test_no_quantization(model):
 
 
 def test_overrides_ordered_dict(model):
-    with pytest.raises(TypeError, message='Expecting TypeError when bits_overrides is not an OrderedDict'):
-        DummyQuantizer(model, bits_overrides={'testing': '123'})
+    with pytest.raises(TypeError, message='Expecting TypeError when overrides is not an OrderedDict'):
+        DummyQuantizer(model, overrides={'testing': '123'})
 
+acts_key = 'bits_activations'
+wts_key = 'bits_weights'
+bias_key = 'bits_bias'
 
 @pytest.mark.parametrize(
-    "qbits, bits_overrides, explicit_expected_overrides",
+    "qbits, overrides, explicit_expected_overrides",
     [
-        (QBits(8, 4), OrderedDict(), {}),
-        (QBits(8, 4),
-         OrderedDict([('conv1', {'acts': None, 'wts': None}), ('relu1', {'acts': None, 'wts': None})]),
-         {'conv1': QBits(None, None), 'relu1': QBits(None, None)}),
-        (QBits(8, 8),
-         OrderedDict([('sub.*conv1', {'wts': 4}), ('sub.*conv2', {'acts': 4, 'wts': 4})]),
-         {'sub1.conv1': QBits(8, 4), 'sub1.conv2': QBits(4, 4), 'sub2.conv1': QBits(8, 4), 'sub2.conv2': QBits(4, 4)}),
-        (QBits(4, 4),
-         OrderedDict([('sub1\..*1', {'acts': 16, 'wts': 16}), ('sub1\..*', {'acts': 8, 'wts': 8})]),
-         {'sub1.conv1': QBits(16, 16), 'sub1.bn1': QBits(16, None),
-          'sub1.relu1': QBits(16, None), 'sub1.pool1': QBits(16, None),
-          'sub1.conv2': QBits(8, 8), 'sub1.bn2': QBits(8, None),
-          'sub1.relu2': QBits(8, None), 'sub1.pool2': QBits(8, None)}),
-        (QBits(4, 4),
-         OrderedDict([('sub1\..*', {'acts': 8, 'wts': 8}), ('sub1\..*1', {'acts': 16, 'wts': 16})]),
-         {'sub1.conv1': QBits(8, 8), 'sub1.bn1': QBits(8, None),
-          'sub1.relu1': QBits(8, None), 'sub1.pool1': QBits(8, None),
-          'sub1.conv2': QBits(8, 8), 'sub1.bn2': QBits(8, None),
-          'sub1.relu2': QBits(8, None), 'sub1.pool2': QBits(8, None)}),
+        (QBits(8, 4, 32), OrderedDict(), {}),
+        (QBits(8, 4, 32),
+         OrderedDict([('conv1', {acts_key: None, wts_key: None, bias_key: None}),
+                      ('relu1', {acts_key: None, wts_key: None, bias_key: None})]),
+         {'conv1': QBits(None, None, None), 'relu1': QBits(None, None, None)}),
+        (QBits(8, 8, 32),
+         OrderedDict([('sub.*conv1', {wts_key: 4}), ('sub.*conv2', {acts_key: 4, wts_key: 4})]),
+         {'sub1.conv1': QBits(8, 4, 32), 'sub1.conv2': QBits(4, 4, 32), 'sub2.conv1': QBits(8, 4, 32), 'sub2.conv2': QBits(4, 4, 32)}),
+        (QBits(4, 4, 32),
+         OrderedDict([('sub1\..*1', {acts_key: 16, wts_key: 16}), ('sub1\..*', {acts_key: 8, wts_key: 8})]),
+         {'sub1.conv1': QBits(16, 16, 32), 'sub1.bn1': QBits(16, None, None),
+          'sub1.relu1': QBits(16, None, None), 'sub1.pool1': QBits(16, None, None),
+          'sub1.conv2': QBits(8, 8, 32), 'sub1.bn2': QBits(8, None, None),
+          'sub1.relu2': QBits(8, None, None), 'sub1.pool2': QBits(8, None, None)}),
+        (QBits(4, 4, 32),
+         OrderedDict([('sub1\..*', {acts_key: 8, wts_key: 8}), ('sub1\..*1', {acts_key: 16, wts_key: 16})]),
+         {'sub1.conv1': QBits(8, 8, 32), 'sub1.bn1': QBits(8, None, None),
+          'sub1.relu1': QBits(8, None, None), 'sub1.pool1': QBits(8, None, None),
+          'sub1.conv2': QBits(8, 8, 32), 'sub1.bn2': QBits(8, None, None),
+          'sub1.relu2': QBits(8, None, None), 'sub1.pool2': QBits(8, None, None)}),
     ],
     ids=[
         'no_override',
@@ -216,8 +229,8 @@ def test_overrides_ordered_dict(model):
                                             #             never actually matched
     ]
 )
-def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_overrides,
-                    train_with_fp_copy, quantize_bias, parallel):
+def test_model_prep(model, optimizer, qbits, overrides, explicit_expected_overrides,
+                    train_with_fp_copy, parallel):
     if parallel:
         model = torch.nn.DataParallel(model)
     m_orig = deepcopy(model)
@@ -226,9 +239,9 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
 
     # Initialize Quantizer
-    q = DummyQuantizer(model, optimizer=optimizer, bits_activations=qbits.acts, bits_weights=qbits.wts,
-                       bits_overrides=deepcopy(bits_overrides), train_with_fp_copy=train_with_fp_copy,
-                       quantize_bias=quantize_bias)
+    q = DummyQuantizer(model, optimizer=optimizer,
+                       bits_activations=qbits.acts, bits_weights=qbits.wts, bits_bias=qbits.bias,
+                       overrides=deepcopy(overrides), train_with_fp_copy=train_with_fp_copy)
 
     # Check number of bits for quantization were registered correctly
     assert q.module_qbits_map == expected_qbits
@@ -242,10 +255,6 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
 
         # Check parameter names are as expected
         assert ptq.q_attr_name in ['weight', 'bias']
-
-        # Check bias will be quantized only if flag is enabled
-        if ptq.q_attr_name == 'bias':
-            assert quantize_bias
 
         named_params = dict(ptq.module.named_parameters())
         if q.train_with_fp_copy:
@@ -262,8 +271,8 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
             assert ptq.fp_attr_name in named_params
 
         # Check number of bits registered correctly
-        # Bias number of bits is hard-coded to 32 for now...
-        expected_n_bits = 32 if ptq.q_attr_name == 'bias' else expected_qbits[ptq.module_name].wts
+        expected_n_bits = expected_qbits[ptq.module_name].bias if ptq.q_attr_name == 'bias' else \
+            expected_qbits[ptq.module_name].wts
         assert ptq.num_bits == expected_n_bits
 
     q_named_modules = dict(model.named_modules())
@@ -275,7 +284,7 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
         # Check module replacement is as expected
         q_module = q_named_modules[orig_name]
         expected_type = expected_type_replacements.get(type(orig_module))
-        if expected_type is None or expected_qbits[orig_name] == QBits(None, None):
+        if expected_type is None or expected_qbits[orig_name] == QBits(None, None, None):
             assert type(orig_module) == type(q_module)
         else:
             assert type(q_module) == expected_type
@@ -286,23 +295,26 @@ def test_model_prep(model, optimizer, qbits, bits_overrides, explicit_expected_o
 
 
 @pytest.mark.parametrize(
-    "qbits, bits_overrides, explicit_expected_overrides",
+    "qbits, overrides, explicit_expected_overrides",
     [
-        (QBits(8, 8),
-         OrderedDict([('conv1', {'acts': None, 'wts': None}), ('relu1', {'acts': None, 'wts': None}),
-                      ('sub.*conv1', {'acts': 8, 'wts': 4}), ('sub.*conv2', {'acts': 4, 'wts': 4})]),
-         {'conv1': QBits(None, None), 'relu1': QBits(None, None),
-          'sub1.conv1': QBits(8, 4), 'sub1.conv2': QBits(4, 4), 'sub2.conv1': QBits(8, 4), 'sub2.conv2': QBits(4, 4)}),
+        (QBits(8, 8, 32),
+         OrderedDict([('conv1', {acts_key: None, wts_key: None, bias_key: None}),
+                      ('relu1', {acts_key: None, wts_key: None, bias_key: None}),
+                      ('sub.*conv1', {acts_key: 8, wts_key: 4, bias_key: 32}),
+                      ('sub.*conv2', {acts_key: 4, wts_key: 4, bias_key: 32})]),
+         {'conv1': QBits(None, None, None), 'relu1': QBits(None, None, None),
+          'sub1.conv1': QBits(8, 4, 32), 'sub1.conv2': QBits(4, 4, 32), 'sub2.conv1': QBits(8, 4, 32),
+          'sub2.conv2': QBits(4, 4, 32)}),
     ]
 )
-def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_expected_overrides,
-                            train_with_fp_copy, quantize_bias):
+def test_param_quantization(model, optimizer, qbits, overrides, explicit_expected_overrides,
+                            train_with_fp_copy):
     # Build expected QBits
     expected_qbits, post_prepare_changes = get_expected_qbits(model, qbits, explicit_expected_overrides)
 
-    q = DummyQuantizer(model, optimizer=optimizer, bits_activations=qbits.acts, bits_weights=qbits.wts,
-                       bits_overrides=deepcopy(bits_overrides), train_with_fp_copy=train_with_fp_copy,
-                       quantize_bias=quantize_bias)
+    q = DummyQuantizer(model, optimizer=optimizer,
+                       bits_activations=qbits.acts, bits_weights=qbits.wts, bits_bias=qbits.bias,
+                       overrides=deepcopy(overrides), train_with_fp_copy=train_with_fp_copy)
     q.prepare_model()
     expected_qbits.update(post_prepare_changes)
 
@@ -319,10 +331,7 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
         for param_name, pre_quant_param in pre_quant_module.named_parameters():
             quantizable = num_qbits is not None
             if param_name.endswith('bias'):
-                quantizable = quantizable and quantize_bias
-                # Bias number of bits is hard-coded to 32 for now...
-                if quantizable:
-                    num_bits = 32
+                num_bits = expected_qbits[name].bias
             else:
                 num_bits = num_qbits
 
@@ -348,3 +357,42 @@ def test_param_quantization(model, optimizer, qbits, bits_overrides, explicit_ex
             expected = dummy_quantize_params(pre_quant_param,
                                              _ParamToQuant(None, None, None, None, num_bits)) if quantizable else pre_quant_param
             assert torch.equal(quant_param, expected)
+
+
+def test_overridable_args(model, optimizer, train_with_fp_copy):
+    with pytest.raises(ValueError, message='Expecting ValueError when overriding args without overriding bits.'):
+        model_copy = deepcopy(model)
+        conv_override = OrderedDict([(acts_key, None), (wts_key, None), (bias_key, None), ('prop', 123)])
+        overrides = OrderedDict([('conv1', conv_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
+    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
+        model_copy = deepcopy(model)
+        conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123), ('unexpetcted_prop', 456)])
+        overrides = OrderedDict([('conv1', conv_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
+    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
+        model_copy = deepcopy(model)
+        relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
+                                     ('overridable_prop', 123), ('unexpetcted_prop', 456)])
+        overrides = OrderedDict([('relu1', relu_override)])
+        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+        q.prepare_model()
+
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    q.prepare_model()
+    assert model_copy.conv1.prop == 123
+
+    model_copy = deepcopy(model)
+    relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
+                                ('overridable_prop', 123)])
+    overrides = OrderedDict([('relu1', relu_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    q.prepare_model()
+    assert model_copy.relu1.overridable_prop == 123
