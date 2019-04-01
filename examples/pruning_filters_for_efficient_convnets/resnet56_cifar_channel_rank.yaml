@@ -5,7 +5,7 @@
 # However, instead of one-shot filter ranking and pruning, we perform one-shot channel ranking and
 # pruning, using L1-magnitude of the structures.
 #
-# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_channel_rank.yaml --resume=checkpoint.resnet56_cifar_baseline.pth.tar -j=1 --deterministic
+# time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../pruning_filters_for_efficient_convnets/resnet56_cifar_channel_rank.yaml --resume-from=checkpoint.resnet56_cifar_baseline.pth.tar --reset-optimizer --vs=0
 #
 # Baseline results:
 #     Top1: 92.850    Top5: 99.780    Loss: 0.464
@@ -164,26 +164,26 @@ lr_schedulers:
 policies:
   - pruner:
       instance_name: filter_pruner_70
-    epochs: [180]
+    epochs: [0]
 
   - pruner:
       instance_name: filter_pruner_60
-    epochs: [180]
+    epochs: [0]
 
   - pruner:
       instance_name: filter_pruner_40
-    epochs: [180]
+    epochs: [0]
 
   - pruner:
       instance_name: filter_pruner_20
-    epochs: [180]
+    epochs: [0]
 
   - extension:
       instance_name: net_thinner
-    epochs: [180]
+    epochs: [0]
 
   - lr_scheduler:
       instance_name: exp_finetuning_lr
-    starting_epoch: 190
+    starting_epoch: 10
     ending_epoch: 300
     frequency: 1

@@ -23,7 +23,7 @@ import distiller
 import common
 import pytest
 from distiller.models import create_model
-from distiller.apputils import save_checkpoint, load_checkpoint
+from distiller.apputils import save_checkpoint, load_checkpoint, load_lean_checkpoint
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -296,7 +296,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     conv2 = common.find_module_by_name(model_2, pair[1])
     assert conv2 is not None
     with pytest.raises(KeyError):
-        model_2, compression_scheduler, start_epoch = load_checkpoint(model_2, 'checkpoint.pth.tar')
+        model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
     compression_scheduler = distiller.CompressionScheduler(model)
     hasattr(model, 'thinning_recipes')
 
@@ -304,13 +304,13 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
 
     # (2)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None, scheduler=compression_scheduler)
-    model_2, compression_scheduler, start_epoch = load_checkpoint(model_2, 'checkpoint.pth.tar')
+    model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
     assert hasattr(model_2, 'thinning_recipes')
     logger.info("test_arbitrary_channel_pruning - Done")
 
     # (3)
     save_checkpoint(epoch=0, arch=config.arch, model=model_2, optimizer=None, scheduler=compression_scheduler)
-    model_2, compression_scheduler, start_epoch = load_checkpoint(model_2, 'checkpoint.pth.tar')
+    model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
     assert hasattr(model_2, 'thinning_recipes')
     logger.info("test_arbitrary_channel_pruning - Done 2")
 
