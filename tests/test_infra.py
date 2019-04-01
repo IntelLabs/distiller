@@ -14,24 +14,14 @@
 # limitations under the License.
 #
 import logging
-import os
-import sys
 import tempfile
 
 import torch
 import pytest
-try:
-    import distiller
-except ImportError:
-    module_path = os.path.abspath(os.path.join('..'))
-    if module_path not in sys.path:
-        sys.path.append(module_path)
-    import distiller
 import distiller
 from distiller.apputils import save_checkpoint, load_checkpoint, load_lean_checkpoint
 from distiller.models import create_model
 import pretrainedmodels
-
 
 
 def test_create_model_cifar():

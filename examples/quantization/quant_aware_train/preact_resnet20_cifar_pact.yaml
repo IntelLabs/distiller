@@ -22,20 +22,20 @@ quantizers:
     act_clip_init_val: 8.0
     bits_activations: 4
     bits_weights: 3
-    bits_overrides:
+    overrides:
     # Don't quantize first and last layers
       conv1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       layer1.0.pre_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       final_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       fc:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
 
 lr_schedulers:
   training_lr:
