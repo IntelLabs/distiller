@@ -1,5 +1,4 @@
 from setuptools import setup, find_packages
-import distiller
 
 
 packages = find_packages(
@@ -11,7 +10,7 @@ with open('requirements.txt','r') as req_file:
     install_reqs = [line.strip() for line in req_file.readlines()]
 
 setup(name='distiller',
-      version=distiller.__version__,
+      version='0.3.0-pre',
       packages=packages,
       install_requires=install_reqs
       )
