@@ -60,7 +60,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if best_top1 is not None:
         checkpoint['best_top1'] = best_top1
     if optimizer is not None:
-        checkpoint['optimizer'] = optimizer.state_dict()
+        checkpoint['optimizer_state_dict'] = optimizer.state_dict()
+        checkpoint['optimizer_type'] = type(optimizer)
     if scheduler is not None:
         checkpoint['compression_sched'] = scheduler.state_dict()
     if hasattr(model, 'thinning_recipes'):
@@ -73,13 +74,22 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         shutil.copyfile(fullpath, fullpath_best)
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None):
-    """Load a pytorch training checkpoint
+def load_lean_checkpoint(model, chkpt_file, model_device=None):
+    return load_checkpoint(model, chkpt_file, model_device=model_device,
+                           lean_checkpoint=True)[0]
+
+
+def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
+    """Load a pytorch training checkpoint.
 
     Args:
         model: the pytorch model to which we will load the parameters
         chkpt_file: the checkpoint file
-        optimizer: the optimizer to which we will load the serialized state
+        lean_checkpoint: if set, read into model only 'state_dict' field
+        optimizer: [deprecated argument]
+        model_device [str]: if set, call model.to($model_device)
+                This should be set to either 'cpu' or 'cuda'.
+    :returns: updated model, compression_scheduler, optimizer, start_epoch
     """
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
@@ -132,9 +142,43 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
         quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model()
 
-    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
-                                                                   e=checkpoint_epoch))
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(checkpoint['state_dict'])
-    return (model, compression_scheduler, start_epoch)
+    if model_device is not None:
+        model.to(model_device)
+
+    if lean_checkpoint:
+        msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
+        return (model, None, None, 0)
+
+    def _load_optimizer(cls, src_state_dict, model):
+        """Initiate optimizer with model parameters and load src_state_dict"""
+        # initiate the dest_optimizer with a dummy learning rate,
+        # this is required to support SGD.__init__()
+        dest_optimizer = cls(model.parameters(), lr=1)
+        dest_optimizer.load_state_dict(src_state_dict)
+        return dest_optimizer
+
+    try:
+        optimizer = _load_optimizer(checkpoint['optimizer_type'],
+            checkpoint['optimizer_state_dict'], model)
+    except KeyError:
+        if 'optimizer' not in checkpoint:
+            raise
+        # older checkpoints didn't support this feature
+        # they had the 'optimizer' field instead
+        optimizer = None
+
+    if optimizer is not None:
+        msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
+            type=type(optimizer)))
+        msglogger.info('Optimizer Args: {}'.format(
+            dict((k,v) for k,v in optimizer.state_dict()['param_groups'][0].items()
+                            if k != 'params')))
+    else:
+        msglogger.warning('Optimizer could not be loaded from checkpoint.')
+
+    msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
+                                                                   e=checkpoint_epoch))
+    return (model, compression_scheduler, optimizer, start_epoch)

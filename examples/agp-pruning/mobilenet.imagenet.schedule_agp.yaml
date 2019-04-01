@@ -1,4 +1,5 @@
-# time python3 compress_classifier.py -a=mobilenet -p=50 --lr=0.001 ../../../data.imagenet/ -j=22 --resume=mobilenet_sgd_68.848.pth.tar --epochs=96 --compress=../agp-pruning//mobilenet.imagenet.schedule_agp.yaml
+# time python3 compress_classifier.py -a=mobilenet -p=50 --lr=0.001 ../../../data.imagenet/ -j=22 --resume-from=mobilenet_sgd_68.848.pth.tar --epochs=96 --compress=../agp-pruning//mobilenet.imagenet.schedule_agp.yaml  --reset-optimizer --vs=0
+#
 #
 # A pretrained MobileNet (width=1) can be downloaded from: https://github.com/marvis/pytorch-mobilenet (top1: 68.848; top5: 88.740)
 #
@@ -86,18 +87,18 @@ lr_schedulers:
 policies:
   - pruner:
       instance_name : 'conv50_pruner'
-    starting_epoch: 103
-    ending_epoch: 123
+    starting_epoch: 0
+    ending_epoch: 20
     frequency: 2
 
   - pruner:
       instance_name : 'conv60_pruner'
-    starting_epoch: 103
-    ending_epoch: 123
+    starting_epoch: 0
+    ending_epoch: 20
     frequency: 2
 
   - lr_scheduler:
       instance_name: pruning_lr
-    starting_epoch: 103
-    ending_epoch: 200
+    starting_epoch: 0
+    ending_epoch: 100
     frequency: 1
