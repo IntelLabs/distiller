@@ -107,7 +107,7 @@ def append_param_directive(thinning_recipe, param_name, directive):
     thinning_recipe.parameters[param_name] = param_directives
 
 
-def append_module_directive(model, thinning_recipe, module_name, key, val):
+def append_module_directive(thinning_recipe, module_name, key, val):
     msglogger.debug("\t[recipe] setting {}.{} = {}".format(module_name, key, val))
     mod_directive = thinning_recipe.modules.get(module_name, {})
     mod_directive[key] = val
@@ -259,8 +259,7 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
         # We are removing channels, so update the number of incoming channels (IFMs)
         # in the convolutional layer
         assert isinstance(layers[layer_name], torch.nn.modules.Conv2d)
-        append_module_directive(model, thinning_recipe,
-            layer_name, key='in_channels', val=num_nnz_channels)
+        append_module_directive(thinning_recipe, layer_name, key='in_channels', val=num_nnz_channels)
 
         # Select only the non-zero filters
         indices = nonzero_channels.data.squeeze()
@@ -272,8 +271,7 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
             msglogger.info("Could not find predecessors for name={}".format(layer_name))
         for predecessor in predecessors:
             # For each of the convolutional layers that preceed, we have to reduce the number of output channels.
-            append_module_directive(model, thinning_recipe,
-                predecessor, key='out_channels', val=num_nnz_channels)
+            append_module_directive(thinning_recipe, predecessor, key='out_channels', val=num_nnz_channels)
 
             # Now remove channels from the weights tensor of the predecessor conv
             append_param_directive(thinning_recipe, predecessor+'.weight', (0, indices))
@@ -332,7 +330,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
         # We are removing filters, so update the number of outgoing channels (OFMs)
         # in the convolutional layer
         assert isinstance(layers[layer_name], torch.nn.modules.Conv2d)
-        append_module_directive(model, thinning_recipe, layer_name, key='out_channels', val=num_nnz_filters)
+        append_module_directive(thinning_recipe, layer_name, key='out_channels', val=num_nnz_filters)
 
         # Select only the non-zero filters
         indices = nonzero_filters.data.squeeze()
@@ -347,7 +345,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
         for successor in successors:
             if isinstance(layers[successor], torch.nn.modules.Conv2d):
                 # For each of the convolutional layers that follow, we have to reduce the number of input channels.
-                append_module_directive(model, thinning_recipe, successor, key='in_channels', val=num_nnz_filters)
+                append_module_directive(thinning_recipe, successor, key='in_channels', val=num_nnz_filters)
 
                 # Now remove channels from the weights tensor of the successor conv
                 append_param_directive(thinning_recipe, successor+'.weight', (1, indices))
@@ -356,7 +354,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
                 # If a Linear (Fully-Connected) layer follows, we need to update it's in_features member
                 fm_size = layers[successor].in_features // layers[layer_name].out_channels
                 in_features = fm_size * num_nnz_filters
-                append_module_directive(model, thinning_recipe, successor, key='in_features', val=in_features)
+                append_module_directive(thinning_recipe, successor, key='in_features', val=in_features)
                 msglogger.debug("[recipe] Linear {}: fm_size = {}  layers[{}].out_channels={}".format(
                                 successor, in_features, layer_name, layers[layer_name].out_channels))
                 msglogger.debug("[recipe] {}: setting in_features = {}".format(successor, in_features))
