@@ -248,12 +248,8 @@ class SummaryGraph(object):
     def get_ops(self, attr, f=lambda op: True):
         return [op for op in self.ops.values() if attr in op['attrs'] and f(op)]
 
-    def find_op(self, lost_op_name, denormalized=False):
-        assert isinstance(lost_op_name, str)
-        res = self.ops.get(lost_op_name, None)
-        if res is not None and not denormalized:
-            res = distiller.denormalize_module_name(self._src_model, res)
-        return res
+    def find_op(self, lost_op_name):
+        return self.ops.get(distiller.normalize_module_name(lost_op_name), None)
 
     def find_param(self, data_name):
         return self.params.get(data_name, None)
