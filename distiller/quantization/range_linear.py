@@ -589,6 +589,37 @@ class FP16Wrapper(nn.Module):
         return result
 
 
+class RangeLinearEmbeddingWrapper(nn.Module):
+    def __init__(self, wrapped_module, num_bits, mode=LinearQuantMode.SYMMETRIC, stats=None):
+        if not isinstance(wrapped_module, nn.Embedding):
+            raise ValueError(self.__class__.__name__ + ' can only wrap torch.nn.Embedding modules')
+
+        super(RangeLinearEmbeddingWrapper, self).__init__()
+
+        self.min_q_val, self.max_q_val = get_quantized_range(num_bits,
+                                                             signed=mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+
+        if stats is None:
+            w_scale, w_zero_point = _get_quant_params_from_tensor(wrapped_module.weight, num_bits, self.mode)
+        else:
+            w_scale, w_zero_point = _get_quant_params_from_stats_dict(stats['output'], num_bits, mode)
+
+        device = next(wrapped_module.parameters()).device
+
+        self.register_buffer('w_scale', w_scale.to(device))
+        self.register_buffer('w_zero_point', w_zero_point.to(device))
+        linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.min_q_val,
+                              self.max_q_val, inplace=True)
+
+        self.wrapped_module = wrapped_module
+
+    def forward(self, input):
+        out_q = self.wrapped_module(input)
+        out_f = linear_dequantize(out_q, self.w_scale, self.w_zero_point, inplace=True)
+        return out_f
+
+
+
 class PostTrainLinearQuantizer(Quantizer):
     """
     Applies range-based linear quantization to a model.
@@ -607,13 +638,11 @@ class PostTrainLinearQuantizer(Quantizer):
             containing the stats. If None then stats will be calculated dynamically.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
-                 overrides=None, bits_overrides=None,
-                 mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None, per_channel_wts=False,
-                 model_activation_stats=None, fp16=False):
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=False, no_clip_layers=None,
+                 per_channel_wts=False, model_activation_stats=None, fp16=False):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
-                                                       overrides=overrides, bits_overrides=bits_overrides,
-                                                       train_with_fp_copy=False)
+                                                       overrides=overrides, train_with_fp_copy=False)
 
         mode = verify_mode(mode)
 
@@ -634,7 +663,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'mode': str(mode).split('.')[1], 'clip_acts': clip_acts,
                                                     'no_clip_layers': no_clip_layers,
                                                     'per_channel_wts': per_channel_wts}}
-        
+
         def replace_param_layer(module, name, qbits_map,
                                 per_channel_wts=per_channel_wts,
                                 mode=mode,
@@ -649,16 +678,23 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None))
 
-        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16):
+        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16, clip_acts=clip_acts):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = self.clip_acts and norm_name not in self.no_clip_layers
+            clip = clip_acts and norm_name not in self.no_clip_layers
             return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
                                 activation_stats=self.model_activation_stats.get(norm_name, None))
 
+        def replace_embedding(module, name, qbits_map, fp16=fp16):
+            if fp16:
+                return FP16Wrapper(module, convert_input_fp16=False)
+            norm_name = distiller.utils.normalize_module_name(name)
+            return RangeLinearEmbeddingWrapper(module, qbits_map[name].wts, mode=mode,
+                                               stats=self.model_activation_stats.get(norm_name, None))
+
         self.clip_acts = clip_acts
-        self.no_clip_layers = [] or no_clip_layers
+        self.no_clip_layers = no_clip_layers or []
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
         self.mode = mode
@@ -666,14 +702,13 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
 
-        self.replacement_factory[distiller.modules.Concat] = \
-            partial(replace_non_param_layer, RangeLinearQuantConcatWrapper)
-
-        self.replacement_factory[distiller.modules.EltwiseAdd] = \
-            partial(replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
-
-        self.replacement_factory[distiller.modules.EltwiseMult] = \
-            partial(replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+        self.replacement_factory[distiller.modules.Concat] = partial(
+            replace_non_param_layer, RangeLinearQuantConcatWrapper)
+        self.replacement_factory[distiller.modules.EltwiseAdd] = partial(
+            replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
+        self.replacement_factory[distiller.modules.EltwiseMult] = partial(
+            replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+        self.replacement_factory[nn.Embedding] = replace_embedding
 
     @classmethod
     def from_args(cls, model, args):
@@ -794,14 +829,12 @@ class FakeQuantizationWrapper(nn.Module):
 
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
     def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
-                 overrides=None, bits_overrides=None,
-                 mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
                  quantize_inputs=True, num_bits_inputs=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
                                                                   bits_bias=bits_bias,
-                                                                  bits_overrides=bits_overrides,
                                                                   overrides=overrides,
                                                                   train_with_fp_copy=True)
 

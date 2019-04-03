@@ -14,7 +14,7 @@
 # python compress_classifier.py -a=resnet18 -p=10 -j=22 <path_to_imagenet_dataset> --pretrained --evaluate --quantize-eval --qe-config-file ../quantization/post_train_quant/resnet18_imagenet_post_train.yaml
 # (Note that when '--qe-config-file' is passed, all other '--qe*' arguments are ignored. Only the settings in the YAML file are used)
 #
-# Specifically, configuring with a YAML file allows us to define the 'bits_overrides' section, which is cumbersome
+# Specifically, configuring with a YAML file allows us to define the 'overrides' section, which is cumbersome
 # to define programatically and not exposed as a command-line argument.
 #
 # To illustrate how this may come in handy, we'll try post-training quantization of ResNet-18 using 6-bits for weights
@@ -24,7 +24,7 @@
 # FP32: (Run the above command line without the part starting with '--quantize-eval')
 #   ==> Top1: 69.758    Top5: 89.076    Loss: 1.251
 #
-# All layers 6-bits: (Just comment out the entire 'bits_overrides' section)
+# All layers 6-bits: (Just comment out the entire 'overrides' section)
 #   ==> Top1: 64.702    Top5: 85.990    Loss: 1.467
 #
 # First + last layer with 8-bits, everything else in 6-bits (comment out just the section with the header '.*add')
@@ -46,14 +46,14 @@ quantizers:
     per_channel_wts: True
     clip_acts: True
     no_clip_layers: fc
-    bits_overrides:
+    overrides:
     # First and last layers + element-wise add layers in 8-bits
       conv1:
-        wts: 8
-        acts: 8
+        bits_weights: 8
+        bits_activations: 8
       .*add:
-        wts: 8
-        acts: 8
+        bits_weights: 8
+        bits_activations: 8
       fc:
-        wts: 8
-        acts: 8
+        bits_weights: 8
+        bits_activations: 8

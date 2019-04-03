@@ -41,6 +41,10 @@ def model_device(model):
     return 'cpu'
 
 
+def optimizer_device_name(opt):
+    return str(list(list(opt.state)[0])[0].device)
+
+
 def to_np(var):
     return var.data.cpu().numpy()
 
@@ -591,6 +595,7 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     if min_val >= max_val:
         raise ValueError('min_val must be less than max_val')
     return checker
+
 
 
 def filter_kwargs(dict_to_filter, function_to_call):

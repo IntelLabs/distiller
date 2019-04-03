@@ -7,25 +7,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
-  <link rel="shortcut icon" href="../img/favicon.ico">
+  <link rel="shortcut icon" href="img/favicon.ico">
   <title>Design - Neural Network Distiller</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
-  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="../css/highlight.css">
-  <link href="../extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
   
   <script>
     // Current page data
     var mkdocs_page_name = "Design";
     var mkdocs_page_input_path = "design.md";
-    var mkdocs_page_url = "/design/index.html";
+    var mkdocs_page_url = null;
   </script>
   
-  <script src="../js/jquery-2.1.1.min.js"></script>
-  <script src="../js/modernizr-2.8.3.min.js"></script>
-  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
 
@@ -36,10 +37,10 @@
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
       <div class="wy-side-nav-search">
-        <a href="../index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
-  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
   </form>
 </div>
       </div>
@@ -50,22 +51,22 @@
           
             <li class="toctree-l1">
 		
-    <a class="" href="../index.html">Home</a>
+    <a class="" href="index.html">Home</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../install/index.html">Installation</a>
+    <a class="" href="install.html">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../usage/index.html">Usage</a>
+    <a class="" href="usage.html">Usage</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../schedule/index.html">Compression Scheduling</a>
+    <a class="" href="schedule.html">Compression Scheduling</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -74,23 +75,23 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../pruning/index.html">Pruning</a>
+    <a class="" href="pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../regularization/index.html">Regularization</a>
+    <a class="" href="regularization.html">Regularization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../quantization/index.html">Quantization</a>
+    <a class="" href="quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../knowledge_distillation/index.html">Knowledge Distillation</a>
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../conditional_computation/index.html">Conditional Computation</a>
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
                 </li>
     </ul>
 	    </li>
@@ -101,32 +102,32 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../algo_pruning/index.html">Pruning</a>
+    <a class="" href="algo_pruning.html">Pruning</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_quantization/index.html">Quantization</a>
+    <a class="" href="algo_quantization.html">Quantization</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../algo_earlyexit/index.html">Early Exit</a>
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
                 </li>
     </ul>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../model_zoo/index.html">Model Zoo</a>
+    <a class="" href="model_zoo.html">Model Zoo</a>
 	    </li>
           
             <li class="toctree-l1">
 		
-    <a class="" href="../jupyter/index.html">Jupyter Notebooks</a>
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
 	    </li>
           
             <li class="toctree-l1 current">
 		
-    <a class="current" href="index.html">Design</a>
+    <a class="current" href="design.html">Design</a>
     <ul class="subnav">
             
     <li class="toctree-l2"><a href="#distiller-design">Distiller design</a></li>
@@ -149,11 +150,11 @@
     <ul class="subnav">
                 <li class="">
                     
-    <a class="" href="../tutorial-struct_pruning/index.html">Pruning Filters and Channels</a>
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
                 </li>
                 <li class="">
                     
-    <a class="" href="../tutorial-lang_model/index.html">Pruning a Language Model</a>
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
                 </li>
     </ul>
 	    </li>
@@ -168,7 +169,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="../index.html">Neural Network Distiller</a>
+        <a href="index.html">Neural Network Distiller</a>
       </nav>
 
       
@@ -176,7 +177,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="../index.html">Docs</a> &raquo;</li>
+    <li><a href="index.html">Docs</a> &raquo;</li>
     
       
     
@@ -214,7 +215,7 @@ train():
 </code></pre>
 
 <p>These callbacks can be seen in the diagram below, as the arrow pointing from the Training Loop and into Distiller's <em>Scheduler</em>, which invokes the correct algorithm.  The application also uses Distiller services to collect statistics in <em>Summaries</em> and logs files, which can be queried at a later time, from Jupyter notebooks or TensorBoard.</p>
-<p><center><img alt="Distiller design" src="../imgs/distiller-design.png" /></center><br></p>
+<p><center><img alt="Distiller design" src="imgs/distiller-design.png" /></center><br></p>
 <h2 id="sparsification-and-fine-tuning">Sparsification and fine-tuning</h2>
 <ul>
 <li>The application sets up a model as normally done in PyTorch.</li>
@@ -248,10 +249,10 @@ Each sub-class of <code>Quantizer</code> should populate the <code>replacement_f
 To execute the model transformation, call the <code>prepare_model</code> function of the <code>Quantizer</code> instance.</p>
 <h3 id="flexible-bit-widths">Flexible Bit-Widths</h3>
 <ul>
-<li>Each instance of <code>Quantizer</code> is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the <code>bits_activations</code> and <code>bits_weights</code> parameters in <code>Quantizer</code>'s constructor. Sub-classes may define bit-widths for other tensor types as needed.</li>
+<li>Each instance of <code>Quantizer</code> is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the <code>bits_activations</code>, <code>bits_weights</code> and <code>bits_bias</code> parameters in <code>Quantizer</code>'s constructor. Sub-classes may define bit-widths for other tensor types as needed.</li>
 <li>We also want to be able to override the default number of bits mentioned in the bullet above for certain layers. These could be very specific layers. However, many models are comprised of building blocks ("container" modules, such as Sequential) which contain several modules, and it is likely we'll want to override settings for entire blocks, or for a certain module across different blocks. When such building blocks are used, the names of the internal modules usually follow some pattern.</li>
-<li>So, for this purpose, Quantizer also accepts a mapping of regular expressions to number of bits. This allows the user to override specific layers using they're exact name, or a group of layers via a regular expression. This mapping is passed via the <code>bits_overrides</code> parameter in the constructor.</li>
-<li>The <code>bits_overrides</code> mapping is required to be an instance of <a href="https://docs.python.org/3.5/library/collections.html#collections.OrderedDict"><code>collections.OrderedDict</code></a> (as opposed to just a simple Python <a href="https://docs.python.org/3.5/library/stdtypes.html#dict"><code>dict</code></a>). This is done in order to enable handling of overlapping name patterns.<br />
+<li>So, for this purpose, Quantizer also accepts a mapping of regular expressions to number of bits. This allows the user to override specific layers using they're exact name, or a group of layers via a regular expression. This mapping is passed via the <code>overrides</code> parameter in the constructor.</li>
+<li>The <code>overrides</code> mapping is required to be an instance of <a href="https://docs.python.org/3.5/library/collections.html#collections.OrderedDict"><code>collections.OrderedDict</code></a> (as opposed to just a simple Python <a href="https://docs.python.org/3.5/library/stdtypes.html#dict"><code>dict</code></a>). This is done in order to enable handling of overlapping name patterns.<br />
      So, for example, one could define certain override parameters for a group of layers, e.g. 'conv*', but also define different parameters for specific layers in that group, e.g. 'conv1'.<br />
      The patterns are evaluated eagerly - the first match wins. Therefore, the more specific patterns must come before the broad patterns.</li>
 </ul>
@@ -261,7 +262,7 @@ To execute the model transformation, call the <code>prepare_model</code> functio
 <p>The <code>Quantizer</code> class supports quantization-aware training, that is - training with quantization in the loop. This requires handling of a couple of flows / scenarios:</p>
 <ol>
 <li>
-<p>Maintaining a full precision copy of the weights, as described <a href="../quantization/index.html#quantization-aware-training">here</a>. This is enabled by setting <code>train_with_fp_copy=True</code> in the <code>Quantizer</code> constructor. At model transformation, in each module that has parameters that should be quantized, a new <code>torch.nn.Parameter</code> is added, which will maintain the required full precision copy of the parameters. Note that this is done in-place - a new module <strong>is not</strong> created. We preferred not to sub-class the existing PyTorch modules for this purpose. In order to this in-place, and also guarantee proper back-propagation through the weights quantization function, we employ the following "hack": </p>
+<p>Maintaining a full precision copy of the weights, as described <a href="quantization.html#quantization-aware-training">here</a>. This is enabled by setting <code>train_with_fp_copy=True</code> in the <code>Quantizer</code> constructor. At model transformation, in each module that has parameters that should be quantized, a new <code>torch.nn.Parameter</code> is added, which will maintain the required full precision copy of the parameters. Note that this is done in-place - a new module <strong>is not</strong> created. We preferred not to sub-class the existing PyTorch modules for this purpose. In order to this in-place, and also guarantee proper back-propagation through the weights quantization function, we employ the following "hack": </p>
 <ol>
 <li>The existing <code>torch.nn.Parameter</code>, e.g. <code>weights</code>, is replaced by a <code>torch.nn.Parameter</code> named <code>float_weight</code>.</li>
 <li>To maintain the existing functionality of the module, we then register a <code>buffer</code> in the module with the original name - <code>weights</code>.</li>
@@ -269,7 +270,7 @@ To execute the model transformation, call the <code>prepare_model</code> functio
 </ol>
 </li>
 <li>
-<p>In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the <a href="../algo_quantization/index.html#PACT">PACT</a> method, acitvations are clipped to a value <script type="math/tex">\alpha</script>, which is a learned parameter per-layer</p>
+<p>In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the <a href="algo_quantization.html#PACT">PACT</a> method, acitvations are clipped to a value <script type="math/tex">\alpha</script>, which is a learned parameter per-layer</p>
 </li>
 </ol>
 <p>To support these two cases, the <code>Quantizer</code> class also accepts an instance of a <code>torch.optim.Optimizer</code> (normally this would be one an instance of its sub-classes). The quantizer will take care of modifying the optimizer according to the changes made to the parameters.   </p>
@@ -288,10 +289,10 @@ In <code>distiller/quantization/clipped_linear.py</code> there are examples of l
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../tutorial-struct_pruning/index.html" class="btn btn-neutral float-right" title="Pruning Filters and Channels">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="tutorial-struct_pruning.html" class="btn btn-neutral float-right" title="Pruning Filters and Channels">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../jupyter/index.html" class="btn btn-neutral" title="Jupyter Notebooks"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="jupyter.html" class="btn btn-neutral" title="Jupyter Notebooks"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -317,18 +318,17 @@ In <code>distiller/quantization/clipped_linear.py</code> there are examples of l
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../jupyter/index.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="jupyter.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../tutorial-struct_pruning/index.html" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="tutorial-struct_pruning.html" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
-    <script>var base_url = '..';</script>
-    <script src="../js/theme.js"></script>
-      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
-      <script src="../search/require.js"></script>
-      <script src="../search/search.js"></script>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
 
 </body>
 </html>
