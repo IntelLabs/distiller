@@ -67,7 +67,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         elif arch in torch_models.__dict__:
             model = torch_models.__dict__[arch](pretrained=pretrained)
         elif (arch in imagenet_extra_models.__dict__) and not pretrained:
-            model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
+            model = imagenet_extra_models.__dict__[arch]()
         elif arch in pretrainedmodels.model_names:
             model = pretrainedmodels.__dict__[arch](
                         num_classes=1000,
