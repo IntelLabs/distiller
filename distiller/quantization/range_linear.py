@@ -592,7 +592,7 @@ class FP16Wrapper(nn.Module):
         if self.convert_input_fp16:
             input = distiller.convert_tensors_recursively_to(input, dtype=torch.float16)
 
-        result = self.module(*input)
+        result = self.wrapped_module(*input)
         if self.return_fp32:
             return distiller.convert_tensors_recursively_to(result, dtype=torch.float32)
 
