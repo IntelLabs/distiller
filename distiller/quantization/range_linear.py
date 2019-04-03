@@ -584,7 +584,7 @@ class FP16Wrapper(nn.Module):
     """
     def __init__(self, module: nn.Module, convert_input=True, return_fp32=True):
         super(FP16Wrapper, self).__init__()
-        self.module = module.half()
+        self.wrapped_module = module.half()
         self.return_fp32 = return_fp32
         self.convert_input_fp16 = convert_input
 
