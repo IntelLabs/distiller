@@ -20,6 +20,7 @@ from .range_linear import RangeLinearQuantWrapper, RangeLinearQuantParamLayerWra
     RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseAddWrapper, RangeLinearQuantEltwiseMultWrapper
 from .clipped_linear import LinearQuantizeSTE, ClippedLinearQuantization, WRPNQuantizer, DorefaQuantizer, PACTQuantizer
 from .gated_linear import GatedSTEQuatizer, GatedPactSTEQuatizer
+from .learned_linear import LSQQuatizer
 
 del quantizer
 del range_linear

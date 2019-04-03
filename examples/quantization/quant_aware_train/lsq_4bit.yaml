@@ -1,0 +1,34 @@
+quantizers:
+  lsq_quantizer:
+    class: LSQQuatizer
+    bits_activations: 4
+    bits_weights: null
+#    num_bits_inputs: 8
+    mode: 'ASYMMETRIC_UNSIGNED'  # Can try "SYMMETRIC" as well
+    per_channel_wts: True
+    quantize_inputs: False
+#    scale_decay: 0.0001
+    scale_lr: 0.1
+    zero_point_lr: 0.001
+    bits_overrides:
+      conv1:
+        acts: null
+#        wts: 8
+      relu:
+        acts: 8
+      bn1:
+        acts: null
+      .*\.bn1:
+        acts: null
+      fc:
+        acts: 8
+#        wts: 8
+
+policies:
+    - quantizer:
+        instance_name: lsq_quantizer
+      # For now putting a large range here, which should cover both training from scratch or resuming from some
+      # pre-trained checkpoint at some unknown epoch
+      starting_epoch: 0
+      ending_epoch: 300
+      frequency: 1

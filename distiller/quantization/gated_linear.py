@@ -325,6 +325,9 @@ class GatedPactSTEQuatizer(Quantizer):
 
         return [stats1, stats2, stats3, stats4]
 
+    def on_minibatch_end(self, epoch, train_step, steps_per_epoch, optimizer):
+        pass
+
     def _get_updated_optimizer_params_groups(self):
         base_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' not in name and 'clip_val' not in name]}
         q_gate_group = {'params': [param for name, param in self.model.named_parameters() if 'q_gate' in name]}

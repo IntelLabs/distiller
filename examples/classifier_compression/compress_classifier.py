@@ -390,6 +390,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # if compression_scheduler:
         #     compression_scheduler.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
 
+        quantizer = compression_scheduler.policies[0][0].quantizer
+        quantizer.on_minibatch_end(epoch, train_step, steps_per_epoch, optimizer)
+
         # measure elapsed time
         batch_time.add(time.time() - end)
         steps_completed = (train_step+1)
