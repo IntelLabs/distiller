@@ -614,7 +614,7 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         else:
             w_scale, w_zero_point = _get_quant_params_from_stats_dict(stats['output'], num_bits, mode)
 
-        device = next(wrapped_module.parameters()).device
+        device = wrapped_module.weight.device
 
         self.register_buffer('w_scale', w_scale.to(device))
         self.register_buffer('w_zero_point', w_zero_point.to(device))
