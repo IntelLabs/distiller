@@ -681,22 +681,21 @@ class PostTrainLinearQuantizer(Quantizer):
         def replace_param_layer(module, name, qbits_map,
                                 per_channel_wts=per_channel_wts,
                                 mode=mode,
-                                clip_acts=clip_acts,
                                 fp16=fp16):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = clip_acts and norm_name not in self.no_clip_layers
+            clip = self.clip_acts and norm_name not in self.no_clip_layers
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip,
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None))
 
-        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16, clip_acts=clip_acts):
+        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = clip_acts and norm_name not in self.no_clip_layers
+            clip = self.clip_acts and norm_name not in self.no_clip_layers
             return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
                                 activation_stats=self.model_activation_stats.get(norm_name, None))
 
