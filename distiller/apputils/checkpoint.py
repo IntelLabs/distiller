@@ -24,6 +24,8 @@ import os
 import shutil
 from errno import ENOENT
 import logging
+from numbers import Number
+from tabulate import tabulate
 import torch
 import distiller
 from distiller.utils import normalize_module_name
@@ -31,34 +33,38 @@ msglogger = logging.getLogger()
 
 
 def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    best_top1=None, is_best=False, name=None, dir='.'):
+                    vals_to_save=None, is_best=False, name=None, dir='.'):
     """Save a pytorch training checkpoint
 
     Args:
-        epoch: current epoch
-        arch: name of the network arechitecture/topology
+        epoch: current epoch number
+        arch: name of the network architecture/topology
         model: a pytorch model
         optimizer: the optimizer used in the training session
         scheduler: the CompressionScheduler instance used for training, if any
-        best_top1: the best top1 score seen so far
-        is_best: True if this is the best (top1 accuracy) model so far
+        vals_to_save: optional dict with additional key-value pairs to be saved in the checkpoint
+        is_best: If true, will save a copy of the checkpoint with the suffix 'best'
         name: the name of the checkpoint file
         dir: directory in which to save the checkpoint
     """
     if not os.path.isdir(dir):
         raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
 
+    if vals_to_save is None:
+        vals_to_save = {}
+    if not isinstance(vals_to_save, dict):
+        raise TypeError('vals_to_save must be either a dict or None')
+
     filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
     fullpath = os.path.join(dir, filename)
     msglogger.info("Saving checkpoint to: %s" % fullpath)
     filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
     fullpath_best = os.path.join(dir, filename_best)
+
     checkpoint = {}
     checkpoint['epoch'] = epoch
     checkpoint['arch'] = arch
     checkpoint['state_dict'] = model.state_dict()
-    if best_top1 is not None:
-        checkpoint['best_top1'] = best_top1
     if optimizer is not None:
         checkpoint['optimizer_state_dict'] = optimizer.state_dict()
         checkpoint['optimizer_type'] = type(optimizer)
@@ -68,6 +74,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         checkpoint['thinning_recipes'] = model.thinning_recipes
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
+
+    checkpoint.update(vals_to_save)
 
     torch.save(checkpoint, fullpath)
     if is_best:
@@ -96,17 +104,22 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
 
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
-    msglogger.debug("\n\t".join(['Checkpoint keys:'] + list(checkpoint)))
+
+    chkpt_contents = []
+    for k, v in checkpoint.items():
+        if isinstance(v, (Number, str, type)):
+            chkpt_contents.append([k, v.__name__ if isinstance(v, type) else v])
+        else:
+            chkpt_contents.append([k, type(v).__name__])
+    chkpt_contents = sorted(chkpt_contents, key=lambda tup: tup[0])
+    tbl = tabulate(chkpt_contents, headers=('Key', 'Type / Value'), tablefmt='psql', floatfmt=".2f")
+    msglogger.info('=> Checkpoint contents:\n{}\n'.format(tbl))
 
     if 'state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
 
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
-
-    best_top1 = checkpoint.get('best_top1', None)
-    if best_top1 is not None:
-        msglogger.info("   best top@1: %.3f", best_top1)
 
     compression_scheduler = None
     normalize_dataparallel_keys = False

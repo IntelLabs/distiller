@@ -296,7 +296,7 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
         results = (iteration, prec1, param_name, compute_density, total_macs, densities)
         record_network_details(results)
         scheduler = create_scheduler(pruned_model, zeros_mask_dict)
-        save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
+        save_checkpoint(0, arch, pruned_model, optimizer=None, scheduler=scheduler, vals_to_save={'top1': prec1},
                         name="greedy__{}__{:.1f}__{:.1f}".format(str(iteration).zfill(3), compute_density*100, prec1),
                         dir=msglogger.logdir)
         del scheduler
@@ -307,6 +307,6 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
     prec1, prec5, loss = test_fn(model=pruned_model)
     print(prec1, prec5, loss)
     scheduler = create_scheduler(pruned_model, zeros_mask_dict)
-    save_checkpoint(0, arch, pruned_model, optimizer=None, best_top1=prec1, scheduler=scheduler,
+    save_checkpoint(0, arch, pruned_model, optimizer=None, scheduler=scheduler, vals_to_save={'top1': prec1},
                     name='_'.join(("greedy", str(fraction_to_prune))),
                     dir=msglogger.logdir)
