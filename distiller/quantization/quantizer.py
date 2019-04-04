@@ -33,7 +33,7 @@ def has_bias(module):
     return hasattr(module, 'bias') and module.bias is not None
 
 
-def hack_float_backup_parameter(module, name, num_bits, sat_mode):
+def hack_float_backup_parameter(module, name, num_bits, sat_mode=None):
     try:
         data = dict(module.named_parameters())[name].data
     except KeyError:
@@ -52,7 +52,7 @@ def hack_float_backup_parameter(module, name, num_bits, sat_mode):
     if not first:
         module.repr_mod += ' ; '
     module.repr_mod += '{0} --> {1} bits'.format(name, num_bits)
-    if 'weight' in name and num_bits < 8:
+    if 'weight' in name and num_bits < 8 and sat_mode is not None:
         sat_mode_str = str(sat_mode).split('.')[1] if sat_mode else 'No'
         module.repr_mod += ', wts_sat_mode --> {0}'.format(sat_mode_str)
 
@@ -165,6 +165,12 @@ class Quantizer(object):
     def prepare_model(self):
         self._prepare_model_impl()
 
+        # If an optimizer was passed, assume we need to update it
+        if self.optimizer:
+            optimizer_type = type(self.optimizer)
+            new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
+            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _prepare_model_impl(self):
@@ -193,7 +199,7 @@ class Quantizer(object):
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
                     # ugly way to pass wts_sat_mode
-                    hack_float_backup_parameter(module, param_name, n_bits, self.wts_sat_mode)
+                    hack_float_backup_parameter(module, param_name, n_bits)
                     fp_attr_name = FP_BKP_PREFIX + param_name
                 self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, n_bits))
 
@@ -201,11 +207,6 @@ class Quantizer(object):
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
-        # If an optimizer was passed, assume we need to update it
-        if self.optimizer:
-            optimizer_type = type(self.optimizer)
-            new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
-            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
     def _pre_process_container(self, container, prefix=):
         # Iterate through model, insert quantization functions as appropriate

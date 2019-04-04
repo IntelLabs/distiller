@@ -218,7 +218,11 @@ class QuantizationPolicy(ScheduledTrainingPolicy):
         super(QuantizationPolicy, self).__init__()
         self.quantizer = quantizer
         self.quantizer.prepare_model()
-        self.quantizer.quantize_params()
+        # self.quantizer.quantize_params()
+
+    def on_epoch_begin(self, model, zeros_mask_dict, meta):
+        if meta['current_epoch'] == 0:
+            self.quantizer.quantize_params()
 
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         # After parameters update, quantize the parameters again
