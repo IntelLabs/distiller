@@ -16,7 +16,7 @@
 
 from .eltwise import EltwiseAdd, EltwiseMult
 from .grouping import *
-from .rnn import *
+from .rnn import LSTM, LSTMCell
 
 __all__ = ['EltwiseAdd', 'EltwiseMult',
            'Concat', 'Chunk', 'Split', 'Stack',
