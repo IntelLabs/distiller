@@ -308,11 +308,11 @@ def main():
         # Update the list of top scores achieved so far, and save the checkpoint
         update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
         is_best = epoch == perf_scores_history[0].epoch
-        vals_to_save = {'current_top1': top1,
-                        'best_top1': perf_scores_history[0].top1,
-                        'best_epoch': perf_scores_history[0].epoch}
+        checkpoint_extras = {'current_top1': top1,
+                             'best_top1': perf_scores_history[0].top1,
+                             'best_epoch': perf_scores_history[0].epoch}
         apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
-                                 vals_to_save=vals_to_save, is_best=is_best, name=args.name, dir=msglogger.logdir)
+                                 extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
@@ -644,7 +644,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
         checkpoint_name = 'quantized'
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=scheduler,
                                  name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
-                                 dir=msglogger.logdir, vals_to_save={'quantized_top1': top1})
+                                 dir=msglogger.logdir, extras={'quantized_top1': top1})
 
 
 def summarize_model(model, dataset, which_summary):

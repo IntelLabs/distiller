@@ -26,6 +26,7 @@ from errno import ENOENT
 import logging
 from numbers import Number
 from tabulate import tabulate
+from copy import deepcopy
 import torch
 import distiller
 from distiller.utils import normalize_module_name
@@ -33,7 +34,7 @@ msglogger = logging.getLogger()
 
 
 def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    vals_to_save=None, is_best=False, name=None, dir='.'):
+                    extras=None, is_best=False, name=None, dir='.'):
     """Save a pytorch training checkpoint
 
     Args:
@@ -42,7 +43,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         model: a pytorch model
         optimizer: the optimizer used in the training session
         scheduler: the CompressionScheduler instance used for training, if any
-        vals_to_save: optional dict with additional key-value pairs to be saved in the checkpoint
+        extras: optional dict with additional user-defined data to be saved in the checkpoint.
+            Will be saved under the key 'extras'
         is_best: If true, will save a copy of the checkpoint with the suffix 'best'
         name: the name of the checkpoint file
         dir: directory in which to save the checkpoint
@@ -50,10 +52,10 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if not os.path.isdir(dir):
         raise IOError(ENOENT, 'Checkpoint directory does not exist at', os.path.abspath(dir))
 
-    if vals_to_save is None:
-        vals_to_save = {}
-    if not isinstance(vals_to_save, dict):
-        raise TypeError('vals_to_save must be either a dict or None')
+    if extras is None:
+        extras = {}
+    if not isinstance(extras, dict):
+        raise TypeError('extras must be either a dict or None')
 
     filename = 'checkpoint.pth.tar' if name is None else name + '_checkpoint.pth.tar'
     fullpath = os.path.join(dir, filename)
@@ -75,7 +77,8 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    checkpoint.update(vals_to_save)
+    if extras:
+        checkpoint['extras'] = deepcopy(extras)
 
     torch.save(checkpoint, fullpath)
     if is_best:
@@ -85,6 +88,19 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
 def load_lean_checkpoint(model, chkpt_file, model_device=None):
     return load_checkpoint(model, chkpt_file, model_device=model_device,
                            lean_checkpoint=True)[0]
+
+
+def get_contents_table(d):
+    def inspect_val(val):
+        if isinstance(val, (int, float, str)):
+            return val
+        elif isinstance(val, type):
+            return val.__name__
+        return None
+
+    contents = [[k, type(d[k]).__name__, inspect_val(d[k])] for k in d.keys()]
+    contents = sorted(contents, key=lambda entry: entry[0])
+    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
@@ -105,15 +121,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
 
-    chkpt_contents = []
-    for k, v in checkpoint.items():
-        if isinstance(v, (Number, str, type)):
-            chkpt_contents.append([k, v.__name__ if isinstance(v, type) else v])
-        else:
-            chkpt_contents.append([k, type(v).__name__])
-    chkpt_contents = sorted(chkpt_contents, key=lambda tup: tup[0])
-    tbl = tabulate(chkpt_contents, headers=('Key', 'Type / Value'), tablefmt='psql', floatfmt=".2f")
-    msglogger.info('=> Checkpoint contents:\n{}\n'.format(tbl))
+    msglogger.info('=> Checkpoint contents:\n{}\n'.format(get_contents_table(checkpoint)))
+    if 'extras' in checkpoint:
+        msglogger.info("=> Checkpoint['extras'] contents:\n{}\n".format(get_contents_table(checkpoint['extras'])))
 
     if 'state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
