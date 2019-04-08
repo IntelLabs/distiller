@@ -17,8 +17,6 @@ from collections import namedtuple
 import numpy as np
 import logging
 import torch
-import os
-import sys
 import distiller
 import common
 import pytest
