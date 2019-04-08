@@ -114,12 +114,12 @@ class CompressionScheduler(object):
                                        'ending_epoch': ending_epoch,
                                        'frequency': frequency}
 
-    def on_epoch_begin(self, epoch, optimizer=None):
-        if epoch in self.policies:
-            for policy in self.policies[epoch]:
-                meta = self.sched_metadata[policy]
-                meta['current_epoch'] = epoch
-                policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta)
+    def on_epoch_begin(self, epoch, optimizer=None, **kwargs):
+        for policy in self.policies.get(epoch, list()):
+            meta = self.sched_metadata[policy]
+            meta['current_epoch'] = epoch
+            policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta,
+                                  **kwargs)
 
     def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
         if epoch in self.policies:

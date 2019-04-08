@@ -3,7 +3,7 @@
 #
 # We save the output (i.e. checkpoint.pth.tar) in ../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20_finetuned.pth.tar
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=98 --compress=../ssl/ssl_channels-removal_finetuning.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20.pth.tar
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=98 --compress=../ssl/ssl_channels-removal_finetuning.yaml --resume-from=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20.pth.tar --reset-optimizer
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -58,6 +58,6 @@ lr_schedulers:
 policies:
   - lr_scheduler:
       instance_name: training_lr
-    starting_epoch: 45
+    starting_epoch: 0
     ending_epoch: 300
     frequency: 1

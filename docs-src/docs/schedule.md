@@ -250,24 +250,24 @@ quantizers:
     class: DorefaQuantizer
     bits_activations: 8
     bits_weights: 4
-    bits_overrides:
+    overrides:
       conv1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       relu1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       final_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       fc:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
 ```
 
 - The specific quantization method we're instantiating here is `DorefaQuantizer`.
 - Then we define the default bit-widths for activations and weights, in this case 8 and 4-bits, respectively. 
-- Then, we define the `bits_overrides` mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of `DorefaQuantizer`, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters `conv1`, the first activation layer `relu1`, the last activation layer `final_relu` and the last layer with parameters `fc`.
+- Then, we define the `overrides` mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of `DorefaQuantizer`, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters `conv1`, the first activation layer `relu1`, the last activation layer `final_relu` and the last layer with parameters `fc`.
 - Specifying `null` means "do not quantize".
 - Note that for quantizers, we reference names of modules, not names of parameters as we do for pruners and regularizers.
 
@@ -276,10 +276,10 @@ quantizers:
 Suppose we have a sub-module in our model named `block1`, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named `conv1`, `conv2` and so on. In that case we would define the following:
 
 ```
-bits_overrides:
+overrides:
   'block1\.conv*':
-    wts: 2
-    acts: null
+    bits_weights: 2
+    bits_activations: null
 ```
 
 - **RegEx Note**: Remember that the dot (`.`) is a meta-character (i.e. a reserved character) in regular expressions. So, to match the actual dot characters which separate sub-modules in PyTorch module names, we need to escape it: `\.`
@@ -287,13 +287,13 @@ bits_overrides:
 **Overlapping patterns** are also possible, which allows to define some override for a groups of layers and also "single-out" specific layers for different overrides. For example, let's take the last example and configure a different override for `block1.conv1`:
 
 ```
-bits_overrides:
+overrides:
   'block1\.conv1':
-    wts: 4
-    acts: null
+    bits_weights: 4
+    bits_activations: null
   'block1\.conv*':
-    wts: 2
-    acts: null
+    bits_weights: 2
+    bits_activations: null
 ```
 
 - **Important Note**: The patterns are evaluated eagerly - first match wins. So, to properly quantize a model using "broad" patterns and more "specific" patterns as just shown, make sure the specific pattern is listed **before** the broad one.
@@ -390,9 +390,10 @@ if args.quantize_eval:
     # Execute evaluation on model as usual
 ```
 
-Note that the command-line arguments don't expose the `bits_overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
+Note that the command-line arguments don't expose the `overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
 
-To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). 
+For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
 
 ### Collecting Statistics for Quantization
 
@@ -514,12 +515,9 @@ policies:
   \frac{\partial Loss\left(\widehat{W}_{l}^{i=k}\right)}{\partial \widehat{W}_{l}^{i=k}}
   \)) is not sufficient to guarantee that \(W_{l}^{i=k+1}\) is sparse.  This is easy do: if we allow for the general case where \(v_i\) is not necessarily sparse, then \(\Delta p = v_{i+1}\) is not sparse, and therefore \(W_{l}^{i+1}\) is not sparse.
   <br>
-  ------
-  <br>
+  <hr>
   ***Masking the weights in the forward-pass, and gradients in the backward-pass, is not sufficient to maintain the sparsity of the weights!***
-  <br>
-  ------
-  <br>
+  <hr>
   This is an important insight, and it means that naïve in-graph masking is also not sufficient to guarantee sparsity of the updated weights. 
   
   - ```use_double_copies```: 

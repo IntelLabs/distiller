@@ -88,6 +88,8 @@ def main():
 
     # Parse arguments
     args = parser.get_parser().parse_args()
+    if args.epochs is None:
+        args.epochs = 90
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -99,6 +101,7 @@ def main():
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
+    ending_epoch = args.epochs
     perf_scores_history = []
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
@@ -156,19 +159,36 @@ def main():
     if args.earlyexit_thresholds:
         msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
-    # We can optionally resume from a checkpoint
-    if args.resume:
-        model, compression_scheduler, start_epoch = apputils.load_checkpoint(model, chkpt_file=args.resume)
-        model.to(args.device)
+    # TODO(barrh): args.deprecated_resume is deprecated since v0.3.1
+    if args.deprecated_resume:
+        msglogger.warning('The "--resume" flag is deprecated. Please use "--resume-from=YOUR_PATH" instead.')
+        if not args.reset_optimizer:
+            msglogger.warning('If you wish to also reset the optimizer, call with: --reset-optimizer')
+            args.reset_optimizer = True
+        args.resumed_checkpoint_path = args.deprecated_resume
 
-    # Define loss function (criterion) and optimizer
+    # We can optionally resume from a checkpoint
+    optimizer = None
+    if args.resumed_checkpoint_path:
+        model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
+            model, args.resumed_checkpoint_path, model_device=args.device)
+    elif args.load_model_path:
+        model = apputils.load_lean_checkpoint(model, args.load_model_path,
+                                              model_device=args.device)
+    if args.reset_optimizer:
+        start_epoch = 0
+        if optimizer is not None:
+            optimizer = None
+            msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
+
+    # Define loss function (criterion)
     criterion = nn.CrossEntropyLoss().to(args.device)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-    msglogger.info('Optimizer Type: %s', type(optimizer))
-    msglogger.info('Optimizer Args: %s', optimizer.defaults)
+    if optimizer is None:
+        optimizer = torch.optim.SGD(model.parameters(),
+            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        msglogger.info('Optimizer Type: %s', type(optimizer))
+        msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
     if args.AMC:
         return automated_deep_compression(model, criterion, optimizer, pylogger, args)
@@ -212,7 +232,8 @@ def main():
     if args.compress:
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
-        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
+            (start_epoch-1) if args.resumed_checkpoint_path else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
     elif compression_scheduler is None:
@@ -220,10 +241,10 @@ def main():
 
     if args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)
-        assert args.resume is not None, "You must use --resume to provide a checkpoint file to thinnify"
+        assert args.resumed_checkpoint_path is not None, "You must use --resume-from to provide a checkpoint file to thinnify"
         distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
-                                 name="{}_thinned".format(args.resume.replace(".pth.tar", "")), dir=msglogger.logdir)
+                                 name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")), dir=msglogger.logdir)
         print("Note: your model may have collapsed to random inference, so you may want to fine-tune")
         return
 
@@ -231,7 +252,7 @@ def main():
     if args.kd_teacher:
         teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
         if args.kd_resume:
-            teacher, _, _ = apputils.load_checkpoint(teacher, chkpt_file=args.kd_resume)
+            teacher = apputils.load_lean_checkpoint(teacher, args.kd_resume)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
@@ -244,11 +265,17 @@ def main():
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
 
-    for epoch in range(start_epoch, start_epoch + args.epochs):
+    if start_epoch >= ending_epoch:
+        msglogger.error(
+            'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
+            start_epoch, ending_epoch))
+        raise ValueError('Epochs parameter is too low. Nothing to do.')
+    for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
-            compression_scheduler.on_epoch_begin(epoch)
+            compression_scheduler.on_epoch_begin(epoch,
+                metrics=(vloss if (epoch != start_epoch) else 10**6))
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
@@ -598,7 +625,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
     # For example:
-    # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --resume=checkpoint.pth.tar --evaluate
+    # python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --resume-from=checkpoint.pth.tar --evaluate
 
     if not isinstance(loggers, list):
         loggers = [loggers]

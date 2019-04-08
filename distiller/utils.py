@@ -19,6 +19,8 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
+import inspect
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -37,6 +39,10 @@ def model_device(model):
     if next(model.parameters()).is_cuda:
         return 'cuda'
     return 'cpu'
+
+
+def optimizer_device_name(opt):
+    return str(list(list(opt.state)[0])[0].device)
 
 
 def to_np(var):
@@ -286,9 +292,6 @@ def sparsity_blocks(tensor, block_shape):
             -1,
             )
     view1 = tensor.view(*view_dims)
-
-    # Next, compute the sums of each column (block)
-    block_sums = view1.abs().sum(dim=1)
 
     # Next, compute the sums of each column (block)
     block_sums = view1.abs().sum(dim=1)
@@ -592,3 +595,35 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     if min_val >= max_val:
         raise ValueError('min_val must be less than max_val')
     return checker
+
+
+
+def filter_kwargs(dict_to_filter, function_to_call):
+    """Utility to check which arguments in the passed dictionary exist in a function's signature
+
+    The function returns two dicts, one with just the valid args from the input and one with the invalid args.
+    The caller can then decide to ignore the existence of invalid args, depending on context.
+    """
+
+    sig = inspect.signature(function_to_call)
+    filter_keys = [param.name for param in sig.parameters.values() if (param.kind == param.POSITIONAL_OR_KEYWORD)]
+    valid_args = {}
+    invalid_args = {}
+
+    for key in dict_to_filter:
+        if key in filter_keys:
+            valid_args[key] = dict_to_filter[key]
+        else:
+            invalid_args[key] = dict_to_filter[key]
+    return valid_args, invalid_args
+
+def convert_tensors_recursively_to(val, *args, **kwargs):
+    """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""
+    if isinstance(val, torch.Tensor):
+        return val.to(*args, **kwargs)
+
+    if isinstance(val, (tuple, list)):
+        return type(val)(convert_tensors_recursively_to(item, *args, **kwargs) for item in val)
+
+    return val
+

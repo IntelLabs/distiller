@@ -14,7 +14,7 @@
 #     Total sparsity: 41.10
 #     # of parameters: 120,000  (=55.7% of the baseline parameters)
 #
-# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp.yaml -j=1 --deterministic --resume=../ssl/checkpoints/checkpoint_trained_dense.pth.tar --validation-split=0
+# time python3 compress_classifier.py --arch resnet20_cifar  ../../../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../agp-pruning/resnet20_filters.schedule_agp.yaml  --resume-from=../ssl/checkpoints/checkpoint_trained_dense.pth.tar --vs=0 --reset-optimizer
 #
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
@@ -109,29 +109,29 @@ extensions:
 policies:
   - pruner:
       instance_name : low_pruner
-    starting_epoch: 180
-    ending_epoch: 210
+    starting_epoch: 0
+    ending_epoch: 30
     frequency: 2
 
   - pruner:
       instance_name : fine_pruner
-    starting_epoch: 210
-    ending_epoch: 230
+    starting_epoch: 30
+    ending_epoch: 50
     frequency: 2
 
   - pruner:
       instance_name : fc_pruner
-    starting_epoch: 210
-    ending_epoch: 230
+    starting_epoch: 30
+    ending_epoch: 50
     frequency: 2
 
 # After completeing the pruning, we perform network thinning and continue fine-tuning.
   - extension:
       instance_name: net_thinner
-    epochs: [212]
+    epochs: [32]
 
   - lr_scheduler:
       instance_name: pruning_lr
-    starting_epoch: 180
+    starting_epoch: 0
     ending_epoch: 400
     frequency: 1

@@ -442,47 +442,47 @@ policies:
     class: DorefaQuantizer
     bits_activations: 8
     bits_weights: 4
-    bits_overrides:
+    overrides:
       conv1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       relu1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       final_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       fc:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
 </code></pre>
 
 <ul>
 <li>The specific quantization method we're instantiating here is <code>DorefaQuantizer</code>.</li>
 <li>Then we define the default bit-widths for activations and weights, in this case 8 and 4-bits, respectively. </li>
-<li>Then, we define the <code>bits_overrides</code> mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of <code>DorefaQuantizer</code>, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters <code>conv1</code>, the first activation layer <code>relu1</code>, the last activation layer <code>final_relu</code> and the last layer with parameters <code>fc</code>.</li>
+<li>Then, we define the <code>overrides</code> mapping. In the example above, we choose not to quantize the first and last layer of the model. In the case of <code>DorefaQuantizer</code>, the weights are quantized as part of the convolution / FC layers, but the activations are quantized in separate layers, which replace the ReLU layers in the original model (remember - even though we replaced the ReLU modules with our own quantization modules, the name of the modules isn't changed). So, in all, we need to reference the first layer with parameters <code>conv1</code>, the first activation layer <code>relu1</code>, the last activation layer <code>final_relu</code> and the last layer with parameters <code>fc</code>.</li>
 <li>Specifying <code>null</code> means "do not quantize".</li>
 <li>Note that for quantizers, we reference names of modules, not names of parameters as we do for pruners and regularizers.</li>
 </ul>
 <h3 id="defining-overrides-for-groups-of-layers-using-regular-expressions">Defining overrides for <strong>groups of layers</strong> using regular expressions</h3>
 <p>Suppose we have a sub-module in our model named <code>block1</code>, which contains multiple convolution layers which we would like to quantize to, say, 2-bits. The convolution layers are named <code>conv1</code>, <code>conv2</code> and so on. In that case we would define the following:</p>
-<pre><code>bits_overrides:
+<pre><code>overrides:
   'block1\.conv*':
-    wts: 2
-    acts: null
+    bits_weights: 2
+    bits_activations: null
 </code></pre>
 
 <ul>
 <li><strong>RegEx Note</strong>: Remember that the dot (<code>.</code>) is a meta-character (i.e. a reserved character) in regular expressions. So, to match the actual dot characters which separate sub-modules in PyTorch module names, we need to escape it: <code>\.</code></li>
 </ul>
 <p><strong>Overlapping patterns</strong> are also possible, which allows to define some override for a groups of layers and also "single-out" specific layers for different overrides. For example, let's take the last example and configure a different override for <code>block1.conv1</code>:</p>
-<pre><code>bits_overrides:
+<pre><code>overrides:
   'block1\.conv1':
-    wts: 4
-    acts: null
+    bits_weights: 4
+    bits_activations: null
   'block1\.conv*':
-    wts: 2
-    acts: null
+    bits_weights: 2
+    bits_activations: null
 </code></pre>
 
 <ul>
@@ -565,8 +565,9 @@ args = parser.parse_args()
     # Execute evaluation on model as usual
 </code></pre>
 
-<p>Note that the command-line arguments don't expose the <code>bits_overrides</code> parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.</p>
-<p>To see integration of these command line arguments in use, see the <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py">image classification example</a>. For examples invocations of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant">here</a>.</p>
+<p>Note that the command-line arguments don't expose the <code>overrides</code> parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.</p>
+<p>To see integration of these command line arguments in use, see the <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py">image classification example</a>. 
+For examples invocations of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant">here</a>.</p>
 <h3 id="collecting-statistics-for-quantization">Collecting Statistics for Quantization</h3>
 <p>To collect generate statistics that can be used for static quantization of activations, do the following (shown here assuming the command line argument <code>--qe-calibration</code> shown above is used, which specifies the number of batches to use for statistics generation):</p>
 <pre><code class="python">if args.qe_calibration:
@@ -678,17 +679,12 @@ policies:
   We want to show that masking the weights and gradients (<script type="math/tex">W_{l}^{i=k}</script> and <script type="math/tex">
   \frac{\partial Loss\left(\widehat{W}_{l}^{i=k}\right)}{\partial \widehat{W}_{l}^{i=k}}
   </script>) is not sufficient to guarantee that <script type="math/tex">W_{l}^{i=k+1}</script> is sparse.  This is easy do: if we allow for the general case where <script type="math/tex">v_i</script> is not necessarily sparse, then <script type="math/tex">\Delta p = v_{i+1}</script> is not sparse, and therefore <script type="math/tex">W_{l}^{i+1}</script> is not sparse.
-  <br></p>
-</li>
-</ul>
-<hr />
-<p><br>
+  <br>
+  <hr>
   <strong><em>Masking the weights in the forward-pass, and gradients in the backward-pass, is not sufficient to maintain the sparsity of the weights!</em></strong>
-  <br>
-  ------
-  <br>
+  <hr>
   This is an important insight, and it means that naïve in-graph masking is also not sufficient to guarantee sparsity of the updated weights. </p>
-<ul>
+</li>
 <li>
 <p><code>use_double_copies</code>: 
   If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set <code>use_double_copies = True</code>.  This changes step (4) to: 
