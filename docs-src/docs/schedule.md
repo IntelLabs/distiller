@@ -444,7 +444,7 @@ We formalize pruning as a 3-step action:
 
 3. Updating the weights (performed by the optimizer).  By default, we compute the data-loss using the masked weights, and calculate the gradient of this loss with respect to the masked-weights.  We update the weights by making a small adjustment to the *masked weights*:
    $$
-   W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W})}{\partial \widehat{W}}
+   W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
    $$
    We show below how to change this default behavior.  We also provide a more exact description of the weights update when using PyTorch's SGD optimizer.
 
@@ -488,48 +488,52 @@ policies:
 
 #### Controls
 
-- ```mini_batch_pruning_frequency```: controls pruning scheduling at the mini-batch granularity.  Every mini_batch_pruning_frequency training steps (i.e. mini_batches) we configure a new mask.  In between mask updates, we mask mini-batches with the current mask.
+- ```mini_batch_pruning_frequency``` (default: 0): controls pruning scheduling at the mini-batch granularity.  Every mini_batch_pruning_frequency training steps (i.e. mini_batches) we configure a new mask.  In between mask updates, we mask mini-batches with the current mask.
 
-- ```discard_masks_at_minibatch_end```: discards the pruning mask at the end of the mini-batch.  In the example YAML above, a new mask is computed once every 16 mini-batches, applied in one forward-pass, and then discraded.  In the next 15 mini-batches the mask is `Null` so we do not mask.
+- ```discard_masks_at_minibatch_end``` (default: False): discards the pruning mask at the end of the mini-batch.  In the example YAML above, a new mask is computed once every 16 mini-batches, applied in one forward-pass, and then discraded.  In the next 15 mini-batches the mask is `Null` so we do not mask.
 
-- ```mask_gradients```: mask the weights gradients after performing the backward-pass, and before invoking the optimizer.  
+- ```mask_gradients``` (default: False): mask the weights gradients after performing the backward-pass, and before invoking the optimizer.  
   <br>
   One way to mask the gradients in PyTorch is to register to the backward callback of the weight tensors we want to mask, and alter the gradients there.  We do this by setting ```mask_gradients: True```, as in the sample YAML above.
   <br>
   This is sufficient if our weights optimization uses plain-vanilla SGD, because the update maintains the sparsity of the weights: \(\widehat{W}_{l}\) is sparse by definition, and the gradients are sparse because we mask them.
   $$
-  W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W})}{\partial \widehat{W}}
+  W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
   $$
   <br>
   But this is not always the case.  For example, [PyTorch’s SGD optimizer](<https://github.com/pytorch/pytorch/blob/master/torch/optim/sgd.py>) with weight-decay (\(\lambda\)) and momentum (\(\alpha\)) has the optimization logic listed below:
   <br>1. \( \Delta p=\frac{\partial Loss\left(\widehat{W}_{l}^{i}\right)}{\partial \widehat{W}_{l}^{i}}+\lambda \widehat{W}_{l}^{i} \)
-  <br>2. \( v_{i+1}=v_{i} \rho+ (1-dampening)\Delta p \)   \( v_{0}=\Delta p \)<br>
-  <br>3. \( \Delta p = v_{i+1} \)
-  <br>4. \( W_{l}^{i+1} \leftarrow \widehat{W}_{l}^{i}-\alpha \Delta p \)
+  <br>2. \( v_{i}=\left\lbrace
+  \matrix{
+    {\Delta p: \; if \;i==0 }\; \cr
+    {v_{i-1} \rho+ (1-dampening)\Delta p: \; if \; i>0}
+  }
+  \right\rbrace \)<br>
+  <br>3. \( W_{l}^{i+1} = \widehat{W}_{l}^{i}-\alpha v_{i} \)
   <br><br>
   Let’s look at the weight optimization update at some arbitrary step (i.e. mini-batch) *k*. 
   <br>
   We want to show that masking the weights and gradients (\(W_{l}^{i=k}\) and \(
   \frac{\partial Loss\left(\widehat{W}_{l}^{i=k}\right)}{\partial \widehat{W}_{l}^{i=k}}
-  \)) is not sufficient to guarantee that \(W_{l}^{i=k+1}\) is sparse.  This is easy do: if we allow for the general case where \(v_i\) is not necessarily sparse, then \(\Delta p = v_{i+1}\) is not sparse, and therefore \(W_{l}^{i+1}\) is not sparse.
-  <br>
+  \)) is not sufficient to guarantee that \(W_{l}^{i=k+1}\) is sparse.  This is easy do: if we allow for the general case where \(v_i\) is not necessarily sparse, then \(W_{l}^{i+1}\) is not necessarily sparse.
   <hr>
   ***Masking the weights in the forward-pass, and gradients in the backward-pass, is not sufficient to maintain the sparsity of the weights!***
   <hr>
   This is an important insight, and it means that naïve in-graph masking is also not sufficient to guarantee sparsity of the updated weights. 
   
-  - ```use_double_copies```: 
-  If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set ```use_double_copies = True```.  This changes step (4) to: 
-  <br>4. \( W_{l}^{i+1} \leftarrow W_{1}^{i}-\alpha \Delta p \)
-
-  - ```mask_on_forward_only```: when set to ```False``` the weights will be masked after the Optimizer is done updating the weights, to remove any updates of the masked gradients.
+  - ```use_double_copies``` (default: False): 
+  If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set ```use_double_copies = True```.  This changes step (3) to: 
+  <br>3. \( W_{l}^{i+1} = W_{1}^{i}-\alpha \Delta p \)
   <br>
-  If we want to guarantee the sparsity of the updated weights, we must explicitly mask the weights after step (4) above:
-  <br>5. \( \widehat{W}_{l}=M_{l} \circ W_{l} \)
+
+  - ```mask_on_forward_only``` (default: False): when set to ```False``` the weights will *also* be masked after the Optimizer is done updating the weights, to remove any updates of the masked gradients.
+  <br>
+  If we want to guarantee the sparsity of the updated weights, we must explicitly mask the weights after step (3) above:
+  <br>4. \( {W}_{l}^{i+1} \leftarrow M_{l}^{i} \circ {W}_{l}^{i+1} \)
   <br>
   This argument defaults to ```False```, but you can skip step (4), by setting ```mask_on_forward_only = True```.
-
-
+  <br>
+  Finally, note that ```mask_gradients``` and ```not mask_on_forward_only``` are mutually exclusive, or simply put: if you are masking in the backward-pass, you should choose to either do it via ```mask_gradients``` or ```mask_on_forward_only=False```, but not both.
 
 ## Knowledge Distillation
 

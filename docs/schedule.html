@@ -613,7 +613,7 @@ We wish to optimize some objective (e.g. minimize the energy required to execute
 <li>
 <p>Updating the weights (performed by the optimizer).  By default, we compute the data-loss using the masked weights, and calculate the gradient of this loss with respect to the masked-weights.  We update the weights by making a small adjustment to the <em>masked weights</em>:
    <script type="math/tex; mode=display">
-   W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W})}{\partial \widehat{W}}
+   W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
    </script>
    We show below how to change this default behavior.  We also provide a more exact description of the weights update when using PyTorch's SGD optimizer.</p>
 </li>
@@ -651,52 +651,56 @@ policies:
 <h4 id="controls">Controls</h4>
 <ul>
 <li>
-<p><code>mini_batch_pruning_frequency</code>: controls pruning scheduling at the mini-batch granularity.  Every mini_batch_pruning_frequency training steps (i.e. mini_batches) we configure a new mask.  In between mask updates, we mask mini-batches with the current mask.</p>
+<p><code>mini_batch_pruning_frequency</code> (default: 0): controls pruning scheduling at the mini-batch granularity.  Every mini_batch_pruning_frequency training steps (i.e. mini_batches) we configure a new mask.  In between mask updates, we mask mini-batches with the current mask.</p>
 </li>
 <li>
-<p><code>discard_masks_at_minibatch_end</code>: discards the pruning mask at the end of the mini-batch.  In the example YAML above, a new mask is computed once every 16 mini-batches, applied in one forward-pass, and then discraded.  In the next 15 mini-batches the mask is <code>Null</code> so we do not mask.</p>
+<p><code>discard_masks_at_minibatch_end</code> (default: False): discards the pruning mask at the end of the mini-batch.  In the example YAML above, a new mask is computed once every 16 mini-batches, applied in one forward-pass, and then discraded.  In the next 15 mini-batches the mask is <code>Null</code> so we do not mask.</p>
 </li>
 <li>
-<p><code>mask_gradients</code>: mask the weights gradients after performing the backward-pass, and before invoking the optimizer.<br />
+<p><code>mask_gradients</code> (default: False): mask the weights gradients after performing the backward-pass, and before invoking the optimizer.<br />
   <br>
   One way to mask the gradients in PyTorch is to register to the backward callback of the weight tensors we want to mask, and alter the gradients there.  We do this by setting <code>mask_gradients: True</code>, as in the sample YAML above.
   <br>
   This is sufficient if our weights optimization uses plain-vanilla SGD, because the update maintains the sparsity of the weights: <script type="math/tex">\widehat{W}_{l}</script> is sparse by definition, and the gradients are sparse because we mask them.
   <script type="math/tex; mode=display">
-  W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W})}{\partial \widehat{W}}
+  W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
   </script>
   <br>
   But this is not always the case.  For example, <a href="https://github.com/pytorch/pytorch/blob/master/torch/optim/sgd.py">PyTorch’s SGD optimizer</a> with weight-decay (<script type="math/tex">\lambda</script>) and momentum (<script type="math/tex">\alpha</script>) has the optimization logic listed below:
   <br>1. <script type="math/tex"> \Delta p=\frac{\partial Loss\left(\widehat{W}_{l}^{i}\right)}{\partial \widehat{W}_{l}^{i}}+\lambda \widehat{W}_{l}^{i} </script>
-  <br>2. <script type="math/tex"> v_{i+1}=v_{i} \rho+ (1-dampening)\Delta p </script>
-<script type="math/tex"> v_{0}=\Delta p </script><br>
-  <br>3. <script type="math/tex"> \Delta p = v_{i+1} </script>
-  <br>4. <script type="math/tex"> W_{l}^{i+1} \leftarrow \widehat{W}_{l}^{i}-\alpha \Delta p </script>
+  <br>2. <script type="math/tex"> v_{i}=\left\lbrace
+  \matrix{
+    {\Delta p: \; if \;i==0 }\; \cr
+    {v_{i-1} \rho+ (1-dampening)\Delta p: \; if \; i>0}
+  }
+  \right\rbrace </script><br>
+  <br>3. <script type="math/tex"> W_{l}^{i+1} = \widehat{W}_{l}^{i}-\alpha v_{i} </script>
   <br><br>
   Let’s look at the weight optimization update at some arbitrary step (i.e. mini-batch) <em>k</em>. 
   <br>
   We want to show that masking the weights and gradients (<script type="math/tex">W_{l}^{i=k}</script> and <script type="math/tex">
   \frac{\partial Loss\left(\widehat{W}_{l}^{i=k}\right)}{\partial \widehat{W}_{l}^{i=k}}
-  </script>) is not sufficient to guarantee that <script type="math/tex">W_{l}^{i=k+1}</script> is sparse.  This is easy do: if we allow for the general case where <script type="math/tex">v_i</script> is not necessarily sparse, then <script type="math/tex">\Delta p = v_{i+1}</script> is not sparse, and therefore <script type="math/tex">W_{l}^{i+1}</script> is not sparse.
-  <br>
+  </script>) is not sufficient to guarantee that <script type="math/tex">W_{l}^{i=k+1}</script> is sparse.  This is easy do: if we allow for the general case where <script type="math/tex">v_i</script> is not necessarily sparse, then <script type="math/tex">W_{l}^{i+1}</script> is not necessarily sparse.
   <hr>
   <strong><em>Masking the weights in the forward-pass, and gradients in the backward-pass, is not sufficient to maintain the sparsity of the weights!</em></strong>
   <hr>
   This is an important insight, and it means that naïve in-graph masking is also not sufficient to guarantee sparsity of the updated weights. </p>
 </li>
 <li>
-<p><code>use_double_copies</code>: 
-  If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set <code>use_double_copies = True</code>.  This changes step (4) to: 
-  <br>4. <script type="math/tex"> W_{l}^{i+1} \leftarrow W_{1}^{i}-\alpha \Delta p </script>
-</p>
+<p><code>use_double_copies</code> (default: False): 
+  If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set <code>use_double_copies = True</code>.  This changes step (3) to: 
+  <br>3. <script type="math/tex"> W_{l}^{i+1} = W_{1}^{i}-\alpha \Delta p </script>
+  <br></p>
 </li>
 <li>
-<p><code>mask_on_forward_only</code>: when set to <code>False</code> the weights will be masked after the Optimizer is done updating the weights, to remove any updates of the masked gradients.
+<p><code>mask_on_forward_only</code> (default: False): when set to <code>False</code> the weights will <em>also</em> be masked after the Optimizer is done updating the weights, to remove any updates of the masked gradients.
   <br>
-  If we want to guarantee the sparsity of the updated weights, we must explicitly mask the weights after step (4) above:
-  <br>5. <script type="math/tex"> \widehat{W}_{l}=M_{l} \circ W_{l} </script>
+  If we want to guarantee the sparsity of the updated weights, we must explicitly mask the weights after step (3) above:
+  <br>4. <script type="math/tex"> {W}_{l}^{i+1} \leftarrow M_{l}^{i} \circ {W}_{l}^{i+1} </script>
   <br>
-  This argument defaults to <code>False</code>, but you can skip step (4), by setting <code>mask_on_forward_only = True</code>.</p>
+  This argument defaults to <code>False</code>, but you can skip step (4), by setting <code>mask_on_forward_only = True</code>.
+  <br>
+  Finally, note that <code>mask_gradients</code> and <code>not mask_on_forward_only</code> are mutually exclusive, or simply put: if you are masking in the backward-pass, you should choose to either do it via <code>mask_gradients</code> or <code>mask_on_forward_only=False</code>, but not both.</p>
 </li>
 </ul>
 <h2 id="knowledge-distillation">Knowledge Distillation</h2>
