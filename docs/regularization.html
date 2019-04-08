@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Regularization - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Regularization";
+    var mkdocs_page_input_path = "regularization.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning.html">Pruning</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="regularization.html">Regularization</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#regularization">Regularization</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#sparsity-and-regularization">Sparsity and Regularization</a></li>
+        
+            <li><a class="toctree-l4" href="#group-regularization">Group Regularization</a></li>
+        
+            <li><a class="toctree-l4" href="#references">References</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Compressing Models &raquo;</li>
+        
+      
+    
+    <li>Regularization</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="regularization">Regularization</h1>
+<p>In their book <a href="#deep-learning">Deep Learning</a> Ian Goodfellow et al. define regularization as</p>
+<blockquote>
+<p>"any modification we make to a learning algorithm that is intended to reduce its generalization error, but not its training error."</p>
+</blockquote>
+<p>PyTorch's <a href="http://pytorch.org/docs/master/optim.html">optimizers</a> use \(l_2\) parameter regularization to limit the capacity of models (i.e. reduce the variance).</p>
+<p>In general, we can write this as:
+\[
+loss(W;x;y) = loss_D(W;x;y) + \lambda_R R(W)
+\]
+And specifically,
+\[
+loss(W;x;y) = loss_D(W;x;y) + \lambda_R \lVert W \rVert_2^2
+\]
+Where W is the collection of all weight elements in the network (i.e. this is model.parameters()), \(loss(W;x;y)\) is the total training loss, and \(loss_D(W)\) is the data loss (i.e. the error of the objective function, also called the loss function, or <code>criterion</code> in the Distiller sample image classifier compression application).</p>
+<pre><code>optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay=0.0001)
+criterion = nn.CrossEntropyLoss()
+...
+for input, target in dataset:
+    optimizer.zero_grad()
+    output = model(input)
+    loss = criterion(output, target)
+    loss.backward()
+    optimizer.step()
+</code></pre>
+
+<p>\(\lambda_R\) is a scalar called the <em>regularization strength</em>, and it balances the data error and the regularization error.  In PyTorch, this is the <code>weight_decay</code> argument.</p>
+<p>\(\lVert W \rVert_2^2\) is the square of the \(l_2\)-norm of W, and as such it is a <em>magnitude</em>, or sizing, of the weights tensor.
+\[
+\lVert W \rVert_2^2 = \sum_{l=1}^{L}  \sum_{i=1}^{n} |w_{l,i}|^2 \;\;where \;n = torch.numel(w_l)
+\]</p>
+<p>\(L\) is the number of layers in the network; and the notation about used 1-based numbering to simplify the notation.</p>
+<p>The qualitative differences between the \(l_2\)-norm, and the squared \(l_2\)-norm is explained in <a href="https://www.deeplearningbook.org/">Deep Learning</a>.</p>
+<h2 id="sparsity-and-regularization">Sparsity and Regularization</h2>
+<p>We mention regularization because there is an interesting interaction between regularization and some DNN sparsity-inducing methods.</p>
+<p>In <a href="#han-et-al-2017">Dense-Sparse-Dense (DSD)</a>, Song Han et al. use pruning as a regularizer to improve a model's accuracy:</p>
+<blockquote>
+<p>"Sparsity is a powerful form of regularization. Our intuition is that, once the network arrives at a local minimum given the sparsity constraint, relaxing the constraint gives the network more freedom to escape the saddle point and arrive at a higher-accuracy local minimum."</p>
+</blockquote>
+<p>Regularization can also be used to induce sparsity.  To induce element-wise sparsity we can use the \(l_1\)-norm, \(\lVert W \rVert_1\).
+\[
+\lVert W \rVert_1 = l_1(W) = \sum_{i=1}^{|W|} |w_i|
+\]</p>
+<p>\(l_2\)-norm regularization reduces overfitting and improves a model's accuracy by shrinking large parameters, but it does not force these parameters to absolute zero.  \(l_1\)-norm regularization sets some of the parameter elements to zero, therefore limiting the model's capacity while making the model simpler.  This is sometimes referred to as <em>feature selection</em> and gives us another interpretation of pruning.</p>
+<p><a href="https://github.com/NervanaSystems/distiller/blob/master/jupyter/L1-regularization.ipynb">One</a> of Distiller's Jupyter notebooks explains how the \(l_1\)-norm regularizer induces sparsity, and how it interacts with \(l_2\)-norm regularization.</p>
+<p>If we configure <code>weight_decay</code> to zero and use \(l_1\)-norm regularization, then we have:
+\[
+loss(W;x;y) = loss_D(W;x;y) + \lambda_R \lVert W \rVert_1
+\]
+If we use both regularizers, we have:
+\[
+loss(W;x;y) = loss_D(W;x;y) + \lambda_{R_2} \lVert W \rVert_2^2  + \lambda_{R_1} \lVert W \rVert_1
+\]</p>
+<p>Class <code>distiller.L1Regularizer</code> implements \(l_1\)-norm regularization, and of course, you can also schedule regularization.</p>
+<pre><code>l1_regularizer = distiller.s(model.parameters())
+...
+loss = criterion(output, target) + lambda * l1_regularizer()
+</code></pre>
+
+<h2 id="group-regularization">Group Regularization</h2>
+<p>In Group Regularization, we penalize entire groups of parameter elements, instead of individual elements.  Therefore, entire groups are either sparsified (i.e. all of the group elements have a value of zero) or not.  The group structures have to be pre-defined.</p>
+<p>To the data loss, and the element-wise regularization (if any), we can add group-wise regularization penalty.  We represent all of the parameter groups in layer \(l\) as \( W_l^{(G)} \), and we add the penalty of all groups for all layers.  It gets a bit messy, but not overly complicated:
+\[
+loss(W;x;y) = loss_D(W;x;y) + \lambda_R R(W) + \lambda_g \sum_{l=1}^{L} R_g(W_l^{(G)})
+\]</p>
+<p>Let's denote all of the weight elements in group \(g\) as \(w^{(g)}\).</p>
+<p>\[
+R_g(w^{(g)}) = \sum_{g=1}^{G} \lVert w^{(g)} \rVert_g = \sum_{g=1}^{G} \sum_{i=1}^{|w^{(g)}|} {(w_i^{(g)})}^2
+\]
+where \(w^{(g)} \in w^{(l)} \) and \( |w^{(g)}| \) is the number of elements in \( w^{(g)} \).</p>
+<p>\( \lambda_g \sum_{l=1}^{L} R_g(W_l^{(G)}) \) is called the Group Lasso regularizer.  Much as in \(l_1\)-norm regularization we sum the magnitudes of all tensor elements, in Group Lasso we sum the magnitudes of element structures (i.e. groups).<br />
+<br>
+Group Regularization is also called Block Regularization, Structured Regularization, or coarse-grained sparsity (remember that element-wise sparsity is sometimes referred to as fine-grained sparsity).  Group sparsity exhibits regularity (i.e. its shape is regular), and therefore
+it can be beneficial to improve inference speed.</p>
+<p><a href="#huizi-et-al-2017">Huizi-et-al-2017</a> provides an overview of some of the different groups: kernel, channel, filter, layers.  Fiber structures such as matrix columns and rows, as well as various shaped structures (block sparsity), and even <a href="#anwar-et-al-2015">intra kernel strided sparsity</a> can also be used.</p>
+<p><code>distiller.GroupLassoRegularizer</code> currently implements most of these groups, and you can easily add new groups.</p>
+<h2 id="references">References</h2>
+<p><div id="deep-learning"></div> <strong>Ian Goodfellow and Yoshua Bengio and Aaron Courville</strong>.
+    <a href="https://www.deeplearningbook.org/"><em>Deep Learning</em></a>,
+     arXiv:1607.04381v2,
+    2017.</p>
+<div id="han-et-al-2017"></div>
+
+<p><strong>Song Han, Jeff Pool, Sharan Narang, Huizi Mao, Enhao Gong, Shijian Tang, Erich Elsen, Peter Vajda, Manohar Paluri, John Tran, Bryan Catanzaro, William J. Dally</strong>.
+    <a href="https://arxiv.org/abs/1607.04381"><em>DSD: Dense-Sparse-Dense Training for Deep Neural Networks</em></a>,
+     arXiv:1607.04381v2,
+    2017.</p>
+<div id="huizi-et-al-2017"></div>
+
+<p><strong>Huizi Mao, Song Han, Jeff Pool, Wenshuo Li, Xingyu Liu, Yu Wang, William J. Dally</strong>.
+    <a href="https://arxiv.org/abs/1705.08922"><em>Exploring the Regularity of Sparse Structure in Convolutional Neural Networks</em></a>,
+    arXiv:1705.08922v3,
+    2017.</p>
+<div id="anwar-et-al-2015"></div>
+
+<p><strong>Sajid Anwar, Kyuyeon Hwang, and Wonyong Sung</strong>.
+    <a href="https://arxiv.org/abs/1512.08571"><em>Structured pruning of deep convolutional neural networks</em></a>,
+    arXiv:1512.08571,
+    2015</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="quantization.html" class="btn btn-neutral float-right" title="Quantization">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="pruning.html" class="btn btn-neutral" title="Pruning"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="pruning.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="quantization.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>
