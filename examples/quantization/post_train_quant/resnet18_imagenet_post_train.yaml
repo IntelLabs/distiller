@@ -44,7 +44,7 @@ quantizers:
     # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
     model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True
-    clip_acts: True
+    clip_acts: AVG
     no_clip_layers: fc
     overrides:
     # First and last layers + element-wise add layers in 8-bits
