@@ -49,6 +49,18 @@ def onnx_name_2_pytorch_name(name, op_type):
     return new_name
 
 
+def increment_instance(node_name):
+    """Increment the instance number of a given node"""
+    try:
+        # There is an assumption here that the last character in node_name is the node instance (an integer),
+        # and that it is between 0-9 (i.e. a digit)
+        base_name = node_name[:-1]
+        suffix = str(int(node_name[-1]) + 1)
+        return base_name + suffix
+    except ValueError:
+        return node_name + ".0"
+
+
 class SummaryGraph(object):
     """We use Pytorch's JIT tracer to run a forward pass and generate a trace graph, which
     is an internal representation of the model.  We then use ONNX to "clean" this
@@ -119,6 +131,12 @@ class SummaryGraph(object):
                 new_op['name'] = onnx_name_2_pytorch_name(new_op['name'], new_op['type'])
                 assert len(new_op['name']) > 0
 
+                if new_op['name'] in self.ops:
+                    # This is a patch.
+                    # ONNX names integrate the node type, while we don't (design bug).
+                    # This means that while parsing the ONNX graph we might find two nodes with the "same" name.
+                    # This patch increments the instance name, but this may break in the future.
+                    new_op['name'] = increment_instance(new_op['name'])
                 self.ops[new_op['name']] = new_op
 
                 for input_ in node.inputs():
