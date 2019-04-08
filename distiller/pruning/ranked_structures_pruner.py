@@ -505,7 +505,6 @@ class BernoulliFilterPruner(RankedStructureParameterPruner):
         if binary_map is None:
             binary_map = torch.bernoulli(torch.as_tensor([keep_prob] * num_filters))
         mask, _ = mask_from_filter_order(None, param, num_filters, binary_map)
-        # mask = mask.detach()
         mask = mask.to(param.device)
         # Compensate for dropping filters
         pruning_factor = binary_map.sum() / num_filters
