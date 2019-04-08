@@ -133,8 +133,8 @@ class LSTM(nn.Module):
         bidirectional_type (int): 1 or 2, corresponds to type 1 and type 2 as per
             https://github.com/pytorch/pytorch/issues/4930. default: 2
     """
-    def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout=0.5, bidirectional=False,
-                 bidirectional_type=2):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True, batch_first=False,
+                 dropout=0.5, bidirectional=False, bidirectional_type=2):
         super(LSTM, self).__init__()
         if num_layers < 1:
             raise ValueError("Number of layers has to be at least 1.")
@@ -143,7 +143,11 @@ class LSTM(nn.Module):
         self.num_layers = num_layers
         self.bidirectional = bidirectional
         self.bias = bias
+        self.batch_first = batch_first
         self.bidirectional_type = bidirectional_type
+
+        if batch_first:
+            self._process_forward = self._process_forward_batch_first
 
         if bidirectional:
             # Following https://github.com/pytorch/pytorch/issues/4930 -
@@ -166,7 +170,7 @@ class LSTM(nn.Module):
                                                    [LSTMCell(2 * hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
                 # Overwrite the current forward.
-                self.forward = self.__bidirectional_type2_forward
+                self._forward = self.__bidirectional_type2_forward
 
             else:
                 raise ValueError("The only allowed types are [1, 2].")
@@ -180,6 +184,16 @@ class LSTM(nn.Module):
         self.dropout_factor = dropout
 
     def forward(self, x, h):
+        return self._process_forward(x, h)
+
+    def _process_forward(self, x, h):
+        return self._forward(x, h)
+
+    def _process_forward_batch_first(self, x, h):
+        y, h = self._forward(x.transpose(0, 1), h)
+        return y.transpose(0, 1), h
+
+    def _forward(self, x, h):
         results = []
         for step in x:
             y, h = self.single_forward(step, h)
@@ -256,10 +270,15 @@ class LSTM(nn.Module):
         pass
 
     def to_pytorch_impl(self):
+        if self.bidirectional and self.bidirectional_type == 1:
+            raise TypeError("Pytorch implementation of bidirectional LSTM doesn't support type 1.")
+
         module = nn.LSTM(input_size=self.input_size,
                          hidden_size=self.hidden_size,
                          num_layers=self.num_layers,
                          dropout=self.dropout_factor,
+                         bias=self.bias,
+                         batch_first=self.batch_first,
                          bidirectional=self.bidirectional)
         param_gates = ['i', 'h']
 
@@ -289,8 +308,8 @@ class LSTM(nn.Module):
     def from_pytorch_impl(lstm: nn.LSTM):
         bidirectional = lstm.bidirectional
 
-        module = LSTM(lstm.input_size, lstm.hidden_size, lstm.num_layers, lstm.bias,
-                      lstm.dropout, bidirectional=bidirectional)
+        module = LSTM(lstm.input_size, lstm.hidden_size, lstm.num_layers, bias=lstm.bias,batch_first=lstm.batch_first,
+                      dropout=lstm.dropout, bidirectional=bidirectional)
         param_gates = ['i', 'h']
 
         param_types = ['weight']
