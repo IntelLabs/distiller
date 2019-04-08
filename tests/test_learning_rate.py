@@ -14,13 +14,7 @@
 # limitations under the License.
 #
 
-import os
-import sys
 import pytest
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
-
 import torch
 from torch.optim import Optimizer
 from distiller.learning_rate import MultiStepMultiGammaLR

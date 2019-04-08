@@ -13,14 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-import os
 import pytest
 import torch
 import torch.testing
 from collections import OrderedDict
 
-module_path = os.path.abspath(os.path.join('..'))
 from distiller.quantization import RangeLinearQuantParamLayerWrapper, LinearQuantMode, \
     RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper
 import distiller.modules
