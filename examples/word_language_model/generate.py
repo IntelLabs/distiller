@@ -18,12 +18,6 @@ import data
 # dependency on distiller code.
 # It's a bit ironic that PyTorch's docs advise against this kind of serialization,
 # while PyTorch's samples use it: https://pytorch.org/docs/master/notes/serialization.html
-import os
-import sys
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 import distiller
 
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 Language Model')
