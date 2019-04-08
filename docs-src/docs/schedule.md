@@ -413,9 +413,7 @@ if args.qe_calibration:
 
 The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml).
 
-## Distiller’s Pruning Fine-Control Explained
-
-Distiller provides a straight-forward way to prune a DNN through a pruning scheduler and a schedule specified using a [simple YAML syntax](https://nervanasystems.github.io/distiller/schedule/index.html).  An infrastructure component parses the pruning schedule and creates ```PruningPolicy``` instances that abstract pruning algorithms.  It then injects this schedule to an instance of ```CompressionScheduler``` which orchestrates the pruning and finetuning process.  The scheduler is invoked at various stages of the training-loop and invokes the relevant backend pruning policies.
+## Pruning Fine-Control
 
 Sometimes the default pruning process doesn't satisfy our needs and we require finer control over the pruning process (e.g. over masking, gradient handling, and weight updates).  Below we will explain the math and nuances of fine-control configuration.
 

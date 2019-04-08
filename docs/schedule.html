@@ -85,7 +85,7 @@
         
             <li><a class="toctree-l3" href="#post-training-quantization">Post-Training Quantization</a></li>
         
-            <li><a class="toctree-l3" href="#distillers-pruning-fine-control-explained">Distiller’s Pruning Fine-Control Explained</a></li>
+            <li><a class="toctree-l3" href="#pruning-fine-control">Pruning Fine-Control</a></li>
         
             <li><a class="toctree-l3" href="#knowledge-distillation">Knowledge Distillation</a></li>
         
@@ -582,8 +582,7 @@ For examples invocations of post-training quantization see <a href="https://gith
 </code></pre>
 
 <p>The genreated YAML stats file can then be provided using the <code>`--qe-stats-file</code> argument. An example of a generated stats file can be found <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml">here</a>.</p>
-<h2 id="distillers-pruning-fine-control-explained">Distiller’s Pruning Fine-Control Explained</h2>
-<p>Distiller provides a straight-forward way to prune a DNN through a pruning scheduler and a schedule specified using a <a href="https://nervanasystems.github.io/distiller/schedule/index.html">simple YAML syntax</a>.  An infrastructure component parses the pruning schedule and creates <code>PruningPolicy</code> instances that abstract pruning algorithms.  It then injects this schedule to an instance of <code>CompressionScheduler</code> which orchestrates the pruning and finetuning process.  The scheduler is invoked at various stages of the training-loop and invokes the relevant backend pruning policies.</p>
+<h2 id="pruning-fine-control">Pruning Fine-Control</h2>
 <p>Sometimes the default pruning process doesn't satisfy our needs and we require finer control over the pruning process (e.g. over masking, gradient handling, and weight updates).  Below we will explain the math and nuances of fine-control configuration.</p>
 <h3 id="setting-up-the-problem">Setting up the problem</h3>
 <p>We represent the weights of a DNN as the set 
