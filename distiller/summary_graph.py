@@ -93,12 +93,13 @@ class SummaryGraph(object):
     Edge = collections.namedtuple('Edge', 'src dst')
 
     def __init__(self, model, dummy_input):
-        model = distiller.make_non_parallel_copy(model)
-        with torch.onnx.set_training(model, False):
+        self._src_model = model
+        model_clone = distiller.make_non_parallel_copy(model)
+        with torch.onnx.set_training(model_clone, False):
             
-            device = next(model.parameters()).device
+            device = next(model_clone.parameters()).device
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
-            trace, _ = jit.get_trace_graph(model, dummy_input)
+            trace, _ = jit.get_trace_graph(model_clone, dummy_input)
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
@@ -152,7 +153,7 @@ class SummaryGraph(object):
         self.add_macs_attr()
         self.add_footprint_attr()
         self.add_arithmetic_intensity_attr()
-        del model
+        del model_clone
 
     def __create_op(self, onnx_node):
         op = {}
@@ -266,15 +267,13 @@ class SummaryGraph(object):
         return [op for op in self.ops.values() if attr in op['attrs'] and f(op)]
 
     def find_op(self, lost_op_name):
-        assert isinstance(lost_op_name, str)
-        return self.ops.get(lost_op_name, None)
+        return self.ops.get(distiller.normalize_module_name(lost_op_name), None)
 
     def find_param(self, data_name):
         return self.params.get(data_name, None)
 
     def predecessors(self, op, depth, done_list=None):
         """Returns a list of <op>'s predecessors"""
-
         if done_list is None:
             done_list = []
 
@@ -288,16 +287,18 @@ class SummaryGraph(object):
             done_list += preds
 
         if depth == 1:
-            return preds
+            ret = preds
         else:
             ret = []
             for predecessor in preds:
                 ret += self.predecessors(predecessor, depth-1, done_list)
-            return ret
+
+        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
 
     def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None):
         """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
         """
+        node_name = distiller.normalize_module_name(node_name)
         node = self.find_op(node_name)
         node_is_an_op = True
         if node is None:
@@ -319,7 +320,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in predecessors_types and len(done_list) > 1:
-                return [node_name]
+                return [distiller.denormalize_module_name(self._src_model, node_name)]
 
             # This is an operation node
             preds = [edge.src for edge in self.edges if (edge.dst == node_name and
@@ -331,11 +332,11 @@ class SummaryGraph(object):
         ret = []
         for predecessor in preds:
             ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging)
-        return ret
+
+        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
 
     def successors(self, node, depth, done_list=None):
         """Returns a list of <op>'s successors"""
-
         if done_list is None:
             done_list = []
 
@@ -351,12 +352,13 @@ class SummaryGraph(object):
             done_list += succs
 
         if depth == 1:
-            return succs
+            ret = succs
         else:
             ret = []
             for successor in succs:
                 ret += self.successors(successor, depth-1, done_list)
-            return ret
+
+        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
 
     def successors_f(self, node_name, successors_types, done_list=None, logging=None):
         """Returns a list of <op>'s successors, if they match the <successors_types> criteria.
@@ -367,7 +369,7 @@ class SummaryGraph(object):
 
         <node_name> and the returned list of successors are strings, because
         """
-
+        node_name = distiller.normalize_module_name(node_name)
         node = self.find_op(node_name)
         node_is_an_op = True
         if node is None:
@@ -389,7 +391,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in successors_types and len(done_list) > 1:
-                return [node_name]
+                return [distiller.denormalize_module_name(self._src_model, node_name)]
 
             # This is an operation node
             succs = [edge.dst for edge in self.edges if (edge.src == node_name and
@@ -401,4 +403,15 @@ class SummaryGraph(object):
         ret = []
         for successor in succs:
             ret += self.successors_f(successor, successors_types, done_list, logging)
-        return ret
+
+        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
+
+    def named_params_layers(self):
+        for param_name, param in self._src_model.named_parameters():
+            # remove the extension of param_name, and then normalize it
+            # to create a normalized layer name
+            normalized_layer_name = distiller.normalize_module_name(
+                '.'.join(param_name.split('.')[:-1]))
+            sgraph_layer_name = distiller.denormalize_module_name(
+                self._src_model, normalized_layer_name)
+            yield sgraph_layer_name, param_name, param
