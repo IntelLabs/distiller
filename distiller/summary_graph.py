@@ -217,11 +217,12 @@ class SummaryGraph(object):
                 conv_out = op['outputs'][0]
                 conv_in = op['inputs'][0]
                 conv_w = op['attrs']['kernel_shape']
+                groups = op['attrs']['group']
                 ofm_vol = self.param_volume(conv_out)
                 try:
-                    # MACs = volume(OFM) * (#IFM * K^2)
-                    op['attrs']['MACs'] = ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1]
-                except IndexError as e:
+                    # MACs = volume(OFM) * (#IFM * K^2) / #Groups
+                    op['attrs']['MACs'] = int(ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1] / groups)
+                except IndexError:
                     # Todo: change the method for calculating MACs
                     msglogger.error("An input to a Convolutional layer is missing shape information "
                                     "(MAC values will be wrong)")
