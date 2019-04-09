@@ -161,6 +161,23 @@ def test_normalize_module_name():
     name_test('imagenet', 'alexnet')
 
 
+def named_params_layers_test_aux(dataset, arch, dataparallel:bool):
+    model = create_model(False, dataset, arch, parallel=dataparallel)
+    sgraph = SummaryGraph(model, get_input(dataset))
+    sgraph_layer_names = set(k for k, i, j in sgraph.named_params_layers())
+    for layer_name in sgraph_layer_names:
+        assert (sgraph.find_op(layer_name) is not None,
+            '{} was not found in summary graph'.format(layer_name))
+
+
+def test_named_params_layers():
+    for dataParallelModel in (True, False):
+        named_params_layers_test_aux('imagenet', 'vgg19', dataParallelModel)
+        named_params_layers_test_aux('cifar10', 'resnet20_cifar', dataParallelModel)
+        named_params_layers_test_aux('imagenet', 'alexnet', dataParallelModel)
+        named_params_layers_test_aux('imagenet', 'resnext101_32x4d', dataParallelModel)
+
+
 def test_onnx_name_2_pytorch_name():
     assert "layer3.0.relu1" == onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1", 'Relu')
     assert "features.34" == onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]', 'Conv')
