@@ -166,8 +166,7 @@ def named_params_layers_test_aux(dataset, arch, dataparallel:bool):
     sgraph = SummaryGraph(model, get_input(dataset))
     sgraph_layer_names = set(k for k, i, j in sgraph.named_params_layers())
     for layer_name in sgraph_layer_names:
-        assert (sgraph.find_op(layer_name) is not None,
-            '{} was not found in summary graph'.format(layer_name))
+        assert sgraph.find_op(layer_name) is not None, '{} was not found in summary graph'.format(layer_name)
 
 
 def test_named_params_layers():
@@ -196,5 +195,22 @@ def test_connectivity_summary():
     assert len(verbose_summary) == 81
 
 
+def test_sg_macs():
+    '''Compare the MACs of different modules as computed by a SummaryGraph
+    and model summary.'''
+    import common
+    sg = create_graph('imagenet', 'mobilenet')
+    assert sg
+    model, _ = common.setup_test('mobilenet', 'imagenet', parallel=False)
+    df_compute = distiller.model_performance_summary(model, common.get_dummy_input('imagenet'))
+    modules_macs = df_compute.loc[:, ['Name', 'MACs']]
+    for name, mod in model.named_modules():
+        if isinstance(mod, (torch.nn.Conv2d, torch.nn.Linear)):
+            summary_macs = int(modules_macs.loc[modules_macs.Name == name].MACs)
+            sg_macs = sg.find_op(name)['attrs']['MACs']
+            assert summary_macs == sg_macs
+ 
+
 if __name__ == '__main__':
-    test_connectivity_summary()
+    #test_connectivity_summary()
+    test_sg_macs()
