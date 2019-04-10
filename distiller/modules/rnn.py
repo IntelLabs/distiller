@@ -21,6 +21,16 @@ from itertools import product
 
 
 class LSTMCell(nn.Module):
+    """
+    A single LSTM block.
+    The calculation of the output takes into account the input and the previous output and cell state:
+    https://pytorch.org/docs/stable/nn.html#lstmcell
+    Args:
+        input_size (int): the size of the input
+        hidden_size (int): the size of the hidden state / output
+        bias (bool): use bias. default: True
+
+    """
     def __init__(self, input_size, hidden_size, bias=True):
         super(LSTMCell, self).__init__()
         self.input_size = input_size
@@ -35,7 +45,7 @@ class LSTMCell(nn.Module):
         self.act_f = nn.Sigmoid()
         self.act_i = nn.Sigmoid()
         self.act_o = nn.Sigmoid()
-        self.act_c_ex = nn.Tanh()
+        self.act_g = nn.Tanh()
         # Calculate cell:
         self.eltwisemult_cell_forget = EltwiseMult()
         self.eltwisemult_cell_input = EltwiseMult()
@@ -45,12 +55,19 @@ class LSTMCell(nn.Module):
         self.eltwisemult_hidden = EltwiseMult()
         self.init_weights()
 
-    def forward(self, x, h):
+    def forward(self, x, h=None):
+        """
+        Implemented as defined in https://pytorch.org/docs/stable/nn.html#lstmcell.
+        """
+        x_bsz, x_device = x.size(1), x.device
+        if h is None:
+            h = self.init_hidden(x_bsz, device=x_device)
+        
         h_prev, c_prev = h
         fc_gate = self.eltwiseadd_gate(self.fc_gate_x(x), self.fc_gate_h(h_prev))
-        i, f, c_ex, o = torch.chunk(fc_gate, 4, dim=1)
-        i, f, c_ex, o = self.act_i(i), self.act_f(f), self.act_c_ex(c_ex), self.act_o(o)
-        cf, ci = self.eltwisemult_cell_forget(f, c_prev), self.eltwisemult_cell_input(i, c_ex)
+        i, f, g, o = torch.chunk(fc_gate, 4, dim=1)
+        i, f, g, o = self.act_i(i), self.act_f(f), self.act_g(g), self.act_o(o)
+        cf, ci = self.eltwisemult_cell_forget(f, c_prev), self.eltwisemult_cell_input(i, g)
         c = self.eltwiseadd_cell(cf, ci)
         h = self.eltwisemult_hidden(o, self.act_h(c))
         return h, c
