@@ -15,15 +15,10 @@
 #
 
 import logging
-import torch
-import os
-import sys
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 import distiller
 import pytest
 import common  # common test code
+
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -33,30 +28,55 @@ logger.addHandler(fh)
 
 
 def test_png_generation():
-    DATASET = "cifar10"
-    ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
+    dataset = "cifar10"
+    arch = "resnet20_cifar"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
     # 2 different ways to create a PNG
-    distiller.draw_img_classifier_to_file(model, 'model.png', DATASET, True)
-    distiller.draw_img_classifier_to_file(model, 'model.png', DATASET, False)
-
+    distiller.draw_img_classifier_to_file(model, 'model.png', dataset, True)
+    distiller.draw_img_classifier_to_file(model, 'model.png', dataset, False)
+    
 
 def test_negative():
-    DATASET = "cifar10"
-    ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
+    dataset = "cifar10"
+    arch = "resnet20_cifar"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
 
     with pytest.raises(ValueError):
         # png is not a supported summary type, so we expect this to fail with a ValueError
-        distiller.model_summary(model, what='png', dataset=DATASET)
+        distiller.model_summary(model, what='png', dataset=dataset)
+
+
+def test_compute_summary():
+    dataset = "cifar10"
+    arch = "simplenet_cifar"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
+    df_compute = distiller.model_performance_summary(model, common.get_dummy_input(dataset))
+    module_macs = df_compute.loc[:, 'MACs'].to_list()
+    #                     [conv1,  conv2,  fc1,   fc2,   fc3]
+    assert module_macs == [352800, 240000, 48000, 10080, 840]
+
+    dataset = "imagenet"
+    arch = "mobilenet"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
+    df_compute = distiller.model_performance_summary(model, common.get_dummy_input(dataset))
+    module_macs = df_compute.loc[:, 'MACs'].to_list()
+    expected_macs = [10838016, 3612672, 25690112, 1806336, 25690112, 3612672, 51380224, 903168, 
+                     25690112, 1806336, 51380224, 451584, 25690112, 903168, 51380224, 903168, 
+                     51380224, 903168, 51380224, 903168, 51380224, 903168, 51380224, 225792, 
+                     25690112, 451584, 51380224, 1024000]
+    assert module_macs == expected_macs
 
 
 def test_summary():
-    DATASET = "cifar10"
-    ARCH = "resnet20_cifar"
-    model, zeros_mask_dict = common.setup_test(ARCH, DATASET, parallel=True)
+    dataset = "cifar10"
+    arch = "resnet20_cifar"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
 
-    distiller.model_summary(model, what='sparsity', dataset=DATASET)
-    distiller.model_summary(model, what='compute', dataset=DATASET)
-    distiller.model_summary(model, what='model', dataset=DATASET)
-    distiller.model_summary(model, what='modules', dataset=DATASET)
+    distiller.model_summary(model, what='sparsity', dataset=dataset)
+    distiller.model_summary(model, what='compute', dataset=dataset)
+    distiller.model_summary(model, what='model', dataset=dataset)
+    distiller.model_summary(model, what='modules', dataset=dataset)
+
+
+if __name__ == '__main__':
+    test_compute_summary()

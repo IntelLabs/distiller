@@ -11,5 +11,5 @@ $ pip3 install -r doc-requirements.txt
 $ cd distiller/docs-src
 $ mkdocs build --clean
 ```
-This will create a folder named 'site' which contains the documentation website.
+This will create a folder named '../docs/site' which contains the documentation website.
 Open distiller/docs/site/index.html to view the documentation home page.

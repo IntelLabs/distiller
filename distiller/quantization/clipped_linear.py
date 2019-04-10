@@ -143,7 +143,7 @@ class DorefaParamsBinarizationSTE(torch.autograd.Function):
         if inplace:
             ctx.mark_dirty(input)
         E = input.abs().mean()
-        output = input.sign() * E
+        output = torch.where(input == 0, torch.ones_like(input), torch.sign(input)) * E
         return output
     
     @staticmethod
@@ -158,7 +158,6 @@ class DorefaQuantizer(Quantizer):
 
     Notes:
         1. Gradients quantization not supported yet
-        2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
     def __init__(self, model, optimizer,
                  bits_activations=32, bits_weights=32, bits_bias=None,

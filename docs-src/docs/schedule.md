@@ -413,6 +413,128 @@ if args.qe_calibration:
 
 The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml).
 
+## Pruning Fine-Control
+
+Sometimes the default pruning process doesn't satisfy our needs and we require finer control over the pruning process (e.g. over masking, gradient handling, and weight updates).  Below we will explain the math and nuances of fine-control configuration.
+
+### Setting up the problem
+
+We represent the weights of a DNN as the set 
+$$
+\theta=\left\{\theta_{l} : 0 \leq l \leq : L\right\}
+$$
+where  \(\theta_{l}\)  represents the parameters tensor (weights and biases) of layer \( l \) in a network having \( L \) layers. Usually we do not prune biases because of their small size and relative importance.  Therefore, we will consider only the network weights (also known as network connections):
+$$
+W=\left\{W_{l} : 0 \leq l \leq : L\right\}
+$$
+We wish to optimize some objective (e.g. minimize the energy required to execute a network in inference mode) under some performance constraint (e.g. accuracy), and we do this by maximizing the sparsity of the network weights (sometimes under some chosen sparsity-pattern constraint).  
+
+We formalize pruning as a 3-step action:
+
+1. Generating a mask - in which we define a sparsity-inducing function per layer, \( P_l \), such that
+   $$
+   M_{l}=P_{l}\left(W_{l}\right)
+   $$
+   \( M_{l} \) is a binary matrix which is used to mask \( W_{l} \).  \( P_l\) is implemented by subclasses of ```distiller.pruner```.
+
+2. Masking the weights using the Hadamard product:
+   $$
+   \widehat{W}_{l}=M_{l} \circ W_{l}
+   $$
+
+3. Updating the weights (performed by the optimizer).  By default, we compute the data-loss using the masked weights, and calculate the gradient of this loss with respect to the masked-weights.  We update the weights by making a small adjustment to the *masked weights*:
+   $$
+   W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
+   $$
+   We show below how to change this default behavior.  We also provide a more exact description of the weights update when using PyTorch's SGD optimizer.
+
+The pruning regimen follows a pruning-rate schedule which, analogously to learning-rate annealing, changes the pruning rate according to a configurable strategy over time.  The schedule allows us to configure new masks either once at the beginning of epochs (most common), or at the beginning of mini-batches (for finer control).  In the former, the masks are calculated and assigned to \(\{M_{l}\}\) once, at the beginning of epochs (the specific epochs are determined by the schedule).  The pseudo-code below shows the typical training-loop with ```CompressionScheduler``` callbacks in bold font, and the three pruning actions described above in burgendy.
+
+<center>![Masking](imgs/pruning_algorithm_pseudo_code.png)</center><br>
+<center>**Figure 1: Pruning algorithm pseudo-code**</center>
+
+We can perform masking by adding the masking operation to the network graph.  We call this *in-graph masking*, as depicted in the bottom of Figure 2.  In the forward-pass we apply element-wise multiplication of the weights \( W_{l} \) and the mask \( M_{l} \) to obtain the masked weights \(widehat{W}_{l}\) , which we apply to the Convolution operation.  In the backward-pass we mask \(\frac{\partial L}{\partial \widehat{W}}\) to obtain \(\frac{\partial L}{\partial W}\) with which we update \( W_{l} \).
+
+<center>![Masking](imgs/pruning_masking.png)</center><br>
+<center>**Figure 2: Forward and backward weight masking**</center>
+
+In Distiller we perform *out-of-graph masking* in which we directly set the value of \(\widehat{W}_{l}\) by applying a mask on \( W_{l} \)  In the backward-pass we make sure that the weights are updated by the *proper* gradients.  In the common pruning use-case we want the optimizer to update only the unmasked weights, but we can configure this behavior using the fine-control arguments, as explained below.
+
+### Fine-Control
+
+For finer control over the behavior of the pruning process, Distiller provides a set of ```PruningPolicy``` arguments in the ```args``` field, as in the sample below.
+
+```YAML
+pruners:
+  random_filter_pruner:
+    class: BernoulliFilterPruner
+    desired_sparsity: 0.1
+    group_type: Filters
+    weights: [module.conv1.weight]
+
+policies:
+  - pruner:
+      instance_name: random_filter_pruner
+      args:
+        mini_batch_pruning_frequency: 16
+        discard_masks_at_minibatch_end: True
+        use_double_copies: True
+        mask_on_forward_only: True
+        mask_gradients: True
+    starting_epoch: 15
+    ending_epoch: 180
+    frequency: 1
+```
+
+#### Controls
+
+- ```mini_batch_pruning_frequency``` (default: 0): controls pruning scheduling at the mini-batch granularity.  Every mini_batch_pruning_frequency training steps (i.e. mini_batches) we configure a new mask.  In between mask updates, we mask mini-batches with the current mask.
+
+- ```discard_masks_at_minibatch_end``` (default: False): discards the pruning mask at the end of the mini-batch.  In the example YAML above, a new mask is computed once every 16 mini-batches, applied in one forward-pass, and then discraded.  In the next 15 mini-batches the mask is `Null` so we do not mask.
+
+- ```mask_gradients``` (default: False): mask the weights gradients after performing the backward-pass, and before invoking the optimizer.  
+  <br>
+  One way to mask the gradients in PyTorch is to register to the backward callback of the weight tensors we want to mask, and alter the gradients there.  We do this by setting ```mask_gradients: True```, as in the sample YAML above.
+  <br>
+  This is sufficient if our weights optimization uses plain-vanilla SGD, because the update maintains the sparsity of the weights: \(\widehat{W}_{l}\) is sparse by definition, and the gradients are sparse because we mask them.
+  $$
+  W_{l} \leftarrow \widehat{W}_{l}-\alpha \frac{\partial Loss(\widehat{W}_{l})}{\partial \widehat{W}_{l}}
+  $$
+  <br>
+  But this is not always the case.  For example, [PyTorch’s SGD optimizer](<https://github.com/pytorch/pytorch/blob/master/torch/optim/sgd.py>) with weight-decay (\(\lambda\)) and momentum (\(\alpha\)) has the optimization logic listed below:
+  <br>1. \( \Delta p=\frac{\partial Loss\left(\widehat{W}_{l}^{i}\right)}{\partial \widehat{W}_{l}^{i}}+\lambda \widehat{W}_{l}^{i} \)
+  <br>2. \( v_{i}=\left\lbrace
+  \matrix{
+    {\Delta p: \; if \;i==0 }\; \cr
+    {v_{i-1} \rho+ (1-dampening)\Delta p: \; if \; i>0}
+  }
+  \right\rbrace \)<br>
+  <br>3. \( W_{l}^{i+1} = \widehat{W}_{l}^{i}-\alpha v_{i} \)
+  <br><br>
+  Let’s look at the weight optimization update at some arbitrary step (i.e. mini-batch) *k*. 
+  <br>
+  We want to show that masking the weights and gradients (\(W_{l}^{i=k}\) and \(
+  \frac{\partial Loss\left(\widehat{W}_{l}^{i=k}\right)}{\partial \widehat{W}_{l}^{i=k}}
+  \)) is not sufficient to guarantee that \(W_{l}^{i=k+1}\) is sparse.  This is easy do: if we allow for the general case where \(v_i\) is not necessarily sparse, then \(W_{l}^{i+1}\) is not necessarily sparse.
+  <hr>
+  ***Masking the weights in the forward-pass, and gradients in the backward-pass, is not sufficient to maintain the sparsity of the weights!***
+  <hr>
+  This is an important insight, and it means that naïve in-graph masking is also not sufficient to guarantee sparsity of the updated weights. 
+  
+  - ```use_double_copies``` (default: False): 
+  If you want to compute the gradients using the masked weights and also to update the unmasked weights (instead of updating the masked weights, per usual), set ```use_double_copies = True```.  This changes step (3) to: 
+  <br>3. \( W_{l}^{i+1} = W_{1}^{i}-\alpha \Delta p \)
+  <br>
+
+  - ```mask_on_forward_only``` (default: False): when set to ```False``` the weights will *also* be masked after the Optimizer is done updating the weights, to remove any updates of the masked gradients.
+  <br>
+  If we want to guarantee the sparsity of the updated weights, we must explicitly mask the weights after step (3) above:
+  <br>4. \( {W}_{l}^{i+1} \leftarrow M_{l}^{i} \circ {W}_{l}^{i+1} \)
+  <br>
+  This argument defaults to ```False```, but you can skip step (4), by setting ```mask_on_forward_only = True```.
+  <br>
+  Finally, note that ```mask_gradients``` and ```not mask_on_forward_only``` are mutually exclusive, or simply put: if you are masking in the backward-pass, you should choose to either do it via ```mask_gradients``` or ```mask_on_forward_only=False```, but not both.
+
 ## Knowledge Distillation
 
 Knowledge distillation (see [here](knowledge_distillation.md)) is also implemented as a `Policy`, which should be added to the scheduler. However, with the current implementation, it cannot be defined within the YAML file like the rest of the policies described above.
