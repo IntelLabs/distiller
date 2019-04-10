@@ -17,7 +17,7 @@ def test_basic():
     assert lstmcell.fc_gate_x.bias.shape == (5 * 4,)
     assert lstmcell.fc_gate_h.bias.shape == (5 * 4,)
 
-    lstm = LSTM(3, 5, 4, False, 0.0, True)
+    lstm = LSTM(3, 5, 4, False, False, 0.0, True)
     assert lstm.bidirectional_type == 2
     assert lstm.cells[0].fc_gate_x.weight.shape == (5 * 4, 3)
     assert lstm.cells[1].fc_gate_x.weight.shape == (5 * 4, 5 * 2)

@@ -128,6 +128,7 @@ class LSTM(nn.Module):
         hidden_size (int): size of the hidden connections and output.
         num_layers (int): number of LSTMCells
         bias (bool): use bias
+        batch_first (bool): the format of the sequence is (batch_size, seq_len, dim). default: False
         dropout : dropout factor
         bidirectional (bool): Whether or not the LSTM is bidirectional. default: False (unidirectional).
         bidirectional_type (int): 1 or 2, corresponds to type 1 and type 2 as per
@@ -146,12 +147,12 @@ class LSTM(nn.Module):
         self.batch_first = batch_first
         self.bidirectional_type = bidirectional_type
 
-        if batch_first:
-            self._process_forward = self._process_forward_batch_first
-
         if bidirectional:
             # Following https://github.com/pytorch/pytorch/issues/4930 -
             if bidirectional_type == 1:
+                # Process each timestep at the entire layers chain -
+                # each timestep is forwarded through `front` and `back` chains independently,
+                # similarily to a unidirectional LSTM.
                 self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                            [LSTMCell(hidden_size, hidden_size, bias)
                                             for _ in range(1, num_layers)])
@@ -159,9 +160,11 @@ class LSTM(nn.Module):
                 self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                                    [LSTMCell(hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
-                self.single_forward = self.__single_bidirectional_type1_forward
 
             elif bidirectional_type == 2:
+                # Process the entire sequence at each layer consecutively -
+                # the output of one layer is the sequence processed through the `front` and `back` cells
+                # and the input to the next layers are both `output_front` and `output_back`.
                 self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                            [LSTMCell(2 * hidden_size, hidden_size, bias)
                                             for _ in range(1, num_layers)])
@@ -169,8 +172,6 @@ class LSTM(nn.Module):
                 self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                                    [LSTMCell(2 * hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
-                # Overwrite the current forward.
-                self._forward = self.__bidirectional_type2_forward
 
             else:
                 raise ValueError("The only allowed types are [1, 2].")
@@ -178,25 +179,35 @@ class LSTM(nn.Module):
             self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                        [LSTMCell(hidden_size, hidden_size, bias)
                                         for _ in range(1, num_layers)])
-            self.single_forward = self.__single_unidirectional_forward
 
         self.dropout = nn.Dropout(dropout)
         self.dropout_factor = dropout
 
     def forward(self, x, h):
-        return self._process_forward(x, h)
+        if self.batch_first:
+            # Transpose to sequence_first format
+            x = x.transpose(0, 1)
 
-    def _process_forward(self, x, h):
-        return self._forward(x, h)
+        if self.bidirectional and self.bidirectional_type == 2:
+            y, h = self.__bidirectional_type2_forward(x, h)
+        else:  # Unidirectional or Type 1 bidirectional
+            y, h = self._forward(x, h)
 
-    def _process_forward_batch_first(self, x, h):
-        y, h = self._forward(x.transpose(0, 1), h)
-        return y.transpose(0, 1), h
+        if self.batch_first:
+            # Transpose back to batch_first format
+            y = y.transpose(0, 1)
+        return y, h
 
     def _forward(self, x, h):
         results = []
+
+        if self.bidirectional and self.bidirectional_type == 1:
+            single_forward = self.__single_bidirectional_type1_forward
+        else:
+            single_forward = self.__single_unidirectional_forward
+
         for step in x:
-            y, h = self.single_forward(step, h)
+            y, h = single_forward(step, h)
             results.append(y)
         return torch.stack(results), h
 
@@ -225,8 +236,7 @@ class LSTM(nn.Module):
 
     def __single_bidirectional_type1_forward(self, x, h):
         """
-        Type 1 bidirectional forward is layer is `layers first, sequence after` approach, similar to regular
-        unidirectional LSTM.
+        Type 1 bidirectional forward is layer is `layers first, sequence after` approach.
         """
         (h_front_all, c_front_all), (h_back_all, c_back_all) = _repackage_bidirectional_input_h(h)
         h_result = []
