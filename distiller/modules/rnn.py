@@ -72,14 +72,6 @@ class LSTMCell(nn.Module):
         h = self.eltwisemult_hidden(o, self.act_h(c))
         return h, c
 
-    def sequence_forward(self, x, h):
-        results = []
-        for step in x:
-            y, h = self.forward(step, h)
-            results.append(y)
-            h = (y, h)  # h, c
-        return torch.stack(results), h
-
     def init_hidden(self, batch_size, device='cuda:0'):
         h_0 = torch.zeros(batch_size, self.hidden_size).to(device)
         c_0 = torch.zeros(batch_size, self.hidden_size).to(device)
@@ -114,6 +106,25 @@ class LSTMCell(nn.Module):
 
     def __repr__(self):
         return "%s(%d, %d)" % (self.__class__.__name__, self.input_size, self.hidden_size)
+
+
+def process_sequence_wise(cell, x, h=None):
+    """
+    Process the entire sequence through an LSTMCell.
+    Args:
+         cell (LSTMCell): the cell.
+         x (torch.Tensor): the input
+         h (tuple of torch.Tensor-s): the hidden states of the LSTMCell.
+    Returns:
+         y (torch.Tensor): the output
+         h (tuple of torch.Tensor-s): the new hidden states of the LSTMCell.
+    """
+    results = []
+    for step in x:
+        y, h = cell(step, h)
+        results.append(y)
+        h = (y, h)
+    return torch.stack(results), h
 
 
 def _reformat_hidden(h):
@@ -177,6 +188,8 @@ class LSTM(nn.Module):
                 self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                                    [LSTMCell(hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
+                self.forward_fn = self.process_layer_wise
+                self.layer_chain_fn = self._layer_chain_bidirectional_type1
 
             elif bidirectional_type == 2:
                 # Process the entire sequence at each layer consecutively -
@@ -189,6 +202,7 @@ class LSTM(nn.Module):
                 self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                                    [LSTMCell(2 * hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
+                self.forward_fn = self._bidirectional_type2_forward
 
             else:
                 raise ValueError("The only allowed types are [1, 2].")
@@ -196,41 +210,38 @@ class LSTM(nn.Module):
             self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
                                        [LSTMCell(hidden_size, hidden_size, bias)
                                         for _ in range(1, num_layers)])
+            self.forward_fn = self.process_layer_wise
+            self.layer_chain_fn = self._layer_chain_unidirectional
 
         self.dropout = nn.Dropout(dropout)
         self.dropout_factor = dropout
 
-    def forward(self, x, h):
+    def forward(self, x, h=None):
         if self.batch_first:
             # Transpose to sequence_first format
             x = x.transpose(0, 1)
+        x_bsz = x.size(1)
 
-        if self.bidirectional and self.bidirectional_type == 2:
-            y, h = self.__bidirectional_type2_forward(x, h)
-        else:  # Unidirectional or Type 1 bidirectional
-            y, h = self._forward(x, h)
+        if h is None:
+            h = self.init_hidden(x_bsz)
+
+        y, h = self.forward_fn(x, h)
 
         if self.batch_first:
             # Transpose back to batch_first format
             y = y.transpose(0, 1)
         return y, h
 
-    def _forward(self, x, h):
+    def process_layer_wise(self, x, h):
         results = []
-
-        if self.bidirectional and self.bidirectional_type == 1:
-            single_forward = self.__single_bidirectional_type1_forward
-        else:
-            single_forward = self.__single_unidirectional_forward
-
         for step in x:
-            y, h = single_forward(step, h)
+            y, h = self.layer_chain_fn(step, h)
             results.append(y)
         return torch.stack(results), h
 
-    def __bidirectional_type2_forward(self, x, h):
+    def _bidirectional_type2_forward(self, x, h):
         """
-        Type 2 bidirectional forward is `sequence first, layers after` approach.
+        Processes the entire sequence through a layer and passes the output sequence to the next layer.
         """
         out = x
         h_h_result = []
@@ -240,8 +251,8 @@ class LSTM(nn.Module):
             h_front, h_back = (h_front_all[i], c_front_all[i]), (h_back_all[i], c_back_all[i])
 
             # Sequence treatment:
-            out_front, h_front = cell_front.sequence_forward(out, h_front)
-            out_back, h_back = cell_back.sequence_forward(out.flip([0]), h_back)
+            out_front, h_front = process_sequence_wise(cell_front, out, h_front)
+            out_back, h_back = process_sequence_wise(cell_back, out.flip([0]), h_back)
             out = torch.cat([out_front, out_back.flip([0])], dim=-1)
 
             h_h_result += [h_front[0], h_back[0]]
@@ -251,29 +262,33 @@ class LSTM(nn.Module):
         h = torch.stack(h_h_result, dim=0), torch.stack(h_c_result, dim=0)
         return out, h
 
-    def __single_bidirectional_type1_forward(self, x, h):
-        """
-        Type 1 bidirectional forward is layer is `layers first, sequence after` approach.
-        """
-        (h_front_all, c_front_all), (h_back_all, c_back_all) = _repackage_bidirectional_input_h(h)
-        h_result = []
-        out_front, out_back = x, x.flip([0])
-        for i, (cell_front, cell_back) in enumerate(zip(self.cells, self.cells_reverse)):
-            h_front, h_back = (h_front_all[i], c_front_all[i]), (h_back_all[i], c_back_all[i])
-            h_front, c_front = cell_front(out_front, h_front)
-            h_back, c_back = cell_back(out_back, h_back)
-            out_front, out_back = h_front, h_back
-            if i < self.num_layers-1:
-                out_front, out_back = self.dropout(out_front), self.dropout(out_back)
-            h_current = torch.stack([h_front, h_back]), torch.stack([c_front, c_back])
-            h_result.append(h_current)
-        h_result = _reformat_hidden_bidirectional(h_result)
-        return torch.cat([out_front, out_back], dim=-1), h_result
+    def _layer_chain_bidirectional_type1(self, x, h):
+        # """
+        # Process a single timestep through the entire bidirectional layer chain.
+        # """
+        # (h_front_all, c_front_all), (h_back_all, c_back_all) = _repackage_bidirectional_input_h(h)
+        # h_result = []
+        # out_front, out_back = x, x.flip([0])
+        # for i, (cell_front, cell_back) in enumerate(zip(self.cells, self.cells_reverse)):
+        #     h_front, h_back = (h_front_all[i], c_front_all[i]), (h_back_all[i], c_back_all[i])
+        #     h_front, c_front = cell_front(out_front, h_front)
+        #     h_back, c_back = cell_back(out_back, h_back)
+        #     out_front, out_back = h_front, h_back
+        #     if i < self.num_layers-1:
+        #         out_front, out_back = self.dropout(out_front), self.dropout(out_back)
+        #     h_current = torch.stack([h_front, h_back]), torch.stack([c_front, c_back])
+        #     h_result.append(h_current)
+        # h_result = _reformat_hidden_bidirectional(h_result)
+        # return torch.cat([out_front, out_back], dim=-1), h_result
+        raise NotImplementedError
 
-    def __single_unidirectional_forward(self, x, h):
+    def _layer_chain_unidirectional(self, step, h):
+        """
+        Process a single timestep through the entire unidirectional layer chain.
+        """
         h_all, c_all = h
         h_result = []
-        out = x
+        out = step
         for i, cell in enumerate(self.cells):
             h = h_all[i], c_all[i]
             out, hid = cell(out, h)
