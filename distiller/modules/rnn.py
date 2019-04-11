@@ -16,6 +16,7 @@
 
 import torch
 import torch.nn as nn
+import numpy as np
 from .eltwise import EltwiseAdd, EltwiseMult
 from itertools import product
 
@@ -78,7 +79,7 @@ class LSTMCell(nn.Module):
         return h_0, c_0
 
     def init_weights(self):
-        initrange = 0.1
+        initrange = 1 / np.sqrt(self.hidden_size)
         self.fc_gate_x.weight.data.uniform_(-initrange, initrange)
         self.fc_gate_h.weight.data.uniform_(-initrange, initrange)
 
@@ -127,19 +128,28 @@ def process_sequence_wise(cell, x, h=None):
     return torch.stack(results), h
 
 
-def _reformat_hidden(h):
+def _repackage_hidden_unidirectional(h):
+    """
+    Repackages the hidden state into nn.LSTM format. (unidirectional use)
+    """
     h_all = [t[0] for t in h]
     c_all = [t[1] for t in h]
     return torch.stack(h_all, 0), torch.stack(c_all, 0)
 
 
-def _reformat_hidden_bidirectional(h_result):
+def _repackage_hidden_bidirectional(h_result):
+    """
+    Repackages the hidden state into nn.LSTM format. (bidirectional use)
+    """
     h_all = [t[0] for t in h_result]
     c_all = [t[1] for t in h_result]
     return torch.cat(h_all, dim=0), torch.cat(c_all, dim=0)
 
 
-def _repackage_bidirectional_input_h(h):
+def _unpack_bidirectional_input_h(h):
+    """
+    Unpack the bidirectional hidden states into states of the 2 separate directions.
+    """
     h_t, c_t = h
     h_front, h_back = h_t[::2], h_t[1::2]
     c_front, c_back = c_t[::2], c_t[1::2]
@@ -178,18 +188,19 @@ class LSTM(nn.Module):
         if bidirectional:
             # Following https://github.com/pytorch/pytorch/issues/4930 -
             if bidirectional_type == 1:
-                # Process each timestep at the entire layers chain -
-                # each timestep is forwarded through `front` and `back` chains independently,
-                # similarily to a unidirectional LSTM.
-                self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                                           [LSTMCell(hidden_size, hidden_size, bias)
-                                            for _ in range(1, num_layers)])
-
-                self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                                                   [LSTMCell(hidden_size, hidden_size, bias)
-                                                    for _ in range(1, num_layers)])
-                self.forward_fn = self.process_layer_wise
-                self.layer_chain_fn = self._layer_chain_bidirectional_type1
+                raise NotImplementedError
+                # # Process each timestep at the entire layers chain -
+                # # each timestep is forwarded through `front` and `back` chains independently,
+                # # similarily to a unidirectional LSTM.
+                # self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
+                #                            [LSTMCell(hidden_size, hidden_size, bias)
+                #                             for _ in range(1, num_layers)])
+                #
+                # self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
+                #                                    [LSTMCell(hidden_size, hidden_size, bias)
+                #                                     for _ in range(1, num_layers)])
+                # self.forward_fn = self.process_layer_wise
+                # self.layer_chain_fn = self._layer_chain_bidirectional_type1
 
             elif bidirectional_type == 2:
                 # Process the entire sequence at each layer consecutively -
@@ -246,7 +257,7 @@ class LSTM(nn.Module):
         out = x
         h_h_result = []
         h_c_result = []
-        (h_front_all, c_front_all), (h_back_all, c_back_all) = _repackage_bidirectional_input_h(h)
+        (h_front_all, c_front_all), (h_back_all, c_back_all) = _unpack_bidirectional_input_h(h)
         for i, (cell_front, cell_back) in enumerate(zip(self.cells, self.cells_reverse)):
             h_front, h_back = (h_front_all[i], c_front_all[i]), (h_back_all[i], c_back_all[i])
 
@@ -278,7 +289,7 @@ class LSTM(nn.Module):
         #         out_front, out_back = self.dropout(out_front), self.dropout(out_back)
         #     h_current = torch.stack([h_front, h_back]), torch.stack([c_front, c_back])
         #     h_result.append(h_current)
-        # h_result = _reformat_hidden_bidirectional(h_result)
+        # h_result = _repackage_hidden_bidirectional(h_result)
         # return torch.cat([out_front, out_back], dim=-1), h_result
         raise NotImplementedError
 
@@ -295,7 +306,7 @@ class LSTM(nn.Module):
             if i < self.num_layers-1:
                 out = self.dropout(out)
             h_result.append((out, hid))
-        h_result = _reformat_hidden(h_result)
+        h_result = _repackage_hidden_unidirectional(h_result)
         return out, h_result
 
     def init_hidden(self, batch_size):
