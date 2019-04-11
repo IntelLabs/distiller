@@ -88,7 +88,7 @@ def assign_layer_fq_names(container, name=None):
     """Assign human-readable names to the modules (layers).
 
     Sometimes we need to access modules by their names, and we'd like to use
-    fully-qualified names for convinience.
+    fully-qualified names for convenience.
     """
     for name, module in container.named_modules():
         module.distiller_name = name
@@ -516,6 +516,32 @@ def log_weights_sparsity(model, epoch, loggers):
     """Log information about the weights sparsity"""
     for logger in loggers:
         logger.log_weights_sparsity(model, epoch)
+
+
+def log_model_buffers(model, buffer_names, tag_prefix, epoch, steps_completed, total_steps, log_freq, loggers=()):
+    """
+    Log values of model buffers. 'buffer_names' is a list of buffers to be logged (which not necessarily exist
+    in all layers in the model).
+
+    USE WITH CARE:
+        * This logger logs each value within the buffers. As such, while any buffer can be passed
+          it is not really intended for big buffers such as model weights.
+        * Special attention is needed when using this using this functionality in TensorBoardLogger, as it could
+          significantly slow down the load time of TensorBard. Please see the documentation of 'log_model_buffers'
+          in that class.
+
+    Args:
+        model: Model containing buffers to be logged
+        buffer_names: Names of buffers to be logged. Expected to be
+        tag_prefix: Prefix to be used before buffer name by logger
+        epoch: The current epoch
+        steps_completed: The current step in the epoch
+        total_steps: The total number of training steps taken so far
+        log_freq: The number of steps between logging records
+        loggers: An iterable of loggers to send the log info to
+    """
+    for logger in loggers:
+        logger.log_model_buffers(model, buffer_names, tag_prefix, epoch, steps_completed, total_steps, log_freq)
 
 
 def has_children(module):
