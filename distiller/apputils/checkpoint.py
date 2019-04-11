@@ -77,7 +77,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    checkpoint['extras'] = deepcopy(extras)
+    checkpoint['extras'] = extras
 
     torch.save(checkpoint, fullpath)
     if is_best:
