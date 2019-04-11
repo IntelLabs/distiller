@@ -29,28 +29,20 @@ $ python3 inspect_ckpt.py checkpoint.pth.tar --model --schedule
 import torch
 import argparse
 from tabulate import tabulate
-import sys
-import os
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-try:
-    import distiller
-except ImportError:
-    sys.path.append(module_path)
-    import distiller
+
+import distiller
+from distiller.apputils.checkpoint import get_contents_table
 
 
 def inspect_checkpoint(chkpt_file, args):
-    def inspect_val(val):
-        if isinstance(val, (int, float, str)):
-            return val
-        return None
-
     print("Inspecting checkpoint file: ", chkpt_file)
     checkpoint = torch.load(chkpt_file)
 
-    chkpt_keys = [[k, type(checkpoint[k]).__name__, inspect_val(checkpoint[k])] for k in checkpoint.keys()]
-    print(tabulate(chkpt_keys, headers=["Key", "Type", "Value"], tablefmt="fancy_grid"))
+    print(get_contents_table(checkpoint))
+
+    if 'extras' in checkpoint and checkpoint['extras']:
+        print("\nContents of Checkpoint['extras']:")
+        print(get_contents_table(checkpoint['extras']))
 
     if args.model and "state_dict" in checkpoint:
         print("\nModel keys (state_dict):\n{}".format(", ".join(list(checkpoint["state_dict"].keys()))))
@@ -67,6 +59,7 @@ def inspect_checkpoint(chkpt_file, args):
     if args.thinning and "thinning_recipes" in checkpoint:
         for recipe in checkpoint["thinning_recipes"]:
             print(recipe)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Distiller checkpoint inspection')
