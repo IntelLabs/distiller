@@ -46,7 +46,7 @@ __all__ = ['model_summary',
 def model_summary(model, what, dataset=None):
     if what == 'sparsity':
         pylogger = PythonLogger(msglogger)
-        csvlogger = CsvLogger('weights.csv')
+        csvlogger = CsvLogger()
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
         if dataset == 'imagenet':
