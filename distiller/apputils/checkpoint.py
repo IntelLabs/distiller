@@ -77,8 +77,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     if hasattr(model, 'quantizer_metadata'):
         checkpoint['quantizer_metadata'] = model.quantizer_metadata
 
-    if extras:
-        checkpoint['extras'] = deepcopy(extras)
+    checkpoint['extras'] = deepcopy(extras)
 
     torch.save(checkpoint, fullpath)
     if is_best:
@@ -92,7 +91,7 @@ def load_lean_checkpoint(model, chkpt_file, model_device=None):
 
 def get_contents_table(d):
     def inspect_val(val):
-        if isinstance(val, (int, float, str)):
+        if isinstance(val, (Number, str)):
             return val
         elif isinstance(val, type):
             return val.__name__
