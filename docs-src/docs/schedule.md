@@ -393,7 +393,7 @@ if args.quantize_eval:
 Note that the command-line arguments don't expose the `overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
 
 To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). 
-For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
 
 ### Collecting Statistics for Quantization
 
@@ -411,7 +411,7 @@ if args.qe_calibration:
     collector.save(yaml_path)
 ```
 
-The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml).
+The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml).
 
 ## Pruning Fine-Control
 
