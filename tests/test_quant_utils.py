@@ -152,3 +152,93 @@ def test_asymmetric_qparams():
                                                          torch.tensor([10., 10., -5., 0.]))
     assert torch.equal(scale, torch.tensor([21.25, 25.5, 25.5, 1.]))
     assert torch.equal(zp, torch.tensor([-42., 0., -255., 0.]))
+
+
+test_tensor = torch.tensor([-93, 33, -77, -42, -89, -55, 79, -19, -94,
+                            69, -46, -88, 19, -43, -38, 30, -56, 87,
+                            27, -86, 81, -60, -19, 59, 58, -47, -26,
+                            12, -74, 83, -83, -28, 69, 63, -95, -87]).float()
+test_tensor_4d = test_tensor.reshape(2, 2, 3, 3)
+test_tensor_2d = test_tensor.reshape(6, 6)
+
+
+def test_get_tensor_min_max():
+    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+
+    t_min, t_max = qu.get_tensor_min_max(test_tensor_4d)
+    assert torch.equal(t_min, torch.tensor(-95.))
+    assert torch.equal(t_max, torch.tensor(87.))
+
+    t_min, t_max = qu.get_tensor_min_max(test_tensor_4d, per_dim=0)
+    assert torch.equal(t_min, torch.tensor([-94., -95.]))
+    assert torch.equal(t_max, torch.tensor([87., 83.]))
+
+    t_min, t_max = qu.get_tensor_min_max(test_tensor_2d, per_dim=0)
+    assert torch.equal(t_min, torch.tensor([-93., -94., -56., -86., -74., -95.]))
+    assert torch.equal(t_max, torch.tensor([33., 79., 87., 81., 83., 69.]))
+
+
+def test_get_tensor_avg_min_max():
+    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
+        qu.get_tensor_avg_min_max(test_tensor_2d, across_dim=2)
+        qu.get_tensor_avg_min_max(test_tensor_2d, across_dim=6)
+
+    t_min, t_max = qu.get_tensor_avg_min_max(test_tensor_2d)
+    assert torch.equal(t_min, torch.tensor(-95.))
+    assert torch.equal(t_max, torch.tensor(87.))
+
+    t_min, t_max = qu.get_tensor_avg_min_max(test_tensor_2d, across_dim=0)
+    assert torch.equal(t_min, torch.tensor(-83.))
+    assert torch.equal(t_max, torch.tensor(72.))
+
+    t_min, t_max = qu.get_tensor_avg_min_max(test_tensor_4d, across_dim=0)
+    assert torch.equal(t_min, torch.tensor(-94.5))
+    assert torch.equal(t_max, torch.tensor(85.))
+
+
+def test_get_tensor_max_abs():
+    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+
+    t_abs = qu.get_tensor_max_abs(test_tensor_4d)
+    assert torch.equal(t_abs, torch.tensor(95.))
+
+    t_abs = qu.get_tensor_max_abs(test_tensor_4d, per_dim=0)
+    assert torch.equal(t_abs, torch.tensor([94., 95.]))
+
+    t_abs = qu.get_tensor_max_abs(test_tensor_2d, per_dim=0)
+    assert torch.equal(t_abs, torch.tensor([93., 94., 87., 86., 83., 95.]))
+
+
+def test_get_tensor_avg_max_abs():
+    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
+        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+
+    t_abs = qu.get_tensor_avg_max_abs(test_tensor_2d)
+    assert torch.equal(t_abs, torch.tensor(95.))
+
+    t_abs = qu.get_tensor_avg_max_abs(test_tensor_2d, across_dim=0)
+    assert torch.equal(t_abs, torch.tensor(83.))
+
+    t_abs = qu.get_tensor_avg_max_abs(test_tensor_4d, across_dim=0)
+    assert torch.equal(t_abs, torch.tensor(94.5))
+
+
+def test_get_tensor_mean_n_stds_min_max():
+    with pytest.raises(ValueError, message='Expecting ValueError with n_stds = 0'):
+        qu.get_tensor_mean_n_stds_min_max(test_tensor, n_stds=0)
+
+    mean = torch.tensor(-16.)
+    std = torch.tensor(62.87447738647461)
+
+    t_min, t_max = qu.get_tensor_mean_n_stds_min_max(test_tensor)
+    torch.testing.assert_allclose(t_min, mean - std)
+    torch.testing.assert_allclose(t_max, mean + std)
+
+    t_min, t_max = qu.get_tensor_mean_n_stds_min_max(test_tensor, n_stds=2)
+    torch.testing.assert_allclose(t_min, torch.tensor(-95.))
+    torch.testing.assert_allclose(t_max, torch.tensor(87.))
