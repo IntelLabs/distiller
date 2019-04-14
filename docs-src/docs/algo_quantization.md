@@ -73,12 +73,15 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 ### Other Features
 
+- **Scale factor scope:** For weight tensors, Distiller supports per-channel quantization (per output channel).
 - **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="imgs/quant_clipped.png"/>
    </p>
-  Currently, Distiller supports clipping of activations with averaging during post-training quantization. That is - for each batch, instead of calculating global min/max values, an average of the min/max values of each sample in the batch.
-- **Scale factor scope:** For weight tensors, Distiller supports per-channel quantization (per output channel).
+  Currently, Distiller supports clipping of activations during post-training quantization using the following methods:
+  
+     - Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.
+     - Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.
 
 ### Implementation in Distiller
 

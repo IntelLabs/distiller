@@ -353,9 +353,11 @@ Arguments controlling quantization at evaluation time ("post-training quantizati
                         Number of bits for quantization of weights
   --qe-bits-accum NUM_BITS
                         Number of bits for quantization of the accumulator
-  --qe-clip-acts, --qeca
-                        Enable clipping of activations using min/max values
-                        averaging over batch
+  --qe-clip-acts QE_CLIP_ACTS, --qeca QE_CLIP_ACTS
+                        Activations clipping mode. Choices: none | avg | n_std
+  --qe-clip-n-stds QE_CLIP_N_STDS
+                        When qe-clip-acts is set to 'n_std', this is the
+                        number of standard deviations to use
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of layer names for which not to clip activations.
                         Applicable only if --qe-clip-acts is also set
