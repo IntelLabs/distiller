@@ -84,7 +84,7 @@ The `Quantizer` class supports quantization-aware training, that is - training w
     2. To maintain the existing functionality of the module, we then register a `buffer` in the module with the original name - `weights`.
     3. During training, `float_weight` will be passed to `param_quantization_fn` and the result will be stored in `weight`.
 
-2. In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the [PACT](algo_quantization.md#PACT) method, acitvations are clipped to a value \(\alpha\), which is a learned parameter per-layer
+2. In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the [PACT](algo_quantization.md#pact) method, acitvations are clipped to a value \(\alpha\), which is a learned parameter per-layer
 
 To support these two cases, the `Quantizer` class also accepts an instance of a `torch.optim.Optimizer` (normally this would be one an instance of its sub-classes). The quantizer will take care of modifying the optimizer according to the changes made to the parameters.   
 

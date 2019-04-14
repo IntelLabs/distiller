@@ -43,6 +43,7 @@ We compared three model sizes: small (7.1M; 14M), medium (28M; 50M), large: (86M
 The results reported below use a preset seed (for reproducibility), and we expect results can be improved if we allow “true” pseudo-randomness.  We limited our tests to 40 epochs, even though validation perplexity was still trending down.
 
 Essentially, this recreates the language model experiment in the AGP paper, and validates its conclusions:
+
 * “We see that sparse models are able to outperform dense models which have significantly more parameters.”
 * The 80% sparse large model (which has 16.9M parameters and a perplexity of 83.64) is able to outperform the dense medium (which has 28.4M parameters and a perplexity of 84.21), a model which has 1.7 times more parameters.  It also outperform the dense large model, which exemplifies how pruning can act as a regularizer.
 * “Our results show that pruning works very well not only on the dense LSTM weights and dense softmax layer but also the dense embedding matrix. This suggests that during the optimization procedure the neural network can find a good sparse embedding for the words in the vocabulary that works well together with the sparse connectivity structure of the LSTM weights and softmax layer.”
