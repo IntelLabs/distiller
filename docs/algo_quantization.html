@@ -212,7 +212,7 @@ For any of the methods below that require quantization-aware training, please se
 <p>In this method we can use two modes - <strong>asymmetric</strong> and <strong>symmetric</strong>.</p>
 <h4 id="asymmetric-mode">Asymmetric Mode</h4>
 <p align="center">
-    <img src="../imgs/quant_asym.png"/>
+    <img src="imgs/quant_asym.png"/>
 </p>
 
 <p>In <strong>asymmetric</strong> mode, we map the min/max in the float range to the min/max of the integer range. This is done by using a <strong>zero-point</strong> (also called <em>quantization bias</em>, or <em>offset</em>) in addition to the scale factor.</p>
@@ -238,7 +238,7 @@ For any of the methods below that require quantization-aware training, please se
 </ul>
 <h4 id="symmetric-mode">Symmetric Mode</h4>
 <p align="center">
-    <img src="../imgs/quant_sym.png"/>
+    <img src="imgs/quant_sym.png"/>
 </p>
 
 <p>In <strong>symmetric</strong> mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.</p>
@@ -264,7 +264,7 @@ For any of the methods below that require quantization-aware training, please se
 <ul>
 <li><strong>Removing Outliers:</strong> As discussed <a href="quantization.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
-       <img src="../imgs/quant_clipped.png"/>
+       <img src="imgs/quant_clipped.png"/>
    </p>
   Currently, Distiller supports clipping of activations with averaging during post-training quantization. That is - for each batch, instead of calculating global min/max values, an average of the min/max values of each sample in the batch.</li>
 <li><strong>Scale factor scope:</strong> For weight tensors, Distiller supports per-channel quantization (per output channel).</li>
@@ -284,7 +284,7 @@ For any of the methods below that require quantization-aware training, please se
 </li>
 <li>All other layers are unaffected and are executed using their original FP32 implementation.</li>
 <li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For details on ways to invoke the quantizer see <a href="schedule.html#post-training-quantization">here</a>.</li>
-<li>The transform performed by the Quantizer only works on sub-classes of <code>torch.nn.Module</code>. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the <code>torch</code> namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/distiller/modules">here</a>. It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified <a href="https://github.com/NervanaSystems/distiller/blob/quantization_updates/models/imagenet/resnet.py">ResNet implementation</a>.</li>
+<li>The transform performed by the Quantizer only works on sub-classes of <code>torch.nn.Module</code>. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the <code>torch</code> namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/modules">here</a>. It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/models/imagenet/resnet.py">ResNet implementation</a>.</li>
 <li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that <a href="schedule.html#collecting-statistics-for-quantization">here</a>.</li>
 <li>The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.</li>
 </ul>
@@ -320,7 +320,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <h2 id="pact">PACT</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1805.06085">PACT: Parameterized Clipping Activation for Quantized Neural Networks</a>)</p>
 <p>This method is similar to DoReFa, but the upper clipping values, <script type="math/tex">\alpha</script>, of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, <script type="math/tex">\alpha</script> is shared per layer.</p>
-<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization/#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
 <h2 id="wrpn">WRPN</h2>
 <p>(As proposed in <a href="https://arxiv.org/abs/1709.01134">WRPN: Wide Reduced-Precision Networks</a>)  </p>
 <p>In this method, activations are clipped to <script type="math/tex">[0, 1]</script> and quantized as follows (<script type="math/tex">k</script> is the number of bits used for quantization):</p>
@@ -332,7 +332,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <script type="math/tex; mode=display">w_q = \frac{1}{2^{k-1}-1} round \left( \left(2^{k-1} - 1 \right)w_f \right)</script>
 </p>
 <p>Note that <script type="math/tex">k-1</script> bits are used to quantize weights, leaving one bit for sign.</p>
-<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization/#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
 <h3 id="notes_1">Notes:</h3>
 <ul>
 <li>The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of <code>WRPNQuantizer</code> at the moment. To experiment with this, modify your model implementation to have wider layers.</li>

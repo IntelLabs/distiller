@@ -23,7 +23,7 @@
 import torch
 import torch.optim.lr_scheduler
 from collections import namedtuple
-
+#from functools import partial
 import logging
 msglogger = logging.getLogger()
 
@@ -65,6 +65,12 @@ class ScheduledTrainingPolicy(object):
         """
         pass
 
+    def before_parameter_optimization(self, model, epoch, minibatch_id, minibatches_per_epoch,
+                                      zeros_mask_dict, meta, optimizer):
+        """The mini-batch training pass has completed the backward-pass,
+        and the optimizer is about to update the weights."""
+        pass
+
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         """The mini-batch training pass has ended"""
         pass
@@ -100,64 +106,89 @@ class PruningPolicy(ScheduledTrainingPolicy):
         """
         super(PruningPolicy, self).__init__(classes, layers)
         self.pruner = pruner
-        self.levels = None
-        self.keep_mask = False
-        self.mini_batch_pruning_frequency = 0
-        self.mask_on_forward_only = False
-        self.use_double_copies = False
-        if pruner_args is not None:
-            if 'levels' in pruner_args:
-                self.levels = pruner_args['levels']
-            self.keep_mask = pruner_args.get('keep_mask', False)
-            self.mini_batch_pruning_frequency = pruner_args.get('mini_batch_pruning_frequency', 0)
-            self.mask_on_forward_only = pruner_args.get('mask_on_forward_only', False)
-            self.use_double_copies = pruner_args.get('use_double_copies', False)
+        # Copy external policy configuration, if available
+        if pruner_args is None:
+            pruner_args = {}
+        self.levels = pruner_args.get('levels', None)
+        self.keep_mask = pruner_args.get('keep_mask', False)
+        self.mini_batch_pruning_frequency = pruner_args.get('mini_batch_pruning_frequency', 0)
+        self.mask_on_forward_only = pruner_args.get('mask_on_forward_only', False)
+        self.mask_gradients = pruner_args.get('mask_gradients', False)
+        if self.mask_gradients and not self.mask_on_forward_only:
+            raise ValueError("mask_gradients and (not mask_on_forward_only) are mutually exclusive")
+        self.backward_hook_handle = None   # The backward-callback handle
+        self.use_double_copies = pruner_args.get('use_double_copies', False)
+        self.discard_masks_at_minibatch_end = pruner_args.get('discard_masks_at_minibatch_end', False)
+        self.skip_first_minibatch = pruner_args.get('skip_first_minibatch', False)
+        # Initiliaze state
         self.is_last_epoch = False
-        self.mini_batch_id = 0          # The ID of the mini_batch within the present epoch
-        self.global_mini_batch_id = 0   # The ID of the mini_batch within the present training session
+        self.is_initialized = False
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         msglogger.debug("Pruner {} is about to prune".format(self.pruner.name))
-        self.mini_batch_id = 0
         self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
-        self.is_first_epoch = meta['current_epoch'] == meta['starting_epoch']
         if self.levels is not None:
             self.pruner.levels = self.levels
 
-        if self.is_first_epoch:
-            self.global_mini_batch_id = 0
-
         meta['model'] = model
+        is_initialized = self.is_initialized
         for param_name, param in model.named_parameters():
-            if self.mask_on_forward_only and self.is_first_epoch:
-                zeros_mask_dict[param_name].use_double_copies = self.use_double_copies
-                zeros_mask_dict[param_name].mask_on_forward_only = self.mask_on_forward_only
-            self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
+            if not is_initialized:
+                # Initialize the maskers
+                masker = zeros_mask_dict[param_name]
+                masker.use_double_copies = self.use_double_copies
+                masker.mask_on_forward_only = self.mask_on_forward_only
+                # register for the backward hook of the parameters
+                if self.mask_gradients:
+                    masker.backward_hook_handle = param.register_hook(masker.mask_gradient)
+                self.is_initialized = True
+                if not self.skip_first_minibatch:
+                    self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
+            else:
+                self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
 
     def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch,
                            zeros_mask_dict, meta, optimizer=None):
-        self.mini_batch_id += 1
-        self.global_mini_batch_id += 1
-        if (self.mini_batch_pruning_frequency != 0 and
-           self.global_mini_batch_id % self.mini_batch_pruning_frequency == 0):
-            for param_name, param in model.named_parameters():
-                self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
+        set_masks = False
+        global_mini_batch_id = epoch * minibatches_per_epoch + minibatch_id
+        if ((minibatch_id > 0) and
+            (self.mini_batch_pruning_frequency != 0) and
+            (global_mini_batch_id % self.mini_batch_pruning_frequency == 0)):
+            # This is _not_ the first mini-batch of a new epoch (performed in on_epoch_begin)
+            # and a pruning step is scheduled
+            set_masks = True
+
+        if self.skip_first_minibatch and global_mini_batch_id == 1:
+            # Because we skipped the first mini-batch of the first epoch (global_mini_batch_id == 0)
+            set_masks = True
 
         for param_name, param in model.named_parameters():
+            if set_masks:
+                self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
             zeros_mask_dict[param_name].apply_mask(param)
 
-    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
+    def before_parameter_optimization(self, model, epoch, minibatch_id, minibatches_per_epoch,
+                                      zeros_mask_dict, meta, optimizer):
         for param_name, param in model.named_parameters():
-            zeros_mask_dict[param_name].remove_mask(param)
+            zeros_mask_dict[param_name].revert_weights(param)
+
+    def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
+        if self.discard_masks_at_minibatch_end:
+            for param_name, param in model.named_parameters():
+                zeros_mask_dict[param_name].mask = None
 
     def on_epoch_end(self, model, zeros_mask_dict, meta):
         """The current epoch has ended"""
-        is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
-        if self.keep_mask and is_last_epoch:
+        if self.is_last_epoch:
             for param_name, param in model.named_parameters():
-                zeros_mask_dict[param_name].use_double_copies = False
-                zeros_mask_dict[param_name].mask_on_forward_only = False
-                zeros_mask_dict[param_name].apply_mask(param)
+                masker = zeros_mask_dict[param_name]
+                if self.keep_mask:
+                    masker.use_double_copies = False
+                    masker.mask_on_forward_only = False
+                    masker.mask_tensor(param)
+                if masker.backward_hook_handle is not None:
+                    masker.backward_hook_handle.remove()
+                    masker.backward_hook_handle = None
 
 
 class RegularizationPolicy(ScheduledTrainingPolicy):

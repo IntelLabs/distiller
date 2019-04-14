@@ -153,7 +153,7 @@ See [here](schedule.md#post-training-quantization) for more details on how to in
 
 A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.
 
-For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
 
 ## Summaries
 You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).

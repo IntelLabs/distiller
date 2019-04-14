@@ -17,7 +17,7 @@ In this method we can use two modes - **asymmetric** and **symmetric**.
 #### Asymmetric Mode
 
 <p align="center">
-    <img src="../imgs/quant_asym.png"/>
+    <img src="imgs/quant_asym.png"/>
 </p>
 
 In **asymmetric** mode, we map the min/max in the float range to the min/max of the integer range. This is done by using a **zero-point** (also called *quantization bias*, or *offset*) in addition to the scale factor.
@@ -47,7 +47,7 @@ Notes:
 #### Symmetric Mode
 
 <p align="center">
-    <img src="../imgs/quant_sym.png"/>
+    <img src="imgs/quant_sym.png"/>
 </p>
 
 In **symmetric** mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.
@@ -75,7 +75,7 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 - **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
-       <img src="../imgs/quant_clipped.png"/>
+       <img src="imgs/quant_clipped.png"/>
    </p>
   Currently, Distiller supports clipping of activations with averaging during post-training quantization. That is - for each batch, instead of calculating global min/max values, an average of the min/max values of each sample in the batch.
 - **Scale factor scope:** For weight tensors, Distiller supports per-channel quantization (per output channel).
@@ -95,7 +95,7 @@ For post-training quantization, this method is implemented by wrapping existing 
     - Embedding
 - All other layers are unaffected and are executed using their original FP32 implementation.
 - To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For details on ways to invoke the quantizer see [here](schedule.md#post-training-quantization).
-- The transform performed by the Quantizer only works on sub-classes of `torch.nn.Module`. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the `torch` namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/distiller/modules). It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified [ResNet implementation](https://github.com/NervanaSystems/distiller/blob/quantization_updates/models/imagenet/resnet.py).
+- The transform performed by the Quantizer only works on sub-classes of `torch.nn.Module`. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the `torch` namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/modules). It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified [ResNet implementation](https://github.com/NervanaSystems/distiller/blob/master/distiller/models/imagenet/resnet.py).
 - For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that [here](schedule.md#collecting-statistics-for-quantization).
 - The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.
 
@@ -141,7 +141,7 @@ This method requires training the model with quantization-aware training, as dis
 
 This method is similar to DoReFa, but the upper clipping values, \(\alpha\), of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, \(\alpha\) is shared per layer.
 
-This method requires training the model with quantization-aware training, as discussed [here](quantization/#quantization-aware-training). Use the `PACTQuantizer` class to transform an existing model to a model suitable for training with quantization using PACT.
+This method requires training the model with quantization-aware training, as discussed [here](quantization.md#quantization-aware-training). Use the `PACTQuantizer` class to transform an existing model to a model suitable for training with quantization using PACT.
 
 ## WRPN
 
@@ -157,7 +157,7 @@ Weights are clipped to \([-1, 1]\) and quantized as follows:
 
 Note that \(k-1\) bits are used to quantize weights, leaving one bit for sign.
 
-This method requires training the model with quantization-aware training, as discussed [here](quantization/#quantization-aware-training). Use the `WRPNQuantizer` class to transform an existing model to a model suitable for training with quantization using WRPN.
+This method requires training the model with quantization-aware training, as discussed [here](quantization.md#quantization-aware-training). Use the `WRPNQuantizer` class to transform an existing model to a model suitable for training with quantization using WRPN.
 
 ### Notes:
 
