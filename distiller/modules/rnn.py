@@ -228,7 +228,11 @@ class LSTM(nn.Module):
         self.dropout_factor = dropout
 
     def forward(self, x, h=None):
-        if self.batch_first:
+        is_packed_seq = isinstance(x, nn.utils.rnn.PackedSequence)
+        if is_packed_seq:
+            x, lengths = nn.utils.rnn.pad_packed_sequence(x, self.batch_first)
+
+        elif self.batch_first:
             # Transpose to sequence_first format
             x = x.transpose(0, 1)
         x_bsz = x.size(1)
@@ -237,8 +241,10 @@ class LSTM(nn.Module):
             h = self.init_hidden(x_bsz)
 
         y, h = self.forward_fn(x, h)
+        if is_packed_seq:
+            y = nn.utils.rnn.pack_padded_sequence(y, lengths, self.batch_first)
 
-        if self.batch_first:
+        elif self.batch_first:
             # Transpose back to batch_first format
             y = y.transpose(0, 1)
         return y, h
