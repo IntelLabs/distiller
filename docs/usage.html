@@ -359,7 +359,7 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 
 <p>See <a href="schedule.html#post-training-quantization">here</a> for more details on how to invoke post-training quantization from the command line.</p>
 <p>A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.</p>
-<p>For more examples of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant">here</a>.</p>
+<p>For more examples of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant">here</a>.</p>
 <h2 id="summaries">Summaries</h2>
 <p>You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
 You can log sparsity statistics (written to console and CSV file), performance, optimizer and model information, and also create a PNG image of the DNN.

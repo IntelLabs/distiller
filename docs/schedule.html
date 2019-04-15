@@ -531,9 +531,11 @@ args = parser.parse_args()
                         Number of bits for quantization of weights
   --qe-bits-accum NUM_BITS
                         Number of bits for quantization of the accumulator
-  --qe-clip-acts, --qeca
-                        Enable clipping of activations using min/max values
-                        averaging over batch
+  --qe-clip-acts QE_CLIP_ACTS, --qeca QE_CLIP_ACTS
+                        Activations clipping mode. Choices: none | avg | n_std
+  --qe-clip-n-stds QE_CLIP_N_STDS
+                        When qe-clip-acts is set to 'n_std', this is the
+                        number of standard deviations to use
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of layer names for which not to clip activations.
                         Applicable only if --qe-clip-acts is also set
@@ -567,7 +569,7 @@ args = parser.parse_args()
 
 <p>Note that the command-line arguments don't expose the <code>overrides</code> parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.</p>
 <p>To see integration of these command line arguments in use, see the <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py">image classification example</a>. 
-For examples invocations of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant">here</a>.</p>
+For examples invocations of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant">here</a>.</p>
 <h3 id="collecting-statistics-for-quantization">Collecting Statistics for Quantization</h3>
 <p>To collect generate statistics that can be used for static quantization of activations, do the following (shown here assuming the command line argument <code>--qe-calibration</code> shown above is used, which specifies the number of batches to use for statistics generation):</p>
 <pre><code class="python">if args.qe_calibration:
@@ -581,7 +583,7 @@ For examples invocations of post-training quantization see <a href="https://gith
     collector.save(yaml_path)
 </code></pre>
 
-<p>The genreated YAML stats file can then be provided using the <code>`--qe-stats-file</code> argument. An example of a generated stats file can be found <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml">here</a>.</p>
+<p>The genreated YAML stats file can then be provided using the <code>`--qe-stats-file</code> argument. An example of a generated stats file can be found <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml">here</a>.</p>
 <h2 id="pruning-fine-control">Pruning Fine-Control</h2>
 <p>Sometimes the default pruning process doesn't satisfy our needs and we require finer control over the pruning process (e.g. over masking, gradient handling, and weight updates).  Below we will explain the math and nuances of fine-control configuration.</p>
 <h3 id="setting-up-the-problem">Setting up the problem</h3>

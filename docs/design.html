@@ -270,7 +270,7 @@ To execute the model transformation, call the <code>prepare_model</code> functio
 </ol>
 </li>
 <li>
-<p>In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the <a href="algo_quantization.html#PACT">PACT</a> method, acitvations are clipped to a value <script type="math/tex">\alpha</script>, which is a learned parameter per-layer</p>
+<p>In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the <a href="algo_quantization.html#pact">PACT</a> method, acitvations are clipped to a value <script type="math/tex">\alpha</script>, which is a learned parameter per-layer</p>
 </li>
 </ol>
 <p>To support these two cases, the <code>Quantizer</code> class also accepts an instance of a <code>torch.optim.Optimizer</code> (normally this would be one an instance of its sub-classes). The quantizer will take care of modifying the optimizer according to the changes made to the parameters.   </p>

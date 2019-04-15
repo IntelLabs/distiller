@@ -113,7 +113,7 @@ def linear_dequantize(input, scale, zero_point, inplace=False):
 def get_tensor_min_max(t, per_dim=None):
     if per_dim is None:
         return t.min(), t.max()
-    if per_dim > t.dim():
+    if per_dim >= t.dim():
         raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
     view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
     tv = t.view(*view_dims)
@@ -133,6 +133,22 @@ def get_tensor_max_abs(t, per_dim=None):
 def get_tensor_avg_max_abs(t, across_dim=None):
     avg_min, avg_max = get_tensor_avg_min_max(t, across_dim=across_dim)
     return torch.max(avg_min.abs_(), avg_max.abs_())
+
+
+def get_tensor_mean_n_stds_min_max(t, n_stds=1):
+    if n_stds <= 0:
+        raise ValueError('n_stds must be > 0, got {}'.format(n_stds))
+    mean = t.mean()
+    std = t.std()
+    min_val, max_val = get_tensor_min_max(t)
+    min_val = torch.max(min_val, mean - n_stds * std)
+    max_val = torch.min(max_val, mean + n_stds * std)
+    return min_val, max_val
+
+
+def get_tensor_mean_n_stds_max_abs(t, n_stds=1):
+    min_val, max_val = get_tensor_mean_n_stds_min_max(t, n_stds)
+    return torch.max(min_val.abs_(), max_val.abs_())
 
 
 def get_quantized_range(num_bits, signed=True):

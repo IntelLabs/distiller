@@ -353,9 +353,11 @@ Arguments controlling quantization at evaluation time ("post-training quantizati
                         Number of bits for quantization of weights
   --qe-bits-accum NUM_BITS
                         Number of bits for quantization of the accumulator
-  --qe-clip-acts, --qeca
-                        Enable clipping of activations using min/max values
-                        averaging over batch
+  --qe-clip-acts QE_CLIP_ACTS, --qeca QE_CLIP_ACTS
+                        Activations clipping mode. Choices: none | avg | n_std
+  --qe-clip-n-stds QE_CLIP_N_STDS
+                        When qe-clip-acts is set to 'n_std', this is the
+                        number of standard deviations to use
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of layer names for which not to clip activations.
                         Applicable only if --qe-clip-acts is also set
@@ -393,7 +395,7 @@ if args.quantize_eval:
 Note that the command-line arguments don't expose the `overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
 
 To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). 
-For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
 
 ### Collecting Statistics for Quantization
 
@@ -411,7 +413,7 @@ if args.qe_calibration:
     collector.save(yaml_path)
 ```
 
-The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant/stats/resnet18_quant_stats.yaml).
+The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml).
 
 ## Pruning Fine-Control
 
