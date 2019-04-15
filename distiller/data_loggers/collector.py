@@ -372,6 +372,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             return sqrt((M / (total_values_so_far + numel - 1)).item())
 
         def update_record(record, tensor):
+            if not tensor.is_contiguous:
+                tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
             min_per_sample = act.min(dim=1)[0]
             max_per_sample = act.max(dim=1)[0]
