@@ -15,6 +15,9 @@
 #
 
 from .eltwise import EltwiseAdd, EltwiseMult
-from .concat import Concat
+from .grouping import *
+from .rnn import DistillerLSTM, DistillerLSTMCell
 
-__all__ = ['EltwiseAdd', 'EltwiseMult', 'Concat']
+__all__ = ['EltwiseAdd', 'EltwiseMult',
+           'Concat', 'Chunk', 'Split', 'Stack',
+           'DistillerLSTMCell', 'DistillerLSTM']
