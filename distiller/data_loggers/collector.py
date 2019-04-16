@@ -233,6 +233,8 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                 return stats.detach().cpu().numpy()
 
         # We get a batch of activations, from which we collect statistics
+        if not output.is_contiguous():
+            output = output.contiguous()
         act = output.view(output.size(0), -1)
         batch_min_list = to_np(torch.min(act, dim=1)).tolist()
         batch_max_list = to_np(torch.max(act, dim=1)).tolist()
@@ -372,6 +374,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             return sqrt((M / (total_values_so_far + numel - 1)).item())
 
         def update_record(record, tensor):
+            if not tensor.is_contiguous():
+                tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
             min_per_sample = act.min(dim=1)[0]
             max_per_sample = act.max(dim=1)[0]
