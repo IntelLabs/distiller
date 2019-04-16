@@ -233,6 +233,8 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                 return stats.detach().cpu().numpy()
 
         # We get a batch of activations, from which we collect statistics
+        if not output.is_contiguous():
+            output = output.contiguous()
         act = output.view(output.size(0), -1)
         batch_min_list = to_np(torch.min(act, dim=1)).tolist()
         batch_max_list = to_np(torch.max(act, dim=1)).tolist()
