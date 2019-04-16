@@ -67,15 +67,16 @@ class RNNModel(nn.Module):
             return weight.new_zeros(self.nlayers, bsz, self.nhid)
 
 
-class WordLangModel(nn.Module):
+class DistillerRNNModel(nn.Module):
+    """This is the distiller version of RNNModel, which uses DistillerLSTM instead of nn.LSTM."""
     def __init__(self, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False):
-        super(WordLangModel, self).__init__()
+        super(DistillerRNNModel, self).__init__()
         self.ntoken = ntoken
         self.ninp = ninp
         self.nhid = nhid
         self.nlayers = nlayers
         self.encoder = nn.Embedding(ntoken, ninp)
-        self.rnn = LSTM(ninp, nhid, nlayers, dropout=dropout)
+        self.rnn = DistillerLSTM(ninp, nhid, nlayers, dropout=dropout)
         self.decoder = nn.Linear(nhid, ntoken)
         self.init_weights()
         if tie_weights:

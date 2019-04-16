@@ -20,8 +20,9 @@ import numpy as np
 from .eltwise import EltwiseAdd, EltwiseMult
 from itertools import product
 
+__all__ = ['DistillerLSTMCell', 'DistillerLSTM']
 
-class LSTMCell(nn.Module):
+class DistillerLSTMCell(nn.Module):
     """
     A single LSTM block.
     The calculation of the output takes into account the input and the previous output and cell state:
@@ -33,7 +34,7 @@ class LSTMCell(nn.Module):
 
     """
     def __init__(self, input_size, hidden_size, bias=True):
-        super(LSTMCell, self).__init__()
+        super(DistillerLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
@@ -96,7 +97,7 @@ class LSTMCell(nn.Module):
 
     @staticmethod
     def from_pytorch_impl(lstmcell: nn.LSTMCell):
-        module = LSTMCell(input_size=lstmcell.input_size, hidden_size=lstmcell.hidden_size, bias=lstmcell.bias)
+        module = DistillerLSTMCell(input_size=lstmcell.input_size, hidden_size=lstmcell.hidden_size, bias=lstmcell.bias)
         module.fc_gate_x.weight = nn.Parameter(lstmcell.weight_ih.clone().detach())
         module.fc_gate_h.weight = nn.Parameter(lstmcell.weight_hh.clone().detach())
         if lstmcell.bias:
@@ -113,7 +114,7 @@ def process_sequence_wise(cell, x, h=None):
     """
     Process the entire sequence through an LSTMCell.
     Args:
-         cell (LSTMCell): the cell.
+         cell (DistillerLSTMCell): the cell.
          x (torch.Tensor): the input
          h (tuple of torch.Tensor-s): the hidden states of the LSTMCell.
     Returns:
@@ -158,7 +159,7 @@ def _unpack_bidirectional_input_h(h):
     return h_front, h_back
 
 
-class LSTM(nn.Module):
+class DistillerLSTM(nn.Module):
     """
     A modular implementation of an LSTM module.
     Args:
@@ -174,7 +175,7 @@ class LSTM(nn.Module):
     """
     def __init__(self, input_size, hidden_size, num_layers, bias=True, batch_first=False,
                  dropout=0.5, bidirectional=False, bidirectional_type=2):
-        super(LSTM, self).__init__()
+        super(DistillerLSTM, self).__init__()
         if num_layers < 1:
             raise ValueError("Number of layers has to be at least 1.")
         self.input_size = input_size
@@ -206,20 +207,20 @@ class LSTM(nn.Module):
                 # Process the entire sequence at each layer consecutively -
                 # the output of one layer is the sequence processed through the `front` and `back` cells
                 # and the input to the next layers are both `output_front` and `output_back`.
-                self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                                           [LSTMCell(2 * hidden_size, hidden_size, bias)
+                self.cells = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
+                                           [DistillerLSTMCell(2 * hidden_size, hidden_size, bias)
                                             for _ in range(1, num_layers)])
 
-                self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                                                   [LSTMCell(2 * hidden_size, hidden_size, bias)
+                self.cells_reverse = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
+                                                   [DistillerLSTMCell(2 * hidden_size, hidden_size, bias)
                                                     for _ in range(1, num_layers)])
                 self.forward_fn = self._bidirectional_type2_forward
 
             else:
                 raise ValueError("The only allowed types are [1, 2].")
         else:
-            self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                                       [LSTMCell(hidden_size, hidden_size, bias)
+            self.cells = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
+                                       [DistillerLSTMCell(hidden_size, hidden_size, bias)
                                         for _ in range(1, num_layers)])
             self.forward_fn = self.process_layer_wise
             self.layer_chain_fn = self._layer_chain_unidirectional
@@ -367,8 +368,9 @@ class LSTM(nn.Module):
     def from_pytorch_impl(lstm: nn.LSTM):
         bidirectional = lstm.bidirectional
 
-        module = LSTM(lstm.input_size, lstm.hidden_size, lstm.num_layers, bias=lstm.bias,batch_first=lstm.batch_first,
-                      dropout=lstm.dropout, bidirectional=bidirectional)
+        module = DistillerLSTM(lstm.input_size, lstm.hidden_size, lstm.num_layers, bias=lstm.bias,
+                               batch_first=lstm.batch_first,
+                               dropout=lstm.dropout, bidirectional=bidirectional)
         param_gates = ['i', 'h']
 
         param_types = ['weight']
