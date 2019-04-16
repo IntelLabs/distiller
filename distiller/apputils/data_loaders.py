@@ -181,14 +181,6 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
         distiller.set_deterministic()
         worker_init_fn = __deterministic_worker_init_fn
 
-        # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
-        # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
-        # In Pytorch, support for deterministic execution is still a bit clunky.
-        if num_workers > 1:
-            msglogger.warning('Number of data loader workers is decreased '
-                'to support deterministic execution')
-        num_workers = min(num_workers, 1)
-
     num_train = len(train_dataset)
     indices = list(range(num_train))
 

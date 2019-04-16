@@ -107,8 +107,10 @@ def main():
     if args.evaluate:
         args.deterministic = True
     if args.deterministic:
-        # Use a well-known seed, for repeatability of experiments
-        distiller.set_deterministic()
+        # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
+        # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
+        # In Pytorch, support for deterministic execution is still a bit clunky.
+        distiller.set_deterministic()  # Use a well-known seed, for repeatability of experiments
     else:
         # This issue: https://github.com/pytorch/pytorch/issues/3659
         # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
