@@ -69,7 +69,7 @@ def get_parser():
                         help='Flag to override optimizer if resumed from checkpoint. This will reset epochs count.')
 
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                        help='evaluate model on validation set')
+                        help='evaluate model on test set')
     parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')

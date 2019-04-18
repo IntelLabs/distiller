@@ -103,18 +103,17 @@ def main():
     start_epoch = 0
     ending_epoch = args.epochs
     perf_scores_history = []
+
+    if args.evaluate:
+        args.deterministic = True
     if args.deterministic:
         # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
         # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
-        # In Pytorch, support for deterministic execution is still a bit clunky.
-        if args.workers > 1:
-            raise ValueError('ERROR: Setting --deterministic requires setting --workers/-j to 0 or 1')
-        # Use a well-known seed, for repeatability of experiments
-        distiller.set_deterministic()
+        distiller.set_deterministic()  # Use a well-known seed, for repeatability of experiments
     else:
-        # This issue: https://github.com/pytorch/pytorch/issues/3659
-        # Implies that cudnn.benchmark should respect cudnn.deterministic, but empirically we see that
-        # results are not re-produced when benchmark is set. So enabling only if deterministic mode disabled.
+        # Turn on CUDNN benchmark mode for best performance. This is usually "safe" for image
+        # classification models, as the input sizes don't change during the run
+        # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
         cudnn.benchmark = True
 
     if args.cpu or not torch.cuda.is_available():
