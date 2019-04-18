@@ -19,12 +19,18 @@
 This code will help with the image classification datasets: ImageNet and CIFAR10
 
 """
+import logging
 import os
 import torch
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data.sampler import Sampler
 import numpy as np
+
+import distiller
+
+
+msglogger = logging.getLogger()
 
 DATASETS_NAMES = ['imagenet', 'cifar10']
 
@@ -170,7 +176,10 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
                      effective_train_size=1., effective_valid_size=1., effective_test_size=1.):
     train_dataset, test_dataset = datasets_fn(data_dir)
 
-    worker_init_fn = __deterministic_worker_init_fn if deterministic else None
+    worker_init_fn = None
+    if deterministic:
+        distiller.set_deterministic()
+        worker_init_fn = __deterministic_worker_init_fn
 
     num_train = len(train_dataset)
     indices = list(range(num_train))
