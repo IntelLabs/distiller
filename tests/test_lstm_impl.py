@@ -5,8 +5,10 @@ from distiller.modules import DistillerLSTM, DistillerLSTMCell
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence, PackedSequence
+from torch.testing import assert_allclose
 
-ACCEPTABLE_ERROR = 5e-5
+ATOL = 5e-5
+RTOL = 1e-3
 BATCH_SIZE = 32
 SEQUENCE_SIZE = 35
 
@@ -50,11 +52,11 @@ def assert_output(out_true, out_pred):
         y_t, lenghts_t = pad_packed_sequence(y_t)
         y_p, lenghts_p = pad_packed_sequence(y_p)
         assert all(lenghts_t == lenghts_p)
-    assert (y_t - y_p).abs().max().item() < ACCEPTABLE_ERROR
+    assert_allclose(y_p, y_t, RTOL, ATOL)
     h_h_t, h_c_t = h_t
     h_h_p, h_c_p = h_p
-    assert (h_h_t - h_h_p).abs().max().item() < ACCEPTABLE_ERROR
-    assert (h_c_t - h_c_p).abs().max().item() < ACCEPTABLE_ERROR
+    assert_allclose(h_h_p, h_h_t, RTOL, ATOL)
+    assert_allclose(h_c_p, h_c_t, RTOL, ATOL)
 
 
 @pytest.fixture(name='bidirectional', params=[False, True], ids=['bidirectional_off', 'bidirectional_on'])
