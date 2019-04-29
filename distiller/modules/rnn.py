@@ -22,6 +22,7 @@ from itertools import product
 
 __all__ = ['DistillerLSTMCell', 'DistillerLSTM']
 
+
 class DistillerLSTMCell(nn.Module):
     """
     A single LSTM block.
@@ -231,7 +232,32 @@ class DistillerLSTM(nn.Module):
     def forward(self, x, h=None):
         is_packed_seq = isinstance(x, nn.utils.rnn.PackedSequence)
         if is_packed_seq:
-            x, lengths = nn.utils.rnn.pad_packed_sequence(x, self.batch_first)
+            # Packed sequence treatment -
+            # the sequences are not of the same size, hence
+            # we split the padded tensor into the sequences.
+            # we take the sequence from each row in the batch.
+            x, lengths = nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
+            x_bsz = x.size(0)
+            if h is None:
+                h = self.init_hidden(x_bsz)
+            y_results = []
+            h_results = []
+            for i, (sequence, seq_len) in enumerate(zip(x, lengths)):
+                # Take the previous state according to the current batch.
+                # we unsqueeze to have a 3D tensor
+                h_current = (h[0][:,i,:].unsqueeze(1),h[1][:,i,:].unsqueeze(1))
+                # Take only the relevant timesteps according to seq_len
+                sequence = sequence[:seq_len].unsqueeze(1)  # sequence.shape = (seq_len, batch_size=1, input_dim)
+                # forward pass:
+                y, h_current = self.forward_fn(sequence, h_current)
+                # sequeeze back the batch into a single sequence
+                y_results.append(y.squeeze(1))
+                h_results.append(h_current)
+            # our result is a packed sequence
+            y = nn.utils.rnn.pack_sequence(y_results)
+            # concat hidden states per batches
+            h = torch.cat([t[0] for t in h_results], dim=1), torch.cat([t[1] for t in h_results], dim=1)
+            return y, h
 
         elif self.batch_first:
             # Transpose to sequence_first format
@@ -242,10 +268,8 @@ class DistillerLSTM(nn.Module):
             h = self.init_hidden(x_bsz)
 
         y, h = self.forward_fn(x, h)
-        if is_packed_seq:
-            y = nn.utils.rnn.pack_padded_sequence(y, lengths, self.batch_first)
 
-        elif self.batch_first:
+        if self.batch_first:
             # Transpose back to batch_first format
             y = y.transpose(0, 1)
         return y, h
@@ -304,6 +328,9 @@ class DistillerLSTM(nn.Module):
         """
         Process a single timestep through the entire unidirectional layer chain.
         """
+        step_bsz = step.size(0)
+        if h is None:
+            h = self.init_hidden(step_bsz)
         h_all, c_all = h
         h_result = []
         out = step
