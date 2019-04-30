@@ -4,8 +4,11 @@ import distiller
 from distiller.modules import DistillerLSTM, DistillerLSTMCell
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence, PackedSequence
+from torch.testing import assert_allclose
 
-ACCEPTABLE_ERROR = 5e-5
+ATOL = 5e-5
+RTOL = 1e-3
 BATCH_SIZE = 32
 SEQUENCE_SIZE = 35
 
@@ -45,11 +48,15 @@ def test_conversion():
 def assert_output(out_true, out_pred):
     y_t, h_t = out_true
     y_p, h_p = out_pred
-    assert (y_t - y_p).abs().max().item() < ACCEPTABLE_ERROR
+    if isinstance(y_t, PackedSequence):
+        y_t, lenghts_t = pad_packed_sequence(y_t)
+        y_p, lenghts_p = pad_packed_sequence(y_p)
+        assert all(lenghts_t == lenghts_p)
+    assert_allclose(y_p, y_t, RTOL, ATOL)
     h_h_t, h_c_t = h_t
     h_h_p, h_c_p = h_p
-    assert (h_h_t - h_h_p).abs().max().item() < ACCEPTABLE_ERROR
-    assert (h_c_t - h_c_p).abs().max().item() < ACCEPTABLE_ERROR
+    assert_allclose(h_h_p, h_h_t, RTOL, ATOL)
+    assert_allclose(h_c_p, h_c_t, RTOL, ATOL)
 
 
 @pytest.fixture(name='bidirectional', params=[False, True], ids=['bidirectional_off', 'bidirectional_on'])
@@ -90,4 +97,25 @@ def test_forward_lstm(input_size, hidden_size, num_layers, bidirectional):
 
     out_true = lstm(x, h)
     out_pred = lstm_man(x, h)
+    assert_output(out_true, out_pred)
+
+
+@pytest.mark.parametrize(
+    "input_size, hidden_size, num_layers, input_lengths",
+    [
+        (1, 1, 2, [5, 4, 3]),
+        (3, 5, 7, [20, 15, 5]),
+        (500, 500, 5, [50, 35, 25])
+    ]
+)
+def test_packed_sequence(input_size, hidden_size, num_layers, input_lengths, bidirectional):
+    lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional)
+    lstm_man = DistillerLSTM.from_pytorch_impl(lstm)
+    lstm.eval()
+    lstm_man.eval()
+
+    h = lstm_man.init_hidden(BATCH_SIZE)
+    x = pack_sequence([torch.rand(length, input_size) for length in input_lengths])
+    out_true = lstm(x)
+    out_pred = lstm_man(x)
     assert_output(out_true, out_pred)
