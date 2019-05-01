@@ -259,6 +259,9 @@ class RangeLinearQuantWrapper(nn.Module):
     def forward(self, *inputs):
         if self.training:
             raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
+        device = inputs[0].device
+        for buffer_name, buffer in self._buffers.items():
+            setattr(self, buffer_name, buffer.to(device))
 
         in_scales, in_zero_points = self.get_inputs_quantization_params(*inputs)
 
@@ -409,7 +412,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         device = self.w_scale.device
 
         if self.preset_act_stats:
-            self.register_buffer('accum_scale', self.in_0_scale.to(device) * self.w_scale)
+            self.in_0_scale = self.in_0_scale.to(device)
+            self.register_buffer('accum_scale', self.in_0_scale * self.w_scale)
             if self.per_channel_wts:
                 self.accum_scale = self.accum_scale.squeeze(dim=-1)
         else:
@@ -423,12 +427,12 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                       self.accum_min_q_val, self.accum_max_q_val, inplace=True)
             else:
                 b_scale, b_zero_point = _get_quant_params_from_tensor(wrapped_module.bias, num_bits_params, self.mode)
-                self.register_buffer('b_scale', b_scale)
-                self.register_buffer('b_zero_point', b_zero_point)
+                self.register_buffer('b_scale', b_scale.to(device))
+                self.register_buffer('b_zero_point', b_zero_point.to(device))
                 base_b_q = linear_quantize_clamp(wrapped_module.bias.data, self.b_scale, self.b_zero_point,
                                                  self.params_min_q_val, self.params_max_q_val)
                 # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
-                self.register_buffer('base_b_q', base_b_q)
+                self.register_buffer('base_b_q', base_b_q.to(device))
 
     def get_inputs_quantization_params(self, input):
         if not self.preset_act_stats:
