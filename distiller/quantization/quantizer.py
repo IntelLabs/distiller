@@ -173,6 +173,9 @@ class Quantizer(object):
         self.train_with_fp_copy = train_with_fp_copy
         self.params_to_quantize = []
 
+        # A dictionary of replaced modules and their respective names.
+        self.modules_replaced = {}
+
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
@@ -184,6 +187,13 @@ class Quantizer(object):
         self.module_overrides_map[module_name] = entry
 
     def prepare_model(self):
+        """
+        Wrappes the model and all intended submodules with their quantized counterparts according to their
+        QBits and overrides configuration.
+        Note:
+            if a submodule is shared between different parts of the graph, but the configurations
+            in these parts are different - the first configuration is kept.
+        """
         self._prepare_model_impl()
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
@@ -226,6 +236,12 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
+            if module in self.modules_replaced:
+                previous_name, previous_wrapper = self.modules_replaced[module]
+                msglogger.debug('Module {0} references to same module as {1},'
+                                ' replacing with reference the same wrapper.'.format(full_name, previous_name))
+                setattr(container, name, previous_wrapper)
+                continue
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
                 if self.module_overrides_map[full_name]:
@@ -241,6 +257,8 @@ class Quantizer(object):
                 new_module = self.replacement_factory[type(module)](module, full_name,
                                                                     self.module_qbits_map, **valid_kwargs)
                 msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
+                # Add to history of prepared submodules
+                self.modules_replaced[module] = full_name, new_module
                 setattr(container, name, new_module)
 
                 # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
