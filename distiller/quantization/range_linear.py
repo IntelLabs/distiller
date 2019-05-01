@@ -427,12 +427,12 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                       self.accum_min_q_val, self.accum_max_q_val, inplace=True)
             else:
                 b_scale, b_zero_point = _get_quant_params_from_tensor(wrapped_module.bias, num_bits_params, self.mode)
-                self.register_buffer('b_scale', b_scale.to(device))
-                self.register_buffer('b_zero_point', b_zero_point.to(device))
+                self.register_buffer('b_scale', b_scale)
+                self.register_buffer('b_zero_point', b_zero_point)
                 base_b_q = linear_quantize_clamp(wrapped_module.bias.data, self.b_scale, self.b_zero_point,
                                                  self.params_min_q_val, self.params_max_q_val)
                 # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
-                self.register_buffer('base_b_q', base_b_q.to(device))
+                self.register_buffer('base_b_q', base_b_q)
 
     def get_inputs_quantization_params(self, input):
         if not self.preset_act_stats:
