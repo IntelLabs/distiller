@@ -25,8 +25,8 @@
       Design
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/model_zoo/index.html">
-      Model Zoo
+    <a href="https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ)">
+      FAQ
     </a>
   </h3>
 </div>
@@ -240,6 +240,7 @@ Distiller comes with a sample application for compressing image classification D
 We'll show you how to use it for some simple use-cases, and will point you to some ready-to-go Jupyter notebooks.
 
 For more details, there are some other resources you can refer to:
++ [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule/index.html)
 + [Usage](https://nervanasystems.github.io/usage/index.html)
