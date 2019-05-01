@@ -188,11 +188,24 @@ class Quantizer(object):
 
     def prepare_model(self):
         """
-        Wrappes the model and all intended submodules with their quantized counterparts according to their
-        QBits and overrides configuration.
+        Traverses the model and replaces sub-modules with quantized counterparts according to the bit-width
+        and overrides configuration provided to __init__(), and according to the replacement_factory as
+        defined by the Quantizer sub-class being used.
+
         Note:
-            if a submodule is shared between different parts of the graph, but the configurations
-            in these parts are different - the first configuration is kept.
+            If multiple sub-modules within the model actually reference the same module, then that module
+            is replaced only once, according to the configuration (bit-width and/or overrides) of the
+            first encountered reference.
+            Toy Example - say a module is constructed using this bit of code:
+
+                shared_relu = nn.ReLU
+                self.relu1 = shared_relu
+                self.relu2 = shared_relu
+
+            When traversing the model, a replacement will be generated when 'self.relu1' is encountered.
+            Let's call it `new_relu1'. When 'self.relu2' will be encountered, it'll simply be replaced
+            with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
+            will be ignored. A warning message will be shown.
         """
         self._prepare_model_impl()
 
