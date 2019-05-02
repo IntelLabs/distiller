@@ -146,7 +146,7 @@ class DummyQuantizer(Quantizer):
 # Other utils
 #############################
 
-expected_type_replacements = {nn.Conv2d: DummyWrapperLayer, nn.ReLU: DummyQuantLayer}
+expected_type_replacements = {nn.Conv2d: DummyWrapperLayer, nn.ReLU: DummyQuantLayer, nn.Linear: DummyWrapperLayer}
 
 
 def params_quantizable(module):
@@ -164,7 +164,7 @@ def get_expected_qbits(model, qbits, expected_overrides):
         expected_qbits[orig_name] = QBits(bits_a, bits_w, bits_b)
 
         # We're testing replacement of module with container
-        if isinstance(orig_module, nn.Conv2d):
+        if isinstance(orig_module, (nn.Conv2d, nn.Linear)):
             post_prepare_changes[orig_name] = QBits(bits_a, None, None)
             post_prepare_changes[orig_name + '.inner'] = expected_qbits[orig_name]
 
