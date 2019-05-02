@@ -83,6 +83,33 @@ class DummyModel(nn.Sequential):
             p.data = torch.zeros_like(p)
 
 
+class DummyDenseWithRelu(nn.Module):
+    def __init__(self, input_size, output_size, relu=None):
+        super(DummyDenseWithRelu, self).__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+        self.relu = relu or nn.ReLU()
+        self.linear = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        return self.relu(self.linear(x))
+
+
+class DummyModelWithSharedSubmodule(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(DummyModelWithSharedSubmodule, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.dense1 = DummyDenseWithRelu(input_size, hidden_size)
+        self.dense2 = DummyDenseWithRelu(hidden_size, output_size, self.dense1.relu)
+
+    def forward(self, x):
+        x = self.dense1(x)
+        x = self.dense2(x)
+        return x
+
+
 #############################
 # Dummy Quantizer
 #############################
@@ -111,6 +138,7 @@ class DummyQuantizer(Quantizer):
 
         self.replacement_factory[nn.Conv2d] = _dummy_wrapper_layer
         self.replacement_factory[nn.ReLU] = _dummy_quant_layer
+        self.replacement_factory[nn.Linear] = _dummy_wrapper_layer
         self.param_quantization_fn = dummy_quantize_params
 
 
@@ -394,3 +422,14 @@ def test_overridable_args(model, optimizer, train_with_fp_copy):
     q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
     q.prepare_model()
     assert model_copy.relu1.overridable_prop == 123
+
+
+def test_shared_submodule(optimizer, train_with_fp_copy):
+    with pytest.warns(UserWarning,
+                      match="Module '{0}' references to same module as '{1}'.".format('dense2.relu', 'dense1.relu')):
+        densenet = DummyModelWithSharedSubmodule(1024, 1024, 1000)
+        quantizer = DummyQuantizer(densenet,
+                                   bits_weights=8, bits_activations=8, bits_bias=32,
+                                   optimizer=optimizer,
+                                   train_with_fp_copy=train_with_fp_copy)
+        quantizer.prepare_model()

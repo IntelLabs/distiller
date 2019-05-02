@@ -252,7 +252,9 @@ class Quantizer(object):
             if module in self.modules_replaced:
                 previous_name, previous_wrapper = self.modules_replaced[module]
                 warnings.warn("Module '{0}' references to same module as '{1}'."
-                              ' Replacing with reference the same wrapper.'.format(full_name, previous_name))
+                              ' Replacing with reference the same wrapper.'.format(full_name, previous_name),
+                              UserWarning)
+                msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, previous_wrapper))
                 setattr(container, name, previous_wrapper)
                 continue
             current_qbits = self.module_qbits_map[full_name]
