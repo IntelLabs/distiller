@@ -83,6 +83,33 @@ class DummyModel(nn.Sequential):
             p.data = torch.zeros_like(p)
 
 
+class DummyDenseWithRelu(nn.Module):
+    def __init__(self, input_size, output_size, relu=None):
+        super(DummyDenseWithRelu, self).__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+        self.relu = relu or nn.ReLU()
+        self.linear = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        return self.relu(self.linear(x))
+
+
+class DummyModelWithSharedSubmodule(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(DummyModelWithSharedSubmodule, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.dense1 = DummyDenseWithRelu(input_size, hidden_size)
+        self.dense2 = DummyDenseWithRelu(hidden_size, output_size, self.dense1.relu)
+
+    def forward(self, x):
+        x = self.dense1(x)
+        x = self.dense2(x)
+        return x
+
+
 #############################
 # Dummy Quantizer
 #############################
@@ -111,6 +138,7 @@ class DummyQuantizer(Quantizer):
 
         self.replacement_factory[nn.Conv2d] = _dummy_wrapper_layer
         self.replacement_factory[nn.ReLU] = _dummy_quant_layer
+        self.replacement_factory[nn.Linear] = _dummy_wrapper_layer
         self.param_quantization_fn = dummy_quantize_params
 
 
@@ -118,7 +146,7 @@ class DummyQuantizer(Quantizer):
 # Other utils
 #############################
 
-expected_type_replacements = {nn.Conv2d: DummyWrapperLayer, nn.ReLU: DummyQuantLayer}
+expected_type_replacements = {nn.Conv2d: DummyWrapperLayer, nn.ReLU: DummyQuantLayer, nn.Linear: DummyWrapperLayer}
 
 
 def params_quantizable(module):
@@ -136,7 +164,7 @@ def get_expected_qbits(model, qbits, expected_overrides):
         expected_qbits[orig_name] = QBits(bits_a, bits_w, bits_b)
 
         # We're testing replacement of module with container
-        if isinstance(orig_module, nn.Conv2d):
+        if isinstance(orig_module, (nn.Conv2d, nn.Linear)):
             post_prepare_changes[orig_name] = QBits(bits_a, None, None)
             post_prepare_changes[orig_name + '.inner'] = expected_qbits[orig_name]
 
@@ -394,3 +422,16 @@ def test_overridable_args(model, optimizer, train_with_fp_copy):
     q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
     q.prepare_model()
     assert model_copy.relu1.overridable_prop == 123
+
+
+def test_shared_submodule(optimizer, train_with_fp_copy):
+    with pytest.warns(UserWarning,
+                      match="Module '{0}' references to same module as '{1}'.".format('dense2.relu', 'dense1.relu')):
+        densenet = DummyModelWithSharedSubmodule(1024, 1024, 1000)
+        quantizer = DummyQuantizer(densenet,
+                                   bits_weights=8, bits_activations=8, bits_bias=32,
+                                   optimizer=optimizer,
+                                   train_with_fp_copy=train_with_fp_copy)
+        quantizer.prepare_model()
+        assert isinstance(quantizer.model.dense1.relu, DummyQuantLayer)
+        assert quantizer.model.dense1.relu == quantizer.model.dense2.relu

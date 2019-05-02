@@ -173,6 +173,9 @@ class Quantizer(object):
         self.train_with_fp_copy = train_with_fp_copy
         self.params_to_quantize = []
 
+        # A dictionary of replaced modules and their respective names.
+        self.modules_replaced = OrderedDict()
+
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
@@ -184,6 +187,26 @@ class Quantizer(object):
         self.module_overrides_map[module_name] = entry
 
     def prepare_model(self):
+        """
+        Traverses the model and replaces sub-modules with quantized counterparts according to the bit-width
+        and overrides configuration provided to __init__(), and according to the replacement_factory as
+        defined by the Quantizer sub-class being used.
+
+        Note:
+            If multiple sub-modules within the model actually reference the same module, then that module
+            is replaced only once, according to the configuration (bit-width and/or overrides) of the
+            first encountered reference.
+            Toy Example - say a module is constructed using this bit of code:
+
+                shared_relu = nn.ReLU
+                self.relu1 = shared_relu
+                self.relu2 = shared_relu
+
+            When traversing the model, a replacement will be generated when 'self.relu1' is encountered.
+            Let's call it `new_relu1'. When 'self.relu2' will be encountered, it'll simply be replaced
+            with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
+            will be ignored. A warning message will be shown.
+        """
         self._prepare_model_impl()
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
@@ -226,6 +249,14 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
+            if module in self.modules_replaced:
+                previous_name, previous_wrapper = self.modules_replaced[module]
+                warnings.warn("Module '{0}' references to same module as '{1}'."
+                              ' Replacing with reference the same wrapper.'.format(full_name, previous_name),
+                              UserWarning)
+                msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, previous_wrapper))
+                setattr(container, name, previous_wrapper)
+                continue
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
                 if self.module_overrides_map[full_name]:
@@ -241,6 +272,8 @@ class Quantizer(object):
                 new_module = self.replacement_factory[type(module)](module, full_name,
                                                                     self.module_qbits_map, **valid_kwargs)
                 msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
+                # Add to history of prepared submodules
+                self.modules_replaced[module] = full_name, new_module
                 setattr(container, name, new_module)
 
                 # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
