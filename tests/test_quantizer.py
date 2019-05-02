@@ -433,3 +433,5 @@ def test_shared_submodule(optimizer, train_with_fp_copy):
                                    optimizer=optimizer,
                                    train_with_fp_copy=train_with_fp_copy)
         quantizer.prepare_model()
+        assert isinstance(quantizer.model.dense1.relu, DummyQuantLayer)
+        assert quantizer.model.dense1.relu == quantizer.model.dense2.relu
