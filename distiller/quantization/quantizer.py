@@ -174,7 +174,7 @@ class Quantizer(object):
         self.params_to_quantize = []
 
         # A dictionary of replaced modules and their respective names.
-        self.modules_replaced = {}
+        self.modules_replaced = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
