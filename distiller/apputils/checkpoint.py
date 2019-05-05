@@ -185,10 +185,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         optimizer = _load_optimizer(checkpoint['optimizer_type'],
             checkpoint['optimizer_state_dict'], model)
     except KeyError:
-        if 'optimizer' not in checkpoint:
-            raise
-        # older checkpoints didn't support this feature
-        # they had the 'optimizer' field instead
+        # Older checkpoints do support optimizer loading: They either had an 'optimizer' field 
+        # (different name) which was not used during the load, or they didn't even checkpoint
+        # the optimizer. 
         optimizer = None
 
     if optimizer is not None:
