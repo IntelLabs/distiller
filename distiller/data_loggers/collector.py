@@ -14,7 +14,8 @@
 # limitations under the License.
 #
 
-from functools import partial
+from functools import partial, reduce
+import operator
 import xlsxwriter
 import yaml
 import os
@@ -25,11 +26,14 @@ import torch
 from torchnet.meter import AverageValueMeter
 import logging
 from math import sqrt
+import matplotlib.pyplot as plt
 import distiller
 msglogger = logging.getLogger()
 
 __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
-           'QuantCalibrationStatsCollector', 'collector_context', 'collectors_context']
+           'QuantCalibrationStatsCollector', 'ActivationHistogramsCollector',
+           'collect_quant_stats', 'collect_histograms',
+           'collector_context', 'collectors_context']
 
 
 class ActivationStatsCollector(object):
@@ -47,13 +51,7 @@ class ActivationStatsCollector(object):
     ActivationStatsCollector uses the forward hook of modules in order to access the
     feature-maps.  This is both slow and limits us to seeing only the outputs of torch.Modules.
     We can remove some of the slowness, by choosing to log only specific layers or use it only
-    during validation or test.  By default, we only log torch.nn.ReLU activations.
-
-    The layer names are mangled, because torch.Modules don't have names and we need to invent
-    a unique name per layer.  To assign human-readable names, it is advisable to invoke the following
-    before starting the statistics collection:
-
-        distiller.utils.assign_layer_fq_names(model)
+    during validation or test. This can be achieved using the `classes` argument.
     """
     def __init__(self, model, stat_name, classes):
         """
@@ -71,6 +69,10 @@ class ActivationStatsCollector(object):
         self.stat_name = stat_name
         self.classes = classes
         self.fwd_hook_handles = []
+
+        # The layer names are mangled, because torch.Modules don't have names and we need to invent
+        # a unique, human-readable name per layer.
+        distiller.utils.assign_layer_fq_names(model)
 
     def value(self):
         """Return a dictionary containing {layer_name: statistic}"""
@@ -314,6 +316,13 @@ class _QuantStatsRecord(object):
         self.output = self.create_records_dict()
 
 
+def _verify_no_dataparallel(model):
+    if torch.nn.DataParallel in [type(m) for m in model.modules()]:
+        raise ValueError('Model contains DataParallel modules, which can cause inaccurate stats collection. '
+                         'Either create a model without DataParallel modules, or call '
+                         'distiller.utils.make_non_parallel_copy on the model before invoking the collector')
+
+
 class QuantCalibrationStatsCollector(ActivationStatsCollector):
     """
     This class tracks activations stats required for quantization, for each layer and for each input
@@ -322,7 +331,25 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
       * Average min / max (calculate min / max per sample and average those)
       * Overall mean
       * Overall standard-deviation
-    Calculated stats are saved to a YAML file.
+
+    The generated stats dict has the following structure per-layer:
+    'layer_name':
+        'inputs':
+            0:
+                'min': value
+                'max': value
+                ...
+            ...
+            n:
+                'min': value
+                'max': value
+                ...
+        'output':
+            'min': value
+            'max': value
+            ...
+    Where n is the number of inputs the layer has.
+    The calculated stats can be saved to a YAML file.
 
     If a certain layer operates in-place, that layer's input stats will be overwritten by its output stats.
     The collector can, optionally, check for such cases at runtime. In addition, a simple mechanism to disable inplace
@@ -348,6 +375,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
     def __init__(self, model, classes=None, inplace_runtime_check=False,
                  disable_inplace_attrs=False, inplace_attr_names=('inplace',)):
         super(QuantCalibrationStatsCollector, self).__init__(model, "quant_stats", classes)
+
+        _verify_no_dataparallel(model)
+
         self.batch_idx = 0
         self.inplace_runtime_check = inplace_runtime_check
 
@@ -450,6 +480,241 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         records_dict = self.value()
         with open(fname, 'w') as f:
             yaml.dump(records_dict, f, default_flow_style=False)
+
+
+class ActivationHistogramsCollector(ActivationStatsCollector):
+    """
+    This class collects activation histograms, for each layer and for each input and output tensor.
+    It requires pre-computed min/max stats per tensor. This is done in order to prevent the need to save
+    all of the activation tensors throughout the run. The histogram is created once according to these
+    min/max values, and updated after each iteration. Any value outside the pre-computed range is clamped.
+
+    The generated stats dict has the following structure per-layer:
+    'layer_name':
+        'inputs':
+            0:
+                'hist': tensor             # Tensor with bin counts
+                'bin_centroids': tensor    # Tensor with activation values corresponding to center of each bin
+            ...
+            n:
+                'hist': tensor
+                'bin_centroids': tensor
+        'output':
+            'hist': tensor
+            'bin_centroids': tensor
+    Where n is the number of inputs the layer has.
+    The generated stats dictionary can be saved to a file.
+    Optionally, histogram images for all tensor can be saved as well
+
+    Args:
+        model (torch.nn.Module): The model we are monitoring
+        activation_stats (str / dict): Either a path to activation stats YAML file, or a dictionary containing
+          the stats. The stats are expected to be in the same structure as generated by QuantCalibrationStatsCollector.
+        classes (list): List of class types for which we collect activation statistics. Passing an empty list or
+          None will collect statistics for all class types.
+        nbins (int): Number of histogram bins
+        save_hist_imgs (bool): If set, calling save() will dump images of the histogram plots in addition to saving the
+          stats dictionary
+        hist_imgs_ext (str): The file type to be used when saving histogram images
+    """
+    def __init__(self, model, activation_stats, classes=None, nbins=2048,
+                 save_hist_imgs=False, hist_imgs_ext='.svg'):
+        super(ActivationHistogramsCollector, self).__init__(model, 'histogram', classes)
+
+        _verify_no_dataparallel(model)
+
+        if isinstance(activation_stats, str):
+            if not os.path.isfile(activation_stats):
+                raise ValueError("Model activation stats file not found at: " + activation_stats)
+            msglogger.info('Loading activation stats from: ' + activation_stats)
+            with open(activation_stats, 'r') as stream:
+                activation_stats = distiller.utils.yaml_ordered_load(stream)
+        elif not isinstance(activation_stats, (dict, OrderedDict)):
+            raise TypeError('model_activation_stats must either be a string, a dict / OrderedDict or None')
+
+        self.act_stats = activation_stats
+        self.nbins = nbins
+        self.save_imgs = save_hist_imgs
+        self.imgs_ext = hist_imgs_ext if hist_imgs_ext[0] == '.' else '.' + hist_imgs_ext
+
+    def _get_min_max(self, *keys):
+        stats_entry = reduce(operator.getitem, keys, self.act_stats)
+        return stats_entry['min'], stats_entry['max']
+
+    def _activation_stats_cb(self, module, inputs, output):
+        def get_hist(t, stat_min, stat_max):
+            t_clamped = t.clamp(stat_min, stat_max)
+            hist = torch.histc(t_clamped.cpu(), bins=self.nbins, min=stat_min, max=stat_max)
+            return hist
+
+        for idx, input in enumerate(inputs):
+            stat_min, stat_max = self._get_min_max(module.distiller_name, 'inputs', idx)
+            curr_hist = get_hist(input, stat_min, stat_max)
+            module.input_hists[idx] += curr_hist
+
+        stat_min, stat_max = self._get_min_max(module.distiller_name, 'output')
+        curr_hist = get_hist(output, stat_min, stat_max)
+        module.output_hist += curr_hist
+
+    def _reset(self, module):
+        num_inputs = len(self.act_stats[module.distiller_name]['inputs'])
+        module.input_hists = module.input_hists = [torch.zeros(self.nbins) for _ in range(num_inputs)]
+        module.output_hist = torch.zeros(self.nbins)
+
+    def _start_counter(self, module):
+        self._reset(module)
+
+    def _reset_counter(self, module):
+        if hasattr(module, 'output_hist'):
+            self._reset(module)
+
+    def _collect_activations_stats(self, module, activation_stats, name=''):
+        if distiller.utils.has_children(module):
+            return
+        if not hasattr(module, 'output_hist'):
+            return
+
+        def get_hist_entry(min_val, max_val, hist):
+            od = OrderedDict()
+            od['hist'] = hist
+            bin_width = (max_val - min_val) / self.nbins
+            od['bin_centroids'] = torch.linspace(min_val + bin_width / 2, max_val - bin_width / 2, self.nbins)
+            return od
+
+        stats_od = OrderedDict()
+        inputs_od = OrderedDict()
+        for idx, hist in enumerate(module.input_hists):
+            inputs_od[idx] = get_hist_entry(*self._get_min_max(module.distiller_name, 'inputs', idx),
+                                            module.input_hists[idx])
+
+        output_od = get_hist_entry(*self._get_min_max(module.distiller_name, 'output'), module.output_hist)
+
+        stats_od['inputs'] = inputs_od
+        stats_od['output'] = output_od
+        activation_stats[module.distiller_name] = stats_od
+
+    def save(self, fname):
+        hist_dict = self.value()
+        torch.save(hist_dict, fname)
+        if self.save_imgs:
+            msglogger.info('Saving histogram images...')
+            save_dir = os.path.join(os.path.split(fname)[0], 'histogram_imgs')
+            if not os.path.isdir(save_dir):
+                os.mkdir(save_dir)
+
+            def save_hist(layer_name, tensor_name, idx, bin_counts, bin_centroids, normed=True):
+                if normed:
+                    bin_counts = bin_counts / bin_counts.sum()
+                plt.figure(figsize=(12, 12))
+                plt.suptitle('\n'.join((layer_name, tensor_name)), fontsize=18, fontweight='bold')
+                for subplt_idx, yscale in enumerate(['linear', 'log']):
+                    plt.subplot(2, 1, subplt_idx + 1)
+                    plt.fill_between(bin_centroids, bin_counts, step='mid', antialiased=False)
+                    if yscale == 'linear':
+                        plt.ylim(bottom=0)
+                    plt.title(yscale + ' scale')
+                    plt.yscale(yscale)
+                    plt.xlabel('Activation Value')
+                    plt.ylabel('Normalized Count')
+                plt.tight_layout(rect=[0, 0, 1, 0.93])
+                idx_str = '{:03d}'.format(idx)
+                plt.savefig(os.path.join(save_dir, '-'.join((idx_str, layer_name, tensor_name)) + self.imgs_ext))
+                plt.close()
+
+            cnt = 0
+            for layer_name, data in hist_dict.items():
+                for idx, od in data['inputs'].items():
+                    cnt += 1
+                    save_hist(layer_name, 'input_{}'.format(idx), cnt, od['hist'], od['bin_centroids'], normed=True)
+                od = data['output']
+                cnt += 1
+                save_hist(layer_name, 'output', cnt, od['hist'], od['bin_centroids'], normed=True)
+            msglogger.info('Done')
+
+
+def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_runtime_check=False,
+                        disable_inplace_attrs=False, inplace_attr_names=('inplace',)):
+    """
+    Helper function for collecting quantization calibration statistics for a model using QuantCalibrationStatsCollector
+
+    Args:
+        model (nn.Module): The model for which to collect stats
+        test_fn (function): Test/Evaluation function for the model. It must have an argument named 'model' that
+          accepts the model. All other arguments should be set in advance (can be done using functools.partial), or
+          they will be left with their default values.
+        save_dir (str): Path to directory where stats YAML file will be saved. If None then YAML will not be saved
+          to disk.
+        classes (iterable): See QuantCalibrationStatsCollector
+        inplace_runtime_check (bool): See QuantCalibrationStatsCollector
+        disable_inplace_attrs (bool): See QuantCalibrationStatsCollector
+        inplace_attr_names (iterable): See QuantCalibrationStatsCollector
+
+    Returns:
+        Dictionary with quantization stats (see QuantCalibrationStatsCollector for a description of the dictionary
+        contents)
+    """
+    msglogger.info('Collecting quantization calibration stats for model')
+    quant_stats_collector = QuantCalibrationStatsCollector(model, classes=classes,
+                                                           inplace_runtime_check=inplace_runtime_check,
+                                                           disable_inplace_attrs=disable_inplace_attrs,
+                                                           inplace_attr_names=inplace_attr_names)
+    with collector_context(quant_stats_collector):
+        test_fn(model=model)
+    msglogger.info('Stats collection complete')
+    if save_dir is not None:
+        save_path = os.path.join(save_dir, 'acts_quantization_stats.yaml')
+        quant_stats_collector.save(save_path)
+        msglogger.info('Stats saved to ' + save_path)
+
+    return quant_stats_collector.value()
+
+
+def collect_histograms(model, test_fn, save_dir=None, activation_stats=None,
+                       classes=None, nbins=2048, save_hist_imgs=False, hist_imgs_ext='.svg'):
+    """
+    Helper function for collecting activation histograms for a model using ActivationsHistogramCollector.
+    Will perform 2 passes - one to collect the required stats and another to collect the histograms. The first
+    pass can be skipped by passing pre-calculated stats.
+
+    Args:
+        model (nn.Module): The model for which to collect histograms
+        test_fn (function): Test/Evaluation function for the model. It must have an argument named 'model' that
+          accepts the model. All other arguments should be set in advance (can be done using functools.partial), or
+          they will be left with their default values.
+        save_dir (str): Path to directory where histograms will be saved. If None then data will not be saved to disk.
+        activation_stats (str / dict / None): Either a path to activation stats YAML file, or a dictionary containing
+          the stats. The stats are expected to be in the same structure as generated by QuantCalibrationStatsCollector.
+          If None, then a stats collection pass will be performed.
+        classes: See ActivationsHistogramCollector
+        nbins: See ActivationsHistogramCollector
+        save_hist_imgs: See ActivationsHistogramCollector
+        hist_imgs_ext: See ActivationsHistogramCollector
+
+    Returns:
+        Dictionary with histograms data (See ActivationsHistogramCollector for a description of the dictionary
+        contents)
+    """
+    msglogger.info('Pass 1: Stats collection')
+    if activation_stats is not None:
+        msglogger.info('Pre-computed activation stats passed, skipping stats collection')
+    else:
+        activation_stats = collect_quant_stats(model, test_fn, save_dir=save_dir, classes=classes,
+                                               inplace_runtime_check=True, disable_inplace_attrs=True)
+
+    msglogger.info('Pass 2: Histograms generation')
+    histogram_collector = ActivationHistogramsCollector(model, activation_stats, classes=classes, nbins=nbins,
+                                                        save_hist_imgs=save_hist_imgs, hist_imgs_ext=hist_imgs_ext)
+    with collector_context(histogram_collector):
+        test_fn(model=model)
+    msglogger.info('Histograms generation complete')
+    if save_dir is not None:
+        save_path = os.path.join(save_dir, 'acts_histograms.pt')
+        histogram_collector.save(save_path)
+        msglogger.info("Histogram data saved to " + save_path)
+        if save_hist_imgs:
+            msglogger.info('Histogram images saved in ' + os.path.join(save_dir, 'histogram_imgs'))
+
+    return histogram_collector.value()
 
 
 @contextmanager
