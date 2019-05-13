@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import torch
 import torch.nn as nn
 
 
@@ -47,3 +47,14 @@ class EltwiseMult(nn.Module):
             for t in input[1:]:
                 res = res * t
         return res
+
+
+class Matmul(nn.Module):
+    """
+    A module for matmul operation between 2 tensors.
+    """
+    def __init__(self):
+        super(Matmul, self).__init__()
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor):
+        return a.matmul(b)
