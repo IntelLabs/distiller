@@ -376,6 +376,11 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             return sqrt((M / (total_values_so_far + numel - 1)).item())
 
         def update_record(record, tensor):
+            if not isinstance(tensor, torch.Tensor):
+                # assume tensor argument is multiple tensors wrapped by another container
+                # e.g. [tensor1, tensor2, ...]
+                tensor = torch.stack(tensor)
+
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)

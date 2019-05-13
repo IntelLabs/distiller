@@ -749,9 +749,8 @@ def create_activation_stats_collectors(model, *phases):
 
 def create_quantization_stats_collector(model):
     distiller.utils.assign_layer_fq_names(model)
-    return {'test': missingdict({'quantization_stats': QuantCalibrationStatsCollector(model, classes=None,
-                                                                                      inplace_runtime_check=True,
-                                                                                      disable_inplace_attrs=True)})}
+    return {'test': missingdict({'quantization_stats':
+                            QuantCalibrationStatsCollector(model, disable_inplace_attrs=True)})}
 
 
 def save_collectors_data(collectors, directory):
