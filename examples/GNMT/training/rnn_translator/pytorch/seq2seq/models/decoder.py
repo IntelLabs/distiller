@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from seq2seq.models.attention import BahdanauAttention
 import seq2seq.data.config as config
+from distiller.modules import *
 
 
 class RecurrentAttention(nn.Module):
@@ -82,6 +83,9 @@ class ResidualRecurrentDecoder(nn.Module):
         self.classifier = Classifier(hidden_size, vocab_size, math)
         self.dropout = nn.Dropout(p=dropout)
 
+        # Adding submodules for basic ops to allow quantization:
+        self.eltwiseadd_residuals = nn.ModuleList([EltwiseAdd() for _ in range(1, len(self.rnn_layers))])
+
     def init_hidden(self, hidden):
         if hidden is not None:
             # per-layer chunks
@@ -127,7 +131,7 @@ class ResidualRecurrentDecoder(nn.Module):
             x = torch.cat((x, attn), dim=2)
             x, h = self.rnn_layers[i](x, hidden[i + 1])
             self.append_hidden(h)
-            x = x + residual
+            x = self.eltwiseadd_residuals[i-1](x, residual)
 
         x = self.classifier(x)
         hidden = self.package_hidden()

@@ -14,10 +14,12 @@
 # limitations under the License.
 #
 
-from .eltwise import EltwiseAdd, EltwiseMult, Matmul
+from .eltwise import *
 from .grouping import *
 from .rnn import DistillerLSTM, DistillerLSTMCell
+from .aggregate import Norm
 
-__all__ = ['EltwiseAdd', 'EltwiseMult', 'Matmul',
+__all__ = ['EltwiseAdd', 'EltwiseMult', 'EltwiseDiv', 'Matmul', 'BatchMatmul',
            'Concat', 'Chunk', 'Split', 'Stack',
-           'DistillerLSTMCell', 'DistillerLSTM']
+           'DistillerLSTMCell', 'DistillerLSTM',
+           'Norm']

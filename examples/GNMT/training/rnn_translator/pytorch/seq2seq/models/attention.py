@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
+from distiller.modules import *
 
 
 class BahdanauAttention(nn.Module):
@@ -27,6 +28,17 @@ class BahdanauAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
         self.mask = None
+
+        # Adding submodules for basic ops to allow quantization:
+        self.eltwiseadd_qk = EltwiseAdd()
+        self.eltwiseadd_norm_bias = EltwiseAdd()
+        self.eltwisemul_norm_scaler = EltwiseMult()
+        self.tanh = nn.Tanh()
+        self.matmul_score = Matmul()
+        self.norm_att = Norm()
+        self.eltwisediv_att = EltwiseDiv()
+        self.softmax_att = nn.Softmax(dim=-1)
+        self.context_matmul = BatchMatmul()
 
         if self.normalize:
             self.normalize_scalar = Parameter(torch.Tensor(1))
@@ -79,20 +91,20 @@ class BahdanauAttention(nn.Module):
 
         att_query = att_query.unsqueeze(2).expand(b, t_q, t_k, n)
         att_keys = att_keys.unsqueeze(1).expand(b, t_q, t_k, n)
-        sum_qk = att_query + att_keys
+        sum_qk = self.eltwiseadd_qk(att_query, att_keys)
 
         if self.normalize:
-            sum_qk = sum_qk + self.normalize_bias
+            sum_qk = self.eltwiseadd_norm_bias(sum_qk, self.normalize_bias)
 
             tmp = self.linear_att.to(torch.float32)
-            linear_att = tmp / tmp.norm()
+            linear_att = self.eltwisediv_att(tmp, self.norm_att(tmp))
             linear_att = linear_att.to(self.normalize_scalar)
 
-            linear_att = linear_att * self.normalize_scalar
+            linear_att = self.eltwisemul_norm_scaler(linear_att, self.normalize_scalar)
         else:
             linear_att = self.linear_att
 
-        out = F.tanh(sum_qk).matmul(linear_att)
+        out = self.tanh(sum_qk).matmul(linear_att)
         return out
 
     def forward(self, query, keys):
@@ -136,13 +148,13 @@ class BahdanauAttention(nn.Module):
             scores.data.masked_fill_(mask, -65504.0)
 
         # Normalize the scores, softmax over t_k
-        scores_normalized = F.softmax(scores, dim=-1)
+        scores_normalized = self.softmax_att(scores)
 
         # Calculate the weighted average of the attention inputs according to
         # the scores
         scores_normalized = self.dropout(scores_normalized)
         # context: (b x t_q x n)
-        context = torch.bmm(scores_normalized, keys)
+        context = self.context_matmul(scores_normalized, keys)
 
         if single_query:
             context = context.squeeze(1)

@@ -1,6 +1,7 @@
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
+from distiller.modules import *
 
 import seq2seq.data.config as config
 
@@ -34,6 +35,9 @@ class ResidualRecurrentEncoder(nn.Module):
             self.embedder = nn.Embedding(vocab_size, hidden_size,
                                         padding_idx=config.PAD)
 
+        # Adding submodules for basic ops to allow quantization:
+        self.eltwiseadd_residuals = nn.ModuleList([EltwiseAdd() for _ in range(2, len(self.rnn_layers))])
+
     def forward(self, inputs, lengths):
         x = self.embedder(inputs)
 
@@ -53,6 +57,6 @@ class ResidualRecurrentEncoder(nn.Module):
             residual = x
             x = self.dropout(x)
             x, _ = self.rnn_layers[i](x)
-            x = x + residual
+            x = self.eltwiseadd_residuals[i-2](x, residual)
 
         return x
