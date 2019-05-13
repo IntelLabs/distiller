@@ -323,8 +323,8 @@ def main():
         # run sacrebleu
         reference_path = os.path.join(args.dataset_dir,
                                       config.TGT_TEST_TARGET_FNAME)
-        sacrebleu = subprocess.run([f'sacrebleu --input {detok_test_path} \
-                                    {reference_path} --score-only -lc --tokenize intl'],
+        sacrebleu = subprocess.run([f'sacrebleu --input {detok_test_path} '
+                                    f'{reference_path} --score-only -lc --tokenize intl'],
                                    stdout=subprocess.PIPE, shell=True)
         bleu = float(sacrebleu.stdout.strip())
 
