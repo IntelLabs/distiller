@@ -1,0 +1,3 @@
+sacrebleu==1.2.10
+numpy==1.14.2
+mlperf-compliance==0.0.4
