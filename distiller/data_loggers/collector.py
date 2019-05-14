@@ -599,7 +599,16 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
 
     def save(self, fname):
         hist_dict = self.value()
+
+        if not fname.endswith('.pt'):
+            fname = ".".join([fname, 'pt'])
+        try:
+            os.remove(fname)
+        except OSError:
+            pass
+
         torch.save(hist_dict, fname)
+
         if self.save_imgs:
             msglogger.info('Saving histogram images...')
             save_dir = os.path.join(os.path.split(fname)[0], 'histogram_imgs')
@@ -634,6 +643,7 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
                 cnt += 1
                 save_hist(layer_name, 'output', cnt, od['hist'], od['bin_centroids'], normed=True)
             msglogger.info('Done')
+        return fname
 
 
 def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_runtime_check=False,
