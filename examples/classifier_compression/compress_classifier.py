@@ -755,12 +755,14 @@ def create_quantization_stats_collector(model):
 
 
 def save_collectors_data(collectors, directory):
-    """Utility function that saves all activation statistics to Excel workbooks
+    """Utility function that saves all activation statistics to disk.
+
+    File type and format of contents are collector-specific.
     """
     for name, collector in collectors.items():
-        workbook = os.path.join(directory, name)
-        msglogger.info("Generating {}".format(workbook))
-        collector.save(workbook)
+        msglogger.info('Saving data for collector {}...'.format(name))
+        file_path = collector.save(os.path.join(directory, name))
+        msglogger.info("Saved to {}".format(file_path))
 
 
 def check_pytorch_version():
