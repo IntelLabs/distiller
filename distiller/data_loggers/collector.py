@@ -113,7 +113,7 @@ class ActivationStatsCollector(object):
         return self
 
     def save(self, fname):
-        pass
+        raise NotImplementedError
 
     def _activation_stats_cb(self, module, input, output):
         """Handle new activations ('output' argument).
@@ -207,6 +207,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
                 worksheet.write_column(1, col, module_summary_data)
                 col_names.append(module_name)
             worksheet.write_row(0, 0, col_names)
+        return fname
 
 
 class RecordsActivationStatsCollector(ActivationStatsCollector):
@@ -283,6 +284,7 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                     col_names.append(col_name)
                 worksheet.write_row(0, 0, col_names)
                 worksheet.write(0, len(col_names)+2, module_act_records['shape'])
+        return fname
 
     def _start_counter(self, module):
         if not hasattr(module, "statistics_records"):
@@ -450,6 +452,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         records_dict = self.value()
         with open(fname, 'w') as f:
             yaml.dump(records_dict, f, default_flow_style=False)
+
+        return fname
 
 
 @contextmanager
