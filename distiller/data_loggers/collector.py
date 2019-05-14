@@ -113,7 +113,7 @@ class ActivationStatsCollector(object):
         return self
 
     def save(self, fname):
-        pass
+        raise NotImplementedError
 
     def _activation_stats_cb(self, module, input, output):
         """Handle new activations ('output' argument).
