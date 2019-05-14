@@ -27,7 +27,6 @@ import pandas as pd
 from tabulate import tabulate
 import logging
 import torch
-from torch.autograd import Variable
 import torch.optim
 import distiller
 from .summary_graph import SummaryGraph
@@ -49,11 +48,9 @@ def model_summary(model, what, dataset=None):
         csvlogger = CsvLogger()
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
-        if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(1, 3, 224, 224))
-        elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(1, 3, 32, 32))
-        else:
+        try:
+            dummy_input = dataset_dummy_input(dataset)
+        except ValueError:
             print("Unsupported dataset (%s) - aborting compute operation" % dataset)
             return
         df = model_performance_summary(model, dummy_input, 1)
@@ -446,30 +443,27 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
 
 def dataset_dummy_input(dataset):
     if dataset == 'imagenet':
-        dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
+        dummy_input = torch.randn(1, 3, 224, 224)
     elif dataset == 'cifar10':
-        dummy_input = Variable(torch.randn(1, 3, 32, 32))
+        dummy_input = torch.randn(1, 3, 32, 32)
     else:
         raise ValueError("Unsupported dataset (%s) - aborting draw operation" % dataset)
     return dummy_input
 
 
-def export_img_classifier_to_onnx(model, onnx_fname, dataset, export_params=True, add_softmax=True):
+def export_img_classifier_to_onnx(model, onnx_fname, dataset, **kwargs):
     """Export a PyTorch image classifier to ONNX.
 
     """
     dummy_input = dataset_dummy_input(dataset).to('cuda')
-    # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
-    model = distiller.make_non_parallel_copy(model)
+    # Pytorch doesn't support exporting modules wrapped in DataParallel
+    non_para_model = distiller.make_non_parallel_copy(model)
 
-    with torch.onnx.set_training(model, False):
-        if add_softmax:
-            # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
-            model.original_forward = model.forward
-            softmax = torch.nn.Softmax(dim=-1)
-            model.forward = lambda input: softmax(model.original_forward(input))
-        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=export_params)
+    try:
+        torch.onnx.export(non_para_model, dummy_input, onnx_fname, **kwargs)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
+    finally:
+        del non_para_model
 
 
 def data_node_has_parent(g, id):
