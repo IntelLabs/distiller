@@ -198,6 +198,10 @@ def main():
     if args.summary:
         return summarize_model(model, args.dataset, which_summary=args.summary)
 
+    if args.export_onnx is not None:
+        return model_summaries.export_img_classifier_to_onnx(model,
+            os.path.join(msglogger.logdir, args.export_onnx), args.dataset)
+
     activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     if args.qe_calibration:
@@ -650,12 +654,11 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
 
 
 def summarize_model(model, dataset, which_summary):
-    if which_summary.startswith('png'):
-        model_summaries.draw_img_classifier_to_file(model, 'model.png', dataset, which_summary == 'png_w_params')
-    elif which_summary == 'onnx':
-        model_summaries.export_img_classifier_to_onnx(model, 'model.onnx', dataset)
-    else:
-        distiller.model_summary(model, which_summary, dataset)
+    for s in which_summary:
+        if s.startswith('png'):
+            model_summaries.draw_img_classifier_to_file(model, 'model.png', dataset, s == 'png_w_params')
+        else:
+            distiller.model_summary(model, s, dataset)
 
 
 def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsities):

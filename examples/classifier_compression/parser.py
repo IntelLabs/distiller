@@ -23,7 +23,7 @@ from distiller.utils import float_range_argparse_checker as float_range
 import distiller.models as models
 
 
-SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
+SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 
 
 def get_parser():
@@ -77,9 +77,10 @@ def get_parser():
                         help='print masks sparsity table at end of each epoch')
     parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
                         help='log the parameter tensors histograms to file (WARNING: this can use significant disk space)')
-    parser.add_argument('--summary', type=lambda s: s.lower(), choices=SUMMARY_CHOICES,
-                        help='print a summary of the model, and exit - options: ' +
-                        ' | '.join(SUMMARY_CHOICES))
+    parser.add_argument('--summary', type=lambda s: s.lower(), choices=SUMMARY_CHOICES, action='append',
+                        help='print a summary of the model, and exit - options: | '.join(SUMMARY_CHOICES))
+    parser.add_argument('--export-onnx', action='store', nargs='?', type=str, const='model.onnx', default=None,
+                        help='export model to ONNX format')
     parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
                         help='configuration file for pruning the model (default is to use hard-coded schedule)')
     parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'], type=lambda s: s.lower(),
