@@ -116,6 +116,24 @@ def test_layer_search():
     assert preds == ['layer1.0.conv2', 'conv1']
 
 
+def test_weights_size_attr():
+    def test(dataset, arch, dataparallel:bool):
+        model = create_model(False, dataset, arch, parallel=False)
+        sgraph = SummaryGraph(model, get_input(dataset))
+
+        distiller.assign_layer_fq_names(model)
+        for name, mod in model.named_modules():
+            if isinstance(mod, torch.nn.Conv2d) or isinstance(mod, torch.nn.Linear):
+                op = sgraph.find_op(name)
+                assert op is not None
+                assert op['attrs']['weights_vol'] == distiller.volume(mod.weight)
+
+    for data_parallel in (True, False):
+        test('cifar10', 'resnet20_cifar', data_parallel)
+        test('imagenet', 'alexnet', data_parallel)
+        test('imagenet', 'resnext101_32x4d', data_parallel)
+
+
 def test_vgg():
     g = create_graph('imagenet', 'vgg19')
     assert g is not None
@@ -170,11 +188,11 @@ def named_params_layers_test_aux(dataset, arch, dataparallel:bool):
 
 
 def test_named_params_layers():
-    for dataParallelModel in (True, False):
-        named_params_layers_test_aux('imagenet', 'vgg19', dataParallelModel)
-        named_params_layers_test_aux('cifar10', 'resnet20_cifar', dataParallelModel)
-        named_params_layers_test_aux('imagenet', 'alexnet', dataParallelModel)
-        named_params_layers_test_aux('imagenet', 'resnext101_32x4d', dataParallelModel)
+    for data_parallel in (True, False):
+        named_params_layers_test_aux('imagenet', 'vgg19', data_parallel)
+        named_params_layers_test_aux('cifar10', 'resnet20_cifar', data_parallel)
+        named_params_layers_test_aux('imagenet', 'alexnet', data_parallel)
+        named_params_layers_test_aux('imagenet', 'resnext101_32x4d', data_parallel)
 
 
 def test_onnx_name_2_pytorch_name():
