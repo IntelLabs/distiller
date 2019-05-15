@@ -73,6 +73,11 @@ def get_parser():
     parser.add_argument('--activation-stats', '--act-stats', nargs='+', metavar='PHASE', default=list(),
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
+    parser.add_argument('--activation-histograms', '--act-hist',
+                        type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                        metavar='PORTION_OF_TEST_SET',
+                        help='Run the model in evaluation mode on the specified portion of the test dataset and '
+                             'generate activation histograms. NOTE: This slows down evaluation significantly')
     parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
                         help='print masks sparsity table at end of each epoch')
     parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
