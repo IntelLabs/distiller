@@ -52,8 +52,8 @@ def model_summary(model, what, dataset=None):
     elif what == 'compute':
         try:
             dummy_input = dataset_dummy_input(dataset)
-        except ValueError:
-            print("Unsupported dataset (%s) - aborting compute operation" % dataset)
+        except ValueError as e:
+            print(e)
             return
         df = model_performance_summary(model, dummy_input, 1)
         t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
@@ -431,16 +431,19 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
                                    'fillcolor': 'gray',
                                    'style': 'rounded, filled'}
     """
+    dummy_input = dataset_dummy_input(dataset)
     try:
-        dummy_input = dataset_dummy_input(dataset)
-        model = distiller.make_non_parallel_copy(model)
-        g = SummaryGraph(model, dummy_input)
+        non_para_model = distiller.make_non_parallel_copy(model)
+        g = SummaryGraph(non_para_model, dummy_input)
+
         draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
         print("Network PNG image generation completed")
     except FileNotFoundError:
         print("An error has occured while generating the network PNG image.")
         print("Please check that you have graphviz installed.")
         print("\t$ sudo apt-get install graphviz")
+    finally:
+        del non_para_model
 
 
 def dataset_dummy_input(dataset):
@@ -449,7 +452,7 @@ def dataset_dummy_input(dataset):
     elif dataset == 'cifar10':
         dummy_input = torch.randn(1, 3, 32, 32)
     else:
-        raise ValueError("Unsupported dataset (%s) - aborting draw operation" % dataset)
+        raise ValueError("Unsupported dataset (%s) - aborting operation" % dataset)
     return dummy_input
 
 
