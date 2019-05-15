@@ -437,7 +437,6 @@ def replace_lstm_recursively(model: nn.Module):
     Replaces all `nn.LSTM`s and `nn.LSTMCell`s in the model with distiller versions.
     Args:
         model (nn.Module): the model
-        inplace (bool):
     """
     if isinstance(model, nn.LSTMCell):
         return DistillerLSTMCell.from_pytorch_impl(model)
