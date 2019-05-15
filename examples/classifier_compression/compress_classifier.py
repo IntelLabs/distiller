@@ -196,7 +196,9 @@ def main():
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
-        return summarize_model(model, args.dataset, which_summary=args.summary)
+        for s in which_summary:
+            distiller.model_summary(model, s, dataset)
+        return
 
     if args.export_onnx is not None:
         return distiller.export_img_classifier_to_onnx(model,
@@ -652,14 +654,6 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=scheduler,
                                  name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
                                  dir=msglogger.logdir, extras={'quantized_top1': top1})
-
-
-def summarize_model(model, dataset, which_summary):
-    for s in which_summary:
-        if s.startswith('png'):
-            model_summaries.draw_img_classifier_to_file(model, 'model.png', dataset, s == 'png_w_params')
-        else:
-            distiller.model_summary(model, s, dataset)
 
 
 def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsities):

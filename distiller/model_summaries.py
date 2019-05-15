@@ -43,7 +43,9 @@ __all__ = ['model_summary',
 
 
 def model_summary(model, what, dataset=None):
-    if what == 'sparsity':
+    if what.startswith('png'):
+        draw_img_classifier_to_file(model, 'model.png', dataset, what == 'png_w_params')
+    elif what == 'sparsity':
         pylogger = PythonLogger(msglogger)
         csvlogger = CsvLogger()
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
