@@ -20,7 +20,7 @@ import numpy as np
 from .eltwise import EltwiseAdd, EltwiseMult
 from itertools import product
 
-__all__ = ['DistillerLSTMCell', 'DistillerLSTM']
+__all__ = ['DistillerLSTMCell', 'DistillerLSTM', 'replace_lstm_recursively']
 
 
 class DistillerLSTMCell(nn.Module):
@@ -430,3 +430,21 @@ class DistillerLSTM(nn.Module):
                 self.num_layers,
                 self.dropout_factor,
                 self.bidirectional)
+
+
+def replace_lstm_recursively(model: nn.Module):
+    """
+    Replaces all `nn.LSTM`s and `nn.LSTMCell`s in the model with distiller versions.
+    Args:
+        model (nn.Module): the model
+        inplace (bool):
+    """
+    if isinstance(model, nn.LSTMCell):
+        return DistillerLSTMCell.from_pytorch_impl(model)
+    if isinstance(model, nn.LSTM):
+        return DistillerLSTM.from_pytorch_impl(model)
+    for name, module in model.named_modules():
+        module = replace_lstm_recursively(module)
+        setattr(model, name, module)
+
+    return model
