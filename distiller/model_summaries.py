@@ -39,7 +39,7 @@ __all__ = ['model_summary',
            'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary',
            'attributes_summary', 'attributes_summary_tbl', 'connectivity_summary',
            'connectivity_summary_verbose', 'connectivity_tbl_summary', 'create_png', 'create_pydot_graph',
-           'draw_model_to_file', 'draw_img_classifier_to_file']
+           'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
 def model_summary(model, what, dataset=None):
@@ -451,15 +451,25 @@ def dataset_dummy_input(dataset):
     return dummy_input
 
 
-def export_img_classifier_to_onnx(model, onnx_fname, dataset, **kwargs):
+def export_img_classifier_to_onnx(model, onnx_fname, dataset, add_softmax=True, **kwargs):
     """Export a PyTorch image classifier to ONNX.
 
+    Args:
+        add_softmax: when True, adds softmax layer to the output model.
+        kwargs: arguments to be passed to torch.onnx.export
     """
     dummy_input = dataset_dummy_input(dataset).to('cuda')
     # Pytorch doesn't support exporting modules wrapped in DataParallel
     non_para_model = distiller.make_non_parallel_copy(model)
 
     try:
+        if add_softmax:
+            # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
+            # TorchVision models use nn.CrossEntropyLoss for computing the loss,
+            # instead of adding a softmax layer
+            non_para_model.original_forward = non_para_model.forward
+            softmax = torch.nn.Softmax(dim=-1)
+            non_para_model.forward = lambda input: softmax(non_para_model.original_forward(input))
         torch.onnx.export(non_para_model, dummy_input, onnx_fname, **kwargs)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
     finally:

@@ -199,8 +199,9 @@ def main():
         return summarize_model(model, args.dataset, which_summary=args.summary)
 
     if args.export_onnx is not None:
-        return model_summaries.export_img_classifier_to_onnx(model,
-            os.path.join(msglogger.logdir, args.export_onnx), args.dataset)
+        return distiller.export_img_classifier_to_onnx(model,
+            os.path.join(msglogger.logdir, args.export_onnx),
+            args.dataset, add_softmax=True, verbose=False)
 
     activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
