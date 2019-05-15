@@ -241,7 +241,7 @@ def test_concat_layer_wrapper(inputs, concat_stats, mode, clip_acts, expected_ou
 
     layer = distiller.modules.Concat(dim=1)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         # Check exception on no stats
         RangeLinearQuantConcatWrapper(layer, 8, mode, clip_acts, activation_stats=None)
 
@@ -292,7 +292,7 @@ def test_eltwise_mult_layer_wrapper(inputs, eltwise_mult_stats, mode, clip_acts,
 
     layer = distiller.modules.EltwiseMult()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         # Check exception on no stats
         RangeLinearQuantEltwiseMultWrapper(layer, 8, mode, clip_acts, activation_stats=None)
 
@@ -343,7 +343,7 @@ def test_eltwise_add_layer_wrapper(inputs, eltwise_add_stats, mode, clip_acts, e
 
     layer = distiller.modules.EltwiseAdd()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         # Check exception on no stats
         RangeLinearQuantEltwiseAddWrapper(layer, 8, mode, clip_acts, activation_stats=None)
 

@@ -16,10 +16,10 @@
 
 from .eltwise import *
 from .grouping import *
-from .rnn import DistillerLSTM, DistillerLSTMCell
+from .rnn import *
 from .aggregate import Norm
 
 __all__ = ['EltwiseAdd', 'EltwiseMult', 'EltwiseDiv', 'Matmul', 'BatchMatmul',
            'Concat', 'Chunk', 'Split', 'Stack',
-           'DistillerLSTMCell', 'DistillerLSTM',
+           'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm']
            'Norm']
