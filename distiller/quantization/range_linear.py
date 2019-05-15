@@ -18,7 +18,7 @@ import torch.nn as nn
 import argparse
 from enum import Enum
 from collections import OrderedDict
-from functools import reduce, partial
+from functools import reduce, partial, update_wrapper
 import logging
 import os
 
@@ -756,7 +756,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'clip_acts': _enum_to_str(clip_acts),
                                                     'clip_n_stds': clip_n_stds,
                                                     'no_clip_layers': no_clip_layers,
-                                                    'per_channel_wts': per_channel_wts}}
+                                                    'per_channel_wts': per_channel_wts,
+                                                    'fp16': fp16}}
 
         def replace_param_layer(module, name, qbits_map,
                                 per_channel_wts=per_channel_wts,
@@ -803,12 +804,19 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
 
-        self.replacement_factory[distiller.modules.Concat] = partial(
+        factory_concat = partial(
             replace_non_param_layer, RangeLinearQuantConcatWrapper)
-        self.replacement_factory[distiller.modules.EltwiseAdd] = partial(
+        factory_eltwiseadd = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
-        self.replacement_factory[distiller.modules.EltwiseMult] = partial(
+        factory_eltwisemult = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+        update_wrapper(factory_concat, replace_non_param_layer)
+        update_wrapper(factory_eltwiseadd, replace_non_param_layer)
+        update_wrapper(factory_eltwisemult, replace_non_param_layer)
+
+        self.replacement_factory[distiller.modules.Concat] = factory_concat
+        self.replacement_factory[distiller.modules.EltwiseAdd] = factory_eltwiseadd
+        self.replacement_factory[distiller.modules.EltwiseMult] = factory_eltwisemult
         self.replacement_factory[nn.Embedding] = replace_embedding
 
     @classmethod

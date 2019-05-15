@@ -21,5 +21,5 @@ from .aggregate import Norm
 
 __all__ = ['EltwiseAdd', 'EltwiseMult', 'EltwiseDiv', 'Matmul', 'BatchMatmul',
            'Concat', 'Chunk', 'Split', 'Stack',
-           'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm']
+           'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm',
            'Norm']
