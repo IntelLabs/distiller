@@ -16,8 +16,8 @@
 
 from .eltwise import EltwiseAdd, EltwiseMult
 from .grouping import *
-from .rnn import DistillerLSTM, DistillerLSTMCell, replace_lstm_recursively
+from .rnn import DistillerLSTM, DistillerLSTMCell, convert_model_to_distiller_lstm
 
 __all__ = ['EltwiseAdd', 'EltwiseMult',
            'Concat', 'Chunk', 'Split', 'Stack',
-           'DistillerLSTMCell', 'DistillerLSTM', 'replace_lstm_recursively']
+           'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm']
