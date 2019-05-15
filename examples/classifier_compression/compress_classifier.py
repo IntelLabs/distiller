@@ -198,25 +198,18 @@ def main():
     if args.summary:
         return summarize_model(model, args.dataset, which_summary=args.summary)
 
-    activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
-
     if args.qe_calibration:
-        msglogger.info('Quantization calibration stats collection enabled:')
-        msglogger.info('\tStats will be collected for {:.1%} of test dataset'.format(args.qe_calibration))
-        msglogger.info('\tSetting constant seeds and converting model to serialized execution')
-        distiller.set_deterministic()
-        model = distiller.make_non_parallel_copy(model)
-        activations_collectors.update(create_quantization_stats_collector(model))
-        args.evaluate = True
-        args.effective_test_size = args.qe_calibration
+        return acts_quant_stats_collection(model, criterion, pylogger, args)
+
+    if args.activation_histograms:
+        return acts_histogram_collection(model, criterion, pylogger, args)
+
+    activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
 
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
     # substring "_cifar", then cifar10 is used.
-    train_loader, val_loader, test_loader, _ = apputils.load_data(
-        args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
-        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
+    train_loader, val_loader, test_loader, _ = load_data(args)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -678,10 +671,7 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    train_loader, val_loader, test_loader, _ = apputils.load_data(
-        args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
-        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
+    train_loader, val_loader, test_loader, _ = load_data(args)
 
     args.display_confusion = True
     validate_fn = partial(test, test_loader=test_loader, criterion=criterion,
@@ -695,10 +685,7 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
 
 def greedy(model, criterion, optimizer, loggers, args):
-    train_loader, val_loader, test_loader, _ = apputils.load_data(
-        args.dataset, os.path.expanduser(args.data), args.batch_size,
-        args.workers, args.validation_split, args.deterministic,
-        args.effective_train_size, args.effective_valid_size, args.effective_test_size)
+    train_loader, val_loader, test_loader, _ = load_data(args)
 
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
@@ -708,6 +695,37 @@ def greedy(model, criterion, optimizer, loggers, args):
                                                           args.greedy_target_density,
                                                           args.greedy_pruning_step,
                                                           test_fn, train_fn)
+
+
+def acts_quant_stats_collection(model, criterion, loggers, args):
+    msglogger.info('Collecting quantization calibration stats based on {:.1%} of test dataset'
+                   .format(args.qe_calibration))
+    model = distiller.utils.make_non_parallel_copy(model)
+    args.effective_test_size = args.qe_calibration
+    train_loader, val_loader, test_loader, _ = load_data(args)
+    test_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                      loggers=loggers, args=args, activations_collectors=None)
+    collect_quant_stats(model, test_fn, save_dir=msglogger.logdir,
+                        classes=None, inplace_runtime_check=True, disable_inplace_attrs=True)
+
+
+def acts_histogram_collection(model, criterion, loggers, args):
+    msglogger.info('Collecting activation histograms based on {:.1%} of test dataset'
+                   .format(args.activation_histograms))
+    model = distiller.utils.make_non_parallel_copy(model)
+    args.effective_test_size = args.activation_histograms
+    train_loader, val_loader, test_loader, _ = load_data(args, fixed_subset=True)
+    test_fn = partial(test, test_loader=test_loader, criterion=criterion,
+                      loggers=loggers, args=args, activations_collectors=None)
+    collect_histograms(model, test_fn, save_dir=msglogger.logdir,
+                       classes=None, nbins=2048, save_hist_imgs=True)
+
+
+def load_data(args, fixed_subset=False):
+    return apputils.load_data(args.dataset, os.path.expanduser(args.data), args.batch_size,
+                              args.workers, args.validation_split, args.deterministic,
+                              args.effective_train_size, args.effective_valid_size, args.effective_test_size,
+                              fixed_subset)
 
 
 class missingdict(dict):
@@ -729,8 +747,6 @@ def create_activation_stats_collectors(model, *phases):
 
     WARNING! Enabling activation statsitics collection will significantly slow down training!
     """
-    distiller.utils.assign_layer_fq_names(model)
-
     genCollectors = lambda: missingdict({
         "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
                                                          lambda t: 100 * distiller.utils.sparsity(t)),
@@ -745,13 +761,6 @@ def create_activation_stats_collectors(model, *phases):
 
     return {k: (genCollectors() if k in phases else missingdict())
             for k in ('train', 'valid', 'test')}
-
-
-def create_quantization_stats_collector(model):
-    distiller.utils.assign_layer_fq_names(model)
-    return {'test': missingdict({'quantization_stats': QuantCalibrationStatsCollector(model, classes=None,
-                                                                                      inplace_runtime_check=True,
-                                                                                      disable_inplace_attrs=True)})}
 
 
 def save_collectors_data(collectors, directory):
