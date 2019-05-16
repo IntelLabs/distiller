@@ -31,7 +31,7 @@ logger.addHandler(fh)
 
 
 @pytest.mark.parametrize('arch',
-    ['resnet18', 'resnet20_cifar', 'alexnet', 'vgg19', 'resnext50_32x4d'])
+    ['resnet18', 'resnet20_cifar', 'alexnet', 'vgg19', 'resnext101_32x4d'])
 @pytest.mark.parametrize('add_softmax', [True, False])
 def test_summary(arch, add_softmax):
     dataset = 'cifar10' if arch.endswith('cifar') else 'imagenet'
