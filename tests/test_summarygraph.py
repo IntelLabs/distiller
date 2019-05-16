@@ -32,18 +32,8 @@ logger = logging.getLogger()
 logger.addHandler(fh)
 
 
-def get_input(dataset):
-    if dataset == 'imagenet':
-        return torch.randn((1, 3, 224, 224), requires_grad=False)
-    elif dataset == 'cifar10':
-        return torch.randn((1, 3, 32, 32))
-    return None
-
-
 def create_graph(dataset, arch):
-    dummy_input = get_input(dataset)
-    assert dummy_input is not None, "Unsupported dataset ({}) - aborting draw operation".format(dataset)
-
+    dummy_input = distiller.get_dummy_input(dataset)
     model = create_model(False, dataset, arch, parallel=False)
     assert model is not None
     return SummaryGraph(model, dummy_input)
@@ -163,7 +153,7 @@ def test_normalize_module_name():
 
 def named_params_layers_test_aux(dataset, arch, dataparallel:bool):
     model = create_model(False, dataset, arch, parallel=dataparallel)
-    sgraph = SummaryGraph(model, get_input(dataset))
+    sgraph = SummaryGraph(model, distiller.get_dummy_input(dataset))
     sgraph_layer_names = set(k for k, i, j in sgraph.named_params_layers())
     for layer_name in sgraph_layer_names:
         assert sgraph.find_op(layer_name) is not None, '{} was not found in summary graph'.format(layer_name)
@@ -202,7 +192,7 @@ def test_sg_macs():
     sg = create_graph('imagenet', 'mobilenet')
     assert sg
     model, _ = common.setup_test('mobilenet', 'imagenet', parallel=False)
-    df_compute = distiller.model_performance_summary(model, common.get_dummy_input('imagenet'))
+    df_compute = distiller.model_performance_summary(model, distiller.get_dummy_input('imagenet'))
     modules_macs = df_compute.loc[:, ['Name', 'MACs']]
     for name, mod in model.named_modules():
         if isinstance(mod, (torch.nn.Conv2d, torch.nn.Linear)):
@@ -214,7 +204,7 @@ def test_sg_macs():
 def test_weights_size_attr():
     def test(dataset, arch, dataparallel:bool):
         model = create_model(False, dataset, arch, parallel=dataparallel)
-        sgraph = SummaryGraph(model, get_input(dataset))
+        sgraph = SummaryGraph(model, distiller.get_dummy_input(dataset))
 
         distiller.assign_layer_fq_names(model)
         for name, mod in model.named_modules():
