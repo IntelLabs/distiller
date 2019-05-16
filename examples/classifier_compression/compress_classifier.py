@@ -196,8 +196,8 @@ def main():
 
     # This sample application can be invoked to produce various summary reports.
     if args.summary:
-        for s in which_summary:
-            distiller.model_summary(model, s, dataset)
+        for summary in args.summary:
+            distiller.model_summary(model, summary, args.dataset)
         return
 
     if args.export_onnx is not None:
