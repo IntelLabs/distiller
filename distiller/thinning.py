@@ -29,8 +29,8 @@ import math
 import logging
 from collections import namedtuple
 import torch
-from .policy import ScheduledTrainingPolicy
 import distiller
+from .policy import ScheduledTrainingPolicy
 from .summary_graph import SummaryGraph
 msglogger = logging.getLogger(__name__)
 
@@ -63,14 +63,7 @@ __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
 
 
 def create_graph(dataset, model):
-    dummy_input = None
-    if dataset == 'imagenet':
-        dummy_input = torch.randn((1, 3, 224, 224), requires_grad=False)
-    elif dataset == 'cifar10':
-        dummy_input = torch.randn((1, 3, 32, 32), requires_grad=False)
-    assert dummy_input is not None, "Unsupported dataset ({}) - aborting draw operation".format(dataset)
-
-    dummy_input = dummy_input.to(distiller.model_device(model))
+    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
     return SummaryGraph(model, dummy_input)
 
 

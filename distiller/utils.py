@@ -556,13 +556,19 @@ def has_children(module):
         return False
 
 
-def get_dummy_input(dataset):
+def get_dummy_input(dataset, device=None):
+    """Generate a representative dummy (random) input for the specified dataset.
+
+    If a device is specified, then the dummay_input is moved to that device.
+    """
     if dataset == 'imagenet':
         dummy_input = torch.randn(1, 3, 224, 224)
     elif dataset == 'cifar10':
         dummy_input = torch.randn(1, 3, 32, 32)
     else:
         raise ValueError("dataset %s is not supported" % dataset)
+    if device:
+        dummy_input = dummy_input.to(device)
     return dummy_input
 
 

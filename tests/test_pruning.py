@@ -277,7 +277,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
         assert bn1.bias.size(0) == cnt_nnz_channels
         assert bn1.weight.size(0) == cnt_nnz_channels
 
-    dummy_input = common.get_dummy_input(config.dataset)
+    dummy_input = distiller.get_dummy_input(config.dataset, distiller.model_device(model))
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
     run_forward_backward(model, optimizer, dummy_input)
 

@@ -42,7 +42,7 @@ def test_compute_summary():
     dataset = "cifar10"
     arch = "simplenet_cifar"
     model, _ = common.setup_test(arch, dataset, parallel=True)
-    df_compute = distiller.model_performance_summary(model, common.get_dummy_input(dataset))
+    df_compute = distiller.model_performance_summary(model, distiller.get_dummy_input(dataset))
     module_macs = df_compute.loc[:, 'MACs'].to_list()
     #                     [conv1,  conv2,  fc1,   fc2,   fc3]
     assert module_macs == [352800, 240000, 48000, 10080, 840]
@@ -50,7 +50,7 @@ def test_compute_summary():
     dataset = "imagenet"
     arch = "mobilenet"
     model, _ = common.setup_test(arch, dataset, parallel=True)
-    df_compute = distiller.model_performance_summary(model, common.get_dummy_input(dataset))
+    df_compute = distiller.model_performance_summary(model, distiller.get_dummy_input(dataset))
     module_macs = df_compute.loc[:, 'MACs'].to_list()
     expected_macs = [10838016, 3612672, 25690112, 1806336, 25690112, 3612672, 51380224, 903168, 
                      25690112, 1806336, 51380224, 451584, 25690112, 903168, 51380224, 903168, 

@@ -37,13 +37,5 @@ def find_module_by_name(model, module_to_find):
     return None
 
 
-def get_dummy_input(dataset):
-    if dataset == "imagenet":
-        return torch.randn(1, 3, 224, 224).cuda()
-    elif dataset == "cifar10":
-        return torch.randn(1, 3, 32, 32).cuda()
-    raise ValueError("Trying to use an unknown dataset " + dataset)
-
-
 def almost_equal(a , b, max_diff=0.000001):
     return abs(a - b) <= max_diff
