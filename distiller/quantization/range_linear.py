@@ -704,6 +704,39 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         return out_f
 
 
+class RangeLinearQuantSoftmaxWrapper(RangeLinearQuantWrapper):
+    """
+    Wrapper for nn.Softmax.
+    TODO - implement for integer types.
+    """
+    def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
+                 activation_stats=None, clip_n_stds=None):
+        raise NotImplementedError("Quantizing Softmax to integer representation is not supported yet.")
+        # if not isinstance(wrapped_module, nn.Softmax):
+        #     raise ValueError(self.__class__.__name__ + ' can only wrap nn.Softmax modules')
+        #
+        # if not activation_stats:
+        #     raise NoStatsError(self.__class__.__name__ +
+        #                        ' must get activation stats, dynamic quantization not supported')
+        #
+        # super(RangeLinearQuantSoftmaxWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
+        #                                                      clip_acts=clip_acts, activation_stats=activation_stats,
+        #                                                      clip_n_stds=clip_n_stds)
+        # pass
+
+    def get_inputs_quantization_params(self, *inputs):
+        pass
+
+    def quantized_forward(self, *inputs_q):
+        pass
+
+    def get_output_quantization_params(self, accumulator):
+        pass
+
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        pass
+
+
 class PostTrainLinearQuantizer(Quantizer):
     """
     Applies range-based linear quantization to a model.
@@ -810,14 +843,19 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
         factory_eltwisemult = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+        factory_softmax = partial(
+            replace_non_param_layer, RangeLinearQuantSoftmaxWrapper)
+
         update_wrapper(factory_concat, replace_non_param_layer)
         update_wrapper(factory_eltwiseadd, replace_non_param_layer)
         update_wrapper(factory_eltwisemult, replace_non_param_layer)
+        update_wrapper(factory_softmax, replace_non_param_layer)
 
         self.replacement_factory[distiller.modules.Concat] = factory_concat
         self.replacement_factory[distiller.modules.EltwiseAdd] = factory_eltwiseadd
         self.replacement_factory[distiller.modules.EltwiseMult] = factory_eltwisemult
         self.replacement_factory[nn.Embedding] = replace_embedding
+        self.replacement_factory[nn.Softmax] = factory_softmax
 
     @classmethod
     def from_args(cls, model, args):
