@@ -98,7 +98,7 @@ def main():
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
     apputils.log_execution_env_state(
-        list(filter(lambda x: x not in [None, ''], [args.compress, args.qe_stats_file])),
+        filter(lambda x: x not in [None, ''], [args.compress, args.qe_stats_file]),
         msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 

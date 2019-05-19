@@ -91,7 +91,7 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
 
     if (logdir is None) or (config_path is None):
         return
-    if not isinstance(config_path, list):
+    if isinstance(config_path, str) or not hasattr(config_path, '__iter__'):
         config_path = [config_path]
 
     # clone configuration files to output directory
