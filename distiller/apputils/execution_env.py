@@ -91,19 +91,23 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
 
     if (logdir is None) or (config_path is None):
         return
+    if not isinstance(config_path, list):
+        config_path = [config_path]
+
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
     with contextlib.suppress(FileExistsError):
         os.makedirs(configs_dest)
-    if os.path.exists(os.path.join(configs_dest,
-                                   os.path.basename(config_path))):
-        logger.debug('{} already exists in logdir'.format(
-            os.path.basename(config_path) or config_path))
-    else:
-        try:
-            shutil.copy(config_path, configs_dest)
-        except OSError as e:
-            logger.debug('Failed to copy of config file: {}'.format(str(e)))
+
+    for conf in config_path:
+        if os.path.exists(os.path.join(configs_dest, os.path.basename(conf))):
+            logger.debug('{} already exists in logdir'.format(
+                os.path.basename(conf) or conf))
+        else:
+            try:
+                shutil.copy(conf, configs_dest)
+            except OSError as e:
+                logger.debug('Failed to copy of config file: {}'.format(str(e)))
 
 
 def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
