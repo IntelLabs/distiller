@@ -74,7 +74,7 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 ### Other Features
 
 - **Scale factor scope:** For weight tensors, Distiller supports per-channel quantization (per output channel).
-- **Removing Outliers:** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
+- **Removing outliers (post-training only):** As discussed [here](quantization.md#outliers-removal), in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="imgs/quant_clipped.png"/>
    </p>
@@ -82,6 +82,12 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
   
      - Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.
      - Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.
+
+- **Scale factor approximation (post-training only):** This can be enabled optionally, to simulate an execution pipeline with no floating-point operations. Instead of multiplying with a floating-point scale factor, we multiply with an integer and then do a bit-wise shift: \(Q \approx {A}/{2^n}\), where \(Q\) denotes the FP32 scale factor, \(A\) denotes the integer multiplier and \(n\) denotes the number of bits by which we shift after multiplication. The number of bits assigned to \(A\) is usually a parameter of the HW, and in Distiller it is configured by the user. Let us denote that with \(m\). Given \(Q\) and \(m\), we determine \(A\) and \(n\) as follows:
+
+\[Q \approx \frac{A}{2^n} \Rightarrow A \approx 2^nQ \Rightarrow\]
+\[\Rightarrow 2^nQ \le 2^m - 1 \Rightarrow\]
+\[\Rightarrow n = \left\lfloor\log_2\frac{2^m - 1}{Q}\right\rfloor\ \ \ ;\ \ \ A = \lfloor 2^nQ \rfloor\]
 
 ### Implementation in Distiller
 
