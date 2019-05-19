@@ -384,14 +384,7 @@ When using these command line arguments, the quantizer can be invoked as follows
 
 ```python
 if args.quantize_eval:
-    if args.qe_config_file:
-        quantizer = distiller.config_component_from_file_by_class(model, args.qe_config_file,
-                                                                  'PostTrainLinearQuantizer')
-    else:
-        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, None, args.qe_mode, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers, args.qe_per_channel,
-                                                          args.qe_stats_file)
+    quantizer = distiller.quantization.PostTrainLinearQuantizer.from_args(model, args)
     quantizer.prepare_model()
     # Execute evaluation on model as usual
 ```
