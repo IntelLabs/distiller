@@ -96,10 +96,9 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
 
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
-    with contextlib.suppress(FileExistsError):
-        os.makedirs(configs_dest)
-
     for conf in config_path:
+        os.makedirs(configs_dest, exist_ok=True)
+
         if os.path.exists(os.path.join(configs_dest, os.path.basename(conf))):
             logger.debug('{} already exists in logdir'.format(
                 os.path.basename(conf) or conf))
