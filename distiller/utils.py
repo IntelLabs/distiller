@@ -60,12 +60,14 @@ def size2str(torch_size):
         return size_to_str(torch_size.size())
     if isinstance(torch_size, torch.autograd.Variable):
         return size_to_str(torch_size.data.size())
+    if isinstance(torch_size, tuple) or isinstance(torch_size, list):
+        return size_to_str(torch_size)
     raise TypeError
 
 
 def size_to_str(torch_size):
     """Convert a pytorch Size object to a string"""
-    assert isinstance(torch_size, torch.Size)
+    assert isinstance(torch_size, torch.Size) or isinstance(torch_size, tuple) or isinstance(torch_size, list)
     return '('+(', ').join(['%d' % v for v in torch_size])+')'
 
 
