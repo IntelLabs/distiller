@@ -538,10 +538,14 @@ args = parser.parse_args()
                         number of standard deviations to use
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of layer names for which not to clip activations.
-                        Applicable only if --qe-clip-acts is also set
+                        Applicable only if --qe-clip-acts is not 'none'
   --qe-per-channel, --qepc
                         Enable per-channel quantization of weights (per output
                         channel)
+  --qe-scale-approx-bits NUM_BITS, --qesab NUM_BITS
+                        Enable scale factor approximation using integer
+                        multiply + bit shift, and uset his number of bits to
+                        use for the integer multiplier
   --qe-stats-file PATH  Path to YAML file with calibration stats. If not
                         given, dynamic quantization will be run (Note that not
                         all layer types are supported for dynamic

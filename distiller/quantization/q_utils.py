@@ -151,6 +151,28 @@ def get_tensor_mean_n_stds_max_abs(t, n_stds=1):
     return torch.max(min_val.abs_(), max_val.abs_())
 
 
+def get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=False):
+    shift_bits = torch.log2((2 ** mult_bits - 1) / fp32_scale).floor()
+    if limit:
+        shift_bits = min(mult_bits, shift_bits)
+    return shift_bits
+
+
+def get_scale_approximation_mult(fp32_scale, shift_bits):
+    return (fp32_scale * (2 ** shift_bits)).floor()
+
+
+def get_scale_approximation_params(fp32_scale, mult_bits, limit=False):
+    shift_bits = get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=limit)
+    multiplier = get_scale_approximation_mult(fp32_scale, shift_bits)
+    return multiplier, shift_bits
+
+
+def approx_scale_as_mult_and_shift(fp32_scale, mult_bits, limit=False):
+    multiplier, shift_bits = get_scale_approximation_params(fp32_scale, mult_bits, limit=limit)
+    return multiplier / (2 ** shift_bits)
+
+
 def get_quantized_range(num_bits, signed=True):
     if signed:
         n = 2 ** (num_bits - 1)
