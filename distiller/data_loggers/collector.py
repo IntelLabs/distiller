@@ -442,9 +442,10 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             for i in range(len(inputs)):
                 module.quant_stats.inputs.append(_QuantStatsRecord.create_records_dict())
 
-        for idx, input in enumerate(inputs):
-            update_record(module.quant_stats.inputs[idx], input)
-        update_record(module.quant_stats.output, output)
+        with torch.no_grad():
+            for idx, input in enumerate(inputs):
+                update_record(module.quant_stats.inputs[idx], input)
+            update_record(module.quant_stats.output, output)
 
     def _start_counter(self, module):
         # We don't know the number of inputs at this stage so we defer records creation to the actual callback
@@ -549,18 +550,22 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
 
     def _activation_stats_cb(self, module, inputs, output):
         def get_hist(t, stat_min, stat_max):
+            # torch.histc doesn't work on integral data types, so convert if needed
+            if t.dtype not in [torch.float, torch.double, torch.half]:
+                t = t.float()
             t_clamped = t.clamp(stat_min, stat_max)
             hist = torch.histc(t_clamped.cpu(), bins=self.nbins, min=stat_min, max=stat_max)
             return hist
 
-        for idx, input in enumerate(inputs):
-            stat_min, stat_max = self._get_min_max(module.distiller_name, 'inputs', idx)
-            curr_hist = get_hist(input, stat_min, stat_max)
-            module.input_hists[idx] += curr_hist
+        with torch.no_grad():
+            for idx, input in enumerate(inputs):
+                stat_min, stat_max = self._get_min_max(module.distiller_name, 'inputs', idx)
+                curr_hist = get_hist(input, stat_min, stat_max)
+                module.input_hists[idx] += curr_hist
 
-        stat_min, stat_max = self._get_min_max(module.distiller_name, 'output')
-        curr_hist = get_hist(output, stat_min, stat_max)
-        module.output_hist += curr_hist
+            stat_min, stat_max = self._get_min_max(module.distiller_name, 'output')
+            curr_hist = get_hist(output, stat_min, stat_max)
+            module.output_hist += curr_hist
 
     def _reset(self, module):
         num_inputs = len(self.act_stats[module.distiller_name]['inputs'])
