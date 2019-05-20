@@ -262,8 +262,8 @@ class Quantizer(object):
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
                 continue
 
-            # This hints pycharm the replace_fn is a function
-            replace_fn: Optional[Callable] = self.replacement_factory[type(module)]
+            # We use a type hint comment to let IDEs know replace_fn is a function
+            replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
             # If the replacement function wasn't specified - continue without replacing this module.
             if replace_fn is not None:
                 valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name], replace_fn)
