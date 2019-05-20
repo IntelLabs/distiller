@@ -64,7 +64,7 @@ class MobileNet(nn.Module):
 
     def forward(self, x):
         x = self.model(x)
-        x = x.view(-1, self.channels[-1])
+        x = x.view(-1, x.size(1))
         x = self.fc(x)
         return x
 
