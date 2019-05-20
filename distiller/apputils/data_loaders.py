@@ -179,7 +179,7 @@ def _get_subset_length(data_source, effective_size):
 def _get_sampler(data_source, effective_size, fixed_subset=False):
     if fixed_subset:
         subset_length = _get_subset_length(data_source, effective_size)
-        indices = torch.randperm(len(data_source))
+        indices = np.random.permutation(len(data_source))
         subset_indices = indices[:subset_length]
         return torch.utils.data.SubsetRandomSampler(subset_indices)
     return SwitchingSubsetRandomSampler(data_source, effective_size)
