@@ -8,6 +8,8 @@ logs/
 __pycache__/
 .pytest_cache
 .cache
+examples/ncf/run/
+examples/ncf/ml-20m*
 
 # Virtual env
 env/
