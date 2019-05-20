@@ -538,10 +538,14 @@ args = parser.parse_args()
                         number of standard deviations to use
   --qe-no-clip-layers LAYER_NAME [LAYER_NAME ...], --qencl LAYER_NAME [LAYER_NAME ...]
                         List of layer names for which not to clip activations.
-                        Applicable only if --qe-clip-acts is also set
+                        Applicable only if --qe-clip-acts is not 'none'
   --qe-per-channel, --qepc
                         Enable per-channel quantization of weights (per output
                         channel)
+  --qe-scale-approx-bits NUM_BITS, --qesab NUM_BITS
+                        Enable scale factor approximation using integer
+                        multiply + bit shift, and uset his number of bits to
+                        use for the integer multiplier
   --qe-stats-file PATH  Path to YAML file with calibration stats. If not
                         given, dynamic quantization will be run (Note that not
                         all layer types are supported for dynamic
@@ -555,14 +559,7 @@ args = parser.parse_args()
 <p>(Note that <code>--quantize-eval</code> and <code>--qe-calibration</code> are mutually exclusive.)</p>
 <p>When using these command line arguments, the quantizer can be invoked as follows:</p>
 <pre><code class="python">if args.quantize_eval:
-    if args.qe_config_file:
-        quantizer = distiller.config_component_from_file_by_class(model, args.qe_config_file,
-                                                                  'PostTrainLinearQuantizer')
-    else:
-        quantizer = quantization.PostTrainLinearQuantizer(model, args.qe_bits_acts, args.qe_bits_wts,
-                                                          args.qe_bits_accum, None, args.qe_mode, args.qe_clip_acts,
-                                                          args.qe_no_clip_layers, args.qe_per_channel,
-                                                          args.qe_stats_file)
+    quantizer = distiller.quantization.PostTrainLinearQuantizer.from_args(model, args)
     quantizer.prepare_model()
     # Execute evaluation on model as usual
 </code></pre>

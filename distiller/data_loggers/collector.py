@@ -26,6 +26,8 @@ import torch
 from torchnet.meter import AverageValueMeter
 import logging
 from math import sqrt
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
 msglogger = logging.getLogger()

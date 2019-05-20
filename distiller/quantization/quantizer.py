@@ -221,14 +221,11 @@ class Quantizer(object):
 
         for module_name, module in self.model.named_modules():
             qbits = self.module_qbits_map[module_name]
-            if qbits.wts is None:
-                continue
-
             curr_parameters = dict(module.named_parameters())
             for param_name, param in curr_parameters.items():
-                # Bias is usually quantized according to the accumulator's number of bits
-                # Handle # of bits for bias quantization as "first-class" citizen, similarly to weights
                 n_bits = qbits.bias if param_name.endswith('bias') else qbits.wts
+                if n_bits is None:
+                    continue
                 fp_attr_name = param_name
                 if self.train_with_fp_copy:
                     hack_float_backup_parameter(module, param_name, n_bits)

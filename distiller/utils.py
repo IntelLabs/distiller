@@ -60,12 +60,14 @@ def size2str(torch_size):
         return size_to_str(torch_size.size())
     if isinstance(torch_size, torch.autograd.Variable):
         return size_to_str(torch_size.data.size())
+    if isinstance(torch_size, tuple) or isinstance(torch_size, list):
+        return size_to_str(torch_size)
     raise TypeError
 
 
 def size_to_str(torch_size):
     """Convert a pytorch Size object to a string"""
-    assert isinstance(torch_size, torch.Size)
+    assert isinstance(torch_size, torch.Size) or isinstance(torch_size, tuple) or isinstance(torch_size, list)
     return '('+(', ').join(['%d' % v for v in torch_size])+')'
 
 
@@ -556,13 +558,19 @@ def has_children(module):
         return False
 
 
-def get_dummy_input(dataset):
+def get_dummy_input(dataset, device=None):
+    """Generate a representative dummy (random) input for the specified dataset.
+
+    If a device is specified, then the dummay_input is moved to that device.
+    """
     if dataset == 'imagenet':
         dummy_input = torch.randn(1, 3, 224, 224)
     elif dataset == 'cifar10':
         dummy_input = torch.randn(1, 3, 32, 32)
     else:
         raise ValueError("dataset %s is not supported" % dataset)
+    if device:
+        dummy_input = dummy_input.to(device)
     return dummy_input
 
 

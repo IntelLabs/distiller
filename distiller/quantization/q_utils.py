@@ -135,7 +135,9 @@ def get_tensor_avg_max_abs(t, across_dim=None):
     return torch.max(avg_min.abs_(), avg_max.abs_())
 
 
-def get_tensor_mean_n_stds_min_max(t, n_stds=1):
+def get_tensor_mean_n_stds_min_max(t, dim=None, n_stds=1):
+    if dim is not None:
+        raise NotImplementedError('Setting dim != None not supported yet')
     if n_stds <= 0:
         raise ValueError('n_stds must be > 0, got {}'.format(n_stds))
     mean = t.mean()
@@ -146,9 +148,31 @@ def get_tensor_mean_n_stds_min_max(t, n_stds=1):
     return min_val, max_val
 
 
-def get_tensor_mean_n_stds_max_abs(t, n_stds=1):
-    min_val, max_val = get_tensor_mean_n_stds_min_max(t, n_stds)
+def get_tensor_mean_n_stds_max_abs(t, dim=None, n_stds=1):
+    min_val, max_val = get_tensor_mean_n_stds_min_max(t, dim, n_stds)
     return torch.max(min_val.abs_(), max_val.abs_())
+
+
+def get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=False):
+    shift_bits = torch.log2((2 ** mult_bits - 1) / fp32_scale).floor()
+    if limit:
+        shift_bits = min(mult_bits, shift_bits)
+    return shift_bits
+
+
+def get_scale_approximation_mult(fp32_scale, shift_bits):
+    return (fp32_scale * (2 ** shift_bits)).floor()
+
+
+def get_scale_approximation_params(fp32_scale, mult_bits, limit=False):
+    shift_bits = get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=limit)
+    multiplier = get_scale_approximation_mult(fp32_scale, shift_bits)
+    return multiplier, shift_bits
+
+
+def approx_scale_as_mult_and_shift(fp32_scale, mult_bits, limit=False):
+    multiplier, shift_bits = get_scale_approximation_params(fp32_scale, mult_bits, limit=limit)
+    return multiplier / (2 ** shift_bits)
 
 
 def get_quantized_range(num_bits, signed=True):

@@ -27,7 +27,6 @@ import pandas as pd
 from tabulate import tabulate
 import logging
 import torch
-from torch.autograd import Variable
 import torch.optim
 import distiller
 from .summary_graph import SummaryGraph
@@ -40,21 +39,21 @@ __all__ = ['model_summary',
            'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary',
            'attributes_summary', 'attributes_summary_tbl', 'connectivity_summary',
            'connectivity_summary_verbose', 'connectivity_tbl_summary', 'create_png', 'create_pydot_graph',
-           'draw_model_to_file', 'draw_img_classifier_to_file']
+           'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
 def model_summary(model, what, dataset=None):
-    if what == 'sparsity':
+    if what.startswith('png'):
+        draw_img_classifier_to_file(model, 'model.png', dataset, what == 'png_w_params')
+    elif what == 'sparsity':
         pylogger = PythonLogger(msglogger)
         csvlogger = CsvLogger()
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
-        if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(1, 3, 224, 224))
-        elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(1, 3, 32, 32))
-        else:
-            print("Unsupported dataset (%s) - aborting compute operation" % dataset)
+        try:
+            dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+        except ValueError as e:
+            print(e)
             return
         df = model_performance_summary(model, dummy_input, 1)
         t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
@@ -320,7 +319,7 @@ def connectivity_tbl_summary(sgraph, verbose=False):
     return tabulate(df, headers='keys', tablefmt='psql')
 
 
-def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', styles=None):
+def create_pydot_graph(op_nodes_desc, data_nodes, param_nodes, edges, rankdir='TB', styles=None):
     """Low-level API to create a PyDot graph (dot formatted).
     """
     pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir=rankdir)
@@ -329,7 +328,7 @@ def create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir='TB', s
                      'fillcolor': '#6495ED',
                      'style': 'rounded, filled'}
 
-    for op_node in op_nodes:
+    for op_node in op_nodes_desc:
         style = op_node_style
         # Check if we should override the style of this node.
         if styles is not None and op_node[0] in styles:
@@ -369,6 +368,12 @@ def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
                                    'style': 'rounded, filled'}
     """
 
+    def annotate_op_node(op):
+        if op['type'] == 'Conv':
+            return ["sh={}".format(distiller.size2str(op['attrs']['kernel_shape'])),
+                    "g={}".format(str(op['attrs']['group']))]
+        return ''   
+
     op_nodes = [op['name'] for op in sgraph.ops.values()]
     data_nodes = []
     param_nodes = []
@@ -386,8 +391,8 @@ def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
         edges = [edge for edge in sgraph.edges if edge.src in non_param_ids]
         param_nodes = None
 
-    op_nodes = [(op['name'], op['type']) for op in sgraph.ops.values()]
-    pydot_graph = create_pydot_graph(op_nodes, data_nodes, param_nodes, edges, rankdir, styles)
+    op_nodes_desc = [(op['name'], op['type'], *annotate_op_node(op)) for op in sgraph.ops.values()]
+    pydot_graph = create_pydot_graph(op_nodes_desc, data_nodes, param_nodes, edges, rankdir, styles)
     png = pydot_graph.create_png()
     return png
 
@@ -432,44 +437,44 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
                                    'fillcolor': 'gray',
                                    'style': 'rounded, filled'}
     """
+    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
     try:
-        dummy_input = dataset_dummy_input(dataset)
-        model = distiller.make_non_parallel_copy(model)
-        g = SummaryGraph(model, dummy_input)
+        non_para_model = distiller.make_non_parallel_copy(model)
+        g = SummaryGraph(non_para_model, dummy_input)
+
         draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
         print("Network PNG image generation completed")
     except FileNotFoundError:
         print("An error has occured while generating the network PNG image.")
         print("Please check that you have graphviz installed.")
         print("\t$ sudo apt-get install graphviz")
+    finally:
+        del non_para_model
 
 
-def dataset_dummy_input(dataset):
-    if dataset == 'imagenet':
-        dummy_input = Variable(torch.randn(1, 3, 224, 224), requires_grad=False)
-    elif dataset == 'cifar10':
-        dummy_input = Variable(torch.randn(1, 3, 32, 32))
-    else:
-        raise ValueError("Unsupported dataset (%s) - aborting draw operation" % dataset)
-    return dummy_input
-
-
-def export_img_classifier_to_onnx(model, onnx_fname, dataset, export_params=True, add_softmax=True):
+def export_img_classifier_to_onnx(model, onnx_fname, dataset, add_softmax=True, **kwargs):
     """Export a PyTorch image classifier to ONNX.
 
+    Args:
+        add_softmax: when True, adds softmax layer to the output model.
+        kwargs: arguments to be passed to torch.onnx.export
     """
-    dummy_input = dataset_dummy_input(dataset).to('cuda')
-    # Pytorch 0.4 doesn't support exporting modules wrapped in DataParallel
-    model = distiller.make_non_parallel_copy(model)
+    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+    # Pytorch doesn't support exporting modules wrapped in DataParallel
+    non_para_model = distiller.make_non_parallel_copy(model)
 
-    with torch.onnx.set_training(model, False):
+    try:
         if add_softmax:
             # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
-            model.original_forward = model.forward
+            # TorchVision models use nn.CrossEntropyLoss for computing the loss,
+            # instead of adding a softmax layer
+            non_para_model.original_forward = non_para_model.forward
             softmax = torch.nn.Softmax(dim=-1)
-            model.forward = lambda input: softmax(model.original_forward(input))
-        torch.onnx.export(model, dummy_input, onnx_fname, verbose=False, export_params=export_params)
+            non_para_model.forward = lambda input: softmax(non_para_model.original_forward(input))
+        torch.onnx.export(non_para_model, dummy_input, onnx_fname, **kwargs)
         msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
+    finally:
+        del non_para_model
 
 
 def data_node_has_parent(g, id):
