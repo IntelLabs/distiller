@@ -20,7 +20,6 @@ This is helpful if you want to recreate an experiment at a later time, or if
 you want to understand the environment in which you execute the training.
 """
 
-import contextlib
 import logging
 import logging.config
 import os
@@ -41,16 +40,16 @@ except ImportError:
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
+def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
     """Log information about the execution environment.
 
-    File 'config_path' will be copied to directory 'logdir'. A common use-case
+    Files in 'config_paths' will be copied to directory 'logdir'. A common use-case
     is passing the path to a (compression) schedule YAML file. Storing a copy
     of the schedule file, with the experiment logs, is useful in order to
     reproduce experiments.
 
     Args:
-        config_path: path to config file, used only when logdir is set
+        config_paths: path(s) to config file(s), used only when logdir is set
         logdir: log directory
         git_root: the path to the .git root directory
     """
@@ -89,22 +88,22 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
     log_git_state()
     logger.debug("Command line: %s", " ".join(sys.argv))
 
-    if (logdir is None) or (config_path is None):
+    if (logdir is None) or (config_paths is None):
         return
-    if isinstance(config_path, str) or not hasattr(config_path, '__iter__'):
-        config_path = [config_path]
+    if isinstance(config_paths, str) or not hasattr(config_paths, '__iter__'):
+        config_paths = [config_paths]
 
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
-    for conf in config_path:
+    for cpath in config_paths:
         os.makedirs(configs_dest, exist_ok=True)
 
-        if os.path.exists(os.path.join(configs_dest, os.path.basename(conf))):
+        if os.path.exists(os.path.join(configs_dest, os.path.basename(cpath))):
             logger.debug('{} already exists in logdir'.format(
-                os.path.basename(conf) or conf))
+                os.path.basename(cpath) or cpath))
         else:
             try:
-                shutil.copy(conf, configs_dest)
+                shutil.copy(cpath, configs_dest)
             except OSError as e:
                 logger.debug('Failed to copy of config file: {}'.format(str(e)))
 
