@@ -90,11 +90,12 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
 
     if (logdir is None) or (config_paths is None):
         return
-    if isinstance(config_paths, str) or not hasattr(config_paths, '__iter__'):
-        config_paths = [config_paths]
 
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
+
+    if isinstance(config_paths, str) or not hasattr(config_paths, '__iter__'):
+        config_paths = [config_paths]
     for cpath in config_paths:
         os.makedirs(configs_dest, exist_ok=True)
 
