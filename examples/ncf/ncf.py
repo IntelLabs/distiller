@@ -271,7 +271,7 @@ def main():
     else:
         train_dataset = None
         train_dataloader = None
-        nb_users, nb_items = (276986, 53488)
+        nb_users, nb_items = (138493, 26744)
 
     test_ratings = load_test_ratings(os.path.join(args.data, TEST_RATINGS_FILENAME))  # noqa: E501
     test_negs = load_test_negs(os.path.join(args.data, TEST_NEG_FILENAME))
