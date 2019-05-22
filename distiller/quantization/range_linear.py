@@ -906,19 +906,15 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
         factory_eltwisemult = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
-        factory_softmax = partial(
-            replace_non_param_layer, RangeLinearQuantSoftmaxWrapper)
 
         update_wrapper(factory_concat, replace_non_param_layer)
         update_wrapper(factory_eltwiseadd, replace_non_param_layer)
         update_wrapper(factory_eltwisemult, replace_non_param_layer)
-        update_wrapper(factory_softmax, replace_non_param_layer)
 
         self.replacement_factory[distiller.modules.Concat] = factory_concat
         self.replacement_factory[distiller.modules.EltwiseAdd] = factory_eltwiseadd
         self.replacement_factory[distiller.modules.EltwiseMult] = factory_eltwisemult
         self.replacement_factory[nn.Embedding] = replace_embedding
-        self.replacement_factory[nn.Softmax] = factory_softmax
 
     @classmethod
     def from_args(cls, model, args):
