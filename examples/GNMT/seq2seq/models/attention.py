@@ -35,8 +35,6 @@ class BahdanauAttention(nn.Module):
         self.eltwisemul_norm_scaler = EltwiseMult()
         self.tanh = nn.Tanh()
         self.matmul_score = Matmul()
-        self.norm_att = Norm()
-        self.eltwisediv_att = EltwiseDiv()
         self.softmax_att = nn.Softmax(dim=-1)
         self.context_matmul = BatchMatmul()
 
@@ -97,7 +95,7 @@ class BahdanauAttention(nn.Module):
             sum_qk = self.eltwiseadd_norm_bias(sum_qk, self.normalize_bias)
 
             tmp = self.linear_att.to(torch.float32)
-            linear_att = self.eltwisediv_att(tmp, self.norm_att(tmp))
+            linear_att = tmp / tmp.norm()
             linear_att = linear_att.to(self.normalize_scalar)
 
             linear_att = self.eltwisemul_norm_scaler(linear_att, self.normalize_scalar)
