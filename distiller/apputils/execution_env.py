@@ -22,11 +22,13 @@ you want to understand the environment in which you execute the training.
 
 import logging
 import logging.config
+import operator
 import os
 import platform
 import shutil
 import sys
 import time
+import pkg_resources
 
 from git import Repo, InvalidGitRepositoryError
 import numpy as np
@@ -83,8 +85,10 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
     if HAVE_LSB:
         logger.debug("OS: %s", lsb_release.get_lsb_information()['DESCRIPTION'])
     logger.debug("Python: %s", sys.version)
-    logger.debug("PyTorch: %s", torch.__version__)
-    logger.debug("Numpy: %s", np.__version__)
+    def _pip_freeze():
+        return {x.key:x.version for x in sorted(pkg_resources.working_set,
+                                                key=operator.attrgetter('key'))}
+    logger.debug("pip freeze: {}".format(_pip_freeze()))
     log_git_state()
     logger.debug("Command line: %s", " ".join(sys.argv))
 
