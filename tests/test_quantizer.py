@@ -20,6 +20,7 @@ from copy import deepcopy
 from collections import OrderedDict
 import pytest
 
+import distiller
 from distiller.quantization import Quantizer
 from distiller.quantization.quantizer import QBits, _ParamToQuant
 from distiller.quantization.quantizer import FP_BKP_PREFIX
@@ -423,14 +424,34 @@ def test_overridable_args(model, optimizer, train_with_fp_copy):
     assert model_copy.relu1.overridable_prop == 123
 
 
-def test_shared_submodule(optimizer, train_with_fp_copy):
+@pytest.mark.parametrize(
+    "overrides, expected_relu_type, is_skipped",
+    [
+        (None, DummyQuantLayer, False),
+        (distiller.utils.yaml_ordered_load("""
+        dense1.relu:
+            bits_activations: null
+            bits_weights: null
+        """), nn.ReLU, True)
+    ]
+)
+def test_shared_submodule(optimizer, train_with_fp_copy, overrides, expected_relu_type, is_skipped):
     with pytest.warns(UserWarning,
                       match="Module '{0}' references to same module as '{1}'.".format('dense2.relu', 'dense1.relu')):
         densenet = DummyModelWithSharedSubmodule(1024, 1024, 1000)
+        relu = densenet.dense1.relu
         quantizer = DummyQuantizer(densenet,
                                    bits_weights=8, bits_activations=8, bits_bias=32,
                                    optimizer=optimizer,
-                                   train_with_fp_copy=train_with_fp_copy)
+                                   train_with_fp_copy=train_with_fp_copy,
+                                   overrides=deepcopy(overrides))
         quantizer.prepare_model()
-        assert isinstance(quantizer.model.dense1.relu, DummyQuantLayer)
+        assert isinstance(quantizer.model.dense1.relu, expected_relu_type)
         assert quantizer.model.dense1.relu == quantizer.model.dense2.relu
+        assert quantizer.modules_processed[relu] is not None
+        if is_skipped:
+            assert quantizer.modules_processed[relu][1] is None
+        else:
+            assert quantizer.modules_processed[relu][1] == quantizer.model.dense1.relu
+            assert quantizer.modules_processed[relu][1] == quantizer.model.dense2.relu
+
