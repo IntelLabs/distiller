@@ -102,21 +102,13 @@ def main():
         msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 
+    if args.evaluate:
+        args.deterministic = True
+    distiller.set_deterministic(args.deterministic, args.seed)
+
     start_epoch = 0
     ending_epoch = args.epochs
     perf_scores_history = []
-
-    if args.evaluate:
-        args.deterministic = True
-    if args.deterministic:
-        # Experiment reproducibility is sometimes important.  Pete Warden expounded about this
-        # in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
-        distiller.set_deterministic()  # Use a well-known seed, for repeatability of experiments
-    else:
-        # Turn on CUDNN benchmark mode for best performance. This is usually "safe" for image
-        # classification models, as the input sizes don't change during the run
-        # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
-        cudnn.benchmark = True
 
     if args.cpu or not torch.cuda.is_available():
         # Set GPU index to -1 if using CPU

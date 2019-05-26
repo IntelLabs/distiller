@@ -595,18 +595,35 @@ def make_non_parallel_copy(model):
     return new_model
 
 
-def set_deterministic():
-    msglogger.debug('set_deterministic is called')
-    torch.manual_seed(0)
-    random.seed(0)
-    np.random.seed(0)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+def set_seed(seed):
+    """Seed the PRNG for the CPU, Cuda, numpy and Python"""
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+def set_deterministic(is_deterministic=True, seed=0):
+    '''Try to configure the system for reproducible results.
+
+    Experiment reproducibility is sometimes important.  Pete Warden expounded about this
+    in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
+    For Pytorch specifics see: https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
+    '''
+    msglogger.debug("set_deterministic({})".format(is_deterministic))
+    if seed is None and is_deterministic:
+        seed = 0
+    if seed is not None:
+        set_seed(seed)
+    torch.backends.cudnn.deterministic = is_deterministic
+    # Turn on CUDNN benchmark mode for best performance (non-deterministic). This is usually "safe"
+    # for image classification models, as the input sizes don't change during the run
+    # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
+    torch.backends.cudnn.benchmark = not is_deterministic
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
-    """
-    Function to load YAML file using an OrderedDict
+    """Function to load YAML file using an OrderedDict
+
     See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
     """
     class OrderedLoader(Loader):
