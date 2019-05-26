@@ -176,7 +176,7 @@ class Quantizer(object):
         self.params_to_quantize = []
 
         # A dictionary of replaced modules and their respective names.
-        self.modules_replaced = OrderedDict()
+        self.modules_processed = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
@@ -248,8 +248,8 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
-            if module in self.modules_replaced:
-                previous_name, previous_wrapper = self.modules_replaced[module]
+            if module in self.modules_processed:
+                previous_name, previous_wrapper = self.modules_processed[module]
                 warnings.warn("Module '{0}' references to same module as '{1}'."
                               ' Replacing with reference the same wrapper.'.format(full_name, previous_name),
                               UserWarning)
@@ -266,7 +266,7 @@ class Quantizer(object):
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
                 # We indicate this module wasn't replaced by a wrapper
                 msglogger.debug('Module {0}: Skipping \n{1}.'.format(full_name, module))
-                self.modules_replaced[module] = full_name, None
+                self.modules_processed[module] = full_name, None
                 continue
 
             # We use a type hint comment to let IDEs know replace_fn is a function
@@ -281,7 +281,7 @@ class Quantizer(object):
                 new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
                 msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
                 # Add to history of prepared submodules
-                self.modules_replaced[module] = full_name, new_module
+                self.modules_processed[module] = full_name, new_module
                 setattr(container, name, new_module)
 
                 # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
