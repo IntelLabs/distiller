@@ -97,6 +97,8 @@ def get_parser():
                         help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='seed the PRNG for CPU, CUDA, numpy, and Python')
     parser.add_argument('--gpus', metavar='DEV_ID', default=None,
                         help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
     parser.add_argument('--cpu', action='store_true', default=False,

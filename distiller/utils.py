@@ -595,18 +595,31 @@ def make_non_parallel_copy(model):
     return new_model
 
 
-def set_deterministic():
-    msglogger.debug('set_deterministic is called')
-    torch.manual_seed(0)
-    random.seed(0)
-    np.random.seed(0)
+def set_seed(seed):
+    """Seed the PRNG for the CPU, Cuda, numpy and Python"""
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+def set_deterministic(seed=0):
+    'Try to configure the system for reproducible results.
+
+    Experiment reproducibility is sometimes important.  Pete Warden expounded about this
+    in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
+    For Pytorch specifics see: https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
+    '
+    msglogger.debug('set_deterministic was invoked')
+    if seed is None:
+        seed = 0
+    set_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
-    """
-    Function to load YAML file using an OrderedDict
+    """Function to load YAML file using an OrderedDict
+
     See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
     """
     class OrderedLoader(Loader):
