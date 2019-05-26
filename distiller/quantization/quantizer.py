@@ -256,9 +256,9 @@ class Quantizer(object):
                 if previous_wrapper:
                     msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.
                                     format(full_name, module, previous_wrapper))
+                    setattr(container, name, previous_wrapper)
                 else:
                     msglogger.debug('Module {0}: Skipping \n{1}.'.format(full_name, module))
-                setattr(container, name, previous_wrapper)
                 continue
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
