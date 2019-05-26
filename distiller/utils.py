@@ -667,3 +667,33 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
 
     return val
 
+
+def collect_inner_activations(model, *input):
+    """
+    Forwards the input through model and collect all activations.
+    Args:
+        model (nn.Module): the model
+        input : inputs to the model
+    Returns:
+        dict
+    """
+    assign_layer_fq_names(model)
+    inner_activations = {}
+    cb_handles = []
+
+    def save_activation(module, i, o):
+        inner_activations[module.distiller_name] = o.data.cpu().numpy()
+
+    def register_forward_hook(m):
+        if hasattr(m, 'distiller_name'):
+            h = m.register_forward_hook(save_activation)
+            cb_handles.append(h)
+
+    model.apply(register_forward_hook)
+    input = convert_tensors_recursively_to(input, device='cuda')
+    y = model(*input)
+
+    for h in cb_handles:
+        h.remove()
+
+    return inner_activations
