@@ -602,7 +602,7 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def set_deterministic(is_deterministic=True, seed=0):
+def set_deterministic(is_deterministic=True, seed=None):
     '''Try to configure the system for reproducible results.
 
     Experiment reproducibility is sometimes important.  Pete Warden expounded about this
