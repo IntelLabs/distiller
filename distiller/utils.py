@@ -602,23 +602,19 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def set_deterministic(is_deterministic=True, seed=None):
+def set_deterministic(seed=None):
     '''Try to configure the system for reproducible results.
 
     Experiment reproducibility is sometimes important.  Pete Warden expounded about this
     in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
     For Pytorch specifics see: https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
     '''
-    msglogger.debug("set_deterministic({})".format(is_deterministic))
-    if seed is None and is_deterministic:
+    msglogger.debug('set_deterministic was invoked')
+    if seed is None:
         seed = 0
-    if seed is not None:
-        set_seed(seed)
-    torch.backends.cudnn.deterministic = is_deterministic
-    # Turn on CUDNN benchmark mode for best performance (non-deterministic). This is usually "safe"
-    # for image classification models, as the input sizes don't change during the run
-    # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
-    torch.backends.cudnn.benchmark = not is_deterministic
+    set_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):

@@ -104,7 +104,15 @@ def main():
 
     if args.evaluate:
         args.deterministic = True
-    distiller.set_deterministic(args.deterministic, args.seed)
+    if args.deterministic:
+        distiller.set_deterministic(args.seed) # For experiment reproducability
+    else:
+        if args.seed is not None:
+            distiller.set_seed(args.seed)
+        # Turn on CUDNN benchmark mode for best performance. This is usually "safe" for image
+        # classification models, as the input sizes don't change during the run
+        # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
+        cudnn.benchmark = True
 
     start_epoch = 0
     ending_epoch = args.epochs
