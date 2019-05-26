@@ -253,13 +253,20 @@ class Quantizer(object):
                 warnings.warn("Module '{0}' references to same module as '{1}'."
                               ' Replacing with reference the same wrapper.'.format(full_name, previous_name),
                               UserWarning)
-                msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, previous_wrapper))
+                if previous_wrapper:
+                    msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.
+                                    format(full_name, module, previous_wrapper))
+                else:
+                    msglogger.debug('Module {0}: Skipping \n{1}.'.format(full_name, module))
                 setattr(container, name, previous_wrapper)
                 continue
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
                 if self.module_overrides_map[full_name]:
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
+                # We indicate this module wasn't replaced by a wrapper
+                msglogger.debug('Module {0}: Skipping \n{1}.'.format(full_name, module))
+                self.modules_replaced[module] = full_name, None
                 continue
 
             # We use a type hint comment to let IDEs know replace_fn is a function
