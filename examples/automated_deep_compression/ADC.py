@@ -81,11 +81,16 @@ from examples.automated_deep_compression.adc_random_env import random_agent
 # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
 #RLLIB = "spinup"
 RLLIB = "coach"
-
+RLLIB = "private"
+from .private import agent as private_agent
+#RLLIB = 
 
 msglogger = logging.getLogger()
-Observation = namedtuple('Observation', ['n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
-LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest'])
+# Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
+# LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
+Observation = namedtuple('Observation', ['t', 'n', 'c',  'stride', 'k', 'MACs', 'Weights', 'reduced', 'rest', 'prev_a'])
+LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'stride', 'k', 'MACs', 'Weights', 'reduced', 'rest', 'prev_a'])
+
 LayerDescLen = len(LayerDesc._fields)
 ALMOST_ONE = 0.9999
 
@@ -165,13 +170,13 @@ def log_amc_config(amc_cfg):
         pass
 
 
-def count_conv_layer(model):
-    """Count the number of Convolution layers exist in this model"""
-    conv_cnt = 0
-    for module in model.modules():
-        if type(module) == torch.nn.Conv2d:
-            conv_cnt += 1
-    return conv_cnt
+# def count_conv_layer(model):
+#     """Count the number of Convolution layers exist in this model"""
+#     conv_cnt = 0
+#     for module in model.modules():
+#         if type(module) == torch.nn.Conv2d:
+#             conv_cnt += 1
+#     return conv_cnt
 
 
 def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
@@ -212,6 +217,136 @@ def amc_reward_fn(env, top1, top5, vloss, total_macs):
     return reward
 
 
+from torch.nn import functional as f
+
+# def psize(name, t):
+#     print("%s = %s" % (name, t.size()))
+    
+# def im2col(x, conv):
+#     x_unfold = f.unfold(x.data, kernel_size=conv.kernel_size, stride=conv.stride, padding=conv.padding)
+#     x_unfold = torch.chunk(x_unfold, x_unfold.size(2))
+#     x_unfold = torch.cat(x_unfold, 2)
+#     return x_unfold
+
+
+def collect_intermediate_featuremap_samples(net_wrapper):
+    """Collect pairs of input/output feature-maps.
+
+    For reconstruction of weights, we need to collect pairs of (layer_input, layer_output)
+    using a sample subset of the input dataset.  We feed this dataset-subset to the 
+    """
+    from functools import partial
+
+    def cache_featuremaps(module, input, output, intermediate_fms):
+        """Create a cached dictionary of each layer's input and output feature-maps.
+
+        We use this with distiller.FMReconstructionChannelPruner
+        """
+
+        # Make a permanent copy of the input and output feature-maps
+        X = input[0]
+        n_points_per_layer = 10
+        randx = np.random.randint(0, X.size(2), n_points_per_layer)
+        randy = np.random.randint(0, X.size(3), n_points_per_layer)
+        X = X[:, :, randx, randy].detach().cpu().clone()
+        #X = X
+        Y = output[:, :, randx, randy].detach().cpu().clone()
+
+        # Preprocess the outputs: transpose the batch and channel dimensions, create a flattened view, and transpose.
+        # The outputs originally have shape: (batch size, num channels, feature-map width, feature-map height).
+        # Y = Y.transpose(0,1).contiguous()
+        # Y = Y.view(Y.size(0), -1)
+        # Y = Y.t()
+        # Y i storch.Size([128, 16, 32, 32])
+        Y = Y.view(Y.size(0), Y.size(1), -1) # torch.Size([128, 16, 1024])
+        Y = Y.transpose(2, 1)  # torch.Size([128, 1024, 16])
+        Y = Y.contiguous().view(-1, Y.size(2))  # torch.Size([131072, 16])
+
+
+        intermediate_fms['output_fms'][module.distiller_name].append(Y)
+        intermediate_fms['input_fms'][module.distiller_name].append(X)
+
+
+    def install_io_collectors(m, intermediate_fms, mod_names):
+        if isinstance(m, torch.nn.Conv2d) and m.distiller_name in mod_names:
+            intermediate_fms['output_fms'][m.distiller_name] = []
+            intermediate_fms['input_fms'][m.distiller_name] = []
+            hook_handles.append(m.register_forward_hook(partial(cache_featuremaps, intermediate_fms=intermediate_fms)))
+
+    def init_list(m, intermediate_fms, mod_names):
+        if isinstance(m, torch.nn.Conv2d) and m.distiller_name in mod_names:
+            intermediate_fms['output_fms'][m.distiller_name] = []
+            intermediate_fms['input_fms'][m.distiller_name] = []
+
+    msglogger.info("\nCollecting input/ouptput feature-map pairs for weight reconstruction")
+    distiller.assign_layer_fq_names(net_wrapper.model)
+    # Register on the forward hooks, then run the forward path and collect the data
+    hook_handles = []
+    intermediate_fms = {"output_fms": dict(), "input_fms": dict()}
+    net_wrapper.model.apply(partial(init_list, intermediate_fms=intermediate_fms, 
+                            mod_names=modules_list(net_wrapper.app_args.arch)))
+    net_wrapper.model.apply(partial(install_io_collectors, intermediate_fms=intermediate_fms, 
+                            mod_names=modules_list(net_wrapper.app_args.arch)))
+    net_wrapper.validate()
+    # Unregister from the forward hooks
+    for handle in hook_handles:
+        handle.remove()
+
+    # for (layer_name, Y) in intermediate_fms['output_fms'].items():
+    #     # try:
+    #     #     outputs = net_wrapper.model.intermediate_fms['output_fms'][layer_name]
+    #     # except KeyError:
+    #     #     net_wrapper.model.intermediate_fms['output_fms'][layer_name] = 
+    #     #     outputs = net_wrapper.model.intermediate_fms['output_fms'][layer_name]
+
+    #     try:
+    #         outputs = net_wrapper.model.intermediate_fms['output_fms'][layer_name]
+    #         outputs[layer_name] = torch.cat((outputs[layer_name], Y), dim=1)
+    #     except:
+    #         net_wrapper.model.intermediate_fms['output_fms'][layer_name] = Y
+
+    def concat_tensor_list(tensor_list, dim):
+        return torch.cat(tensor_list, dim=dim)
+
+    net_wrapper.model.intermediate_fms = {"output_fms": dict(), "input_fms": dict()}
+
+    outputs = net_wrapper.model.intermediate_fms['output_fms']
+    inputs = net_wrapper.model.intermediate_fms['input_fms']
+
+    msglogger.info("Concatenating FMs...")
+    for (layer_name, X), Y in zip(intermediate_fms['input_fms'].items(), intermediate_fms['output_fms'].values()):                
+        inputs[layer_name] = concat_tensor_list(X, dim=0)
+        #Y = intermediate_fms['output_fms'][layer_name]
+        outputs[layer_name] = concat_tensor_list(Y, dim=0)
+
+    msglogger.info("Done.")
+    #msglogger.info(net_wrapper.model.intermediate_fms['input_fms']['module.layer1.0.conv1'].shape)
+    del intermediate_fms 
+
+
+# Work around PPO's Gaussian sampling space
+# See: https://github.com/openai/baselines/issues/121
+PPO_MIN, PPO_MAX = -3, 3  # These are empiric values that are a very rough estimate
+def adjust_ppo_output(ppo_pruning_action, action_high, action_low):
+    # We need to map PPO's infinite action-space to our action-space (in PPO actions are sampled 
+    # from a normalized Gaussian N(0,1)).
+    # We do this by a shift & scale operation: 
+    #   1. We crudely assume that most of the Gaussian maps to actions in a limited range {PPO_MIN..PPO_MAX} 
+    #      which allows us to clip the action, and scale it to the range of the actual action-space.
+    #   2. We assume that the distribution the agent samples from is centered at zero, and so we shift
+    #      actions to the center of the actual action-space.
+
+    #ppo_pruning_action = np.clip(ppo_pruning_action, self.action_low, self.action_high) 
+    shift = (action_high - action_low) / 2 + action_low
+    scale = (action_high - action_low) / (PPO_MAX - PPO_MIN)
+    # scale = (action_high - action_low) / 2# / (PPO_MAX - PPO_MIN)
+    pruning_action = ppo_pruning_action * scale + shift
+    return float(pruning_action)
+
+class Stam(object):
+    def __init__(self):
+        pass
+
 def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
@@ -219,7 +354,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
     np.random.seed()
-    conv_cnt = count_conv_layer(model)
+    #conv_cnt = count_conv_layer(model)
 
     msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, RLLIB)
 
@@ -241,10 +376,11 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
             'perform_thinning': perform_thinning,
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
-            'conv_cnt': conv_cnt,
+#            'conv_cnt': conv_cnt,
             'reward_frequency': args.amc_reward_frequency,
             'ft_frequency': args.amc_ft_frequency,
-            'pruning_pattern': "filters"}) # "channels"}) #
+            'pruning_pattern':  args.amc_prune_pattern,
+            'pruning_method': args.amc_prune_method}) 
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -255,7 +391,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         amc_cfg.action_constrain_fn = None
     elif args.amc_protocol == "mac-constrained":
         amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100 #(90.5 - top1) / 10
+        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100
         amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
     elif args.amc_protocol == "mac-constrained-experimental":
         amc_cfg.target_density = args.amc_target_density
@@ -264,8 +400,9 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
-    steps_per_episode = conv_cnt
     if args.amc_agent_algo == "DDPG":
+        e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        steps_per_episode = e.net_wrapper.num_layers()
         amc_cfg.heatup_noise = 0.5
         amc_cfg.initial_training_noise = 0.5
         amc_cfg.training_noise_decay = 0.996  # 0.998
@@ -282,6 +419,29 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         env1 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         ddpg_spinup(env1, env2)
+    if RLLIB == "private":
+        msglogger.info("AMC: Using private")
+        env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+
+        agent_args = Stam()
+        agent_args.bsize = args.batch_size
+        agent_args.tau = 0.01
+        agent_args.discount = 1.
+        agent_args.epsilon = 50000
+        agent_args.init_delta = 0.5
+        agent_args.delta_decay = 0.95
+        agent_args.warmup = 100
+        agent_args.lr_c = 1e-3
+        agent_args.lr_a = 1e-4
+        agent_args.hidden1 = 300
+        agent_args.hidden2 = 300
+        agent_args.rmsize = 100
+        agent_args.rmsize = agent_args.rmsize * env.net_wrapper.num_layers()  # for each layer
+        agent_args.window_length = 1
+        agent_args.train_episode = 800
+        agent_args.output = "."
+        agent = private_agent.DDPG(len(Observation._fields), 1, agent_args)
+        private_agent.train(agent_args.train_episode, agent, env, agent_args.output, agent_args.warmup)
     else:
         msglogger.info("AMC: Using coach")
 
@@ -355,11 +515,34 @@ plain20_params =  ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight
                    "module.layer3.1.conv1.weight", "module.layer3.1.conv2.weight",
                    "module.layer3.2.conv1.weight", "module.layer3.2.conv2.weight"]
 
+mobilenet_params= [#"module.model.0.0.weight", 
+                   "module.model.1.3.weight", "module.model.2.3.weight",
+                   "module.model.3.3.weight", "module.model.4.3.weight", "module.model.5.3.weight",
+                   "module.model.6.3.weight", "module.model.7.3.weight", "module.model.8.3.weight",
+                   "module.model.9.3.weight", "module.model.10.3.weight", "module.model.11.3.weight",
+                   "module.model.12.3.weight", "module.model.13.3.weight"]
+
 
 resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
 resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
 resnet56_layers = [param[:-len(".weight")] for param in resnet56_params]
 plain20_layers = [param[:-len(".weight")] for param in plain20_params]
+mobilenet_layers = [param[:-len(".weight")] for param in mobilenet_params]
+
+def modules_list(arch):
+    # Temporary ugly hack!
+    layers = None
+    if arch == "resnet20_cifar":
+        layers = resnet20_layers
+    elif arch == "resnet56_cifar":
+        layers = resnet56_layers
+    elif arch == "resnet50":
+        layers = resnet50_layers
+    elif arch == "plain20_cifar":
+        layers = plain20_layers
+    elif arch == "mobilenet":
+        layers = mobilenet_layers
+    return layers
 
 
 class NetworkWrapper(object):
@@ -380,17 +563,7 @@ class NetworkWrapper(object):
         return self.app_args.arch
 
     def collect_conv_details(self, model):
-        # Temporary ugly hack!
-        resnet_layers = None
-        if self.app_args.arch == "resnet20_cifar":
-            resnet_layers = resnet20_layers
-        elif self.app_args.arch == "resnet56_cifar":
-            resnet_layers = resnet56_layers
-        elif self.app_args.arch == "resnet50":
-            resnet_layers = resnet50_layers
-        elif self.app_args.arch == "plain20_cifar":
-            resnet_layers = plain20_layers
-        return collect_conv_details(model, self.app_args.dataset, True, resnet_layers)
+        return collect_conv_details(model, self.app_args.dataset, True, modules_list(self.app_args.arch))
 
     def num_layers(self):
         return len(self.conv_layers)
@@ -406,8 +579,9 @@ class NetworkWrapper(object):
         if layer is None:
             return 0
         conv_module = distiller.model_find_module(self.model, layer.name)
-        # MACs = volume(OFM) * (#IFM * K^2)
-        dense_macs = (conv_module.out_channels * layer.ofm_h * layer.ofm_w) * (conv_module.in_channels * layer.k**2)
+        # MACs = volume(OFM) * (#IFM * K^2) / groups
+        dense_macs = (conv_module.out_channels * layer.ofm_h * layer.ofm_w) * (conv_module.in_channels * layer.k**2) 
+        dense_macs /= conv_module.groups 
         return dense_macs
 
     def reset(self, model):
@@ -420,7 +594,7 @@ class NetworkWrapper(object):
         scheduler.load_state_dict(state={'masks_dict': masks})
         return scheduler
 
-    def remove_structures(self, layer_id, fraction_to_prune, prune_what="channels"):
+    def remove_structures(self, layer_id, fraction_to_prune, prune_what="channels", prune_how="l1-rank"):
         """Physically remove channels and corresponding filters from the model
 
         Returns the compute-sparsity of the layer with index 'layer_id'
@@ -453,10 +627,18 @@ class NetworkWrapper(object):
             remove_structures_fn = distiller.remove_filters
         else:
             raise ValueError("unsupported structure {}".format(prune_what))
-        # Create a channel-ranking pruner
-        pruner = distiller.pruning.L1RankedStructureParameterPruner("adc_pruner", group_type,
-                                                                    fraction_to_prune, conv_pname)
-        pruner.set_param_mask(conv_p, conv_pname, self.zeros_mask_dict, meta=None)
+        if prune_how == "l1-rank" or prune_how == "stochastic-l1-rank":
+            # Create a channel/filter-ranking pruner
+            epsilon = 0 if "l1-rank" else 0.1
+            pruner = distiller.pruning.L1RankedStructureParameterPruner("adc_pruner", group_type,
+                                                                        fraction_to_prune, conv_pname, epsilon)
+            meta = None
+        elif prune_how == "fm-reconstruction":
+            pruner = distiller.pruning.FMReconstructionChannelPruner("adc_pruner", group_type,
+                                                                     fraction_to_prune, conv_pname)
+            meta = {'model': self.model}
+        
+        pruner.set_param_mask(conv_p, conv_pname, self.zeros_mask_dict, meta=meta)
         del pruner
 
         if (self.zeros_mask_dict[conv_pname].mask is None or
@@ -466,11 +648,13 @@ class NetworkWrapper(object):
 
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
+        
         remove_structures_fn(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
         conv_p = distiller.model_find_param(self.model, conv_pname)
         return 1 - (self.get_layer_macs(layer) / macs_before)
 
     def validate(self):
+        assert distiller.model_device(self.model) == 'cuda'
         top1, top5, vloss = self.services.validate_fn(model=self.model)
         return top1, top5, vloss
 
@@ -512,7 +696,10 @@ class DistillerWrapperEnvironment(gym.Env):
         self.action_high = amc_cfg.action_range[1]
         # Gym spaces documentation: https://gym.openai.com/docs/
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
-            self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,))
+            if self.amc_cfg.agent_algo == "ClippedPPO-continuous":
+                self.action_space = spaces.Box(PPO_MIN, PPO_MAX, shape=(1,))
+            else:
+                self.action_space = spaces.Box(self.action_low, self.action_high, shape=(1,)) 
             self.action_space.default_action = self.action_low
         else:
             self.action_space = spaces.Discrete(10)
@@ -520,9 +707,19 @@ class DistillerWrapperEnvironment(gym.Env):
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
         self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
         #self.observation_space = spaces.Box(0, float("inf"), shape=(LayerDescLen * self.num_layers(), ))
-        #self.create_network_record_file()
         self.stats_file = AMCStatsFile(os.path.join(msglogger.logdir, 'amc.csv'))
         self.ft_stats_file = FineTuneStatsFile(os.path.join(msglogger.logdir, 'ft_top1.csv'))
+
+        self.orig_model = copy.deepcopy(self.net_wrapper.model)
+        if self.amc_cfg.pruning_method == "fm-reconstruction":
+            if self.amc_cfg.pruning_pattern != "channels":
+                raise ValueError("Feature-map reconstruction is only supported when pruning weights channels")
+            # For feature-map reconstruction we need to collect a representative set of inter-layer feature-maps
+            collect_intermediate_featuremap_samples(self.net_wrapper)
+        
+        #print(self.orig_model.intermediate_fms['output_fms']['module.layer1.1.conv1'])
+        #assert False
+        #print(self.orig_model.module.layer2[1].conv1.input_fm) #neta
 
     def reset(self, init_only=False):
         """Reset the environment.
@@ -532,10 +729,13 @@ class DistillerWrapperEnvironment(gym.Env):
         self.current_layer_id = 0
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
+        if hasattr(self.net_wrapper.model, 'intermediate_fms'):
+            self.model.intermediate_fms = self.net_wrapper.model.intermediate_fms
         self.net_wrapper.reset(self.model)
         self._removed_macs = 0
         self.action_history = []
         self.agent_action_history = []
+        self.model_representation = self.get_model_representation()
         if init_only:
             return
         initial_observation = self.get_obs()
@@ -590,12 +790,16 @@ class DistillerWrapperEnvironment(gym.Env):
         This function is invoked by the Agent.
         """
         msglogger.info("env.step - current_layer_id={}  episode={}".format(self.current_layer_id, self.episode))
-        pruning_action = pruning_action[0]
+        pruning_action = float(pruning_action[0])
         msglogger.info("\tAgent pruning_action={}".format(pruning_action))
         self.agent_action_history.append(pruning_action)
 
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
-            pruning_action = np.clip(pruning_action, self.action_low, self.action_high)
+            if self.amc_cfg.agent_algo == "ClippedPPO-continuous":
+                # We need to map PPO's infinite action-space (actions sampled from a Gaussian) to our action-space.
+                pruning_action = adjust_ppo_output(pruning_action, self.action_high, self.action_low)
+            else:
+                pruning_action = np.clip(pruning_action, self.action_low, self.action_high)
         else:
             # Divide the action space into 10 discrete levels (0%, 10%, 20%,....90% sparsity)
             pruning_action = pruning_action / 10
@@ -611,11 +815,15 @@ class DistillerWrapperEnvironment(gym.Env):
         msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
         msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
         msglogger.info("\trest_macs={:.2f}".format(self.rest_macs()))
-
+    
+        # print(self.orig_model.module.layer2[1].conv1.input_fm)  # Neta
+        #print(self.orig_model.intermediate_fms['output_fms']['module.layer1.1.conv1'])
+        #self.net_wrapper.model.orig_model = self.orig_model  # Temporary hack!
         if pruning_action > 0:
             pruning_action = self.net_wrapper.remove_structures(self.current_layer_id,
                                                                 fraction_to_prune=pruning_action,
-                                                                prune_what=self.amc_cfg.pruning_pattern)
+                                                                prune_what=self.amc_cfg.pruning_pattern,
+                                                                prune_how=self.amc_cfg.pruning_method)
         else:
             pruning_action = 0
 
@@ -639,7 +847,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
         distiller.log_training_progress(stats, None,
                                         self.episode, steps_completed=self.current_layer_id,
-                                        total_steps=self.amc_cfg.conv_cnt, log_freq=1, loggers=[self.tflogger])
+                                        total_steps=self.net_wrapper.num_layers(), log_freq=1, loggers=[self.tflogger])
 
         if self.episode_is_done():
             msglogger.info("Episode is ending")
@@ -651,6 +859,9 @@ class DistillerWrapperEnvironment(gym.Env):
                                   normalized_nnz, self.action_history, self.agent_action_history)
             self.episode += 1
         else:
+            # if self.amc_cfg.pruning_method == "fm-reconstruction":
+            #     collect_intermediate_featuremap_samples(self.net_wrapper)
+
             if self.amc_cfg.ft_frequency is not None and self.current_layer_id % self.amc_cfg.ft_frequency == 0:
                 self.net_wrapper.train(1, self.episode)
             observation = self.get_obs()
@@ -659,13 +870,16 @@ class DistillerWrapperEnvironment(gym.Env):
             else:
                 reward = 0
         self.prev_action = pruning_action
-        info = {}
+        if self.episode_is_done():
+            info = {"accuracy": top1, "compress_ratio": normalized_macs}
+        else:
+            info = {}
         return observation, reward, self.episode_is_done(), info
 
-    def one_hot(self, n, r):
-        """Produce a one-hot representation of the layer id"""
-        #return [1 if i == n else 0 for i in range(r)]
-        return [n]
+    # def one_hot(self, n, r):
+    #     """Produce a one-hot representation of the layer id"""
+    #     #return [1 if i == n else 0 for i in range(r)]
+    #     return [n]
 
     def get_obs(self):
         """Produce a state embedding (i.e. an observation)"""
@@ -674,20 +888,27 @@ class DistillerWrapperEnvironment(gym.Env):
         current_layer_macs_pct = current_layer_macs/self.dense_model_macs
         current_layer = self.current_layer()
         conv_module = distiller.model_find_module(self.model, current_layer.name)
-        obs = [#current_layer.t,
-                conv_module.out_channels,
-                conv_module.in_channels,
-                current_layer.ifm_h,
-                current_layer.ifm_w,
-                current_layer.stride[0],
-                current_layer.k,
-                current_layer_macs_pct*100,
-                self.removed_macs()*100,
-                self.rest_macs()*100,
-                self.prev_action*100]
-        onehot_id = self.one_hot(self.current_layer_id, self.net_wrapper.num_layers())
-        msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
-        obs = np.array(onehot_id + obs)
+
+        obs = self.model_representation[self.current_layer_id, :]
+        # obs = [ self.current_layer_id,
+        #         conv_module.out_channels,
+        #         conv_module.in_channels,
+        #         current_layer.ifm_h,
+        #         current_layer.ifm_w,
+        #         current_layer.stride[0],
+        #         current_layer.k,
+        #         current_layer_macs_pct*100,
+        #         self.removed_macs()*100,
+        #         self.rest_macs()*100,
+        #         self.prev_action*100]
+        obs[-1] = self.prev_action # *100
+        obs[-2] = self.rest_macs() # *100
+        obs[-3] = self.removed_macs() #*100
+
+        #onehot_id = self.one_hot(self.current_layer_id, self.net_wrapper.num_layers())
+        #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+        msglogger.info("obs={}".format(Observation._make(obs)))
+        #obs = np.array(onehot_id + obs)
         assert (self.removed_macs() + current_layer_macs_pct + self.rest_macs()) <= 1
         return obs
 
@@ -695,51 +916,100 @@ class DistillerWrapperEnvironment(gym.Env):
         """Return the final state embedding (observation)
         The final state is reached after we traverse all of the Convolution layers.
         """
-        obs = [#-1,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                self.removed_macs()*100,
-                self.rest_macs()*100,
-                self.prev_action*100]
-        onehot_id = self.one_hot(self.net_wrapper.num_layers(), self.net_wrapper.num_layers())
-        msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
-        obs = np.array(onehot_id + obs)
+        obs = self.model_representation[-1, :]
+
+        # obs = [-1,
+        #         0,
+        #         0,
+        #         0,
+        #         0,
+        #         0,
+        #         0,
+        #         0,
+        #         self.removed_macs(), # *100,
+        #         self.rest_macs(), # *100,
+        #         self.prev_action] # *100
+        #onehot_id = self.one_hot(self.net_wrapper.num_layers(), self.net_wrapper.num_layers())
+        #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+        #obs = np.array(onehot_id + obs)
+        msglogger.info("obs={}".format(Observation._make(obs)))
         return obs
 
-    def whole_network_get_obs(self):
+    # def whole_network_get_obs(self):
+    #     """Produce a state embedding (i.e. an observation)"""
+    #     num_layers = self.net_wrapper.num_layers()
+    #     network_obs = np.empty(shape=(LayerDescLen, num_layers))
+    #     for layer_id in range(num_layers):
+    #         layer = self.get_layer(layer_id)
+    #         layer_macs = self.net_wrapper.get_layer_macs(layer)
+    #         layer_macs_pct = layer_macs/self.dense_model_macs
+    #         conv_module = distiller.model_find_module(self.model, layer.name)
+    #         obs = [layer.t,
+    #                conv_module.out_channels,
+    #                conv_module.in_channels,
+    #                layer.ifm_h,
+    #                layer.ifm_w,
+    #                layer.stride[0],
+    #                layer.k,
+    #                layer_macs_pct,
+    #                self.removed_macs(),
+    #                self.rest_macs()]
+    #         network_obs[:, layer_id] = np.array(obs)
+
+    #     #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
+    #     #network_obs = network_obs.reshape(network_obs.shape[0], network_obs.shape[1], 1)
+    #     network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
+    #     #msglogger.info("* obs={}".format(network_obs))
+    #     return network_obs
+
+
+    # def whole_network_get_final_obs(self):
+    #     return self.get_obs()
+
+    def get_model_representation(self):
         """Produce a state embedding (i.e. an observation)"""
         num_layers = self.net_wrapper.num_layers()
-        network_obs = np.empty(shape=(LayerDescLen, num_layers))
+        network_obs = np.empty(shape=(num_layers, LayerDescLen))
         for layer_id in range(num_layers):
-            layer = self.get_layer(layer_id)
+            layer = self.net_wrapper.get_layer(layer_id)
             layer_macs = self.net_wrapper.get_layer_macs(layer)
-            layer_macs_pct = layer_macs/self.dense_model_macs
+            #layer_macs_pct = layer_macs/self.dense_model_macs
             conv_module = distiller.model_find_module(self.model, layer.name)
-            obs =  [layer.t,
-                    conv_module.out_channels,
-                    conv_module.in_channels,
-                    layer.ifm_h,
-                    layer.ifm_w,
-                    layer.stride[0],
-                    layer.k,
-                    layer_macs_pct,
-                    self.removed_macs(),
-                    self.rest_macs()]
-            network_obs[:, layer_id] = np.array(obs)
+            obs = [layer.t,
+                   conv_module.out_channels,
+                   conv_module.in_channels,
+                   #layer.ifm_h,
+                   #layer.ifm_w,
+                   layer.stride[0],
+                   layer.k,
+                   distiller.volume(conv_module.weight),
+                   #layer_macs_pct,
+                   layer_macs,
+                   0,
+                   0,
+                   0]
+            network_obs[layer_id: ] = np.array(obs)
+
+        # ***********************************************************************
+        # normalize the state
+        #network_obs = np.array(network_obs, 'float')
+        #msglogger.info("model representation=\n{}".format(network_obs))
+        #print('=> shape of embedding (n_layer * n_dim): {}'.format(layer_embedding.shape))
+        #assert len(network_obs.shape) == 2, network_obs.shape
+        for feature in range(LayerDescLen):
+            feature_vec = network_obs[:, feature]
+            fmin = min(feature_vec)
+            fmax = max(feature_vec)
+            if fmax - fmin > 0:
+                network_obs[:, feature] = (feature_vec - fmin) / (fmax - fmin)
+
 
         #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
         #network_obs = network_obs.reshape(network_obs.shape[0], network_obs.shape[1], 1)
-        network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
-        #msglogger.info("* obs={}".format(network_obs))
+        # network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
+        msglogger.debug("model representation=\n{}".format(network_obs))
+        #exit(0)
         return network_obs
-
-    def whole_network_get_final_obs(self):
-        return self.get_obs()
 
     def rest_macs_raw(self):
         """Return the number of remaining MACs in the layers following the current layer"""

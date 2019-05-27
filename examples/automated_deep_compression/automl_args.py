@@ -37,3 +37,7 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     group.add_argument('--amc-ft-frequency', type=int, default=None,
                        help='How many action-steps between fine-tuning.\n'
                        'By default there is no fine-tuning between steps.')
+    group.add_argument('--amc-prune-pattern', choices=["filters", "channels"],
+                       default="filters", help="The pruning pattern")
+    group.add_argument('--amc-prune-method', choices=["l1-rank", "stochastic-l1-rank", "fm-reconstruction"],
+                       default="l1-rank", help="The pruning method")
