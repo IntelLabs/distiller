@@ -882,17 +882,21 @@ class PostTrainLinearQuantizer(Quantizer):
             return distiller.config_component_from_file_by_class(model, args.qe_config_file,
                                                                  'PostTrainLinearQuantizer')
         else:
+            overrides = OrderedDict(
+                [(layer, OrderedDict([('clip_acts', 'NONE')]))
+                 for layer in args.qe_no_clip_layers]
+            )
             return cls(model,
                        bits_activations=args.qe_bits_acts,
                        bits_parameters=args.qe_bits_wts,
                        bits_accum=args.qe_bits_accum,
                        mode=args.qe_mode,
                        clip_acts=args.qe_clip_acts,
-                       no_clip_layers=args.qe_no_clip_layers,
                        per_channel_wts=args.qe_per_channel,
                        model_activation_stats=args.qe_stats_file,
                        clip_n_stds=args.qe_clip_n_stds,
-                       scale_approx_mult_bits=args.qe_scale_approx_bits)
+                       scale_approx_mult_bits=args.qe_scale_approx_bits,
+                       overrides=overrides)
 
 
 ###############################################################################
