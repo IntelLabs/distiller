@@ -768,9 +768,6 @@ class PostTrainLinearQuantizer(Quantizer):
         overrides (:obj:`OrderedDict`, optional): Overrides the layers quantization settings.
         mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
         clip_acts (ClipMode): Activations clipping mode to use
-        no_clip_layers (list): List of fully-qualified layer names for which activations clipping should not be done.
-            A common practice is to not clip the activations of the last layer before softmax.
-            Applicable only if clip_acts is True.
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
         model_activation_stats (str / dict / OrderedDict): Either a path to activation stats YAML file, or a dictionary
@@ -788,7 +785,7 @@ class PostTrainLinearQuantizer(Quantizer):
         to half precision, regardless of bits_activations/parameters/accum.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
-                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, no_clip_layers=None,
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  per_channel_wts=False, model_activation_stats=None, fp16=False, clip_n_stds=None,
                  scale_approx_mult_bits=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
@@ -817,32 +814,35 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'mode': str(mode).split('.')[1],
                                                     'clip_acts': _enum_to_str(clip_acts),
                                                     'clip_n_stds': clip_n_stds,
-                                                    'no_clip_layers': no_clip_layers,
                                                     'per_channel_wts': per_channel_wts,
                                                     'fp16': fp16,
                                                     'scale_approx_mult_bits': scale_approx_mult_bits}}
 
         def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
-                                mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits):
+                                mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
+                                clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
+            # clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
+            clip_acts = verify_clip_mode(clip_acts)
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
-                                                     num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip,
+                                                     num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip_acts,
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None),
                                                      clip_n_stds=clip_n_stds,
                                                      scale_approx_mult_bits=scale_approx_mult_bits)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
-                                    scale_approx_mult_bits=scale_approx_mult_bits):
+                                    scale_approx_mult_bits=scale_approx_mult_bits,
+                                    clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
+            # clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
+            clip_acts = verify_clip_mode(clip_acts)
             try:
-                return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
+                return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
                                     activation_stats=self.model_activation_stats.get(norm_name, None),
                                     clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits)
             except NoStatsError:
@@ -858,7 +858,6 @@ class PostTrainLinearQuantizer(Quantizer):
                                                stats=self.model_activation_stats.get(norm_name, None))
 
         self.clip_acts = clip_acts
-        self.no_clip_layers = no_clip_layers or []
         self.clip_n_stds = clip_n_stds
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
