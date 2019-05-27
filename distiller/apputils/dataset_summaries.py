@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,25 +14,32 @@
 # limitations under the License.
 #
 
+import distiller
+import numpy as np
+import logging
+msglogger = logging.getLogger()
+
 def dataset_summary(data_loader):
     """Create a histogram of class membership distribution within a dataset.
 
     It is important to examine our training, validation, and test
     datasets, to make sure that they are balanced.
     """
-    print("Analyzing dataset:")
-    hist = {}
-    for idx, (input, label_batch) in enumerate(data_loader):
-        for label in label_batch:
-            hist[label] = hist.get(label, 0) + 1
-        if idx%50 == 0:
-            print("idx: %d" % idx)
+    msglogger.info("Analyzing dataset:")
+    print_frequency = 50
+    for batch, (input, label_batch) in enumerate(data_loader):
+        try:
+            all_labels = np.append(all_labels, distiller.to_np(label_batch))
+        except NameError:
+            all_labels = distiller.to_np(label_batch)
+        if (batch+1) % print_frequency == 0:
+            # progress indicator
+            print("batch: %d" % batch)
             
-    nclasses = len(hist)
-    from statistics import mean
-    print('Dataset contains {} items'.format(len(data_loader.sampler)))
-    print('Found {} classes'.format(nclasses))
-    for data_class, size in hist.items():
-        print('\tClass {} = {}'.format(data_class, size))
-
-    print('mean: ', mean(list(hist.values())))
+    hist = np.histogram(all_labels, bins=np.arange(1000+1))
+    nclasses = len(hist[0])
+    for data_class, size in enumerate(hist[0]):
+        msglogger.info("\tClass {} = {}".format(data_class, size))
+    msglogger.info("Dataset contains {} items".format(len(data_loader.sampler)))
+    msglogger.info("Found {} classes".format(nclasses))
+    msglogger.info("Average: {} samples per class".format(np.mean(hist[0])))
