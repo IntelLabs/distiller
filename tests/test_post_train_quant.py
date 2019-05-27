@@ -361,7 +361,7 @@ class DummyRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
         super(DummyRNN, self).__init__()
         self.rnn = distiller.modules.DistillerLSTM(input_size, hidden_size, num_layers)
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x, h=None):
         y, h = self.rnn(x, h)

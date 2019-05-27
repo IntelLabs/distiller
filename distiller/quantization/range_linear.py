@@ -824,7 +824,6 @@ class PostTrainLinearQuantizer(Quantizer):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            # clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
             clip_acts = verify_clip_mode(clip_acts)
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip_acts,
@@ -839,7 +838,6 @@ class PostTrainLinearQuantizer(Quantizer):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            # clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
             clip_acts = verify_clip_mode(clip_acts)
             try:
                 return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
