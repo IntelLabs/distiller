@@ -29,7 +29,7 @@ from numbers import Number
 from tabulate import tabulate
 import torch
 import distiller
-from distiller.utils import normalize_module_name, getModuleFromModel, inferDatasetNameFromModel
+from distiller.utils import normalize_module_name, getModuleFromModel, inferDatasetNameFromImageClassifierModel
 
 msglogger = logging.getLogger()
 
@@ -66,7 +66,7 @@ def save_checkpoint(model, optimizer=None, compression_sched=None,
 
     checkpoint = {'extras': extras}
     checkpoint['arch'] = arch or type(getModuleFromModel(model))
-    checkpoint['dataset'] = dataset or inferDatasetNameFromModel(model)
+    checkpoint['dataset'] = dataset or inferDatasetNameFromImageClassifierModel(model)
     checkpoint['state_dict'] = model.state_dict()
     if optimizer is not None:
         checkpoint['optimizer_state_dict'] = optimizer.state_dict()
@@ -90,9 +90,9 @@ def save_checkpoint(model, optimizer=None, compression_sched=None,
         torch.save(checkpoint, fullpath)
         msglogger.info("Saving checkpoint to: %s" % fullpath)
 
-def load_lean_checkpoint(chkpt_path, model_device=None, model=None,
+def load_lean_checkpoint(chkpt_path, map_location=None, model=None,
                          model_create_params=None):
-    return load_checkpoint(chkpt_path, model_device, model,
+    return load_checkpoint(chkpt_path, map_location, model,
         model_create_params, lean_checkpoint=True)['model']
 
 
@@ -109,13 +109,13 @@ def get_contents_table(d):
     return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
 
 
-def load_checkpoint(chkpt_path, model_device=None, model=None,
+def load_checkpoint(chkpt_path, map_location=None, model=None,
         model_create_params=None, *, lean_checkpoint=False):
     """Load a pytorch training checkpoint.
 
     Args:
         chkpt_path: path to checkpoint file
-        model_device [str]: if set, call model.to($model_device)
+        map_location [str]: if set, call model.to(map_location)
                 This should be set to either 'cpu' or 'cuda'.
         model: the pytorch model to which we will load the parameters
         model_create_params [dict] - parameters to pass to create_model()
@@ -182,8 +182,8 @@ def load_checkpoint(chkpt_path, model_device=None, model=None,
         if normalize_dataparallel_keys:
                 checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
         model.load_state_dict(checkpoint['state_dict'])
-        if model_device is not None:
-            model.to(model_device)
+        if map_location is not None:
+            model.to(map_location)
 
         if lean_checkpoint:
             msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_path)))

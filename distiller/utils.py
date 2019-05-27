@@ -684,5 +684,5 @@ def getModuleFromModel(model):
     """Return the module, which is sometimes wrapped by DataParallel object."""
     return model if (type(model).__name__ != 'DataParallel') else model.module
 
-def inferDatasetNameFromModel(model):
+def inferDatasetNameFromImageClassifierModel(model):
     return 'cifar10' if 'cifar10' in str(type(getModuleFromModel(model))).split('.') else 'imagenet'

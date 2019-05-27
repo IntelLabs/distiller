@@ -142,7 +142,7 @@ def test_load_gpu_model_on_cpu():
     checkpoint_filename = 'checkpoints/resnet20_cifar10_checkpoint.pth.tar'
 
     model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
-    res = load_checkpoint(checkpoint_filename, model=model, model_device='cpu')
+    res = load_checkpoint(checkpoint_filename, model=model, map_location='cpu')
     model = res['model']
 
     assert res['compression_sched'] is not None
