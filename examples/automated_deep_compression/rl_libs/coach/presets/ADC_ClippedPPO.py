@@ -47,6 +47,7 @@ agent_params.algorithm.clipping_decay_schedule = LinearSchedule(1.0, 0, 1000000)
 agent_params.algorithm.beta_entropy = 0
 agent_params.algorithm.gae_lambda = 0.95
 agent_params.algorithm.discount = 1
+# How many epochs to train the network using supervised methods
 agent_params.algorithm.optimization_epochs = 10
 agent_params.algorithm.estimate_state_value_using_gae = True
 

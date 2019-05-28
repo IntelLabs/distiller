@@ -43,7 +43,7 @@ class RlLibInterface(object):
         # Coach to create and use our DistillerWrapperEnvironment environment.
         # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
         if args.amc_agent_algo == "DDPG":
-            from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
+            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_DDPG import graph_manager, agent_params
             agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
                 (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
                 (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),

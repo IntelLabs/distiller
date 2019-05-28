@@ -50,18 +50,4 @@ vis_params.dump_signals_to_csv_every_x_episodes = 1
 graph_manager = BasicRLGraphManager(agent_params=agent_params, env_params=env_params,
                                     schedule_params=schedule_params, vis_params=vis_params)
 
-########
-# Test #
-########
-# preset_validation_params = PresetValidationParameters()
-# preset_validation_params.test = True
-# preset_validation_params.min_reward_threshold = 400
-# preset_validation_params.max_episodes_to_achieve_reward = 3000
-# preset_validation_params.reward_test_level = 'inverted_pendulum'
-# preset_validation_params.trace_test_levels = ['inverted_pendulum', 'hopper']
-#
-# graph_manager = BasicRLGraphManager(agent_params=agent_params, env_params=env_params,
-#                                     schedule_params=schedule_params, vis_params=VisualizationParameters(),
-#                                     preset_validation_params=preset_validation_params)
-
 

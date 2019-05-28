@@ -37,12 +37,7 @@ import distiller
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
-from examples.automated_deep_compression.adc_random_env import random_agent
-
-# Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
-RLLIB = "spinup"
-# RLLIB = "coach"
-#RLLIB = "private"
+#from examples.automated_deep_compression.adc_random_env import random_agent
  
 
 msglogger = logging.getLogger()
@@ -87,34 +82,6 @@ def is_using_continuous_action_space(agent):
     return agent in ("DDPG", "ClippedPPO-continuous", "Random-policy")
 
 
-#if RLLIB == "spinup":
-    # import tensorflow as tf
-    # from spinup.algos.ddpg import core
-    # from .ddpg import ddpg
-
-    # def ddpg_spinup(env1, env2):
-    #     from spinup.utils.run_utils import setup_logger_kwargs
-    #     exp_name = "Test"
-    #     seed = 0
-    #     # The number and size of the Actor-Critic MLP hidden layers
-    #     layers, hid = 2, 300
-    #     logger_kwargs = setup_logger_kwargs(exp_name)  # ,  seed)
-
-    #     ddpg.ddpg(env=env1, test_env=env2, actor_critic=core.mlp_actor_critic,
-    #               ac_kwargs=dict(hidden_sizes=[hid]*layers, output_activation=tf.sigmoid),
-    #               gamma=1,  # discount rate
-    #               seed=seed,
-    #               epochs=400,
-    #               replay_size=2000,
-    #               batch_size=64,
-    #               start_steps=env1.amc_cfg.num_heatup_epochs,
-    #               steps_per_epoch=800 * env1.num_layers(),  # every 50 episodes perform 10 episodes of testing
-    #               act_noise=0.5,
-    #               pi_lr=1e-4,
-    #               q_lr=1e-3,
-    #               logger_kwargs=logger_kwargs)
-
-
 def log_amc_config(amc_cfg):
     try:
         msglogger.info('AMC configuration:')
@@ -122,15 +89,6 @@ def log_amc_config(amc_cfg):
             msglogger.info("\t{} : {}".format(k, v))
     except TypeError as e:
         pass
-
-
-# def count_conv_layer(model):
-#     """Count the number of Convolution layers exist in this model"""
-#     conv_cnt = 0
-#     for module in model.modules():
-#         if type(module) == torch.nn.Conv2d:
-#             conv_cnt += 1
-#     return conv_cnt
 
 
 def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
@@ -172,15 +130,6 @@ def amc_reward_fn(env, top1, top5, vloss, total_macs):
 
 
 from torch.nn import functional as f
-
-# def psize(name, t):
-#     print("%s = %s" % (name, t.size()))
-    
-# def im2col(x, conv):
-#     x_unfold = f.unfold(x.data, kernel_size=conv.kernel_size, stride=conv.stride, padding=conv.padding)
-#     x_unfold = torch.chunk(x_unfold, x_unfold.size(2))
-#     x_unfold = torch.cat(x_unfold, 2)
-#     return x_unfold
 
 
 def collect_intermediate_featuremap_samples(net_wrapper):
@@ -309,7 +258,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
 
     with open("auto_compression.yaml", 'r') as cfg_file:
         compression_cfg = distiller.utils.yaml_ordered_load(cfg_file)
-    print(compression_cfg)
+
     RLLIB = compression_cfg["rl_lib"]["name"]
     msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, RLLIB)
 
@@ -355,19 +304,8 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
-    # if args.amc_agent_algo == "DDPG":
-    #     e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-    #     steps_per_episode = e.net_wrapper.num_layers()
-    #     amc_cfg.heatup_noise = 0.5
-    #     amc_cfg.initial_training_noise = 0.5
-    #     amc_cfg.training_noise_decay = 0.996  # 0.998
-    #     amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
-    #     amc_cfg.num_training_epochs = args.amc_training_epochs
-    #     training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-    #     heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
-
-    if amc_cfg.agent_algo == "Random-policy":
-        return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
+    # if amc_cfg.agent_algo == "Random-policy":
+    #     return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
 
     if RLLIB == "spinningup":
         amc_cfg.heatup_noise = 0.5
@@ -382,7 +320,7 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
         env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         num_layers = env1.net_wrapper.num_layers()
         x.solve(env1, env2, num_layers)
-    if RLLIB == "private":
+    elif RLLIB == "private":
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         from .rl_libs.private import private_if
         x = private_if.RlLibInterface()
@@ -396,83 +334,23 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
                     'amc_cfg': amc_cfg,
                     'services': services}
         # Todo: This is silly - fix it.
-        e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        steps_per_episode = e.net_wrapper.num_layers()
+        env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        steps_per_episode = env.net_wrapper.num_layers()
         x.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
+    elif RLLIB == "random":
+        from .rl_libs.random import random_if
+        x = random_if.RlLibInterface()
+        env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        return x.solve(env) # random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
     else:
         raise ValueError("unsupported rl library: ", RLLIB)
 
-# This is a temporary hack!
-resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight",
-                   "module.layer1.1.conv1.weight", "module.layer1.1.conv2.weight",
-                   "module.layer1.2.conv1.weight", "module.layer1.2.conv2.weight",
-                   "module.layer2.0.conv1.weight", "module.layer2.0.conv2.weight",
-                   "module.layer2.1.conv1.weight", "module.layer2.1.conv2.weight",
-                   "module.layer2.2.conv1.weight", "module.layer2.2.conv2.weight",
-                   "module.layer2.3.conv1.weight", "module.layer2.3.conv2.weight",
-                   "module.layer3.0.conv1.weight", "module.layer3.0.conv2.weight",
-                   "module.layer3.1.conv1.weight", "module.layer3.1.conv2.weight",
-                   "module.layer3.2.conv1.weight", "module.layer3.2.conv2.weight",
-                   "module.layer3.3.conv1.weight", "module.layer3.3.conv2.weight",
-                   "module.layer3.4.conv1.weight", "module.layer3.4.conv2.weight",
-                   "module.layer3.5.conv1.weight", "module.layer3.5.conv2.weight",
-                   "module.layer4.0.conv1.weight", "module.layer4.0.conv2.weight",
-                   "module.layer4.1.conv1.weight", "module.layer4.1.conv2.weight",
-                   "module.layer4.2.conv1.weight", "module.layer4.2.conv2.weight"]
-
-resnet20_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
-                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
-                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight"]
-
-resnet56_params = ["module.layer1.0.conv1.weight", "module.layer1.1.conv1.weight", "module.layer1.2.conv1.weight",
-                   "module.layer1.3.conv1.weight", "module.layer1.4.conv1.weight", "module.layer1.5.conv1.weight",
-                   "module.layer1.6.conv1.weight", "module.layer1.7.conv1.weight", "module.layer1.8.conv1.weight",
-
-                   "module.layer2.0.conv1.weight", "module.layer2.1.conv1.weight", "module.layer2.2.conv1.weight",
-                   "module.layer2.3.conv1.weight", "module.layer2.4.conv1.weight", "module.layer2.5.conv1.weight",
-                   "module.layer2.6.conv1.weight", "module.layer2.7.conv1.weight", "module.layer2.8.conv1.weight",
-
-                   "module.layer3.0.conv1.weight", "module.layer3.1.conv1.weight", "module.layer3.2.conv1.weight",
-                   "module.layer3.3.conv1.weight", "module.layer3.4.conv1.weight", "module.layer3.5.conv1.weight",
-                   "module.layer3.6.conv1.weight", "module.layer3.7.conv1.weight", "module.layer3.8.conv1.weight"]
-
-plain20_params =  ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight",
-                   "module.layer1.1.conv1.weight", "module.layer1.1.conv2.weight",
-                   "module.layer1.2.conv1.weight", "module.layer1.2.conv2.weight",
-                   "module.layer2.0.conv1.weight", "module.layer2.0.conv2.weight",
-                   "module.layer2.1.conv1.weight", "module.layer2.1.conv2.weight",
-                   "module.layer2.2.conv1.weight", "module.layer2.2.conv2.weight",
-                   "module.layer3.0.conv1.weight", "module.layer3.0.conv2.weight",
-                   "module.layer3.1.conv1.weight", "module.layer3.1.conv2.weight",
-                   "module.layer3.2.conv1.weight", "module.layer3.2.conv2.weight"]
-
-mobilenet_params= [#"module.model.0.0.weight", 
-                   "module.model.1.3.weight", "module.model.2.3.weight",
-                   "module.model.3.3.weight", "module.model.4.3.weight", "module.model.5.3.weight",
-                   "module.model.6.3.weight", "module.model.7.3.weight", "module.model.8.3.weight",
-                   "module.model.9.3.weight", "module.model.10.3.weight", "module.model.11.3.weight",
-                   "module.model.12.3.weight", "module.model.13.3.weight"]
-
-
-resnet50_layers = [param[:-len(".weight")] for param in resnet50_params]
-resnet20_layers = [param[:-len(".weight")] for param in resnet20_params]
-resnet56_layers = [param[:-len(".weight")] for param in resnet56_params]
-plain20_layers = [param[:-len(".weight")] for param in plain20_params]
-mobilenet_layers = [param[:-len(".weight")] for param in mobilenet_params]
 
 def modules_list(arch):
     # Temporary ugly hack!
-    layers = None
-    if arch == "resnet20_cifar":
-        layers = resnet20_layers
-    elif arch == "resnet56_cifar":
-        layers = resnet56_layers
-    elif arch == "resnet50":
-        layers = resnet50_layers
-    elif arch == "plain20_cifar":
-        layers = plain20_layers
-    elif arch == "mobilenet":
-        layers = mobilenet_layers
+    with open("auto_compression.yaml", 'r') as cfg_file:
+        compression_cfg = distiller.utils.yaml_ordered_load(cfg_file)
+    layers = compression_cfg["network"][arch]
     return layers
 
 
@@ -848,54 +726,8 @@ class DistillerWrapperEnvironment(gym.Env):
         The final state is reached after we traverse all of the Convolution layers.
         """
         obs = self.model_representation[-1, :]
-
-        # obs = [-1,
-        #         0,
-        #         0,
-        #         0,
-        #         0,
-        #         0,
-        #         0,
-        #         0,
-        #         self.removed_macs(), # *100,
-        #         self.rest_macs(), # *100,
-        #         self.prev_action] # *100
-        #onehot_id = self.one_hot(self.net_wrapper.num_layers(), self.net_wrapper.num_layers())
-        #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
-        #obs = np.array(onehot_id + obs)
         msglogger.info("obs={}".format(Observation._make(obs)))
         return obs
-
-    # def whole_network_get_obs(self):
-    #     """Produce a state embedding (i.e. an observation)"""
-    #     num_layers = self.net_wrapper.num_layers()
-    #     network_obs = np.empty(shape=(LayerDescLen, num_layers))
-    #     for layer_id in range(num_layers):
-    #         layer = self.get_layer(layer_id)
-    #         layer_macs = self.net_wrapper.get_layer_macs(layer)
-    #         layer_macs_pct = layer_macs/self.dense_model_macs
-    #         conv_module = distiller.model_find_module(self.model, layer.name)
-    #         obs = [layer.t,
-    #                conv_module.out_channels,
-    #                conv_module.in_channels,
-    #                layer.ifm_h,
-    #                layer.ifm_w,
-    #                layer.stride[0],
-    #                layer.k,
-    #                layer_macs_pct,
-    #                self.removed_macs(),
-    #                self.rest_macs()]
-    #         network_obs[:, layer_id] = np.array(obs)
-
-    #     #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
-    #     #network_obs = network_obs.reshape(network_obs.shape[0], network_obs.shape[1], 1)
-    #     network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
-    #     #msglogger.info("* obs={}".format(network_obs))
-    #     return network_obs
-
-
-    # def whole_network_get_final_obs(self):
-    #     return self.get_obs()
 
     def get_model_representation(self):
         """Produce a state embedding (i.e. an observation)"""
@@ -933,13 +765,7 @@ class DistillerWrapperEnvironment(gym.Env):
             fmax = max(feature_vec)
             if fmax - fmin > 0:
                 network_obs[:, feature] = (feature_vec - fmin) / (fmax - fmin)
-
-
-        #msglogger.info("obs={} {}".format(onehot_id, Observation._make(obs)))
-        #network_obs = network_obs.reshape(network_obs.shape[0], network_obs.shape[1], 1)
-        # network_obs = network_obs.reshape(network_obs.shape[0] * network_obs.shape[1])
         msglogger.debug("model representation=\n{}".format(network_obs))
-        #exit(0)
         return network_obs
 
     def rest_macs_raw(self):
