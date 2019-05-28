@@ -91,43 +91,6 @@ def log_amc_config(amc_cfg):
         pass
 
 
-def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
-    """A more intuitive reward for constraining the compute and optimizing the
-    accuracy under this constraint.
-    """
-    macs_normalized = total_macs/env.dense_model_macs
-    reward = top1/100
-    if macs_normalized > (env.amc_cfg.target_density+0.002):
-        reward = -3 - macs_normalized
-    else:
-        reward += 1
-    return reward
-
-
-def harmonic_mean_reward_fn(env, top1, top5, vloss, total_macs):
-    """This reward is based on the idea of weighted harmonic mean
-
-    Balance compute and accuracy provided a beta value that weighs the two components.
-    See: https://en.wikipedia.org/wiki/F1_score
-    """
-    beta = 1
-    #beta = 0.75  # How much to favor accuracy
-    macs_normalized = total_macs/env.dense_model_macs
-    reward = (1 + beta**2) * top1/100 * macs_normalized / (beta**2 * macs_normalized + top1/100)
-    return reward
-
-
-def amc_reward_fn(env, top1, top5, vloss, total_macs):
-    """This reward punishes the agent when it produces networks that don't comply with the MACs resource-constraint,
-    (the negative reward is in proportion to the network density).  Otherwise, the reward is the Top1 accuracy.
-    """
-    if not env.is_macs_constraint_achieved(total_macs):
-        current_density = total_macs / env.dense_model_macs
-        reward = env.amc_cfg.target_density - current_density
-    else:
-        reward = top1/100
-    return reward
-
 
 from torch.nn import functional as f
 
@@ -289,23 +252,9 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
 
-    if args.amc_protocol == "accuracy-guaranteed":
-        amc_cfg.target_density = None
-        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: -(1-top1/100) * math.log(total_macs)
-        amc_cfg.action_constrain_fn = None
-    elif args.amc_protocol == "mac-constrained":
-        amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = lambda env, top1, top5, vloss, total_macs: top1/100
-        amc_cfg.action_constrain_fn = DistillerWrapperEnvironment.get_action
-    elif args.amc_protocol == "mac-constrained-experimental":
-        amc_cfg.target_density = args.amc_target_density
-        amc_cfg.reward_fn = amc_reward_fn
-        amc_cfg.action_constrain_fn = None
-    else:
-        raise ValueError("{} is not supported currently".format(args.amc_protocol))
-
-    # if amc_cfg.agent_algo == "Random-policy":
-    #     return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
+    from .rewards import reward_factory
+    amc_cfg.target_density = args.amc_target_density
+    amc_cfg.reward_fn, amc_cfg.action_constrain_fn = reward_factory(args.amc_protocol)
 
     if RLLIB == "spinningup":
         amc_cfg.heatup_noise = 0.5
