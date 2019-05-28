@@ -13,49 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 """To execute this code:
 
 $ time python3 compress_classifier.py --arch=plain20_cifar ../../../data.cifar10 --resume=checkpoint.plain20_cifar.pth.tar --lr=0.05 --amc --amc-protocol=mac-constrained --amc-target-density=0.5 -p=50
-
-
-Coach installation:
-===================
-After creating the virtual environment and installing Distiller's Python package dependencies, go ahead and
-setup Coach per: https://github.com/NervanaSystems/coach#installation.
-
-Make sure that you install Coach's package dependencies into the same virtual environment that already contains
-Distiller's dependency packages.  You do this by ensuring that Distiller's virtual environment is the active environment
-when you install Coach.
-*NOTE: you may need to update TensorFlow to the expected version:
-    $ pip3 install tensorflow==1.9.0
-
-Finally, if you are running Coach in a development environment, you need to tell the Python runtime where to find
-the Coach code:
-$ export PYTHONPATH=<path-to-coach-code>
-
-
-Spinningup installation:
-========================
-
-Spinup require that we use exactly Python 3.6 so if you are not using this Python version see the instructions here:
-    http://ubuntuhandbook.org/index.php/2017/07/install-python-3-6-1-in-ubuntu-16-04-lts/
-    $ sudo update-alternatives --config python3
-
-For Python 3.6 you may also need to install a new virtual-env:
-    $ sudo apt-get install python3.6-venv
-
-Then create and activate your venv, and populate it with the Distiller packages:
-    $ python3 -m venv  distiller_env_python3.6
-    $ source distiller_env_python3.6/bin/activate
-    $ pip3 install -r requirements.txt
-
-You want to install Spinup into this venv.  First clone Spinup and then install it into your venv:
-    $ cd <spinningup-repo>
-    $ sudo apt-get install python3.6-dev
-    $ pip3 install -e .
-
-
-https://spinningup.openai.com/en/latest/user/installation.html?highlight=license
 
 """
 import math
@@ -79,11 +40,10 @@ from distiller import normalize_module_name, SummaryGraph
 from examples.automated_deep_compression.adc_random_env import random_agent
 
 # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
-#RLLIB = "spinup"
-RLLIB = "coach"
-RLLIB = "private"
-from .private import agent as private_agent
-#RLLIB = 
+RLLIB = "spinup"
+# RLLIB = "coach"
+#RLLIB = "private"
+ 
 
 msglogger = logging.getLogger()
 # Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
@@ -127,38 +87,32 @@ def is_using_continuous_action_space(agent):
     return agent in ("DDPG", "ClippedPPO-continuous", "Random-policy")
 
 
-if RLLIB == "spinup":
-    import tensorflow as tf
-    from spinup.algos.ddpg import core
-    from .ddpg import ddpg
+#if RLLIB == "spinup":
+    # import tensorflow as tf
+    # from spinup.algos.ddpg import core
+    # from .ddpg import ddpg
 
-    def ddpg_spinup(env1, env2):
-        from spinup.utils.run_utils import setup_logger_kwargs
-        exp_name = "Test"
-        seed = 0
-        # The number and size of the Actor-Critic MLP hidden layers
-        layers, hid = 2, 300
-        logger_kwargs = setup_logger_kwargs(exp_name)  # ,  seed)
+    # def ddpg_spinup(env1, env2):
+    #     from spinup.utils.run_utils import setup_logger_kwargs
+    #     exp_name = "Test"
+    #     seed = 0
+    #     # The number and size of the Actor-Critic MLP hidden layers
+    #     layers, hid = 2, 300
+    #     logger_kwargs = setup_logger_kwargs(exp_name)  # ,  seed)
 
-        ddpg.ddpg(env=env1, test_env=env2, actor_critic=core.mlp_actor_critic,
-                  ac_kwargs=dict(hidden_sizes=[hid]*layers, output_activation=tf.sigmoid),
-                  gamma=1,  # discount rate
-                  seed=seed,
-                  epochs=400,
-                  replay_size=2000,
-                  batch_size=64,
-                  start_steps=env1.amc_cfg.num_heatup_epochs,
-                  steps_per_epoch=800 * env1.num_layers(),  # every 50 episodes perform 10 episodes of testing
-                  act_noise=0.5,
-                  pi_lr=1e-4,
-                  q_lr=1e-3,
-                  logger_kwargs=logger_kwargs)
-
-
-if RLLIB == "coach":
-    from rl_coach.base_parameters import TaskParameters
-    from rl_coach.core_types import EnvironmentSteps
-    from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
+    #     ddpg.ddpg(env=env1, test_env=env2, actor_critic=core.mlp_actor_critic,
+    #               ac_kwargs=dict(hidden_sizes=[hid]*layers, output_activation=tf.sigmoid),
+    #               gamma=1,  # discount rate
+    #               seed=seed,
+    #               epochs=400,
+    #               replay_size=2000,
+    #               batch_size=64,
+    #               start_steps=env1.amc_cfg.num_heatup_epochs,
+    #               steps_per_epoch=800 * env1.num_layers(),  # every 50 episodes perform 10 episodes of testing
+    #               act_noise=0.5,
+    #               pi_lr=1e-4,
+    #               q_lr=1e-3,
+    #               logger_kwargs=logger_kwargs)
 
 
 def log_amc_config(amc_cfg):
@@ -343,9 +297,6 @@ def adjust_ppo_output(ppo_pruning_action, action_high, action_low):
     pruning_action = ppo_pruning_action * scale + shift
     return float(pruning_action)
 
-class Stam(object):
-    def __init__(self):
-        pass
 
 def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
@@ -356,6 +307,10 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     np.random.seed()
     #conv_cnt = count_conv_layer(model)
 
+    with open("auto_compression.yaml", 'r') as cfg_file:
+        compression_cfg = distiller.utils.yaml_ordered_load(cfg_file)
+    print(compression_cfg)
+    RLLIB = compression_cfg["rl_lib"]["name"]
     msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, RLLIB)
 
     # Create a dictionary of parameters that Coach will handover to DistillerWrapperEnvironment
@@ -400,76 +355,52 @@ def do_adc_internal(model, args, optimizer_data, validate_fn, save_checkpoint_fn
     else:
         raise ValueError("{} is not supported currently".format(args.amc_protocol))
 
-    if args.amc_agent_algo == "DDPG":
-        e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        steps_per_episode = e.net_wrapper.num_layers()
+    # if args.amc_agent_algo == "DDPG":
+    #     e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+    #     steps_per_episode = e.net_wrapper.num_layers()
+    #     amc_cfg.heatup_noise = 0.5
+    #     amc_cfg.initial_training_noise = 0.5
+    #     amc_cfg.training_noise_decay = 0.996  # 0.998
+    #     amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
+    #     amc_cfg.num_training_epochs = args.amc_training_epochs
+    #     training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
+    #     heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
+
+    if amc_cfg.agent_algo == "Random-policy":
+        return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
+
+    if RLLIB == "spinningup":
         amc_cfg.heatup_noise = 0.5
         amc_cfg.initial_training_noise = 0.5
         amc_cfg.training_noise_decay = 0.996  # 0.998
         amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
         amc_cfg.num_training_epochs = args.amc_training_epochs
-        training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-        heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
 
-    if amc_cfg.agent_algo == "Random-policy":
-        return random_agent(DistillerWrapperEnvironment(model, app_args, amc_cfg, services))
-
-    if RLLIB == "spinup":
-        msglogger.info("AMC: Using spinup")
+        from .rl_libs.spinningup import spinningup_if
+        x = spinningup_if.RlLibInterface()
         env1 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        ddpg_spinup(env1, env2)
+        num_layers = env1.net_wrapper.num_layers()
+        x.solve(env1, env2, num_layers)
     if RLLIB == "private":
-        msglogger.info("AMC: Using private")
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-
-        agent_args = Stam()
-        agent_args.bsize = args.batch_size
-        agent_args.tau = 0.01
-        agent_args.discount = 1.
-        agent_args.epsilon = 50000
-        agent_args.init_delta = 0.5
-        agent_args.delta_decay = 0.95
-        agent_args.warmup = 100
-        agent_args.lr_c = 1e-3
-        agent_args.lr_a = 1e-4
-        agent_args.hidden1 = 300
-        agent_args.hidden2 = 300
-        agent_args.rmsize = 100
-        agent_args.rmsize = agent_args.rmsize * env.net_wrapper.num_layers()  # for each layer
-        agent_args.window_length = 1
-        agent_args.train_episode = 800
-        agent_args.output = "."
-        agent = private_agent.DDPG(len(Observation._fields), 1, agent_args)
-        private_agent.train(agent_args.train_episode, agent, env, agent_args.output, agent_args.warmup)
+        from .rl_libs.private import private_if
+        x = private_if.RlLibInterface()
+        args.observation_len = len(Observation._fields)
+        x.solve(env, args)
+    elif RLLIB == "coach":
+        from .rl_libs.coach import coach_if
+        x = coach_if.RlLibInterface()
+        env_cfg  = {'model': model, 
+                    'app_args': app_args,
+                    'amc_cfg': amc_cfg,
+                    'services': services}
+        # Todo: This is silly - fix it.
+        e = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        steps_per_episode = e.net_wrapper.num_layers()
+        x.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
     else:
-        msglogger.info("AMC: Using coach")
-
-        # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
-        # Coach to create and use our DistillerWrapperEnvironment environment.
-        # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
-        if args.amc_agent_algo == "DDPG":
-            from examples.automated_deep_compression.presets.ADC_DDPG import graph_manager, agent_params
-            agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-                (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
-                (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
-                 EnvironmentSteps(training_noise_duration))])
-            # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
-        elif "ClippedPPO" in args.amc_agent_algo:
-            from examples.automated_deep_compression.presets.ADC_ClippedPPO import graph_manager, agent_params
-
-        # These parameters are passed to the Distiller environment
-        graph_manager.env_params.additional_simulator_parameters = {'model': model,
-                                                                    'app_args': app_args,
-                                                                    'amc_cfg': amc_cfg,
-                                                                    'services': services}
-
-        coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
-        os.mkdir(coach_logs_dir)
-        task_parameters = TaskParameters(experiment_path=coach_logs_dir)
-        graph_manager.create_graph(task_parameters)
-        graph_manager.improve()
-
+        raise ValueError("unsupported rl library: ", RLLIB)
 
 # This is a temporary hack!
 resnet50_params = ["module.layer1.0.conv1.weight", "module.layer1.0.conv2.weight",
@@ -703,9 +634,9 @@ class DistillerWrapperEnvironment(gym.Env):
             self.action_space.default_action = self.action_low
         else:
             self.action_space = spaces.Discrete(10)
-        self.STATE_EMBEDDING_LEN = len(Observation._fields)
+        #self.STATE_EMBEDDING_LEN = len(Observation._fields)
         #self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+self.num_layers(),))
-        self.observation_space = spaces.Box(0, float("inf"), shape=(self.STATE_EMBEDDING_LEN+1,))
+        self.observation_space = spaces.Box(0, float("inf"), shape=(len(Observation._fields),))
         #self.observation_space = spaces.Box(0, float("inf"), shape=(LayerDescLen * self.num_layers(), ))
         self.stats_file = AMCStatsFile(os.path.join(msglogger.logdir, 'amc.csv'))
         self.ft_stats_file = FineTuneStatsFile(os.path.join(msglogger.logdir, 'ft_top1.csv'))
