@@ -107,20 +107,14 @@ def adjust_ppo_output(ppo_pruning_action, action_high, action_low):
     # scale = (action_high - action_low) / 2# / (PPO_MAX - PPO_MIN)
     pruning_action = ppo_pruning_action * scale + shift
     return float(pruning_action)
-    
 
-def modules_list(arch):
-    # Temporary ugly hack!
-    with open("auto_compression.yaml", 'r') as cfg_file:
-        compression_cfg = distiller.utils.yaml_ordered_load(cfg_file)
-    layers = compression_cfg["network"][arch]
-    return layers
 
 
 class NetworkWrapper(object):
-    def __init__(self, model, app_args, services):
+    def __init__(self, model, app_args, services, modules_list):
         self.app_args = app_args
         self.services = services
+        self.modules_list = modules_list
         self.conv_layers, _, _ = self.collect_conv_details(model)
         self.reset(model)
 
@@ -135,7 +129,7 @@ class NetworkWrapper(object):
         return self.app_args.arch
 
     def collect_conv_details(self, model):
-        return collect_conv_details(model, self.app_args.dataset, True, modules_list(self.app_args.arch))
+        return collect_conv_details(model, self.app_args.dataset, True, self.modules_list)
 
     def num_layers(self):
         return len(self.conv_layers)
@@ -254,7 +248,8 @@ class DistillerWrapperEnvironment(gym.Env):
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
-        self.net_wrapper = NetworkWrapper(model, app_args, services)
+        modules_list = amc_cfg.modules_dict[app_args.arch]
+        self.net_wrapper = NetworkWrapper(model, app_args, services, modules_list)
         self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_model_resources_requirements(model)
 
         self.reset(init_only=True)
@@ -286,7 +281,7 @@ class DistillerWrapperEnvironment(gym.Env):
             # For feature-map reconstruction we need to collect a representative set of inter-layer feature-maps
             collect_intermediate_featuremap_samples(self.net_wrapper.model,
                                                     self.net_wrapper.validate, 
-                                                    modules_list(self.net_wrapper.app_args.arch))
+                                                    modules_list)
         
         #print(self.orig_model.intermediate_fms['output_fms']['module.layer1.1.conv1'])
         #assert False

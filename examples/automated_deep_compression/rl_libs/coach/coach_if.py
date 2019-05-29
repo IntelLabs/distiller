@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 
-
 from rl_coach.base_parameters import TaskParameters
 from rl_coach.core_types import EnvironmentSteps
 from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
@@ -49,8 +48,8 @@ class RlLibInterface(object):
                 (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
                  EnvironmentSteps(training_noise_duration))])
             # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
-        elif "ClippedPPO" in app_args.amc_agent_algo:
-            from examples.automated_deep_compression.presets.ADC_ClippedPPO import graph_manager, agent_params
+        elif "ClippedPPO" in args.amc_agent_algo:
+            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params
 
         # These parameters are passed to the Distiller environment
         env_cfg  = {'model': model, 
