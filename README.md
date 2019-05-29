@@ -176,7 +176,7 @@ Beware.
 These instructions will help get Distiller up and running on your local machine.
 1. [Clone Distiller](#clone-distiller)
 2. [Create a Python virtual environment](#create-a-python-virtual-environment)
-3. [Install dependencies](#install-dependencies)
+3. [Install the package](#install-the-package)
 
 Notes:
 - Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
@@ -230,6 +230,7 @@ $ pip3 install -e .
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
 
 PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.
+If you do not use CUDA 9 in your environment, please refer to [Pytorch website](https://pytorch.org/get-started/locally/) to install the compatible build of Pytorch 1.0.1. Use `pip3 install --force` to reinstall.
 
 ## Getting Started
 
