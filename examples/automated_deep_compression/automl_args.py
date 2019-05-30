@@ -44,3 +44,5 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        default="filters", help="The pruning pattern")
     group.add_argument('--amc-prune-method', choices=["l1-rank", "stochastic-l1-rank", "fm-reconstruction"],
                        default="l1-rank", help="The pruning method")
+    group.add_argument('--amc-rllib', choices=["coach", "spinningup", "private", "random"],
+                       default=None, help="Choose which RL library to use")
