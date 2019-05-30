@@ -25,14 +25,13 @@ from copy import deepcopy
 import logging
 import operator
 import random
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import yaml
-
 import inspect
+import distiller
 
 msglogger = logging.getLogger()
 
@@ -559,19 +558,7 @@ def has_children(module):
 
 
 def get_dummy_input(dataset, device=None):
-    """Generate a representative dummy (random) input for the specified dataset.
-
-    If a device is specified, then the dummay_input is moved to that device.
-    """
-    if dataset == 'imagenet':
-        dummy_input = torch.randn(1, 3, 224, 224)
-    elif dataset == 'cifar10':
-        dummy_input = torch.randn(1, 3, 32, 32)
-    else:
-        raise ValueError("dataset %s is not supported" % dataset)
-    if device:
-        dummy_input = dummy_input.to(device)
-    return dummy_input
+    return distiller.apputils.classification_get_dummy_input(dataset, device)
 
 
 def make_non_parallel_copy(model):
