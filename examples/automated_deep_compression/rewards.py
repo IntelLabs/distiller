@@ -22,6 +22,10 @@ msglogger = logging.getLogger()
 
 
 def reward_factory(reward_name):
+    """Returns a reward function and a function with logic to clamp an action.
+
+    This pair is defines the --amc-protocol choice.
+    """
     return {
         "mac-constrained": (amc_mac_constrained_reward_fn, mac_constrained_clamp_action),
         "accuracy-guaranteed": (amc_accuracy_guarantee_reward_fn, None),
