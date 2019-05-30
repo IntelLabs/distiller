@@ -61,8 +61,11 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     with open(amc_cfg_fname, 'r') as cfg_file:
         compression_cfg = distiller.utils.yaml_ordered_load(cfg_file)
 
-    rl_lib = compression_cfg["rl_lib"]["name"]
-    msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, rl_lib)
+    if not args.amc_rllib:
+        raise ValueError("You must set --amc-rllib to a valid value")
+
+    #rl_lib = compression_cfg["rl_lib"]["name"]
+    #msglogger.info("Executing AMC: RL agent - %s   RL library - %s", args.amc_agent_algo, rl_lib)
 
     # Create a dictionary of parameters that Coach will handover to DistillerWrapperEnvironment
     # Once it creates it.
@@ -96,7 +99,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     amc_cfg.target_density = args.amc_target_density
     amc_cfg.reward_fn, amc_cfg.action_constrain_fn = reward_factory(args.amc_protocol)
 
-    if rl_lib == "spinningup":
+    if args.amc_rllib == "spinningup":
         amc_cfg.heatup_noise = 0.5
         amc_cfg.initial_training_noise = 0.5
         amc_cfg.training_noise_decay = 0.996  # 0.998
@@ -109,13 +112,13 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         num_layers = env1.net_wrapper.num_layers()
         x.solve(env1, env2, num_layers)
-    elif rl_lib == "private":
+    elif args.amc_rllib == "private":
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         from .rl_libs.private import private_if
         x = private_if.RlLibInterface()
         args.observation_len = len(Observation._fields)
         x.solve(env, args)
-    elif rl_lib == "coach":
+    elif args.amc_rllib == "coach":
         from .rl_libs.coach import coach_if
         x = coach_if.RlLibInterface()
         env_cfg  = {'model': model, 
@@ -126,7 +129,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         steps_per_episode = env.net_wrapper.num_layers()
         x.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
-    elif rl_lib == "random":
+    elif args.amc_rllib == "random":
         from .rl_libs.random import random_if
         x = random_if.RlLibInterface()
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
