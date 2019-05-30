@@ -12,7 +12,8 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     group.add_argument('--amc-protocol', choices=["mac-constrained",
                                                   "param-constrained",
                                                   "accuracy-guaranteed",
-                                                  "mac-constrained-experimental"],
+                                                  "mac-constrained-experimental",
+                                                  "punish_agent"],
                        default="mac-constrained", help='Compression-policy search protocol')
     group.add_argument('--amc-ft-epochs', type=int, default=1,
                        help='The number of epochs to fine-tune each discovered network')
