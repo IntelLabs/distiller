@@ -14,6 +14,15 @@
 # limitations under the License.
 #
 
+"""
+We thank Prof. Song Han and his team for their help with certain critical parts 
+of this implementation.
+
+AMC: AutoML for Model Compression and Acceleration on Mobile Devices.
+     Yihui He, Ji Lin, Zhijian Liu, Hanrui Wang, Li-Jia Li, Song Han
+     arXiv:1802.03494
+"""
+
 import math
 import os
 import copy
@@ -40,11 +49,8 @@ msglogger = logging.getLogger()
 
 
 # Observation = namedtuple('Observation', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
-# LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'h', 'w', 'stride', 'k', 'MACs', 'reduced', 'rest', 'prev_a'])
 Observation = namedtuple('Observation', ['t', 'n', 'c',  'stride', 'k', 'MACs', 'Weights', 'reduced', 'rest', 'prev_a'])
-LayerDesc = namedtuple('LayerDesc', ['t', 'n', 'c', 'stride', 'k', 'MACs', 'Weights', 'reduced', 'rest', 'prev_a'])
-
-LayerDescLen = len(LayerDesc._fields)
+ObservationLen = len(Observation._fields)
 ALMOST_ONE = 0.9999
 
 
@@ -248,7 +254,15 @@ class DistillerWrapperEnvironment(gym.Env):
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
-        modules_list = amc_cfg.modules_dict[app_args.arch]
+        try:
+            modules_list = amc_cfg.modules_dict[app_args.arch]
+        except KeyError:
+            msglogger.warning("!!! The config file does not specify the modules to compress for %s" % app_args.arch)
+            # Default to using all convolution layers
+            distiller.assign_layer_fq_names(model)
+            modules_list = [mod.distiller_name for mod in model.modules() if type(mod)==torch.nn.Conv2d]
+            msglogger.warning("Using the following layers: %s" % ", ".join(modules_list))
+
         self.net_wrapper = NetworkWrapper(model, app_args, services, modules_list)
         self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_model_resources_requirements(model)
 
@@ -447,11 +461,10 @@ class DistillerWrapperEnvironment(gym.Env):
     def get_model_representation(self):
         """Produce a state embedding (i.e. an observation)"""
         num_layers = self.net_wrapper.num_layers()
-        network_obs = np.empty(shape=(num_layers, LayerDescLen))
+        network_obs = np.empty(shape=(num_layers, ObservationLen))
         for layer_id in range(num_layers):
             layer = self.net_wrapper.get_layer(layer_id)
             layer_macs = self.net_wrapper.get_layer_macs(layer)
-            #layer_macs_pct = layer_macs/self.dense_model_macs
             conv_module = distiller.model_find_module(self.model, layer.name)
             obs = [layer.t,
                    conv_module.out_channels,
@@ -461,20 +474,12 @@ class DistillerWrapperEnvironment(gym.Env):
                    layer.stride[0],
                    layer.k,
                    distiller.volume(conv_module.weight),
-                   #layer_macs_pct,
                    layer_macs,
-                   0,
-                   0,
-                   0]
+                   0, 0, 0]
             network_obs[layer_id: ] = np.array(obs)
 
-        # ***********************************************************************
-        # normalize the state
-        #network_obs = np.array(network_obs, 'float')
-        #msglogger.info("model representation=\n{}".format(network_obs))
-        #print('=> shape of embedding (n_layer * n_dim): {}'.format(layer_embedding.shape))
-        #assert len(network_obs.shape) == 2, network_obs.shape
-        for feature in range(LayerDescLen):
+        # Feature normalization
+        for feature in range(ObservationLen):
             feature_vec = network_obs[:, feature]
             fmin = min(feature_vec)
             fmax = max(feature_vec)
