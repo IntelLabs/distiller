@@ -138,8 +138,8 @@ def main():
             torch.cuda.set_device(args.gpus[0])
 
     # Infer the dataset from the model name
-    args.dataset = 'cifar10' if 'cifar' in args.arch else 'imagenet'
-    args.num_classes = 10 if args.dataset == 'cifar10' else 1000
+    args.dataset = distiller.apputils.classification_dataset_str_from_arch(args.arch)
+    args.num_classes = distiller.apputils.classification_num_classes(args.dataset)
 
     if args.earlyexit_thresholds:
         args.num_exits = len(args.earlyexit_thresholds) + 1

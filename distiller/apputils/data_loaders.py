@@ -25,10 +25,32 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data.sampler import Sampler
 import numpy as np
-
 import distiller
 
-DATASETS_NAMES = ['imagenet', 'cifar10']
+
+DATASETS_NAMES = ['imagenet', 'cifar10', 'mnist']
+
+
+def classification_dataset_str_from_arch(arch):
+    if 'cifar' in arch:
+        dataset = 'cifar10' 
+    elif 'mnist' in arch:
+        dataset = 'mnist' 
+    else:
+        dataset = 'imagenet'
+    return dataset
+
+
+def classification_num_classes(dataset):
+    return {'cifar10': 10,
+            'mnist': 10,
+            'imagenet': 1000}.get(dataset, None)
+
+
+def __dataset_factory(dataset):
+    return {'cifar10': cifar10_get_datasets,
+            'mnist': mnist_get_datasets,
+            'imagenet': imagenet_get_datasets}.get(dataset, None)
 
 
 def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
@@ -45,18 +67,41 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
         deterministic: set to True if you want the data loading process to be deterministic.
           Note that deterministic data loading suffers from poor performance.
         effective_train/valid/test_size: portion of the datasets to load on each epoch.
-          The subset is chosen randomly each time. For the training and validation sets, this is applied AFTER
-          the split to those sets according to the validation_split parameter
-        fixed_subset: set to True to keep the same subset of data throughout the run (the size of the subset
-          is still determined according to the effective_train/valid/test_size args)
+          The subset is chosen randomly each time. For the training and validation sets,
+          this is applied AFTER the split to those sets according to the validation_split parameter
+        fixed_subset: set to True to keep the same subset of data throughout the run
+          (the size of the subset is still determined according to the effective_train/valid/test
+          size args)
     """
     if dataset not in DATASETS_NAMES:
         raise ValueError('load_data does not support dataset %s" % dataset')
-    datasets_fn = cifar10_get_datasets if dataset == 'cifar10' else imagenet_get_datasets
-    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, validation_split=validation_split,
-                            deterministic=deterministic, effective_train_size=effective_train_size,
-                            effective_valid_size=effective_valid_size, effective_test_size=effective_test_size,
+    datasets_fn = __dataset_factory(dataset)
+    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, 
+                            validation_split=validation_split,
+                            deterministic=deterministic, 
+                            effective_train_size=effective_train_size,
+                            effective_valid_size=effective_valid_size, 
+                            effective_test_size=effective_test_size,
                             fixed_subset=fixed_subset)
+
+
+def mnist_get_datasets(data_dir):
+    """Load the MNIST dataset."""
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    train_dataset = datasets.MNIST(root=data_dir, train=True,
+                                   download=True, transform=train_transform)
+
+    test_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    test_dataset = datasets.MNIST(root=data_dir, train=False,
+                                  transform=test_transform)
+
+    return train_dataset, test_dataset
 
 
 def cifar10_get_datasets(data_dir):
