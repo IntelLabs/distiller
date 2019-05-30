@@ -134,14 +134,15 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
         # First, reshape the weights tensor such that each channel (kernel) in the original
         # tensor, is now a row in the 2D tensor.
-        #view_2d = param.view(-1, kernel_size)
+        view_2d = param.view(-1, kernel_size)
         # Next, compute the sums of each kernel
-        #kernel_mags = magnitude_fn(view_2d, dim=1)
+        kernel_mags = magnitude_fn(view_2d, dim=1)
         # Now group by channels
-        #k_sums_mat = kernel_mags.view(num_filters, num_channels).t()
-        #channel_mags = k_sums_mat.mean(dim=1)
-        #channel_mags = magnitude_fn(param, dim=(0, 2, 3))
-        channel_mags = torch.abs(param).sum((0, 2, 3))
+        k_sums_mat = kernel_mags.view(num_filters, num_channels).t()
+        channel_mags = k_sums_mat.mean(dim=1)
+
+        # TODO: the code below computes L1 in a simple manner - extend this for other norms
+        #channel_mags = torch.abs(param).sum((0, 2, 3))
 
         k = int(fraction_to_prune * channel_mags.size(0))
         if k == 0:
@@ -624,13 +625,16 @@ class FMReconstructionChannelPruner(RankedStructureParameterPruner):
     given a size-reduced input. The coefficients of the solution to MMSE are then used as
     the new weights of the Convolution layer.
 
-    This 
+    We thank Prof. Han and his team for their help with this implementation.
 
     A variant of this technique was used in [1] and [2].
 
-    [1] Channel Pruning for Accelerating Very Deep Neural Networks
+    [1] Channel Pruning for Accelerating Very Deep Neural Networks.
+        Yihui He, Xiangyu Zhang, Jian Sun.
+        arXiv:1707.06168
     [2] AMC: AutoML for Model Compression and Acceleration on Mobile Devices.
         Yihui He, Ji Lin, Zhijian Liu, Hanrui Wang, Li-Jia Li, Song Han
+        arXiv:1802.03494
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
                  group_dependency=None, kwargs=None, magnitude_fn=l1_magnitude):
