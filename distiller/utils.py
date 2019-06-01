@@ -672,4 +672,5 @@ def getModuleFromModel(model):
     return model if (type(model).__name__ != 'DataParallel') else model.module
 
 def inferDatasetNameFromImageClassifierModel(model):
-    return 'cifar10' if 'cifar10' in str(type(getModuleFromModel(model))).split('.') else 'imagenet'
+    return distiller.apputils.classification_dataset_str_from_arch(
+        str(type(getModuleFromModel(model))).split('.'))
