@@ -79,12 +79,19 @@ class FusedLinearBatchNorm(nn.Module):
         return LinearQuantizeSTE.apply(t, scale, zero_point, self.dequantize, False)
 
     def linear_forward(self, input_q, w_q, b_q):
+        """
+        Forwards the input through the linear layer with quantized params.
+        Args:
+            input_q (torch.Tensor): quantized input
+            w_q (nn.Parameter): quantized weights
+            b_q (nn.Parameter): quantized bias
+        """
         w_old, b_old = self.linear.weight, self.linear.bias
         # We do a trick to save the original module's attributes but forward with quantized weights -
         # Replace only the weight/biases of the model, forward, and then replace back.
         self.linear.weight = w_q
         self.linear.bias = b_q
-        y = self.linear(input_q)
+        y = self.linear(input_q)  # type: torch.Tensor
         self.linear.weight = w_old
         self.linear.bias = b_old
         return y
