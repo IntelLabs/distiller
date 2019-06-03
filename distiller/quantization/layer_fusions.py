@@ -13,7 +13,6 @@ class FusedLinearBatchNorm(nn.Module):
                  freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, frozen=False):
         """
         Wrapper for simulated fusing of BatchNorm into linear layers.
-
         Args:
             linear_module (nn.Linear or nn.Conv2d): the wrapped linear layer
             bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
@@ -28,13 +27,11 @@ class FusedLinearBatchNorm(nn.Module):
         Note:
             The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
         """
-
-        super(FusedLinearBatchNorm, self).__init__()
         FusedLinearBatchNorm.verify_module_types(linear_module, bn)
-
         if not bn.track_running_stats or not bn.affine:
             raise ValueError("Quantization is only supported for BatchNorm which tracks running stats with"
                              "affine weights.")
+        super(FusedLinearBatchNorm, self).__init__()
         self.dequantize = dequantize
         self.mode = verify_quant_mode(mode)
         self.num_bits_acts = num_bits_acts
@@ -64,23 +61,25 @@ class FusedLinearBatchNorm(nn.Module):
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
         batch_mean = batch_var = None
+        w, gamma = self.linear.weight, self.bn.weight
         if not self.frozen:
             # First update the running mean and variance of the batch norm.
-            batch_mean, batch_var = self.batch_stats(self.linear(x))
+            batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w, None))
 
         bn_inverse_sigma = self.bn_inverse_sigma
-        w_corrected = self.linear.weight * self.bn.weight * bn_inverse_sigma
+        # Make the bn.weight broadcastable with linear.weight
+        w_corrected = w * gamma.unsqueeze(1) * bn_inverse_sigma.unsqueeze(1)
         w_quantized = self.quant_weights(w_corrected)
         if self._has_bias:
-            linear_bias, bn_bias = self.quant_bias(self.linear.bias), self.quant_bias(self.bn.bias)
-            bias = self.bn.weight * (linear_bias - self.bn.running_mean) * bn_inverse_sigma + bn_bias
+            b, beta = self.quant_bias(self.linear.bias), self.quant_bias(self.bn.bias)
+            bias = beta + gamma * (b - self.bn.running_mean) * bn_inverse_sigma
         else:
             bias = None
         y = self.linear_forward_fn(x, w_quantized, bias)
         if not self.frozen:
             batch_sigma = torch.sqrt(batch_var + self.bn.eps)
             c = batch_sigma * bn_inverse_sigma
-            bias_correction = self.bn.weight * (self.bn.running_mean * bn_inverse_sigma - batch_mean / batch_sigma)
+            bias_correction = gamma * (self.bn.running_mean * bn_inverse_sigma - batch_mean / batch_sigma)
             return y / c + bias_correction
         return y
 
@@ -153,6 +152,7 @@ class FusedLinearBatchNorm(nn.Module):
                 momentum = 1/num_batches
                 self.bn.running_mean.mul_(1 - momentum).add_(momentum * mean)
                 self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
+        self.bn.num_batches_tracked += 1
         return mean, var
 
     def freeze_batchnorm(self):
