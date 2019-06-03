@@ -1,4 +1,5 @@
 from .range_linear import *
+from torch.nn import functional as F
 
 __all__ = ['FusedLinearBatchNorm']
 
@@ -13,7 +14,7 @@ class FusedLinearBatchNorm(nn.Module):
         linear_module: the wrapped linear layer
         bn : batch normalization
     """
-    def __init__(self, linear_module, bn, num_bits_acts, num_bits_accum, num_bits_params,
+    def __init__(self, linear_module, bn, quantize=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
                  freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, frozen=False):
 
@@ -35,6 +36,7 @@ class FusedLinearBatchNorm(nn.Module):
         self.freeze_bn_delay = freeze_bn_delay
         self.frozen = frozen  # Indicate whether the BatchNorm stats are frozen
         self._has_bias = (self.linear.bias is not None)
+        self.quantize = quantize
 
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
@@ -51,7 +53,7 @@ class FusedLinearBatchNorm(nn.Module):
             bias = self.bn.weight * (linear_bias - self.bn.running_mean) * bn_inverse_sigma + bn_bias
         else:
             bias = None
-        y = self.linear_forward(x, w_quantized, bias)
+        y = F.linear(x, w_quantized, bias)
         if not self.frozen:
             batch_sigma = torch.sqrt(batch_var + self.bn.eps)
             c = batch_sigma * bn_inverse_sigma
@@ -60,9 +62,13 @@ class FusedLinearBatchNorm(nn.Module):
         return y
 
     def quant_weights(self, w: nn.Parameter):
+        if not self.quantize:
+            return w
         return self._quant_param(w, self.num_bits_params)
 
     def quant_bias(self, b: nn.Parameter):
+        if not self.quantize:
+            return b
         return self._quant_param(b, self.num_bits_accum)
 
     def _quant_param(self, t: torch.Tensor, num_bits):
@@ -79,24 +85,6 @@ class FusedLinearBatchNorm(nn.Module):
             scale, zero_point = asymmetric_linear_quantization_params(num_bits, t_min, t_max,
                                                                       signed=signed)
         return LinearQuantizeSTE.apply(t, scale, zero_point, self.dequantize, False)
-
-    def linear_forward(self, input_q, w_q, b_q):
-        """
-        Forwards the input through the linear layer with quantized params.
-        Args:
-            input_q (torch.Tensor): quantized input
-            w_q (nn.Parameter): quantized weights
-            b_q (nn.Parameter): quantized bias
-        """
-        w_old, b_old = self.linear.weight, self.linear.bias
-        # We do a trick to save the original module's attributes but forward with quantized weights -
-        # Replace only the weight/biases of the model, forward, and then replace back.
-        self.linear.weight = w_q
-        self.linear.bias = b_q
-        y = self.linear(input_q)  # type: torch.Tensor
-        self.linear.weight = w_old
-        self.linear.bias = b_old
-        return y
 
     @property
     def bn_inverse_sigma(self):
