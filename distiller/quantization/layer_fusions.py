@@ -1,5 +1,6 @@
 from .range_linear import *
 from torch.nn import functional as F
+from torch.jit import script_method
 
 __all__ = ['FusedLinearBatchNorm']
 
@@ -11,8 +12,18 @@ class FusedLinearBatchNorm(nn.Module):
     """
     Wrapper for simulated fusing of BatchNorm into linear layers.
     Args:
-        linear_module: the wrapped linear layer
-        bn : batch normalization
+        linear_module (nn.Linear or nn.Conv2d): the wrapped linear layer
+        bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
+        quantize (bool): whether to quantize the modules.
+        num_bits_acts (int): number of bits to quantize activations
+        num_bits_accum (int): number of bits to quantize accumulator (or bias)
+        num_bits_params (int): number of bits to quantize weights
+        mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
+        dequantize (bool): whether to dequantized the acts after calculating them
+        freeze_bn_delay (int): number of steps before freezing the batchnorm running stats
+        frozen (bool): whether to freeze the batchnorm right away
+    Note:
+        The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
     """
     def __init__(self, linear_module, bn, quantize=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
@@ -37,6 +48,10 @@ class FusedLinearBatchNorm(nn.Module):
         self.frozen = frozen  # Indicate whether the BatchNorm stats are frozen
         self._has_bias = (self.linear.bias is not None)
         self.quantize = quantize
+        if isinstance(linear_module, nn.Linear):
+            self.linear_forward_fn = self._linear_layer_forward
+        else:
+            self.linear_forward_fn = self._conv2d_layer_forward
 
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
@@ -53,7 +68,7 @@ class FusedLinearBatchNorm(nn.Module):
             bias = self.bn.weight * (linear_bias - self.bn.running_mean) * bn_inverse_sigma + bn_bias
         else:
             bias = None
-        y = F.linear(x, w_quantized, bias)
+        y = self.linear_forward_fn(x, w_quantized, bias)
         if not self.frozen:
             batch_sigma = torch.sqrt(batch_var + self.bn.eps)
             c = batch_sigma * bn_inverse_sigma
@@ -88,6 +103,9 @@ class FusedLinearBatchNorm(nn.Module):
 
     @property
     def bn_inverse_sigma(self):
+        """
+        Returns 1/sqrt(var + epsilon)
+        """
         # .clone().detach() to remove history from these tensors.
         return torch.rsqrt(self.bn.running_var + self.bn.eps).clone().detach()
 
@@ -132,5 +150,14 @@ class FusedLinearBatchNorm(nn.Module):
     def freeze_batchnorm(self):
         self.frozen = True
 
+    def _linear_layer_forward(self, input, w, b):
+        return F.linear(input, w, b)
 
+    def _conv2d_layer_forward(self, input, w, b):
+        # We replace the weights temporarily to allow for easy forward with the new weights.
+        w_old, b_old = self.linear.weight, self.linear.bias
+        self.linear.weight, self.linear.bias = w, b
+        y = self.linear(input)
+        self.linear.weight, self.linear.bias = w_old, b_old
+        return y
 
