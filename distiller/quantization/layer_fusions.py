@@ -14,7 +14,7 @@ class FusedLinearBatchNorm(nn.Module):
         bn : batch normalization
     """
     def __init__(self, linear_module, bn, num_bits_acts, num_bits_accum, num_bits_params,
-                 mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, dequantize=True,
+                 mode=LinearQuantMode.SYMMETRIC, dequantize=True,
                  freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, frozen=False):
 
         super(FusedLinearBatchNorm, self).__init__()
@@ -35,11 +35,14 @@ class FusedLinearBatchNorm(nn.Module):
         self.freeze_bn_delay = freeze_bn_delay
         self.frozen = frozen  # Indicate whether the BatchNorm stats are frozen
         self._has_bias = (self.linear.bias is not None)
-        self.quantizer_inputs = FakeLinearQuantization(num_bits_acts, mode=self.mode, ema_decay=ema_decay)
 
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
-        x_quantized = self.quantizer_inputs(x)
+        batch_mean = batch_var = None
+        if not self.frozen:
+            # First update the running mean and variance of the batch norm.
+            batch_mean, batch_var = self.batch_stats(self.linear(x))
+
         bn_inverse_sigma = self.bn_inverse_sigma
         w_corrected = self.linear.weight * self.bn.weight * bn_inverse_sigma
         w_quantized = self.quant_weights(w_corrected)
@@ -48,9 +51,8 @@ class FusedLinearBatchNorm(nn.Module):
             bias = self.bn.weight * (linear_bias - self.bn.running_mean) * bn_inverse_sigma + bn_bias
         else:
             bias = None
-        y = self.linear_forward(x_quantized, w_quantized, bias)
+        y = self.linear_forward(x, w_quantized, bias)
         if not self.frozen:
-            batch_mean, batch_var = self.batch_stats(self.linear(x))
             batch_sigma = torch.sqrt(batch_var + self.bn.eps)
             c = batch_sigma * bn_inverse_sigma
             bias_correction = self.bn.weight * (self.bn.running_mean * bn_inverse_sigma - batch_mean / batch_sigma)
@@ -103,7 +105,7 @@ class FusedLinearBatchNorm(nn.Module):
 
     def batch_stats(self, x):
         """
-        Get the batch mean and variance of x.
+        Get the batch mean and variance of x and updates the BatchNorm's running mean and average.
         Args:
             x (torch.Tensor): input batch.
         Returns:
@@ -123,6 +125,24 @@ class FusedLinearBatchNorm(nn.Module):
         channel_size = self.bn.num_features
         mean = x.transpose(0, 1).contiguous().view(channel_size, -1).mean(1)
         var = x.transpose(0, 1).contiguous().view(channel_size, -1).var(1)
+        if self.bn.momentum:
+            self.bn.running_mean.mul_(1-self.bn.momentum).add_(self.bn.momentum * mean)
+            self.bn.running_var.mul_(1-self.bn.momentum).add_(self.bn.momentum * var)
+        else:
+            # momentum is None - we compute a cumulative moving average
+            # as noted in https://pytorch.org/docs/stable/nn.html#batchnorm2d
+            num_batches = self.bn.num_batches_tracked
+            if num_batches == 0:
+                self.bn.running_mean.data = mean
+                self.bn.running_var.data = var
+            else:
+                momentum = 1/num_batches
+                self.bn.running_mean.mul_(1 - momentum).add_(momentum * mean)
+                self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
         return mean, var
+
+    def freeze_batchnorm(self):
+        self.frozen = True
+
 
 
