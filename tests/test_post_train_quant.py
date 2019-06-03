@@ -16,10 +16,13 @@
 import pytest
 import torch
 import torch.testing
+import torch.nn as nn
 from collections import OrderedDict
 
 from distiller.quantization import RangeLinearQuantParamLayerWrapper, LinearQuantMode, ClipMode, \
-    RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper
+    RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper, \
+    PostTrainLinearQuantizer
+from distiller.data_loggers import QuantCalibrationStatsCollector, collector_context
 import distiller.modules
 
 
@@ -352,3 +355,55 @@ def test_eltwise_add_layer_wrapper(inputs, eltwise_add_stats, mode, clip_acts, e
     output = model(*inputs)
 
     torch.testing.assert_allclose(output, expected_output)
+
+
+class DummyRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(DummyRNN, self).__init__()
+        self.rnn = distiller.modules.DistillerLSTM(input_size, hidden_size, num_layers)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x, h=None):
+        y, h = self.rnn(x, h)
+        y = self.softmax(y)
+        return y, h
+
+
+@pytest.fixture()
+def rnn_model():
+    return DummyRNN(20, 128, 1)
+
+
+@pytest.fixture()
+def rnn_model_stats(rnn_model):
+    collector = QuantCalibrationStatsCollector(rnn_model)
+    dummy_input = torch.randn(35, 50, 20)
+    with collector_context(collector):
+        y,h = rnn_model(dummy_input)
+    return collector.value()
+
+
+@pytest.mark.parametrize(
+    "overrides, e_clip_acts, e_n_stds",
+    [
+        (None, ClipMode.AVG, 0),
+
+        (distiller.utils.yaml_ordered_load("""
+        rnn.cells.0.eltwisemult_hidden:
+            clip_acts: NONE
+        """), ClipMode.NONE, 0),
+
+        (distiller.utils.yaml_ordered_load("""
+        rnn.cells.0.eltwisemult_hidden:
+            clip_acts: N_STD
+            clip_n_stds: 2
+        """), ClipMode.N_STD, 2)
+    ]
+)
+def test_override_no_clip(overrides, e_clip_acts, e_n_stds, rnn_model, rnn_model_stats):
+    quantizer = PostTrainLinearQuantizer(rnn_model, clip_acts="AVG", clip_n_stds=0, overrides=overrides,
+                                         model_activation_stats=rnn_model_stats)
+    quantizer.prepare_model()
+    assert isinstance(quantizer.model.rnn.cells[0].eltwisemult_hidden, RangeLinearQuantEltwiseMultWrapper)
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_acts == e_clip_acts
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_n_stds == e_n_stds
