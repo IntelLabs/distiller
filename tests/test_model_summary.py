@@ -64,5 +64,12 @@ def test_summary(what):
     dataset = "cifar10"
     arch = "resnet20_cifar"
     model, _ = common.setup_test(arch, dataset, parallel=True)
+    distiller.model_summary(model, what, dataset=dataset)
 
+
+@pytest.mark.parametrize('what', SUMMARY_CHOICES)
+def test_mnist(what):
+    dataset = "mnist"
+    arch = "simplenet_mnist"
+    model, _ = common.setup_test(arch, dataset, parallel=True)
     distiller.model_summary(model, what, dataset=dataset)
