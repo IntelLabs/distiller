@@ -45,7 +45,6 @@ quantizers:
     model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True
     clip_acts: AVG
-    no_clip_layers: fc
     overrides:
     # First and last layers + element-wise add layers in 8-bits
       conv1:
@@ -57,3 +56,4 @@ quantizers:
       fc:
         bits_weights: 8
         bits_activations: 8
+        clip_acts: NONE
