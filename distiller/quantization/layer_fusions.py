@@ -1,6 +1,5 @@
 from .range_linear import *
 from torch.nn import functional as F
-from torch.jit import script_method
 
 __all__ = ['FusedLinearBatchNorm']
 
@@ -9,30 +8,29 @@ FREEZE_BN_DELAY_DEFAULT = 200000
 
 
 class FusedLinearBatchNorm(nn.Module):
-    """
-    Wrapper for simulated fusing of BatchNorm into linear layers.
-    Args:
-        linear_module (nn.Linear or nn.Conv2d): the wrapped linear layer
-        bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
-        quantize (bool): whether to quantize the modules.
-        num_bits_acts (int): number of bits to quantize activations
-        num_bits_accum (int): number of bits to quantize accumulator (or bias)
-        num_bits_params (int): number of bits to quantize weights
-        mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
-        dequantize (bool): whether to dequantized the acts after calculating them
-        freeze_bn_delay (int): number of steps before freezing the batchnorm running stats
-        frozen (bool): whether to freeze the batchnorm right away
-    Note:
-        The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
-    """
-    def __init__(self, linear_module, bn, quantize=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
+    def __init__(self, linear_module, bn, quantized=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
                  freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, frozen=False):
+        """
+        Wrapper for simulated fusing of BatchNorm into linear layers.
+
+        Args:
+            linear_module (nn.Linear or nn.Conv2d): the wrapped linear layer
+            bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
+            quantized (bool): whether to quantize the modules.
+            num_bits_acts (int): number of bits to quantize activations
+            num_bits_accum (int): number of bits to quantize accumulator (or bias)
+            num_bits_params (int): number of bits to quantize weights
+            mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
+            dequantize (bool): whether to dequantized the acts after calculating them
+            freeze_bn_delay (int): number of steps before freezing the batchnorm running stats
+            frozen (bool): whether to freeze the batchnorm right away
+        Note:
+            The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
+        """
 
         super(FusedLinearBatchNorm, self).__init__()
-        if not isinstance(linear_module, (nn.Linear, nn.Conv2d)) \
-                and not isinstance(bn, (nn.BatchNorm1d, nn.BatchNorm2d)):
-            raise ValueError("Only supporting fusing nn.BatchNorm1d/nn.BatchNorm2d into nn.Linear/nn.Conv2d.")
+        FusedLinearBatchNorm.verify_module_types(linear_module, bn)
 
         if not bn.track_running_stats or not bn.affine:
             raise ValueError("Quantization is only supported for BatchNorm which tracks running stats with"
@@ -47,11 +45,21 @@ class FusedLinearBatchNorm(nn.Module):
         self.freeze_bn_delay = freeze_bn_delay
         self.frozen = frozen  # Indicate whether the BatchNorm stats are frozen
         self._has_bias = (self.linear.bias is not None)
-        self.quantize = quantize
+        self.quantized = quantized
         if isinstance(linear_module, nn.Linear):
             self.linear_forward_fn = self._linear_layer_forward
         else:
             self.linear_forward_fn = self._conv2d_layer_forward
+
+    @staticmethod
+    def verify_module_types(linear, bn):
+        if not isinstance(linear, (nn.Linear, nn.Conv2d)) \
+                and not isinstance(bn, (nn.BatchNorm1d, nn.BatchNorm2d)):
+            raise TypeError("Only supporting fusing nn.BatchNorm1d/nn.BatchNorm2d into nn.Linear/nn.Conv2d.")
+        if isinstance(linear, nn.Linear) and isinstance(bn, nn.BatchNorm2d):
+            raise TypeError("nn.Linear layer has to be followed by a nn.BatchNorm1d layer.")
+        if isinstance(linear, nn.Conv2d) and isinstance(bn, nn.BatchNorm1d):
+            raise TypeError("nn.Con2d layer has to be followed by a nn.BatchNorm2d layer.")
 
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
@@ -77,12 +85,12 @@ class FusedLinearBatchNorm(nn.Module):
         return y
 
     def quant_weights(self, w: nn.Parameter):
-        if not self.quantize:
+        if not self.quantized:
             return w
         return self._quant_param(w, self.num_bits_params)
 
     def quant_bias(self, b: nn.Parameter):
-        if not self.quantize:
+        if not self.quantized:
             return b
         return self._quant_param(b, self.num_bits_accum)
 
