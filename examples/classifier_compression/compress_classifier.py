@@ -29,8 +29,8 @@ For each epoch:
     compression_scheduler.on_epoch_begin(epoch)
     train()
     validate()
-    save_checkpoint()
     compression_scheduler.on_epoch_end(epoch)
+    save_checkpoint()
 
 train():
     For each training step:
@@ -277,8 +277,7 @@ def main():
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
-            compression_scheduler.on_epoch_begin(epoch,
-                metrics=(vloss if (epoch != start_epoch) else 10**6))
+            compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
@@ -305,7 +304,7 @@ def main():
                                         loggers=[tflogger])
 
         if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch, optimizer)
+            compression_scheduler.on_epoch_end(epoch, optimizer, metrics={'min': vloss, 'max': top1})
 
         # Update the list of top scores achieved so far, and save the checkpoint
         update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
