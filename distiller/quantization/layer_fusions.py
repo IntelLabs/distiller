@@ -40,7 +40,6 @@ class FusedLinearBatchNorm(nn.Module):
         self.linear = linear_module
         self.bn = bn
         self.freeze_bn_delay = freeze_bn_delay
-        self.frozen = frozen  # Indicate whether the BatchNorm stats are frozen
         self._has_bias = (self.linear.bias is not None)
         self.quantized = quantized
         if isinstance(linear_module, nn.Linear):
@@ -60,28 +59,24 @@ class FusedLinearBatchNorm(nn.Module):
 
     def forward(self, x):
         """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
-        batch_mean = batch_var = None
-        w, gamma = self.linear.weight, self.bn.weight
-        if not self.frozen:
-            # First update the running mean and variance of the batch norm.
+        w, gamma, beta = self.linear.weight, self.bn.weight, self.bn.bias
+        batch_mean = batch_var = sigma_batch = None
+        if self.training:
             batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w, None))
-
-        bn_inverse_sigma = self.bn_inverse_sigma
+            sigma_batch = torch.sqrt(batch_var + self.bn.eps)
+        recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps).clone().detach()
+        c = sigma_batch * recip_sigma_moving if self.training else None
         # Make the bn.weight broadcastable with linear.weight
-        w_corrected = w * gamma.unsqueeze(1) * bn_inverse_sigma.unsqueeze(1)
+        w_corrected = w * gamma.unsqueeze(1) * recip_sigma_moving.unsqueeze(1)
         w_quantized = self.quant_weights(w_corrected)
-        if self._has_bias:
-            b, beta = self.quant_bias(self.linear.bias), self.quant_bias(self.bn.bias)
-            bias = beta + gamma * (b - self.bn.running_mean) * bn_inverse_sigma
+        y = self.linear_forward_fn(x, w_quantized, None)
+        if self.training:
+            y_corrected = y / c
+            bias_corrected = beta - gamma * batch_mean / sigma_batch
         else:
-            bias = None
-        y = self.linear_forward_fn(x, w_quantized, bias)
-        if not self.frozen:
-            batch_sigma = torch.sqrt(batch_var + self.bn.eps)
-            c = batch_sigma * bn_inverse_sigma
-            bias_correction = gamma * (self.bn.running_mean * bn_inverse_sigma - batch_mean / batch_sigma)
-            return y / c + bias_correction
-        return y
+            y_corrected = y
+            bias_corrected = beta - gamma * self.bn.running_mean * recip_sigma_moving
+        return y_corrected + bias_corrected
 
     def quant_weights(self, w: nn.Parameter):
         if not self.quantized:
@@ -107,14 +102,6 @@ class FusedLinearBatchNorm(nn.Module):
             scale, zero_point = asymmetric_linear_quantization_params(num_bits, t_min, t_max,
                                                                       signed=signed)
         return LinearQuantizeSTE.apply(t, scale, zero_point, self.dequantize, False)
-
-    @property
-    def bn_inverse_sigma(self):
-        """
-        Returns 1/sqrt(var + epsilon)
-        """
-        # .clone().detach() to remove history from these tensors.
-        return torch.rsqrt(self.bn.running_var + self.bn.eps).clone().detach()
 
     def batch_stats(self, x):
         """
@@ -154,9 +141,6 @@ class FusedLinearBatchNorm(nn.Module):
                 self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
         self.bn.num_batches_tracked += 1
         return mean, var
-
-    def freeze_batchnorm(self):
-        self.frozen = True
 
     def _linear_layer_forward(self, input, w, b):
         return F.linear(input, w, b)
