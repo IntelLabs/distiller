@@ -465,6 +465,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                 # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
                 self.register_buffer('base_b_q', base_b_q)
 
+        if self.mode != LinearQuantMode.SYMMETRIC:
+            self.wrapped_module.weight.data += self.w_zero_point
+
     def get_inputs_quantization_params(self, input):
         if not self.preset_act_stats:
             self.in_0_scale, self.in_0_zero_point = _get_quant_params_from_tensor(
@@ -498,16 +501,125 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
         # dealing solely with integer values, the results are the same either way.
 
-        if self.mode != LinearQuantMode.SYMMETRIC:
-            input_q += self.in_0_zero_point
-            self.wrapped_module.weight.data += self.w_zero_point
+        # if self.mode != LinearQuantMode.SYMMETRIC:
+        #     input_q += self.in_0_zero_point
+        #     self.wrapped_module.weight.data += self.w_zero_point
 
+        input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
-        if self.mode != LinearQuantMode.SYMMETRIC:
-            self.wrapped_module.weight.data -= self.w_zero_point
+        # if self.mode != LinearQuantMode.SYMMETRIC:
+        #     self.wrapped_module.weight.data -= self.w_zero_point
         return accum
+
+    def get_output_quantization_params(self, accumulator):
+        if self.preset_act_stats:
+            return self.output_scale, self.output_zero_point
+
+        y_f = accumulator / self.accum_scale
+        return _get_quant_params_from_tensor(y_f, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                                             num_stds=self.clip_n_stds,
+                                             scale_approx_mult_bits=self.scale_approx_mult_bits)
+
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        requant_scale = output_scale / self.accum_scale
+        if self.scale_approx_mult_bits is not None:
+            requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
+        return requant_scale, output_zero_point
+
+    def extra_repr(self):
+        tmpstr = 'mode={0}, '.format(str(self.mode).split('.')[1])
+        tmpstr += 'num_bits_acts={0}, num_bits_params={1}, num_bits_accum={2}, '.format(self.num_bits_acts,
+                                                                                        self.num_bits_params,
+                                                                                        self.num_bits_accum)
+        tmpstr += 'clip_acts={0}, '.format(_enum_to_str(self.clip_acts))
+        if self.clip_acts == ClipMode.N_STD:
+            tmpstr += 'num_stds={} '.format(self.clip_n_stds)
+        tmpstr += 'per_channel_wts={}, scale_approx_mult_bits={}'.format(self.per_channel_wts,
+                                                                         self.scale_approx_mult_bits)
+        tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
+        if self.per_channel_wts:
+            tmpstr += '\nw_scale=PerCh, w_zero_point=PerCh'
+        else:
+            tmpstr += '\nw_scale={0:.4f}, w_zero_point={1:.4f}'.format(self.w_scale.item(), self.w_zero_point.item())
+        if self.preset_act_stats:
+            tmpstr += '\nin_scale={0:.4f}, in_zero_point={1:.4f}'.format(self.in_0_scale.item(),
+                                                                         self.in_0_zero_point.item())
+            tmpstr += '\nout_scale={0:.4f}, out_zero_point={1:.4f}'.format(self.output_scale.item(),
+                                                                           self.output_zero_point.item())
+        elif self.has_bias:
+            tmpstr += '\nbase_b_scale={0:.4f}, base_b_zero_point={1:.4f}'.format(self.b_scale.item(),
+                                                                                 self.b_zero_point.item())
+        return tmpstr
+
+
+class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
+    """
+    Wrapper for quantizing the Matmul operation between 2 input tensors.
+    output = input1 @ input2
+    where:
+        input1.shape = (input_batch, input_size)
+        input2.shape = (input_size, output_size)
+    The mathematical calculation is:
+        y_f = i1_f * i2_f
+        iN_f = iN_q / scale_iN + zp_iN =>
+        y_q = scale_y * y_f + zp_y =  scale_y * (i1_f * i2_f) + zp_y =
+
+                    scale_y
+        y_q = ------------------- * ((i1_q + zp_i1) * (i2_q + zp_i2) + zp_y
+               scale_x * scale_w
+    Args:
+        wrapped_module (distiller.modules.Matmul): Module to be wrapped
+        input_size (int) : the feature map size of the first input
+        output_size (int) : the fature map size of the second input (and the output)
+        num_bits_acts (int): Number of bits used for inputs and output quantization
+        num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
+        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
+        clip_acts (ClipNode): See RangeLinearQuantWrapper
+        per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
+            output channel
+        activation_stats (dict): See RangeLinearQuantWrapper
+        clip_n_stds (int): See RangeLinearQuantWrapper
+        scale_approx_mult_bits (int): See RangeLinearQuantWrapper
+    """
+    def __init__(self, wrapped_module, input_size, output_size, num_bits_acts, num_bits_accum=32,
+                 mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
+                 clip_n_stds=None, scale_approx_mult_bits=None):
+        super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
+                                                                clip_acts, activation_stats, clip_n_stds,
+                                                                scale_approx_mult_bits)
+
+        if not isinstance(wrapped_module, distiller.modules.Matmul):
+            raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
+
+        self.per_channel_wts = per_channel_wts
+        self.input_size = input_size
+        self.output_size = output_size
+
+    def forward(self, input1, input2):
+        # Override completely the forward pass of the wrapper.
+        # TODO - implement
+        [i1_scale, i2_scale], [i1_zero_point, i2_zero_point] = self.get_inputs_quantization_params(input1, input2)
+        input1_q = LinearQuantizeSTE.apply(input1, i1_scale, i1_zero_point, dequantize=False, inplace=False)
+        input2_q = LinearQuantizeSTE.apply(input2, i2_scale, i2_zero_point, dequantize=False, inplace=False)
+        accum = self.wrapped_module(input1_q, input2_q)
+        # TODO requant accum
+        return accum
+
+    def get_inputs_quantization_params(self, input1, input2):
+        if not self.preset_act_stats:
+            self.in_0_scale, self.in_0_zero_point = _get_quant_params_from_tensor(
+                input1, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                num_stds=self.clip_n_stds, scale_approx_mult_bits=self.scale_approx_mult_bits)
+            self.in_1_scale, self.in_1_zero_point = _get_quant_params_from_tensor(
+                input1, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                num_stds=self.clip_n_stds, scale_approx_mult_bits=self.scale_approx_mult_bits)
+        return [self.in_0_scale, self.in_1_scale], [self.in_0_zero_point, self.in_1_zero_point]
+
+    def quantized_forward(self, input1_q, input2_q):
+        # Unused
+        pass
 
     def get_output_quantization_params(self, accumulator):
         if self.preset_act_stats:

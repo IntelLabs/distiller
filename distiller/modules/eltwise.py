@@ -20,6 +20,7 @@ import torch.nn as nn
 class EltwiseAdd(nn.Module):
     def __init__(self, inplace=False):
         super(EltwiseAdd, self).__init__()
+
         self.inplace = inplace
 
     def forward(self, *input):

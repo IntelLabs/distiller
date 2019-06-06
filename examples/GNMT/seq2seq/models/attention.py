@@ -102,7 +102,7 @@ class BahdanauAttention(nn.Module):
         else:
             linear_att = self.linear_att
 
-        out = self.tanh(sum_qk).matmul(linear_att)
+        out = self.matmul_score(self.tanh(sum_qk),linear_att)
         return out
 
     def forward(self, query, keys):
