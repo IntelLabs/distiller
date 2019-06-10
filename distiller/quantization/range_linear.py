@@ -411,7 +411,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
-        clip_n_stds (int): See RangeLinearQuantWrapper
+        clip_n_stds (int or float): See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
@@ -556,7 +556,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
 
 class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
     """
-    Wrapper for quantizing the Matmul operation between 2 input tensors.
+    Wrapper for quantizing the Matmul/BatchMatmul operation between 2 input tensors.
     output = input1 @ input2
     where:
         input1.shape = (input_batch, input_size)
@@ -570,56 +570,44 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         y_q = ------------------- * ((i1_q + zp_i1) * (i2_q + zp_i2) + zp_y
                scale_x * scale_w
     Args:
-        wrapped_module (distiller.modules.Matmul): Module to be wrapped
-        input_size (int) : the feature map size of the first input
-        output_size (int) : the fature map size of the second input (and the output)
+        wrapped_module (distiller.modules.Matmul or distiller.modules.BatchMatmul): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
         mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
         clip_acts (ClipNode): See RangeLinearQuantWrapper
-        per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
-            output channel
         activation_stats (dict): See RangeLinearQuantWrapper
         clip_n_stds (int): See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
-    def __init__(self, wrapped_module, input_size, output_size, num_bits_acts, num_bits_accum=32,
-                 mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
+    def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32,
+                 mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,  activation_stats=None,
                  clip_n_stds=None, scale_approx_mult_bits=None):
         super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds,
                                                                 scale_approx_mult_bits)
 
-        if not isinstance(wrapped_module, distiller.modules.Matmul):
+        if not isinstance(wrapped_module, (distiller.modules.Matmul, distiller.modules.BatchMatmul)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
+        if self.preset_act_stats:
+            self.register_buffer('accum_scale', self.in_0_scale * self.in_1_scale)
+        else:
+            self.accum_scale = 1
 
-        self.per_channel_wts = per_channel_wts
-        self.input_size = input_size
-        self.output_size = output_size
-
-    def forward(self, input1, input2):
-        # Override completely the forward pass of the wrapper.
-        # TODO - implement
-        [i1_scale, i2_scale], [i1_zero_point, i2_zero_point] = self.get_inputs_quantization_params(input1, input2)
-        input1_q = LinearQuantizeSTE.apply(input1, i1_scale, i1_zero_point, dequantize=False, inplace=False)
-        input2_q = LinearQuantizeSTE.apply(input2, i2_scale, i2_zero_point, dequantize=False, inplace=False)
-        accum = self.wrapped_module(input1_q, input2_q)
-        # TODO requant accum
-        return accum
-
-    def get_inputs_quantization_params(self, input1, input2):
+    def get_inputs_quantization_params(self, input0, input1):
         if not self.preset_act_stats:
             self.in_0_scale, self.in_0_zero_point = _get_quant_params_from_tensor(
-                input1, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                input0, self.num_bits_acts, self.mode, clip=self.clip_acts,
                 num_stds=self.clip_n_stds, scale_approx_mult_bits=self.scale_approx_mult_bits)
             self.in_1_scale, self.in_1_zero_point = _get_quant_params_from_tensor(
-                input1, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                input0, self.num_bits_acts, self.mode, clip=self.clip_acts,
                 num_stds=self.clip_n_stds, scale_approx_mult_bits=self.scale_approx_mult_bits)
         return [self.in_0_scale, self.in_1_scale], [self.in_0_zero_point, self.in_1_zero_point]
 
-    def quantized_forward(self, input1_q, input2_q):
-        # Unused
-        pass
+    def quantized_forward(self, input0_q, input1_q):
+        accum = self.wrapped_module.forward(input0_q + self.in_0_zero_point,
+                                            input1_q + self.in_1_zero_point)
+        clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
+        return accum
 
     def get_output_quantization_params(self, accumulator):
         if self.preset_act_stats:
@@ -638,22 +626,19 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
     def extra_repr(self):
         tmpstr = 'mode={0}, '.format(str(self.mode).split('.')[1])
-        tmpstr += 'num_bits_acts={0}, num_bits_params={1}, num_bits_accum={2}, '.format(self.num_bits_acts,
-                                                                                        self.num_bits_params,
-                                                                                        self.num_bits_accum)
+        tmpstr += 'num_bits_acts={0},  num_bits_accum={1}, '.format(self.num_bits_acts, self.num_bits_accum)
         tmpstr += 'clip_acts={0}, '.format(_enum_to_str(self.clip_acts))
         if self.clip_acts == ClipMode.N_STD:
             tmpstr += 'num_stds={} '.format(self.clip_n_stds)
-        tmpstr += 'per_channel_wts={}, scale_approx_mult_bits={}'.format(self.per_channel_wts,
-                                                                         self.scale_approx_mult_bits)
+        tmpstr += 'scale_approx_mult_bits={}'.format(self.scale_approx_mult_bits)
         tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
-        if self.per_channel_wts:
-            tmpstr += '\nw_scale=PerCh, w_zero_point=PerCh'
-        else:
-            tmpstr += '\nw_scale={0:.4f}, w_zero_point={1:.4f}'.format(self.w_scale.item(), self.w_zero_point.item())
         if self.preset_act_stats:
-            tmpstr += '\nin_scale={0:.4f}, in_zero_point={1:.4f}'.format(self.in_0_scale.item(),
+            tmpstr += '\nin_0_scale={0:.4f}, in_0_zero_point={1:.4f}'.format(self.in_0_scale.item(),
                                                                          self.in_0_zero_point.item())
+
+            tmpstr += '\nin_1_scale={0:.4f}, in_1_zero_point={1:.4f}'.format(self.in_1_scale.item(),
+                                                                         self.in_1_zero_point.item())
+
             tmpstr += '\nout_scale={0:.4f}, out_zero_point={1:.4f}'.format(self.output_scale.item(),
                                                                            self.output_zero_point.item())
         elif self.has_bias:
@@ -1015,14 +1000,19 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseAddWrapper)
         factory_eltwisemult = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
+        factory_matmul = partial(
+            replace_non_param_layer, RangeLinearQuantMatmulWrapper)
 
         update_wrapper(factory_concat, replace_non_param_layer)
         update_wrapper(factory_eltwiseadd, replace_non_param_layer)
         update_wrapper(factory_eltwisemult, replace_non_param_layer)
+        update_wrapper(factory_matmul, replace_non_param_layer)
 
         self.replacement_factory[distiller.modules.Concat] = factory_concat
         self.replacement_factory[distiller.modules.EltwiseAdd] = factory_eltwiseadd
         self.replacement_factory[distiller.modules.EltwiseMult] = factory_eltwisemult
+        self.replacement_factory[distiller.modules.Matmul] = factory_matmul
+        self.replacement_factory[distiller.modules.BatchMatmul] = factory_matmul
         self.replacement_factory[nn.Embedding] = replace_embedding
 
     @classmethod
