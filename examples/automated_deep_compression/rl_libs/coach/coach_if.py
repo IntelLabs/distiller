@@ -46,11 +46,13 @@ class RlLibInterface(object):
             #     (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
             #     (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
             #      EnvironmentSteps(training_noise_duration))])
-            agent_params.exploration.noise_percentage_schedule = ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay)
+            #agent_params.exploration.noise_percentage_schedule = ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay)
+            agent_params.exploration.noise_schedule = ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay)
             # Number of iterations to train 
             agent_params.algorithm.num_consecutive_training_steps = steps_per_episode
             # How many act iterations, before training
             agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(steps_per_episode)
+            agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(steps_per_episode)
             # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
         elif "ClippedPPO" in args.amc_agent_algo:
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params

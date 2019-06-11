@@ -36,20 +36,21 @@ agent_params.network_wrappers['critic'].input_embedders_parameters['action'].sch
 agent_params.network_wrappers['actor'].optimizer_type = 'Adam'
 agent_params.network_wrappers['actor'].adam_optimizer_beta1 = 0.9
 agent_params.network_wrappers['actor'].adam_optimizer_beta2 = 0.999
+agent_params.network_wrappers['actor'].optimizer_epsilon = 1e-8
+#agent_params.network_wrappers['actor'].wd = 0
 
 agent_params.network_wrappers['critic'].optimizer_type = 'Adam'
 agent_params.network_wrappers['critic'].adam_optimizer_beta1 = 0.9
 agent_params.network_wrappers['critic'].adam_optimizer_beta2 = 0.999
-
+agent_params.network_wrappers['critic'].optimizer_epsilon = 1e-8
 
 agent_params.network_wrappers['actor'].learning_rate = 0.0001
 agent_params.network_wrappers['critic'].learning_rate = 0.001
 
 agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
-agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(1)
+#agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(1)
 agent_params.algorithm.heatup_using_network_decisions = False # We want uniform-random samples during heatup
 agent_params.algorithm.discount = 1
-
 agent_params.algorithm.use_non_zero_discount_for_terminal_states = True
 
 # See : https://nervanasystems.github.io/coach/components/agents/policy_optimization/ddpg.html?highlight=ddpg#rl_coach.agents.ddpg_agent.DDPGAlgorithmParameters
@@ -57,7 +58,8 @@ agent_params.algorithm.use_non_zero_discount_for_terminal_states = True
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
 agent_params.exploration = TruncatedNormalParameters()
 agent_params.algorithm.use_target_network_for_evaluation = True
-agent_params.exploration.evaluation_noise_percentage = 0  # Neta new
+#agent_params.exploration.evaluation_noise_percentage = 0  # Neta new
+agent_params.exploration.evaluation_noise = 0  # Neta new
 #agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
 
 
