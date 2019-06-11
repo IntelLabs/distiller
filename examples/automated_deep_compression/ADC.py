@@ -30,7 +30,7 @@ try:
     import gym
 except ImportError as e:
     print("WARNING: to use automated compression you will need to install extra packages")
-    print("See instructions in the header of examples/automated_deep_compression/ADC.py")
+    print("See instructions in the interface of each RL library.")
     raise e
 from gym import spaces
 import distiller
@@ -38,8 +38,8 @@ from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
 from examples.automated_deep_compression.environment import DistillerWrapperEnvironment, Observation
-#from .environment import DistillerWrapperEnvironment, Observation
 from examples.automated_deep_compression.utils.features_collector import collect_intermediate_featuremap_samples
+
 
 msglogger = logging.getLogger()
 
@@ -47,11 +47,9 @@ msglogger = logging.getLogger()
 def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
     dataset = args.dataset
     arch = args.arch
-    perform_thinning = True  # args.amc_thinning
     num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
     np.random.seed()
-    #conv_cnt = count_conv_layer(model)
 
     # Read the experiment configuration
     amc_cfg_fname = args.amc_cfg_file
@@ -83,14 +81,14 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'modules_dict': compression_cfg["network"],  # dict of modules, indexed by arch name
             'protocol': args.amc_protocol,
             'agent_algo': args.amc_agent_algo,
-            'perform_thinning': perform_thinning,
             'num_ft_epochs': num_ft_epochs,
             'action_range': action_range,
-#            'conv_cnt': conv_cnt,
             'reward_frequency': args.amc_reward_frequency,
             'ft_frequency': args.amc_ft_frequency,
             'pruning_pattern':  args.amc_prune_pattern,
-            'pruning_method': args.amc_prune_method}) 
+            'pruning_method': args.amc_prune_method,
+            'group_size': 1,
+            'n_points_per_fm':10})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -110,8 +108,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         x = spinningup_if.RlLibInterface()
         env1 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        num_layers = env1.net_wrapper.num_layers()
-        x.solve(env1, env2, num_layers)
+        steps_per_episode = env1.steps_per_episode
+        x.solve(env1, env2, steps_per_episode)
     elif args.amc_rllib == "private":
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         from .rl_libs.private import private_if
@@ -125,9 +123,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
                     'app_args': app_args,
                     'amc_cfg': amc_cfg,
                     'services': services}
-        # Todo: This is silly - fix it.
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        steps_per_episode = env.net_wrapper.num_layers()
+        steps_per_episode = env.steps_per_episode
         x.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
     elif args.amc_rllib == "random":
         from .rl_libs.random import random_if
