@@ -1,11 +1,8 @@
 lr_schedulers:
   training_lr:
     class: StepLR # ReduceLROnPlateau
-    step_size: 10
-    gamma: 0.2
-    #mode: max
-    #patience: 5
-    #factor: 0.1
+    step_size: 20
+    gamma: 0.3 #0.4
 
 policies:
     - lr_scheduler:
