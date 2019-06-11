@@ -10,16 +10,6 @@ from rl_coach.graph_managers.graph_manager import ScheduleParameters
 ####################
 # Graph Scheduling #
 ####################
-
-# schedule_params = ScheduleParameters()
-# schedule_params.improve_steps = EnvironmentSteps(1000000)
-# schedule_params.steps_between_evaluation_periods = EnvironmentSteps(5000)
-# schedule_params.evaluation_steps = EnvironmentEpisodes(10)
-# schedule_params.heatup_steps = EnvironmentSteps(10000)
-
-####################
-# Block Scheduling #
-####################
 schedule_params = ScheduleParameters()
 schedule_params.improve_steps = EnvironmentEpisodes(800)
 schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(5000)
@@ -41,7 +31,6 @@ agent_params.network_wrappers['critic'].middleware_parameters.scheme = [Dense(40
 ###############
 # Environment #
 ###############
-#env_params = GymVectorEnvironment(level=SingleLevelSelection(mujoco_v2))
 env_params = GymVectorEnvironment()
 env_params.level = '../automated_deep_compression/ADC.py:DistillerWrapperEnvironment'
 

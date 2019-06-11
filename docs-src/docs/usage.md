@@ -4,8 +4,8 @@ The Distiller repository contains a sample application, ```distiller/examples/cl
 
 You might also want to refer to the following resources:
 
-* An [explanation](https://nervanasystems.github.io/distiller/schedule/index.html) of the scheduler file format.
-* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo/index.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
+* An [explanation](https://nervanasystems.github.io/distiller/schedule.html) of the scheduler file format.
+* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
 
 The sample application supports various features for compression of image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.
 
