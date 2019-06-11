@@ -31,12 +31,11 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='Target density of the network we are seeking')
     group.add_argument('--amc-agent-algo', choices=["ClippedPPO-continuous",
                                                     "ClippedPPO-discrete",
+                                                    "TD3",
                                                     "DDPG",
                                                     "Random-policy"],
                        default="ClippedPPO-continuous",
                        help="The agent algorithm to use")
-    # group.add_argument('--amc-thinning', action='store_true', default=False,
-    #                    help='Perform netowrk thinning after altering each layer')
     group.add_argument('--amc-ft-frequency', type=int, default=None,
                        help='How many action-steps between fine-tuning.\n'
                        'By default there is no fine-tuning between steps.')
