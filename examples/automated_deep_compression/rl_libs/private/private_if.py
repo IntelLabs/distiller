@@ -45,7 +45,7 @@ class RlLibInterface(object):
         agent_args.hidden1 = 300
         agent_args.hidden2 = 300
         agent_args.rmsize = 100
-        agent_args.rmsize = agent_args.rmsize * env.net_wrapper.num_layers()  # for each layer
+        agent_args.rmsize = agent_args.rmsize * env.net_wrapper.num_pruned_layers()  # for each layer
         agent_args.window_length = 1
         agent_args.train_episode = 800
         agent_args.output = "."
