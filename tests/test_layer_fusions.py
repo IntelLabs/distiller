@@ -16,35 +16,44 @@ def fixture_hasbias(request):
     return request.param
 
 
-@pytest.fixture()
-def linear_weight():
-    t = torch.arange(1, 7, dtype=torch.float).view(3, 2)
-    return nn.Parameter(t)
-
-
-@pytest.fixture()
-def linear_bias():
-    t = torch.arange(7, 10, dtype=torch.float)
-    return nn.Parameter(t)
-
-
-@pytest.fixture()
-def input_tensor():
-    t = torch.arange(0, 4, dtype=torch.float).view(2, 2)
-    return t
-
-
-def test_folding_fc(has_bias, input_tensor, linear_weight, linear_bias):
+@pytest.mark.parametrize(
+    "batch_size, input_size, output_size",
+    [
+        (2, 2, 3),
+        (32, 512, 1024),
+        (256, 128, 1024)
+    ]
+)
+def test_folding_fc(has_bias, batch_size, input_size, output_size):
     distiller.set_deterministic(1234)
-    linear = nn.Linear(2, 3, bias=has_bias)
-    linear.weight = linear_weight
-    linear.bias = linear_bias if has_bias else None
-    bn = nn.BatchNorm1d(3)
+    linear = nn.Linear(input_size, output_size, bias=has_bias)
+    x = torch.rand(batch_size, input_size)
+    bn = nn.BatchNorm1d(output_size)
     folded = FusedLinearBatchNorm(deepcopy(linear), deepcopy(bn), quantized=False)
-    x = input_tensor
     y_t_linear = linear(x)
     y_t = bn(y_t_linear)
     y_p = folded(x)
     assert_allclose(y_t, y_p, RTOL, ATOL)
+
+
+@pytest.mark.parametrize(
+    "batch_size, input_c, output_c, h, w, kernel_size",
+    [
+        (2, 2, 3, 224, 224, 3),
+        (32, 3, 64, 224, 224, 3),
+        (256, 3, 64, 28, 28, 7),
+    ]
+)
+def test_folding_conv(has_bias, batch_size, input_c, output_c, h, w, kernel_size):
+    distiller.set_deterministic(1234)
+    conv2d = nn.Conv2d(input_c, output_c, kernel_size, bias=has_bias)
+    x = torch.rand(batch_size, input_c, h, w)
+    bn = nn.BatchNorm2d(output_c)
+    folded = FusedLinearBatchNorm(deepcopy(conv2d), deepcopy(bn), quantized=False)
+    y_t_linear = conv2d(x)
+    y_t = bn(y_t_linear)
+    y_p = folded(x)
+    assert_allclose(y_t, y_p, RTOL, ATOL)
+
 
 

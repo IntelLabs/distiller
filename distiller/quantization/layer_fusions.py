@@ -7,6 +7,15 @@ __all__ = ['FusedLinearBatchNorm']
 FREEZE_BN_DELAY_DEFAULT = 200000
 
 
+def _broadcast_correction_factor(c, broadcast_to_shape):
+    """
+    Returns a view of `c` which is broadcastable with shape `broadcast_to_shape`.
+    """
+    filler_dims = (1,) * (len(broadcast_to_shape) - len(c.shape) - 1)
+    view_dims = (*c.shape, *filler_dims)
+    return c.view(view_dims)
+
+
 class FusedLinearBatchNorm(nn.Module):
     def __init__(self, linear_module, bn, quantized=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
@@ -44,8 +53,10 @@ class FusedLinearBatchNorm(nn.Module):
         self.quantized = quantized
         if isinstance(linear_module, nn.Linear):
             self.linear_forward_fn = self._linear_layer_forward
+            self.linear_type = "fc"
         else:
             self.linear_forward_fn = self._conv2d_layer_forward
+            self.linear_type = "conv2d"
 
     @staticmethod
     def verify_module_types(linear, bn):
@@ -70,13 +81,24 @@ class FusedLinearBatchNorm(nn.Module):
         w_corrected = w * gamma.unsqueeze(1) * recip_sigma_moving.unsqueeze(1)
         w_quantized = self.quant_weights(w_corrected)
         y = self.linear_forward_fn(x, w_quantized, None)
-        if self.training:
-            y_corrected = y / c
+        if self.training: # TODO - debug for conv
+            y_corrected = y / self.broadcast_correction(c)
             bias_corrected = beta - gamma * batch_mean / sigma_batch
         else:
             y_corrected = y
             bias_corrected = beta - gamma * self.bn.running_mean * recip_sigma_moving
-        return y_corrected + bias_corrected
+
+        return y_corrected + self.broadcast_correction(bias_corrected)
+
+    def broadcast_correction(self, c: torch.Tensor):
+        """
+        Broadcasts a correction factor to the output.
+        """
+        expected_output_dim = 2 if self.linear_type == "fc" else 4
+        view_fillers_dim = expected_output_dim - c.dim() - 1
+        view_filler = (1,) * view_fillers_dim
+        expected_view_shape = (*c.shape, *view_filler)
+        return c.view(*expected_view_shape)
 
     def quant_weights(self, w: nn.Parameter):
         if not self.quantized:
@@ -124,7 +146,9 @@ class FusedLinearBatchNorm(nn.Module):
         """
         channel_size = self.bn.num_features
         mean = x.transpose(0, 1).contiguous().view(channel_size, -1).mean(1)
-        var = x.transpose(0, 1).contiguous().view(channel_size, -1).var(1)
+        # BatchNorm currently uses biased variance (without Bessel's correction) as was discussed at
+        # https://github.com/pytorch/pytorch/issues/1410
+        var = x.transpose(0, 1).contiguous().view(channel_size, -1).var(1, unbiased=False)
         if self.bn.momentum:
             self.bn.running_mean.mul_(1-self.bn.momentum).add_(self.bn.momentum * mean)
             self.bn.running_var.mul_(1-self.bn.momentum).add_(self.bn.momentum * var)
@@ -146,10 +170,14 @@ class FusedLinearBatchNorm(nn.Module):
         return F.linear(input, w, b)
 
     def _conv2d_layer_forward(self, input, w, b):
-        # We replace the weights temporarily to allow for easy forward with the new weights.
-        w_old, b_old = self.linear.weight, self.linear.bias
-        self.linear.weight, self.linear.bias = w, b
-        y = self.linear(input)
-        self.linear.weight, self.linear.bias = w_old, b_old
-        return y
+        # We copy the code from the Conv2d forward, but plug in our weights.
+        conv = self.linear  # type: nn.Conv2d
+        if conv.padding_mode == 'circular':
+            expanded_padding = [(conv.padding[1] + 1) // 2, conv.padding[1] // 2,
+                                (conv.padding[0] + 1) // 2, conv.padding[0] // 2]
+            return F.conv2d(F.pad(input, expanded_padding, mode='circular'),
+                            w, b, conv.stride,
+                            (0, 0), conv.dilation, conv.groups)
+        return F.conv2d(input, w, b, conv.stride,
+                        conv.padding, conv.dilation, conv.groups)
 
