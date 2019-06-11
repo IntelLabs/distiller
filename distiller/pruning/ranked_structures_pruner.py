@@ -16,6 +16,7 @@
 
 from functools import partial
 import numpy as np
+import math
 import logging
 import torch
 from torch.nn import functional as f
@@ -28,7 +29,7 @@ msglogger = logging.getLogger()
 class RankedStructureParameterPruner(_ParameterPruner):
     """Base class for pruning structures by ranking them.
     """
-    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None):
+    def __init__(self, name, group_type, desired_sparsity, weights, group_dependency=None, group_size=1):
         super().__init__(name)
         self.group_type = group_type
         self.group_dependency = group_dependency
@@ -37,6 +38,7 @@ class RankedStructureParameterPruner(_ParameterPruner):
         self.leader_binary_map = None
         self.last_target_sparsity = None
         self.desired_sparsity = desired_sparsity
+        self.group_size = group_size
 
     def leader(self):
         # The "leader" is the first weights-tensor in the list
@@ -93,8 +95,9 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
     See also: https://en.wikipedia.org/wiki/Lp_space#The_p-norm_in_finite_dimensions
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, magnitude_fn=None, epsilon=0.0):
-        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
+                 group_dependency=None, kwargs=None, magnitude_fn=None,
+                 epsilon=0.0, group_size=1):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency, group_size)
         if group_type not in ['3D', 'Filters', 'Channels', 'Rows', 'Blocks']:
             raise ValueError("Structure {} was requested but "
                              "currently ranking of this shape is not supported".
@@ -123,11 +126,12 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
         binary_map = group_pruning_fn(fraction_to_prune, param, param_name,
                                       zeros_mask_dict, model, binary_map,
-                                      magnitude_fn=self.magnitude_fn)
+                                      magnitude_fn=self.magnitude_fn,
+                                      group_size=self.group_size)
         return binary_map
 
     @staticmethod
-    def rank_channels(magnitude_fn, fraction_to_prune, param):
+    def rank_channels(magnitude_fn, fraction_to_prune, param, group_size):
         assert len(param.shape) == 4
         num_filters, num_channels = param.size(0), param.size(1)
         kernel_size = param.size(2) * param.size(3)
@@ -144,7 +148,10 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
         # TODO: the code below computes L1 in a simple manner - extend this for other norms
         #channel_mags = torch.abs(param).sum((0, 2, 3))
 
-        k = int(fraction_to_prune * channel_mags.size(0))
+        k = math.ceil(fraction_to_prune * num_channels) #channel_mags.size(0))
+        if k == num_channels:
+            k = num_channels - 1  # We can't allow removing all of the channels!
+        k = int(np.floor(k * 1. / group_size) * group_size)
         if k == 0:
             msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
                             num_channels, 100*fraction_to_prune)
@@ -164,11 +171,13 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
     @staticmethod
     def rank_and_prune_channels(fraction_to_prune, param, param_name=None, zeros_mask_dict=None, 
-                                model=None, binary_map=None, magnitude_fn=l1_magnitude, epsilon=0.0):
+                                model=None, binary_map=None, magnitude_fn=l1_magnitude,
+                                epsilon=0.0, group_size=1):
 
         if binary_map is None:
             bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(magnitude_fn, 
-                                                                                            fraction_to_prune, param)
+                                                                                            fraction_to_prune,
+                                                                                            param, group_size)
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
                 return
@@ -186,7 +195,8 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
     @staticmethod
     def rank_and_prune_filters(fraction_to_prune, param, param_name, zeros_mask_dict, 
-                               model=None, binary_map=None, magnitude_fn=l1_magnitude, epsilon=0.0):
+                               model=None, binary_map=None, magnitude_fn=l1_magnitude, 
+                               epsilon=0.0, group_size=1):
         assert param.dim() == 4, "This pruning is only supported for 4D weights"
 
         threshold = None
@@ -227,7 +237,8 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
     @staticmethod
     def rank_and_prune_rows(fraction_to_prune, param, param_name,
-                            zeros_mask_dict, model=None, binary_map=None, magnitude_fn=l1_magnitude):
+                            zeros_mask_dict, model=None, binary_map=None,
+                            magnitude_fn=l1_magnitude, group_size=1):
         """Prune the rows of a matrix, based on ranked L1-norms of the matrix rows.
 
         PyTorch stores the weights matrices in a transposed format.  I.e. before performing GEMM, a matrix is
@@ -259,7 +270,8 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
 
     @staticmethod
     def rank_and_prune_blocks(fraction_to_prune, param, param_name=None, zeros_mask_dict=None,
-                              model=None, binary_map=None, block_shape=None, magnitude_fn=l1_magnitude):
+                              model=None, binary_map=None, block_shape=None,
+                              magnitude_fn=l1_magnitude, group_size=1):
         """Block-wise pruning for 4D tensors.
 
         The block shape is specified using a tuple: [block_repetitions, block_depth, block_height, block_width].
@@ -345,9 +357,9 @@ class L1RankedStructureParameterPruner(LpRankedStructureParameterPruner):
     This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, epsilon=0.0):
+                 group_dependency=None, kwargs=None, epsilon=0.0, group_size=1):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency, 
-                         kwargs, magnitude_fn=l1_magnitude, epsilon=epsilon)
+                         kwargs, magnitude_fn=l1_magnitude, epsilon=epsilon, group_size=group_size)
 
 
 class L2RankedStructureParameterPruner(LpRankedStructureParameterPruner):
@@ -356,9 +368,9 @@ class L2RankedStructureParameterPruner(LpRankedStructureParameterPruner):
     This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, epsilon=0.0):
+                 group_dependency=None, kwargs=None, epsilon=0.0, group_size=1):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency, 
-                         kwargs, magnitude_fn=l2_magnitude, epsilon=epsilon)
+                         kwargs, magnitude_fn=l2_magnitude, epsilon=epsilon, group_size=group_size)
 
 
 class RandomLevelStructureParameterPruner(L1RankedStructureParameterPruner):
@@ -603,16 +615,6 @@ def psize(name, t):
     debug_print("%s = %s" % (name, t.size()))
 
 
-def im2col(x, conv):
-    x_unfold = f.unfold(x, kernel_size=conv.kernel_size, stride=conv.stride, padding=conv.padding)
-    #psize("x_unfold", x_unfold)
-    x_chunks = torch.chunk(x_unfold, x_unfold.size(0))
-    #psize("x_chunks[0]", x_chunks[0])
-    x_unfold = torch.cat(x_chunks, dim=2)
-    #psize("x_unfold", x_unfold)
-    return x_unfold
-
-
 class FMReconstructionChannelPruner(RankedStructureParameterPruner):
     """Uses feature-map (channel) reconstruction to prune weights tensors.
 
@@ -625,6 +627,11 @@ class FMReconstructionChannelPruner(RankedStructureParameterPruner):
     given a size-reduced input. The coefficients of the solution to MMSE are then used as
     the new weights of the Convolution layer.
 
+    You must invoke function collect_intermediate_featuremap_samples() prior to using a
+    FMReconstructionChannelPruner.  Pass in your model, forward_fn, and module_filter_fn.
+    For the fm_caching_fwd_hook argument of collect_intermediate_featuremap_samples, pass
+    FMReconstructionChannelPruner.cache_featuremaps_fwd_hook.
+
     We thank Prof. Han and his team for their help with this implementation.
 
     A variant of this technique was used in [1] and [2].
@@ -636,9 +643,61 @@ class FMReconstructionChannelPruner(RankedStructureParameterPruner):
         Yihui He, Ji Lin, Zhijian Liu, Hanrui Wang, Li-Jia Li, Song Han
         arXiv:1802.03494
     """
+
+    @staticmethod
+    def cache_featuremaps_fwd_hook(module, input, output, intermediate_fms, n_points_per_fm):
+        """Create a cached dictionary of each layer's input and output feature-maps.
+
+        For reconstruction of weights, we need to collect pairs of (layer_input, layer_output)
+        using a sample subset of the input dataset.
+        This is a forward-hook function, invoked from forward_hooks of Convolution layers.
+        Use this in conjunction with distiller.features_collector.collect_intermediate_featuremap_samples,
+        which orchestrates the process of feature-map collection.
+
+        This foward-hook samples random points.
+
+        After collecting the feature-map samples, distiller.FMReconstructionChannelPruner can be used.
+
+        Arguments:
+            module - the module who's forward_hook is invoked
+            input, output - the input and output arguments to the forward_hook
+            intermediate_fms - a dictionary of lists of feature-map samples, per layer 
+                (use module.distiller_name as key)
+            n_points_per_fm - number of points to sample, per feature-map.
+        """
+        def im2col(x, conv):
+            x_unfold = f.unfold(x, kernel_size=conv.kernel_size, stride=conv.stride, padding=conv.padding)
+            return x_unfold
+
+        # Sample random (uniform) points in each feature-map.
+        # This method is biased toward small feature-maps.
+        randx = np.random.randint(0, output.size(2), n_points_per_fm)
+        randy = np.random.randint(0, output.size(3), n_points_per_fm)
+
+        X = input[0]
+        if module.kernel_size == (1,1):
+            X = X[:, :, randx, randy].detach().cpu().clone()
+            Y = output[:, :, randx, randy].detach().cpu().clone()
+        else:
+            w, h = X.size(2), X.size(3)
+            X = im2col(X.detach().cpu().clone(), module).squeeze()
+            w_out = output.size(2)
+            pts = randx * w_out + randy
+            X = X[:, :, pts].detach().cpu().clone()
+            Y = output[:, :, randx, randy].detach().cpu().clone()
+
+        # Preprocess the outputs: transpose the batch and channel dimensions, create a flattened view, and transpose.
+        # The outputs originally have shape: (batch size, num channels, feature-map width, feature-map height).
+        Y = Y.view(Y.size(0), Y.size(1), -1)
+        Y = Y.transpose(2, 1)
+        Y = Y.contiguous().view(-1, Y.size(2))
+
+        intermediate_fms['output_fms'][module.distiller_name].append(Y)
+        intermediate_fms['input_fms'][module.distiller_name].append(X)
+
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, magnitude_fn=l1_magnitude):
-        super().__init__(name, group_type, desired_sparsity, weights, group_dependency)
+                 group_dependency=None, kwargs=None, magnitude_fn=l1_magnitude, group_size=1):
+        super().__init__(name, group_type, desired_sparsity, weights, group_dependency, group_size=group_size)
         if group_type != "Channels":
             raise ValueError("Structure {} was requested but "
                              "currently ranking of this shape is not supported".
@@ -650,86 +709,75 @@ class FMReconstructionChannelPruner(RankedStructureParameterPruner):
         if fraction_to_prune == 0:
             return
         binary_map = self.rank_and_prune_channels(fraction_to_prune, param, param_name, 
-                                                  zeros_mask_dict, model, binary_map)
+                                                  zeros_mask_dict, model, binary_map, group_size=self.group_size)
         return binary_map
 
     @staticmethod
     def rank_and_prune_channels(fraction_to_prune, param, param_name=None,
-                                zeros_mask_dict=None, model=None, binary_map=None, magnitude_fn=l1_magnitude):
+                                zeros_mask_dict=None, model=None, binary_map=None, magnitude_fn=l1_magnitude, group_size=1):
         assert binary_map is None
         if binary_map is None:
             bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(magnitude_fn, 
-                                                                                            fraction_to_prune, 
-                                                                                            param)
+                                                                                            fraction_to_prune,
+                                                                                            param, group_size)
             # Todo: this little piece of code can be refactored                                                                                
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
                 return
             
             threshold = bottomk_channels[-1]
-            binary_map = channel_mags.gt(threshold)
-
-            #Here we need to do the weights reconstruction!!!!!!!!!!!!
+            binary_map = channel_mags.ge(threshold)
 
             # These are the indices of channels we want to keep
             indices = binary_map.nonzero().squeeze()
+            msglogger.info("{} {} {}".format(binary_map.sum(), fraction_to_prune, len(indices)))
 
             # Find the module representing this layer
             distiller.assign_layer_fq_names(model)
             layer_name = param_name_2_layer_name(param_name)
-            # debug_print(layer_name)
             conv = distiller.find_module_by_fq_name(model, layer_name)
-            
             try:
                 Y = model.intermediate_fms['output_fms'][layer_name]
                 X = model.intermediate_fms['input_fms'][layer_name]
             except AttributeError:
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
-            psize("X", X)
-            debug_print(conv)
+            #psize("X", X)
+            #debug_print(conv)
 
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
             # channels from the input.  Then we perform the MSE regression to generate
             # a smaller weights tensor.
-            #X = X[:,binary_map,:,:]
-            X = X[:, binary_map, :]
-            psize("X after mask", X)
-            #print(binary_map.sum())
-            #assert False
-
-            assert conv.kernel_size == (1,1), param_name
             if conv.kernel_size == (1,1):
-                # X = X.view(X.size(0), X.size(1), -1)
+                X = X[:, binary_map, :]
+                #psize("X after mask", X)
                 X = X.transpose(1, 2)
                 X = X.contiguous().view(-1, X.size(2))
-                # X = im2col(X.detach(), conv).squeeze()
             else:
-                X = im2col(X.detach(), conv).squeeze()
-            psize("X after im2col", X)
+                # X is (batch, ck^2, num_pts)
+                # we want:   (batch, c, k^2, num_pts)
+                X = X.view(X.size(0), -1, np.prod(conv.kernel_size), X.size(2))
+                #psize("X after extracting channel", X)
+                X = X[:,binary_map,:,:]
+                #psize("X after mask", X)
+                X = X.view(X.size(0), -1, X.size(3))
+                #psize("X after view", X)
+                X = X.transpose(1, 2)
+                #psize("X after transpose", X)
+                X = X.contiguous().view(-1, X.size(2))
+                #psize("X after contig", X)
 
-            psize("Y", Y)
-            #Y = Y.transpose(0,1).contiguous()
-            #psize("Y.transpose", Y)
-            #Y = Y.view(Y.size(0), -1)
             #psize("Y", Y)
             
             # Batch of inputs
             new_w = least_square_sklearn(X, Y)
-            #new_w = least_square_sklearn(X.t().cpu(), Y)
             debug_print(new_w.shape)                
-            #assert False
 
             new_w = torch.from_numpy(new_w) # shape: (num_filters, num_non_masked_channels * k^2)
-            debug_print("W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
+            #debug_print("W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
             cnt_retained_channels = binary_map.sum()
             new_w = new_w.contiguous().view(param.size(0), cnt_retained_channels, param.size(2), param.size(3))
-            #new_w = new_w.contiguous().view(param.size(0) * binary_map.sum(), param.size(2) * param.size(3))
-            debug_print("W'={} W={}".format(new_w.shape, param.shape))
-            #new_w = new_w.view(param.size())
-            #debug_print(new_w.shape)
-            #param.data.copy_(new_w)
-            # debug_print(indices)
+            #debug_print("W'={} W={}".format(new_w.shape, param.shape))
             # Exand the weights back to their original size, 
             param.data[:,indices,:,:] = new_w.type(param.type())
  
