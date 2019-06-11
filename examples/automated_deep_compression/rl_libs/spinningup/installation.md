@@ -18,7 +18,7 @@ Then create and activate your venv, and populate it with the Distiller packages:
     $ pip3 install -r requirements.txt
 ```
 
-You want to install Spinup into this venv.  First clone Spinup and then install it into your venv:
+Finally, you need to install Spinup into this venv.  First clone Spinup and then install it into your venv:
 ```
     $ cd <spinningup-repo>
     $ sudo apt-get install python3.6-dev

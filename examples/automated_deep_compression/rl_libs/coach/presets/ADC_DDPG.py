@@ -14,12 +14,12 @@ from rl_coach.architectures.tensorflow_components.layers import Dense
 steps_per_episode = 13
 
 ####################
-# Block Scheduling #
+# Graph Scheduling #
 ####################
 schedule_params = ScheduleParameters()
 schedule_params.improve_steps = EnvironmentEpisodes(800)
-schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(5)
-schedule_params.evaluation_steps = EnvironmentEpisodes(1)  # Neta: 0
+schedule_params.steps_between_evaluation_periods = EnvironmentEpisodes(5000)
+schedule_params.evaluation_steps = EnvironmentEpisodes(0)  # Neta: 0
 schedule_params.heatup_steps = EnvironmentEpisodes(100)
 
 #####################
@@ -42,27 +42,23 @@ agent_params.network_wrappers['critic'].adam_optimizer_beta1 = 0.9
 agent_params.network_wrappers['critic'].adam_optimizer_beta2 = 0.999
 
 
-agent_params.network_wrappers['actor'].learning_rate = 0.0001  # 0.0001
+agent_params.network_wrappers['actor'].learning_rate = 0.0001
 agent_params.network_wrappers['critic'].learning_rate = 0.001
-# agent_params.network_wrappers['critic'].clip_gradients = 100
-# agent_params.network_wrappers['actor'].clip_gradients = 100
 
 agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
 agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(1)
-agent_params.algorithm.heatup_using_network_decisions = True
+agent_params.algorithm.heatup_using_network_decisions = False # We want uniform-random samples during heatup
 agent_params.algorithm.discount = 1
 
-# Shadi
-agent_params.algorithm.use_non_zero_discount_for_terminal_states = True  # <===========
+agent_params.algorithm.use_non_zero_discount_for_terminal_states = True
 
 # See : https://nervanasystems.github.io/coach/components/agents/policy_optimization/ddpg.html?highlight=ddpg#rl_coach.agents.ddpg_agent.DDPGAlgorithmParameters
 # Replay buffer size
 agent_params.memory.max_size = (MemoryGranularity.Transitions, 2000)
-#agent_params.exploration = AdditiveNoiseParameters() #
 agent_params.exploration = TruncatedNormalParameters()
 agent_params.algorithm.use_target_network_for_evaluation = True
-#agent_params.exploration.evaluation_noise_percentage = 0.01  # Neta new
-agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
+agent_params.exploration.evaluation_noise_percentage = 0  # Neta new
+#agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(1)
 
 
 ##############################

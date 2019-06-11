@@ -27,27 +27,27 @@ msglogger = logging.getLogger()
 class RlLibInterface(object):
     """Interface to the Spinningup RL library"""
 
-    def solve(self, env1, env2, num_layers):
+    def solve(self, env1, env2, steps_per_episode):
         msglogger.info("AMC: Using Spinningup")
 
         # training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-        # heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
+        heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
 
         exp_name = "Test"
         seed = 0
         # The number and size of the Actor-Critic MLP hidden layers
         layers, hid = 2, 300
-        logger_kwargs = setup_logger_kwargs(exp_name)  # ,  seed)
+        logger_kwargs = setup_logger_kwargs(exp_name)
 
         ddpg.ddpg(env=env1, test_env=env2, actor_critic=core.mlp_actor_critic,
                   ac_kwargs=dict(hidden_sizes=[hid]*layers, output_activation=tf.sigmoid),
                   gamma=1,  # discount rate
-                  seed=seed,
+                  #seed=seed,
                   epochs=400,
                   replay_size=2000,
                   batch_size=64,
-                  start_steps=env1.amc_cfg.num_heatup_epochs,
-                  steps_per_epoch=800 * num_layers,  # every 50 episodes perform 10 episodes of testing
+                  start_steps=heatup_duration,
+                  steps_per_epoch=800 * steps_per_episode,  # every 50 episodes perform 10 episodes of testing
                   act_noise=0.5,
                   pi_lr=1e-4,
                   q_lr=1e-3,
