@@ -73,7 +73,7 @@ def __dataset_factory(dataset):
 
 def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
               effective_train_size=1., effective_valid_size=1., effective_test_size=1.,
-              fixed_subset=False):
+              fixed_subset=False, sequential=False):
     """Load a dataset.
 
     Args:
@@ -100,7 +100,8 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
                             effective_train_size=effective_train_size,
                             effective_valid_size=effective_valid_size, 
                             effective_test_size=effective_test_size,
-                            fixed_subset=fixed_subset)
+                            fixed_subset=fixed_subset,
+                            sequential=sequential)
 
 
 def mnist_get_datasets(data_dir):
@@ -233,23 +234,43 @@ class SwitchingSubsetRandomSampler(Sampler):
         return self.subset_length
 
 
+class SubsetSequentialSampler(torch.utils.data.Sampler):
+    """Sequentially samples a subset of the dataset, without replacement.
+
+    Arguments:
+        indices (sequence): a sequence of indices
+    """
+    def __init__(self, indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return (self.indices[i] for i in range(len(self.indices)))
+
+    def __len__(self):
+        return len(self.indices)
+
+
 def _get_subset_length(data_source, effective_size):
     if effective_size <= 0 or effective_size > 1:
         raise ValueError('effective_size must be in (0..1]')
     return int(np.floor(len(data_source) * effective_size))
 
 
-def _get_sampler(data_source, effective_size, fixed_subset=False):
+def _get_sampler(data_source, effective_size, fixed_subset=False, sequential=False):
     if fixed_subset:
         subset_length = _get_subset_length(data_source, effective_size)
         indices = np.random.permutation(len(data_source))
         subset_indices = indices[:subset_length]
-        return torch.utils.data.SubsetRandomSampler(subset_indices)
-    return SwitchingSubsetRandomSampler(data_source, effective_size)
+        if sequential:
+            return SubsetSequentialSampler(subset_indices)
+        else:
+            return torch.utils.data.SubsetRandomSampler(subset_indices)
+        return SwitchingSubsetRandomSampler(data_source, effective_size)
 
 
 def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
-                     effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False):
+                     effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False,
+                     sequential=False):
     train_dataset, test_dataset = datasets_fn(data_dir)
 
     worker_init_fn = None
@@ -268,7 +289,7 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
 
     valid_indices, train_indices = __split_list(indices, validation_split)
 
-    train_sampler = _get_sampler(train_indices, effective_train_size, fixed_subset)
+    train_sampler = _get_sampler(train_indices, effective_train_size, fixed_subset, sequential)
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size, sampler=train_sampler,
                                                num_workers=num_workers, pin_memory=True,
@@ -276,14 +297,14 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
 
     valid_loader = None
     if valid_indices:
-        valid_sampler = _get_sampler(valid_indices, effective_valid_size, fixed_subset)
+        valid_sampler = _get_sampler(valid_indices, effective_valid_size, fixed_subset, sequential)
         valid_loader = torch.utils.data.DataLoader(train_dataset,
                                                    batch_size=batch_size, sampler=valid_sampler,
                                                    num_workers=num_workers, pin_memory=True,
                                                    worker_init_fn=worker_init_fn)
 
     test_indices = list(range(len(test_dataset)))
-    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset)
+    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset, sequential)
     test_loader = torch.utils.data.DataLoader(test_dataset,
                                               batch_size=batch_size, sampler=test_sampler,
                                               num_workers=num_workers, pin_memory=True)
