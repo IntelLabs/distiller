@@ -274,7 +274,7 @@ class NetworkWrapper(object):
 
         self.DDD.reduce_layer_macs(layer, final_action)
         macs_after = self.get_layer_net_macs(layer)
-        print("{} {} ".format(1. - (macs_after / macs_before), final_action))
+        #print("{} {} ".format(1. - (macs_after / macs_before), final_action))
         assert 1. - (macs_after / macs_before) == final_action
         return final_action
 
@@ -568,8 +568,8 @@ class DistillerWrapperEnvironment(gym.Env):
                 prunable_rest += self.net_wrapper.get_layer_net_macs(self.net_wrapper.get_pruned_layer(layer_id))
             else:
                 rest += self.net_wrapper.get_layer_net_macs(self.net_wrapper.get_layer(layer_id))
-        msglogger.info("debug_layers={}".format(debug_layers))
-        msglogger.info("layer_id=%d, prunable_rest=%.3f rest=%.3f" % (self.current_layer_id, prunable_rest, rest))
+        # msglogger.info("debug_layers={}".format(debug_layers))
+        # msglogger.info("layer_id=%d, prunable_rest=%.3f rest=%.3f" % (self.current_layer_id, prunable_rest, rest))
         return prunable_rest, rest
 
     def rest_macs(self):
@@ -682,9 +682,7 @@ def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
             conv.dependencies = list()
             find_dependencies(dependency_type, g, layers, name, conv.dependencies)
             dependent_indices.add(tuple(conv.dependencies))
-
-            msglogger.info("$"*50)
-            msglogger.info("{} {}".format(name, conv.dependencies))
+            #msglogger.info("{} {}".format(name, conv.dependencies))
  
     return all_layers, pruned_indices, dependent_indices, total_macs, total_params
 
