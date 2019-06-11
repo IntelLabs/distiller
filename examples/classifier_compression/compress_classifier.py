@@ -480,8 +480,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     model.eval()
 
     end = time.time()
-    for validation_step, (inputs, target) in enumerate(data_loader):
-        with torch.no_grad():
+    with torch.no_grad():
+        for validation_step, (inputs, target) in enumerate(data_loader):
+            msglogger.info("epoch {} step:{} target:{}".format(epoch, validation_step, target))
             inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model
             output = model(inputs)
@@ -671,16 +672,21 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    train_loader, val_loader, test_loader, _ = load_data(args)
+    fixed_subset, sequential = True, True
+    msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
+    train_loader, val_loader, test_loader, _ = load_data(args, fixed_subset, sequential)
 
     args.display_confusion = True
-    validate_fn = partial(test, test_loader=test_loader, criterion=criterion,
+    validate_fn = partial(test, test_loader=val_loader, criterion=criterion,
                           loggers=loggers, args=args, activations_collectors=None)
     train_fn = partial(train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
     optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
+    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
+                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+
     adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
@@ -721,11 +727,11 @@ def acts_histogram_collection(model, criterion, loggers, args):
                        classes=None, nbins=2048, save_hist_imgs=True)
 
 
-def load_data(args, fixed_subset=False):
+def load_data(args, fixed_subset=False, sequential=False):
     return apputils.load_data(args.dataset, os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset)
+                              fixed_subset, sequential)
 
 
 class missingdict(dict):
