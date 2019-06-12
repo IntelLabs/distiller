@@ -77,11 +77,10 @@ class FusedLinearBatchNorm(nn.Module):
             sigma_batch = torch.sqrt(batch_var + self.bn.eps)
         recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps).clone().detach()
         c = sigma_batch * recip_sigma_moving if self.training else None
-        # Make the bn.weight broadcastable with linear.weight
-        w_corrected = w * gamma.unsqueeze(1) * recip_sigma_moving.unsqueeze(1)
+        w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_moving)
         w_quantized = self.quant_weights(w_corrected)
         y = self.linear_forward_fn(x, w_quantized, None)
-        if self.training: # TODO - debug for conv
+        if self.training:
             y_corrected = y / self.broadcast_correction(c)
             bias_corrected = beta - gamma * batch_mean / sigma_batch
         else:
@@ -92,12 +91,24 @@ class FusedLinearBatchNorm(nn.Module):
 
     def broadcast_correction(self, c: torch.Tensor):
         """
-        Broadcasts a correction factor to the output.
+        Broadcasts a correction factor to the output for elementwise operations.
         """
         expected_output_dim = 2 if self.linear_type == "fc" else 4
         view_fillers_dim = expected_output_dim - c.dim() - 1
         view_filler = (1,) * view_fillers_dim
-        expected_view_shape = (*c.shape, *view_filler)
+        expected_view_shape = c.shape + view_filler
+        return c.view(*expected_view_shape)
+
+    def broadcast_correction_weight(self, c: torch.Tensor):
+        """
+        Broadcasts a correction factor to the weight.
+        """
+        if c.dim() != 1:
+            raise ValueError("Correction factor needs to have a single dimension")
+        expected_weight_dim = 2 if self.linear_type == "fc" else 4
+        view_fillers_dim = expected_weight_dim - c.dim()
+        view_filler = (1,) * view_fillers_dim
+        expected_view_shape = c.shape + view_filler
         return c.view(*expected_view_shape)
 
     def quant_weights(self, w: nn.Parameter):
