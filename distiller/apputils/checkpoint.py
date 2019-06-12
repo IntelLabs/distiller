@@ -98,7 +98,7 @@ def get_contents_table(d):
 
     contents = [[k, type(d[k]).__name__, inspect_val(d[k])] for k in d.keys()]
     contents = sorted(contents, key=lambda entry: entry[0])
-    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
+    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="psql")
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
@@ -118,8 +118,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
 
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
-
-    msglogger.info('=> Checkpoint contents:\n{}\n'.format(get_contents_table(checkpoint)))
+    msglogger.info('=> Checkpoint contents:\n%s\n' % get_contents_table(checkpoint))
     if 'extras' in checkpoint:
         msglogger.info("=> Checkpoint['extras'] contents:\n{}\n".format(get_contents_table(checkpoint['extras'])))
 
