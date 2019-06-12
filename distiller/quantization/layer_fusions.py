@@ -19,7 +19,7 @@ def _broadcast_correction_factor(c, broadcast_to_shape):
 class FusedLinearBatchNorm(nn.Module):
     def __init__(self, linear_module, bn, quantized=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
-                 freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, frozen=False):
+                 freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT):
         """
         Wrapper for simulated fusing of BatchNorm into linear layers.
         Args:
@@ -32,7 +32,6 @@ class FusedLinearBatchNorm(nn.Module):
             mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
             dequantize (bool): whether to dequantized the acts after calculating them
             freeze_bn_delay (int): number of steps before freezing the batchnorm running stats
-            frozen (bool): whether to freeze the batchnorm right away
         Note:
             The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
         """
@@ -69,13 +68,25 @@ class FusedLinearBatchNorm(nn.Module):
             raise TypeError("nn.Con2d layer has to be followed by a nn.BatchNorm2d layer.")
 
     def forward(self, x):
-        """ According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2."""
-        w, gamma, beta = self.linear.weight, self.bn.weight, self.bn.bias
+        """
+        According to https://arxiv.org/pdf/1806.08342.pdf section 3.2.2.
+        Note:
+            The linear layer bias doesn't get included in the calculation!
+            When calculating the batch norm,
+            the bias offsets the mean and so when calculating (x - mu) we get the unbiased position
+            w.r.t. to the mean.
+            i.e. the result of the forward is:
+            bn(linear(x)) = ( linear(x) - E(linear(x)) ) * gamma / std(linear(x)) + beta =
+                          = ( x*W + B - E(x*W +B) ) * gamma / E((x*W+ B - E(x*W +B))^2) + beta =
+                          = (x*W -E(x*W)) * gamma / std(x*W) + beta
+        """
+        w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
         batch_mean = batch_var = sigma_batch = None
         if self.training:
-            batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w, None))
+            batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w), b)
             sigma_batch = torch.sqrt(batch_var + self.bn.eps)
-        recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps).clone().detach()
+        with torch.no_grad():
+            recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps)
         c = sigma_batch * recip_sigma_moving if self.training else None
         w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_moving)
         w_quantized = self.quant_weights(w_corrected)
@@ -85,7 +96,8 @@ class FusedLinearBatchNorm(nn.Module):
             bias_corrected = beta - gamma * batch_mean / sigma_batch
         else:
             y_corrected = y
-            bias_corrected = beta - gamma * self.bn.running_mean * recip_sigma_moving
+            corrected_mean = self.bn.running_mean - (b if b is not None else 0)
+            bias_corrected = beta - gamma * corrected_mean * recip_sigma_moving
 
         return y_corrected + self.broadcast_correction(bias_corrected)
 
@@ -117,7 +129,7 @@ class FusedLinearBatchNorm(nn.Module):
         return self._quant_param(w, self.num_bits_params)
 
     def quant_bias(self, b: nn.Parameter):
-        if not self.quantized:
+        if b is None or not self.quantized:
             return b
         return self._quant_param(b, self.num_bits_accum)
 
@@ -136,11 +148,12 @@ class FusedLinearBatchNorm(nn.Module):
                                                                       signed=signed)
         return LinearQuantizeSTE.apply(t, scale, zero_point, self.dequantize, False)
 
-    def batch_stats(self, x):
+    def batch_stats(self, x, bias=None):
         """
         Get the batch mean and variance of x and updates the BatchNorm's running mean and average.
         Args:
             x (torch.Tensor): input batch.
+            bias (torch.Tensor): the bias that is to be applied to the batch.
         Returns:
             (mean,variance)
         Note:
@@ -156,31 +169,41 @@ class FusedLinearBatchNorm(nn.Module):
             (`nn.BatchNorm2d`)[https://pytorch.org/docs/stable/nn.html#batchnorm2d]
         """
         channel_size = self.bn.num_features
+        n = x.numel() / channel_size
         mean = x.transpose(0, 1).contiguous().view(channel_size, -1).mean(1)
         # BatchNorm currently uses biased variance (without Bessel's correction) as was discussed at
         # https://github.com/pytorch/pytorch/issues/1410
+        #
+        # also see the source code itself:
+        # https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/native/Normalization.cpp#L216
         var = x.transpose(0, 1).contiguous().view(channel_size, -1).var(1, unbiased=False)
-        if self.bn.momentum:
-            self.bn.running_mean.mul_(1-self.bn.momentum).add_(self.bn.momentum * mean)
-            self.bn.running_var.mul_(1-self.bn.momentum).add_(self.bn.momentum * var)
-        else:
-            # momentum is None - we compute a cumulative moving average
-            # as noted in https://pytorch.org/docs/stable/nn.html#batchnorm2d
-            num_batches = self.bn.num_batches_tracked
-            if num_batches == 0:
-                self.bn.running_mean.data = mean
-                self.bn.running_var.data = var
+        with torch.no_grad():
+            if self.bn.momentum:
+                biased_mean = mean + (bias if bias is not None else 0)
+                self.bn.running_mean.mul_(1-self.bn.momentum).add_(self.bn.momentum * biased_mean)
+                # However - running_var is updated using unbiased variance!
+                # as seen in the source code:
+                # https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/native/Normalization.cpp#L223
+                unbiased_var = var * (n / (n-1))
+                self.bn.running_var.mul_(1-self.bn.momentum).add_(self.bn.momentum * unbiased_var)
             else:
-                momentum = 1/num_batches
-                self.bn.running_mean.mul_(1 - momentum).add_(momentum * mean)
-                self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
+                # momentum is None - we compute a cumulative moving average
+                # as noted in https://pytorch.org/docs/stable/nn.html#batchnorm2d
+                num_batches = self.bn.num_batches_tracked
+                if num_batches == 0:
+                    self.bn.running_mean.data = mean
+                    self.bn.running_var.data = var
+                else:
+                    momentum = 1/num_batches
+                    self.bn.running_mean.mul_(1 - momentum).add_(momentum * mean)
+                    self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
         self.bn.num_batches_tracked += 1
         return mean, var
 
-    def _linear_layer_forward(self, input, w, b):
+    def _linear_layer_forward(self, input, w, b=None):
         return F.linear(input, w, b)
 
-    def _conv2d_layer_forward(self, input, w, b):
+    def _conv2d_layer_forward(self, input, w, b=None):
         # We copy the code from the Conv2d forward, but plug in our weights.
         conv = self.linear  # type: nn.Conv2d
         if conv.padding_mode == 'circular':
