@@ -265,7 +265,7 @@ def _get_sampler(data_source, effective_size, fixed_subset=False, sequential=Fal
             return SubsetSequentialSampler(subset_indices)
         else:
             return torch.utils.data.SubsetRandomSampler(subset_indices)
-        return SwitchingSubsetRandomSampler(data_source, effective_size)
+    return SwitchingSubsetRandomSampler(data_source, effective_size)
 
 
 def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
