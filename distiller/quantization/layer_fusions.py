@@ -92,8 +92,8 @@ class FusedLinearBatchNorm(nn.Module):
             w, b = self.linear.weight, self.linear.bias
             w_quantized, bias_quantized = self.quant_weights(w), self.quant_bias(b)
 
-        y = self.linear_forward_fn(self.quant_input(x), w_quantized, bias_quantized)
-        return self.quant_output(y)
+        y = self.linear_forward_fn(self.quant_io(x), w_quantized, bias_quantized)
+        return self.quant_io(y)
 
     def broadcast_correction(self, c: torch.Tensor):
         """
@@ -127,15 +127,10 @@ class FusedLinearBatchNorm(nn.Module):
             return b
         return self._quant_param(b, self.num_bits_accum)
 
-    def quant_input(self, x: torch.Tensor):
+    def quant_io(self, x: torch.Tensor):
         if not self.quantized:
             return x
         return self._quant_param(x, self.num_bits_acts)
-
-    def quant_output(self, y: torch.Tensor):
-        if not self.quantized:
-            return y
-        return self._quant_param(y, self.num_bits_acts)
 
     def _quant_param(self, t: torch.Tensor, num_bits):
         """
