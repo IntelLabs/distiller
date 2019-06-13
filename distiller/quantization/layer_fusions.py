@@ -77,7 +77,7 @@ class FusedLinearBatchNorm(nn.Module):
             w.r.t. to the mean.
             i.e. the result of the forward is:
             bn(linear(x)) = ( linear(x) - E(linear(x)) ) * gamma / std(linear(x)) + beta =
-                          = ( x*W + B - E(x*W +B) ) * gamma / E((x*W+ B - E(x*W +B))^2) + beta =
+                          = ( x*W + B - E(x*W +B) ) * gamma / sqrt(E((x*W+ B - E(x*W +B))^2)) + beta =
                           = (x*W -E(x*W)) * gamma / std(x*W) + beta
         """
         if self.training:
