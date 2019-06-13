@@ -205,7 +205,7 @@ class FusedLinearBatchNorm(nn.Module):
     def _conv2d_layer_forward(self, input, w, b=None):
         # We copy the code from the Conv2d forward, but plug in our weights.
         conv = self.linear  # type: nn.Conv2d
-        if conv.padding_mode == 'circular':
+        if conv.__dict__.get('padding_mode', None) == 'circular':  # This attribute doesn't exist yet in pytorch 1.0.1
             expanded_padding = [(conv.padding[1] + 1) // 2, conv.padding[1] // 2,
                                 (conv.padding[0] + 1) // 2, conv.padding[0] // 2]
             return F.conv2d(F.pad(input, expanded_padding, mode='circular'),
