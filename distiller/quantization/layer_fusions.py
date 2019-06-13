@@ -17,7 +17,7 @@ def _broadcast_correction_factor(c, broadcast_to_shape):
 
 
 class FusedLinearBatchNorm(nn.Module):
-    def __init__(self, linear_module, bn, quantized=False, num_bits_acts=8, num_bits_accum=32, num_bits_params=8,
+    def __init__(self, linear_module, bn, quantized=False, num_bits_accum=32, num_bits_params=8,
                  mode=LinearQuantMode.SYMMETRIC, dequantize=True,
                  freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT):
         """
@@ -26,7 +26,6 @@ class FusedLinearBatchNorm(nn.Module):
             linear_module (nn.Linear or nn.Conv2d): the wrapped linear layer
             bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
             quantized (bool): whether to quantize the modules.
-            num_bits_acts (int): number of bits to quantize activations
             num_bits_accum (int): number of bits to quantize accumulator (or bias)
             num_bits_params (int): number of bits to quantize weights
             mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
@@ -42,12 +41,12 @@ class FusedLinearBatchNorm(nn.Module):
         super(FusedLinearBatchNorm, self).__init__()
         self.dequantize = dequantize
         self.mode = verify_quant_mode(mode)
-        self.num_bits_acts = num_bits_acts
         self.num_bits_params = num_bits_params
         self.num_bits_accum = num_bits_accum
         self.linear = linear_module
         self.bn = bn
         self.freeze_bn_delay = freeze_bn_delay
+        self.frozen = False
         self._has_bias = (self.linear.bias is not None)
         self.quantized = quantized
         if isinstance(linear_module, nn.Linear):
@@ -80,20 +79,36 @@ class FusedLinearBatchNorm(nn.Module):
                           = ( x*W + B - E(x*W +B) ) * gamma / sqrt(E((x*W+ B - E(x*W +B))^2)) + beta =
                           = (x*W -E(x*W)) * gamma / std(x*W) + beta
         """
-        if self.training:
+        if not self.frozen:
             w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
-            batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w), b)
-            recip_sigma_batch = torch.rsqrt(batch_var + self.bn.eps)
-            w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_batch)
-            w_quantized = self.quant_weights(w_corrected)
-            bias_corrected = beta - gamma * batch_mean * recip_sigma_batch
-            bias_quantized = self.quant_bias(bias_corrected)
+            if self.training:
+                batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w), b)
+                recip_sigma_batch = torch.rsqrt(batch_var + self.bn.eps)
+                with torch.no_grad():
+                    sigma_running = torch.sqrt(self.bn.running_var + self.bn.eps)
+                w_corrected = w * self.broadcast_correction_weight(gamma / sigma_running)
+                w_quantized = self.quant_weights(w_corrected)
+                recip_c = self.broadcast_correction(sigma_running * recip_sigma_batch)
+                bias_corrected = beta - gamma * batch_mean * recip_sigma_batch
+                bias_quantized = self.broadcast_correction(self.quant_bias(bias_corrected))
+                y = self.linear_forward_fn(x, w_quantized, None)
+                y.mul_(recip_c).add_(bias_quantized)
+            else:
+                with torch.no_grad():
+                    recip_sigma_running = torch.rsqrt(self.bn.running_var + self.bn.eps)
+                w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_running)
+                w_quantized = self.quant_weights(w_corrected)
+                corrected_mean = self.bn.running_mean - (b if b is not None else 0)
+                bias_corrected = beta - gamma * corrected_mean * recip_sigma_running
+                bias_quantized = self.broadcast_correction(self.quant_bias(bias_corrected))
+                y = self.linear_forward_fn(x, w_quantized)
+                y.add_(bias_quantized)
         else:
             w, b = self.linear.weight, self.linear.bias
             w_quantized, bias_quantized = self.quant_weights(w), self.quant_bias(b)
+            y = self.linear_forward_fn(x, w_quantized, bias_quantized)
 
-        y = self.linear_forward_fn(self.quant_io(x), w_quantized, bias_quantized)
-        return self.quant_io(y)
+        return y
 
     def broadcast_correction(self, c: torch.Tensor):
         """
@@ -126,11 +141,6 @@ class FusedLinearBatchNorm(nn.Module):
         if b is None or not self.quantized:
             return b
         return self._quant_param(b, self.num_bits_accum)
-
-    def quant_io(self, x: torch.Tensor):
-        if not self.quantized:
-            return x
-        return self._quant_param(x, self.num_bits_acts)
 
     def _quant_param(self, t: torch.Tensor, num_bits):
         """
@@ -197,6 +207,8 @@ class FusedLinearBatchNorm(nn.Module):
                     self.bn.running_mean.mul_(1 - momentum).add_(momentum * mean)
                     self.bn.running_var.mul_(1 - momentum).add_(momentum * var)
         self.bn.num_batches_tracked += 1
+        if self.bn.num_batches_tracked > self.freeze_bn_delay:
+            self.freeze()
         return mean, var
 
     def _linear_layer_forward(self, input, w, b=None):
@@ -214,18 +226,15 @@ class FusedLinearBatchNorm(nn.Module):
         return F.conv2d(input, w, b, conv.stride,
                         conv.padding, conv.dilation, conv.groups)
 
-    def eval(self):
-        super(FusedLinearBatchNorm, self).eval()
-        # Fuse the batchnorm weights+stats into the linear layer permanently.
-        # W_fused = gamma * W / running_std
-        # b_fused = beta - gamma * running_mean / running_std
+    def freeze(self):
         w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
         with torch.no_grad():
-            recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps)
-            w.mul_(self.broadcast_correction_weight(gamma * recip_sigma_moving))
+            recip_sigma_running = torch.rsqrt(self.bn.running_var + self.bn.eps)
+            w.mul_(self.broadcast_correction_weight(gamma * recip_sigma_running))
             corrected_mean = self.bn.running_mean - (b if b is not None else 0)
-            bias_corrected = beta - gamma * corrected_mean * recip_sigma_moving
+            bias_corrected = beta - gamma * corrected_mean * recip_sigma_running
             if b is not None:
                 b.copy_(bias_corrected)
             else:
                 self.linear.bias = nn.Parameter(bias_corrected)
+        self.frozen = True
