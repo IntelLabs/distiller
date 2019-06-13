@@ -44,21 +44,21 @@ class MobileNet(nn.Module):
         self.channels = [max(floor(n * channel_multiplier), min_channels) for n in base_channels]
 
         self.model = nn.Sequential(
-            nn.Sequential(*conv_bn_relu(3, self.channels[0], 3, stride=2, padding=1)),
-            depthwise_conv(self.channels[0], self.channels[1], 1),
-            depthwise_conv(self.channels[1], self.channels[2], 2),
-            depthwise_conv(self.channels[2], self.channels[2], 1),
-            depthwise_conv(self.channels[2], self.channels[3], 2),
-            depthwise_conv(self.channels[3], self.channels[3], 1),
-            depthwise_conv(self.channels[3], self.channels[4], 2),
-            depthwise_conv(self.channels[4], self.channels[4], 1),
-            depthwise_conv(self.channels[4], self.channels[4], 1),
-            depthwise_conv(self.channels[4], self.channels[4], 1),
-            depthwise_conv(self.channels[4], self.channels[4], 1),
-            depthwise_conv(self.channels[4], self.channels[4], 1),
-            depthwise_conv(self.channels[4], self.channels[5], 2),
-            depthwise_conv(self.channels[5], self.channels[5], 1),
-            nn.AvgPool2d(7),
+            nn.Sequential(*conv_bn_relu(3, self.channels[0], 3, stride=2, padding=1)),  # 0,1,2
+            depthwise_conv(self.channels[0], self.channels[1], 1),  # 3.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[1], self.channels[2], 2),  # 4.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[2], self.channels[2], 1),  # 5.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[2], self.channels[3], 2),  # 6.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[3], self.channels[3], 1),  # 7.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[3], self.channels[4], 2),  # 8.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[4], 1),  # 9.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[4], 1),  # 10.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[4], 1),  # 11.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[4], 1),  # 12.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[4], 1),  # 13.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[4], self.channels[5], 2),  # 14.(0,1,2,3,4,5)
+            depthwise_conv(self.channels[5], self.channels[5], 1),  # 15.(0,1,2,3,4,5)
+            nn.AvgPool2d(7),  # 16
         )
         self.fc = nn.Linear(self.channels[5], 1000)
 

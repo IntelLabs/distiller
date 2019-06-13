@@ -80,26 +80,20 @@ class FusedLinearBatchNorm(nn.Module):
                           = ( x*W + B - E(x*W +B) ) * gamma / E((x*W+ B - E(x*W +B))^2) + beta =
                           = (x*W -E(x*W)) * gamma / std(x*W) + beta
         """
-        w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
-        batch_mean = batch_var = sigma_batch = None
         if self.training:
+            w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
             batch_mean, batch_var = self.batch_stats(self.linear_forward_fn(x, w), b)
-            sigma_batch = torch.sqrt(batch_var + self.bn.eps)
-        with torch.no_grad():
-            recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps)
-        c = sigma_batch * recip_sigma_moving if self.training else None
-        w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_moving)
-        w_quantized = self.quant_weights(w_corrected)
-        y = self.linear_forward_fn(x, w_quantized, None)
-        if self.training:
-            y_corrected = y / self.broadcast_correction(c)
-            bias_corrected = beta - gamma * batch_mean / sigma_batch
+            recip_sigma_batch = torch.rsqrt(batch_var + self.bn.eps)
+            w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_batch)
+            w_quantized = self.quant_weights(w_corrected)
+            bias_corrected = beta - gamma * batch_mean * recip_sigma_batch
+            bias_quantized = self.quant_bias(bias_corrected)
         else:
-            y_corrected = y
-            corrected_mean = self.bn.running_mean - (b if b is not None else 0)
-            bias_corrected = beta - gamma * corrected_mean * recip_sigma_moving
+            w, b = self.linear.weight, self.linear.bias
+            w_quantized, bias_quantized = self.quant_weights(w), self.quant_bias(b)
 
-        return y_corrected + self.broadcast_correction(bias_corrected)
+        y = self.linear_forward_fn(self.quant_input(x), w_quantized, bias_quantized)
+        return self.quant_output(y)
 
     def broadcast_correction(self, c: torch.Tensor):
         """
@@ -132,6 +126,16 @@ class FusedLinearBatchNorm(nn.Module):
         if b is None or not self.quantized:
             return b
         return self._quant_param(b, self.num_bits_accum)
+
+    def quant_input(self, x: torch.Tensor):
+        if not self.quantized:
+            return x
+        return self._quant_param(x, self.num_bits_acts)
+
+    def quant_output(self, y: torch.Tensor):
+        if not self.quantized:
+            return y
+        return self._quant_param(y, self.num_bits_acts)
 
     def _quant_param(self, t: torch.Tensor, num_bits):
         """
@@ -215,3 +219,18 @@ class FusedLinearBatchNorm(nn.Module):
         return F.conv2d(input, w, b, conv.stride,
                         conv.padding, conv.dilation, conv.groups)
 
+    def eval(self):
+        super(FusedLinearBatchNorm, self).eval()
+        # Fuse the batchnorm weights+stats into the linear layer permanently.
+        # W_fused = gamma * W / running_std
+        # b_fused = beta - gamma * running_mean / running_std
+        w, b, gamma, beta = self.linear.weight, self.linear.bias, self.bn.weight, self.bn.bias
+        with torch.no_grad():
+            recip_sigma_moving = torch.rsqrt(self.bn.running_var + self.bn.eps)
+            w.mul_(self.broadcast_correction_weight(gamma * recip_sigma_moving))
+            corrected_mean = self.bn.running_mean - (b if b is not None else 0)
+            bias_corrected = beta - gamma * corrected_mean * recip_sigma_moving
+            if b is not None:
+                b.copy_(bias_corrected)
+            else:
+                self.linear.bias = nn.Parameter(bias_corrected)
