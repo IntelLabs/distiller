@@ -300,7 +300,6 @@ def greedy_pruner(pruned_model, app_args, fraction_to_prune, pruning_step, test_
                         name="greedy__{}__{:.1f}__{:.1f}".format(str(iteration).zfill(3), compute_density*100, prec1),
                         dir=msglogger.logdir)
         del scheduler
-        del zeros_mask_dict
         msglogger.info("Iteration {}: top1-{:.2f} {} compute-{:.2f}".format(*results[0:4]))
 
     assert iteration > 0
