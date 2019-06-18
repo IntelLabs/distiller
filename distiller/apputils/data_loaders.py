@@ -47,22 +47,15 @@ def classification_num_classes(dataset):
             'imagenet': 1000}.get(dataset, None)
 
 
-def classification_get_dummy_input(dataset, device=None):
-    """Generate a representative dummy (random) input for the specified dataset.
-
-    If a device is specified, then the dummay_input is moved to that device.
-    """
+def classification_get_input_shape(dataset):
     if dataset == 'imagenet':
-        dummy_input = torch.randn(1, 3, 224, 224)
+        return 1, 3, 224, 224
     elif dataset == 'cifar10':
-        dummy_input = torch.randn(1, 3, 32, 32)
+        return 1, 3, 32, 32
     elif dataset == 'mnist':
-        dummy_input = torch.randn(1, 1, 28, 28)
+        return 1, 1, 28, 28
     else:
         raise ValueError("dataset %s is not supported" % dataset)
-    if device:
-        dummy_input = dummy_input.to(device)
-    return dummy_input
 
 
 def __dataset_factory(dataset):
