@@ -18,5 +18,5 @@ pyyaml
 pytest==3.5.1
 xlsxwriter>=1.1.1
 pretrainedmodels
-sklearn
-gym
+scikit-learn
+gym==0.12.5
