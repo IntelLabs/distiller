@@ -560,14 +560,14 @@ def has_children(module):
 def _validate_input_shape(dataset, input_shape):
     if dataset:
         try:
-            return distiller.apputils.classification_get_input_shape(dataset)
+            return tuple(distiller.apputils.classification_get_input_shape(dataset))
         except ValueError:
             raise ValueError("Can't infer input shape for dataset {}, please pass shape directly".format(dataset))
     else:
         if input_shape is None:
             raise ValueError('Must provide either dataset name or input shape')
-        if not isinstance(input_shape, list):
-            raise ValueError('input shape should be a list')
+        if not isinstance(input_shape, tuple):
+            raise ValueError('input shape should be a tuple')
         return input_shape
 
 
@@ -579,7 +579,7 @@ def get_dummy_input(dataset=None, device=None, input_shape=None):
     Args:
         dataset (str): Name of dataset from which to infer the shape
         device (str or torch.device): Device on which to create the input
-        input_shape (list): List of integers representing the input shape. Used only if 'dataset' is None
+        input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
     """
     shape = _validate_input_shape(dataset, input_shape)
     dummy_input = torch.randn(shape)
@@ -594,7 +594,7 @@ def set_model_input_shape_attr(model, dataset=None, input_shape=None):
     Args:
           model (nn.Module): Model instance
           dataset (str): Name of dataset from which to infer input shape
-          input_shape (list): List of integers representing the input shape. Used only if 'dataset' is None
+          input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
     """
     if not hasattr(model, 'input_shape'):
         model.input_shape = _validate_input_shape(dataset, input_shape)

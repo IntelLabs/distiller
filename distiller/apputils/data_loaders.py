@@ -49,11 +49,11 @@ def classification_num_classes(dataset):
 
 def classification_get_input_shape(dataset):
     if dataset == 'imagenet':
-        return [1, 3, 224, 224]
+        return 1, 3, 224, 224
     elif dataset == 'cifar10':
-        return [1, 3, 32, 32]
+        return 1, 3, 32, 32
     elif dataset == 'mnist':
-        return [1, 1, 28, 28]
+        return 1, 1, 28, 28
     else:
         raise ValueError("dataset %s is not supported" % dataset)
 

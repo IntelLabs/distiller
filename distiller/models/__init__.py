@@ -121,9 +121,10 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         # When using pre-trained weights, Cadene models already have an input size attribute
         # We add the batch dimension to it
         input_size = model.module.input_size if isinstance(model, torch.nn.DataParallel) else model.input_size
-        set_model_input_shape_attr(model, input_shape=[1] + input_size)
+        shape = tuple([1] + input_size)
+        set_model_input_shape_attr(model, input_shape=shape)
     elif arch == 'inception_v3':
-        set_model_input_shape_attr(model, input_shape=[1, 3, 299, 299])
+        set_model_input_shape_attr(model, input_shape=(1, 3, 299, 299))
     else:
         set_model_input_shape_attr(model, dataset=dataset)
 
