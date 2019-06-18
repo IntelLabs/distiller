@@ -23,6 +23,8 @@ from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
 
+from distiller.utils import set_model_input_shape_attr
+
 import logging
 msglogger = logging.getLogger()
 
@@ -66,6 +68,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     """
     model = None
     dataset = dataset.lower()
+    cadene = False
     if dataset == 'imagenet':
         if arch in RESNET_SYMS:
             model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
@@ -74,6 +77,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         elif (arch in imagenet_extra_models.__dict__) and not pretrained:
             model = imagenet_extra_models.__dict__[arch]()
         elif arch in pretrainedmodels.model_names:
+            cadene = True
             model = pretrainedmodels.__dict__[arch](num_classes=1000,
                                                     pretrained=(dataset if pretrained else None))
         else:
@@ -112,5 +116,16 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = torch.nn.DataParallel(model, device_ids=device_ids)
     else:
         device = 'cpu'
+
+    if cadene and pretrained:
+        # When using pre-trained weights, Cadene models already have an input size attribute
+        # We add the batch dimension to it
+        input_size = model.module.input_size if isinstance(model, torch.nn.DataParallel) else model.input_size
+        shape = tuple([1] + input_size)
+        set_model_input_shape_attr(model, input_shape=shape)
+    elif arch == 'inception_v3':
+        set_model_input_shape_attr(model, input_shape=(1, 3, 299, 299))
+    else:
+        set_model_input_shape_attr(model, dataset=dataset)
 
     return model.to(device)
