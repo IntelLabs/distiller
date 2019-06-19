@@ -85,6 +85,10 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
     if HAVE_LSB:
         logger.debug("OS: %s", lsb_release.get_lsb_information()['DESCRIPTION'])
     logger.debug("Python: %s", sys.version)
+    try:
+        logger.debug("PYTHONPATH: %s", os.environ['PYTHONPATH'])
+    except KeyError:
+        pass
     def _pip_freeze():
         return {x.key:x.version for x in sorted(pkg_resources.working_set,
                                                 key=operator.attrgetter('key'))}
