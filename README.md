@@ -17,11 +17,11 @@
       Getting Started
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/algo_pruning/index.html">
+    <a href="https://nervanasystems.github.io/distiller/algo_pruning.html">
       Algorithms
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/design/index.html">
+    <a href="https://nervanasystems.github.io/distiller/design.html">
       Design
     </a>
     <span> | </span>
@@ -158,16 +158,16 @@ Beware.
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
   - Post-training quantization of trained full-precision models, dynamic and static (statistics-based)
-  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/quantization/index.html#quantization-aware-training) in the loop
+  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/algo_quantization.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
-  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
+  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
   - Sample implementation of Early Exit, with more to come
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
   + [This notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
-* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html).
+* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html).
 * Logging to the console, text file and TensorBoard-formatted file.
 * Export to **ONNX** (export of quantized models pending ONNX standardization)
 
@@ -243,10 +243,11 @@ We'll show you how to use it for some simple use-cases, and will point you to so
 
 For more details, there are some other resources you can refer to:
 + [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
-+ [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
-+ [Compression scheduling](https://nervanasystems.github.io/distiller/schedule/index.html)
-+ [Usage](https://nervanasystems.github.io/usage/index.html)
-+ [Tutorial: Using Distiller to prune a PyTorch language model](https://github.com/NervanaSystems/distiller/wiki/Tutorial:-Using-Distiller-to-prune-a-PyTorch-language-model)
++ [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
++ [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
++ [Usage](https://nervanasystems.github.io/distiller/usage.html)
++ [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
++ [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)
@@ -299,10 +300,10 @@ This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've include
 $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resume ../ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize-eval --evaluate
 ```
 
-The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md).
+The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
 
 ### Explore the sample Jupyter notebooks
-The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter/index.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
+The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
 After installing and running the server, take a look at the [notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
@@ -415,7 +416,7 @@ If you used Distiller for your work, please use the following citation:
 
 Any published work is built on top of the work of many other people, and the credit belongs to too many people to list here.
 * The Python and PyTorch developer communities have shared many invaluable insights, examples and ideas on the Web.
-* The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html) have shared their research ideas, theoretical background and results.
+* The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
 
 
 
