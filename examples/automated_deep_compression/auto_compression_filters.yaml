@@ -32,7 +32,7 @@ network:
       "module.layer2.0.conv1", "module.layer2.1.conv1", "module.layer2.2.conv1",
       "module.layer3.0.conv1", "module.layer3.1.conv1", "module.layer3.2.conv1"]
   resnet56_cifar:
-      ["module.layer1.0.conv1", "module.layer1.1.conv1", "module.layer1.2.conv1",
+      [ "module.layer1.0.conv1", "module.layer1.1.conv1", "module.layer1.2.conv1",
         "module.layer1.3.conv1", "module.layer1.4.conv1", "module.layer1.5.conv1",
         "module.layer1.6.conv1", "module.layer1.7.conv1", "module.layer1.8.conv1",
 
