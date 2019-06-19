@@ -436,6 +436,7 @@ def draw_img_classifier_to_file(model, png_fname, dataset=None, display_param_no
                 styles['conv1'] = {'shape': 'oval',
                                    'fillcolor': 'gray',
                                    'style': 'rounded, filled'}
+        input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
     """
     dummy_input = distiller.get_dummy_input(dataset=dataset,
                                             device=distiller.model_device(model), input_shape=input_shape)
