@@ -482,7 +482,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     end = time.time()
     with torch.no_grad():
         for validation_step, (inputs, target) in enumerate(data_loader):
-            msglogger.info("epoch {} step:{} target:{}".format(epoch, validation_step, target))
             inputs, target = inputs.to(args.device), target.to(args.device)
             # compute output from model
             output = model(inputs)
@@ -672,7 +671,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    fixed_subset, sequential = True, True
+    using_fm_reconstruction = args.amc_prune_method == 'fm-reconstruction' 
+    fixed_subset, sequential = (using_fm_reconstruction, using_fm_reconstruction)
     msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
     train_loader, val_loader, test_loader, _ = load_data(args, fixed_subset, sequential)
 
