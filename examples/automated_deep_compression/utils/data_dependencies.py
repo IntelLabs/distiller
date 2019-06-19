@@ -42,24 +42,29 @@ def find_dependencies_channels(sgraph, layers, layer_name, dependencies_list):
     predecessors = sgraph.predecessors_f(layer_name, ['Conv'])
     for predecessor in predecessors:
         dependencies_list.append(predecessor)
+        prev = sgraph.find_op(predecessor)
 
-        if layers[predecessor].groups == layers[predecessor].in_channels:
+        if prev['attrs']['group'] == prev['attrs']['n_ifm']:
             # This is a group-wise convolution, and a special one at that (groups == in_channels).
             find_dependencies_channels(sgraph, layers, predecessor, dependencies_list)
-        elif layers[predecessor].groups != 1:
-            raise ValueError("Distiller AutoCompression currently does not handle this conv.groups configuration")
+        elif prev['attrs']['group'] != 1:
+            raise ValueError("Distiller AutoCompression currently does not "
+                             "handle this convolution groups configuration {} "
+                             "(layer={} {}\n{})".format(
+                             prev['attrs']['group'], predecessor, prev, layers[predecessor]))
 
 
+# todo: remove the 'layers' parameter
 def find_dependencies_filters(sgraph, layers, layer_name, dependencies_list):
     # Find all instances of Convolution or FC (GEMM) layers that immediately follow this layer
-    successors = sgraph.successors_f(layer_name, ['Conv', 'Gemm'])
+    successors = sgraph.successors_f(layer_name, ['Conv', 'Gemm'])    
     for successor in successors:
         dependencies_list.append(successor)
-
-        if isinstance(layers[successor], torch.nn.modules.Conv2d):
-            if layers[successor].groups == layers[successor].in_channels:
+        next = sgraph.find_op(successor)
+        if next['type'] == 'Conv':
+            if next['attrs']['group'] == next['attrs']['n_ifm']:
                 # This is a group-wise convolution, and a special one at that (groups == in_channels).
                 find_dependencies_filters(sgraph, layers, successor, dependencies_list)
-            elif layers[successor].groups != 1:
-                raise ValueError("Distiller AutoCompression currently does not handle this conv.groups configuration")
+            elif next['attrs']['group'] != 1:
+                raise ValueError("Distiller AutoCompression currently does not handle this conv.groups configuration")    
  
