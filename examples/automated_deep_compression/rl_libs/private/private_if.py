@@ -40,12 +40,12 @@ class RlLibInterface(object):
         agent_args.init_delta = 0.5
         agent_args.delta_decay = 0.95
         agent_args.warmup = 100
-        agent_args.lr_c = 1e-3
-        agent_args.lr_a = 1e-4
+        agent_args.lr_c = env.amc_cfg.ddpg_cfg.critic_lr
+        agent_args.lr_a = env.amc_cfg.ddpg_cfg.actor_lr
         agent_args.hidden1 = 300
         agent_args.hidden2 = 300
         agent_args.rmsize = 100
-        agent_args.rmsize = agent_args.rmsize * env.net_wrapper.num_pruned_layers()  # for each layer
+        agent_args.rmsize = env.amc_cfg.ddpg_cfg.replay_buffer_size
         agent_args.window_length = 1
         agent_args.train_episode = 800
         agent_args.output = "."
