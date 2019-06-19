@@ -10,10 +10,10 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     group.add_argument('--amc-cfg', dest='amc_cfg_file', type=str, action='store',
                     help='AMC configuration file')
     group.add_argument('--amc-protocol', choices=["mac-constrained",
-                                                  "param-constrained",
+                                                  #"param-constrained",
                                                   "accuracy-guaranteed",
                                                   "mac-constrained-experimental",
-                                                  "punish_agent"],
+                                                  "punish-agent"],
                        default="mac-constrained", help='Compression-policy search protocol')
     group.add_argument('--amc-ft-epochs', type=int, default=1,
                        help='The number of epochs to fine-tune each discovered network')
@@ -45,3 +45,5 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        default="l1-rank", help="The pruning method")
     group.add_argument('--amc-rllib', choices=["coach", "spinningup", "private", "random"],
                        default=None, help="Choose which RL library to use")
+    group.add_argument('--amc-group-size', type=int, default=1,
+                       help="Number of filters/channels to group")

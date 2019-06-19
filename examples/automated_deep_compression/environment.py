@@ -44,8 +44,9 @@ from distiller import normalize_module_name, SummaryGraph
 from .utils.features_collector import collect_intermediate_featuremap_samples
 
 
-msglogger = logging.getLogger()
-Observation = namedtuple('Observation', ['t', 'n', 'c',  'h', 'w', 'stride', 'k', 'MACs', 'Weights', 'reduced', 'rest', 'prev_a'])
+msglogger = logging.getLogger("examples.automated_deep_compression")
+Observation = namedtuple('Observation', ['t', 'n', 'c',  'h', 'w', 'stride', 'k', 'MACs',
+                                         'Weights', 'reduced', 'rest', 'prev_a'])
 ObservationLen = len(Observation._fields)
 ALMOST_ONE = 0.9999
 
@@ -108,16 +109,24 @@ def adjust_ppo_output(ppo_pruning_action, action_high, action_low):
     pruning_action = ppo_pruning_action * scale + shift
     return float(pruning_action)
 
+
 class NetworkMetadata(object):
     def __init__(self, model, dataset, dependency_type, modules_list):
-        self.all_layers, self.pruned_idxs, self.dependent_idxs, self.total_macs, self.total_nnz = get_network_details(model, dataset,
-                                                                                 dependency_type, 
-                                                                                 modules_list)
+        details = get_network_details(model, dataset, dependency_type, modules_list)
+        self.all_layers, self.pruned_idxs, self.dependent_idxs, self._total_macs, self._total_nnz = details
         
     def get_layer_net_macs(self, layer):
         return layer.macs
     
-    def get_layer_macs(self, layer):
+    @property
+    def total_macs(self):
+        return self._total_macs
+
+    @property
+    def total_nnz(self):
+        return self._total_nnz
+
+    def layer_macs(self, layer):
         macs = layer.macs
         for dependent_mod in layer.dependencies:
             macs += self.name2layer(dependent_mod).macs
@@ -136,33 +145,30 @@ class NetworkMetadata(object):
             total_nnz_reduced += nnz_reduced
             self.name2layer(dependent_mod).macs -= macs_reduced
             self.name2layer(dependent_mod).weights_vol -= nnz_reduced
-        self.total_macs -= total_macs_reduced
-        self.total_nnz -= total_nnz_reduced
+        self._total_macs -= total_macs_reduced
+        self._total_nnz -= total_nnz_reduced
 
     def name2layer(self, name):
-        layers = [layer for layer in self.all_layers if layer.name == name]
+        layers = [layer for layer in self.all_layers.values() if layer.name == name]
         if len(layers) == 1:
             return layers[0]
         raise ValueError("illegal module name %s" % name)
 
-    def get_model_budget(self, model, dataset):
-        # _, total_macs, total_nnz = collect_conv_details(model, dataset, True, None)
-        #msglogger.info("\n\n{} {} {} {}\n\n".format(self.total_macs, total_macs, self.total_nnz, total_nnz))    
-        #assert self.total_macs == total_macs and self.total_nnz == total_nnz
-        return self.total_macs, self.total_nnz
+    def get_model_budget(self): #, model, dataset):
+        return self._total_macs, self._total_nnz
 
     def get_layer(self, layer_id):
         return self.all_layers[layer_id]
+
+    def get_pruned_layer(self, layer_id):
+        assert self.is_prunable(layer_id)
+        return self.get_layer(layer_id)
 
     def is_prunable(self, layer_id):
         return layer_id in self.pruned_idxs
 
     def is_reducible(self, layer_id):
         return layer_id in self.pruned_idxs or layer_id in self.dependent_idxs
-
-    def get_pruned_layer(self, layer_id):
-        assert self.is_prunable(layer_id)
-        return self.get_layer(layer_id)
 
     def num_pruned_layers(self):
         return len(self.pruned_idxs)
@@ -175,16 +181,17 @@ class NetworkWrapper(object):
     def __init__(self, model, app_args, services, modules_list, pruning_pattern):
         self.app_args = app_args
         self.services = services
-        self.orig_DDD = NetworkMetadata(model, app_args.dataset, pruning_pattern, modules_list)
+        self.cached_model_metadata = NetworkMetadata(model, app_args.dataset, 
+                                                     pruning_pattern, modules_list)
         self.reset(model)
 
     def reset(self, model):
         self.model = model
         self.zeros_mask_dict = distiller.create_model_masks_dict(self.model)
-        self.DDD = copy.deepcopy(self.orig_DDD)
+        self.model_metadata = copy.deepcopy(self.cached_model_metadata)
 
-    def get_model_resources_requirements(self, model=None):
-        total_macs, total_nnz = self.DDD.get_model_budget(model, self.app_args.dataset)
+    def get_resources_requirements(self):
+        total_macs, total_nnz = self.model_metadata.get_model_budget()
         return total_macs, total_nnz
 
     @property
@@ -192,19 +199,30 @@ class NetworkWrapper(object):
         return self.app_args.arch
 
     def num_pruned_layers(self):
-        return self.DDD.num_pruned_layers()
+        return self.model_metadata.num_pruned_layers()
 
     def get_pruned_layer(self, layer_id):
-        return self.DDD.get_pruned_layer(layer_id)
+        return self.model_metadata.get_pruned_layer(layer_id)
 
     def get_layer(self, idx):
-       return self.DDD.get_layer(idx)
+       return self.model_metadata.get_layer(idx)
 
-    def get_layer_macs(self, layer):
-        return self.DDD.get_layer_macs(layer)
+    def layer_macs(self, layer):
+        return self.model_metadata.layer_macs(layer)
 
     def get_layer_net_macs(self, layer):
-        return self.DDD.get_layer_net_macs(layer)
+        return self.model_metadata.get_layer_net_macs(layer)
+
+    def name2layer(self, name):
+        return self.model_metadata.name2layer(name)
+
+    @property
+    def total_macs(self):
+        return self.model_metadata.total_macs
+
+    @property
+    def total_nnz(self):
+        return self.model_metadata.total_nnz
 
     def create_scheduler(self):
         scheduler = distiller.CompressionScheduler(self.model)
@@ -217,7 +235,7 @@ class NetworkWrapper(object):
 
         Returns the compute-sparsity of the layer with index 'layer_id'
         """
-        if layer_id not in self.DDD.pruned_idxs: #range(self.num_pruned_layers()):
+        if layer_id not in self.model_metadata.pruned_idxs:
             raise ValueError("idx=%d is not in correct range " % layer_id)
         if fraction_to_prune < 0:
             raise ValueError("fraction_to_prune=%.3f is illegal" % fraction_to_prune)
@@ -228,12 +246,12 @@ class NetworkWrapper(object):
             # For now, prevent the removal of entire layers
             fraction_to_prune = ALMOST_ONE
 
-        layer = self.DDD.get_pruned_layer(layer_id)
+        layer = self.model_metadata.get_pruned_layer(layer_id)
         macs_before = self.get_layer_net_macs(layer)
         conv_pname = layer.name + ".weight"
         conv_p = distiller.model_find_param(self.model, conv_pname)
 
-        msglogger.info("ADC: trying to remove %.1f%% %s from %s" % (fraction_to_prune*100, prune_what, conv_pname))
+        msglogger.debug("ADC: trying to remove %.1f%% %s from %s" % (fraction_to_prune*100, prune_what, conv_pname))
 
         if prune_what == "channels":
             calculate_sparsity = distiller.sparsity_ch
@@ -263,7 +281,7 @@ class NetworkWrapper(object):
 
         if (self.zeros_mask_dict[conv_pname].mask is None or 
                 0 == calculate_sparsity(self.zeros_mask_dict[conv_pname].mask)):
-            msglogger.info("remove_structures: aborting because there are no structures to prune")
+            msglogger.debug("remove_structures: aborting because there are no structures to prune")
             return 0
         final_action = calculate_sparsity(self.zeros_mask_dict[conv_pname].mask)
 
@@ -272,9 +290,8 @@ class NetworkWrapper(object):
         if apply_thinning:     
             remove_structures_fn(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
 
-        self.DDD.reduce_layer_macs(layer, final_action)
+        self.model_metadata.reduce_layer_macs(layer, final_action)
         macs_after = self.get_layer_net_macs(layer)
-        #print("{} {} ".format(1. - (macs_after / macs_before), final_action))
         assert 1. - (macs_after / macs_before) == final_action
         return final_action
 
@@ -302,7 +319,22 @@ class NetworkWrapper(object):
 class DistillerWrapperEnvironment(gym.Env):
     def __init__(self, model, app_args, amc_cfg, services):
         self.pylogger = distiller.data_loggers.PythonLogger(msglogger)
-        self.tflogger = distiller.data_loggers.TensorBoardLogger(msglogger.logdir)
+        logdir = logging.getLogger().logdir
+        self.tflogger = distiller.data_loggers.TensorBoardLogger(logdir)
+        self.verbose = False
+        if self.verbose:
+            loglevel = logging.DEBUG
+        else:
+            loglevel = logging.INFO
+            logging.getLogger().setLevel(logging.WARNING)
+            #logging.getLogger("__main__").setLevel(logging.WARNING)
+            #logging.getLogger("examples.classifer_compression.compress_classifier").setLevel(logging.WARNING)
+        for module in ["examples.automated_deep_compression",
+                       "distiller.data_loggers.logger",
+                       "distiller.thinning", 
+                       "distiller.pruning.ranked_structures_pruner"]:
+            logging.getLogger(module).setLevel(loglevel)
+
         self.orig_model = copy.deepcopy(model)
         self.app_args = app_args
         self.amc_cfg = amc_cfg
@@ -317,11 +349,13 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.warning("Using the following layers: %s" % ", ".join(modules_list))
 
         self.net_wrapper = NetworkWrapper(model, app_args, services, modules_list, amc_cfg.pruning_pattern)
-        self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_model_resources_requirements(model)
+        self.dense_model_macs, self.dense_model_size = self.net_wrapper.get_resources_requirements()
         self.reset(init_only=True)
-        msglogger.info("Model %s has %d Convolution layers", self.app_args.arch, self.net_wrapper.DDD.num_layers())
-        msglogger.info("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
-        self._max_episode_steps = self.net_wrapper.DDD.num_pruned_layers()  # For TD3
+        msglogger.debug("Model %s has %d modules (%d pruned)", self.app_args.arch, 
+                                                               self.net_wrapper.model_metadata.num_layers(),
+                                                               self.net_wrapper.model_metadata.num_pruned_layers())
+        msglogger.debug("\tTotal MACs: %s" % distiller.pretty_int(self.dense_model_macs))
+        self._max_episode_steps = self.net_wrapper.model_metadata.num_pruned_layers()  # Hack for Coach-TD3
         log_amc_config(amc_cfg)
 
         self.episode = 0
@@ -338,8 +372,8 @@ class DistillerWrapperEnvironment(gym.Env):
         else:
             self.action_space = spaces.Discrete(10)
         self.observation_space = spaces.Box(0, float("inf"), shape=(len(Observation._fields),))
-        self.stats_file = AMCStatsFile(os.path.join(msglogger.logdir, 'amc.csv'))
-        self.ft_stats_file = FineTuneStatsFile(os.path.join(msglogger.logdir, 'ft_top1.csv'))
+        self.stats_file = AMCStatsFile(os.path.join(logdir, 'amc.csv'))
+        self.ft_stats_file = FineTuneStatsFile(os.path.join(logdir, 'ft_top1.csv'))
 
         if self.amc_cfg.pruning_method == "fm-reconstruction":
             if self.amc_cfg.pruning_pattern != "channels":
@@ -361,7 +395,7 @@ class DistillerWrapperEnvironment(gym.Env):
                         n_points_per_fm=self.amc_cfg.n_points_per_fm))
     @property
     def steps_per_episode(self):
-        return self.net_wrapper.DDD.num_pruned_layers() 
+        return self.net_wrapper.model_metadata.num_pruned_layers() 
         
     def reset(self, init_only=False):
         """Reset the environment.
@@ -369,7 +403,7 @@ class DistillerWrapperEnvironment(gym.Env):
         """
         msglogger.info("Resetting the environment (init_only={})".format(init_only))
         self.current_state_id = 0
-        self.current_layer_id = self.net_wrapper.DDD.pruned_idxs[self.current_state_id]
+        self.current_layer_id = self.net_wrapper.model_metadata.pruned_idxs[self.current_state_id]
         self.prev_action = 0
         self.model = copy.deepcopy(self.orig_model)
         if hasattr(self.net_wrapper.model, 'intermediate_fms'):
@@ -388,9 +422,10 @@ class DistillerWrapperEnvironment(gym.Env):
         return self.net_wrapper.get_pruned_layer(self.current_layer_id)
 
     def episode_is_done(self):
-        return self.current_state_id == self.net_wrapper.DDD.num_pruned_layers()
+        return self.current_state_id == self.net_wrapper.model_metadata.num_pruned_layers()
 
-    def removed_macs(self):
+    @property
+    def removed_macs_pct(self):
         """Return the amount of MACs removed so far.
         This is normalized to the range 0..1
         """
@@ -400,11 +435,12 @@ class DistillerWrapperEnvironment(gym.Env):
         """Provide some feedback to the user about what's going on.
         This is invoked by the Agent.
         """
-        if self.current_state_id == 0: # self.net_wrapper.DDD.pruned_idxs[0]:
+        if self.current_state_id == 0:
             msglogger.info("+" + "-" * 50 + "+")
             msglogger.info("Starting a new episode %d", self.episode)
             msglogger.info("+" + "-" * 50 + "+")
-
+        if not self.verbose:
+            return
         msglogger.info("Render Environment: current_state_id=%d" % self.current_state_id)
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
 
@@ -414,10 +450,10 @@ class DistillerWrapperEnvironment(gym.Env):
         The action represents the desired sparsity for the "current" layer.
         This function is invoked by the Agent.
         """
-        msglogger.info("env.step - current_state_id=%d (%s)  episode=%d" % 
+        msglogger.debug("env.step - current_state_id=%d (%s)  episode=%d" % 
                        (self.current_state_id, self.current_layer().name, self.episode))
         pruning_action = float(pruning_action[0])
-        msglogger.info("\tAgent pruning_action={}".format(pruning_action))
+        msglogger.debug("\tAgent pruning_action={}".format(pruning_action))
         self.agent_action_history.append(pruning_action)
 
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
@@ -429,19 +465,19 @@ class DistillerWrapperEnvironment(gym.Env):
         else:
             # Divide the action space into 10 discrete levels (0%, 10%, 20%,....90% sparsity)
             pruning_action = pruning_action / 10
-        msglogger.info("\tAgent clipped pruning_action={}".format(pruning_action))
+        msglogger.debug("\tAgent clipped pruning_action={}".format(pruning_action))
 
         if self.amc_cfg.action_constrain_fn is not None:
             pruning_action = self.amc_cfg.action_constrain_fn(self, pruning_action=pruning_action)
-            msglogger.info("Constrained pruning_action={}".format(pruning_action))
+            msglogger.debug("Constrained pruning_action={}".format(pruning_action))
 
         # Calculate the final compression rate
-        total_macs_before, _ = self.net_wrapper.get_model_resources_requirements(self.model)
-        layer_macs = self.net_wrapper.get_layer_macs(self.current_layer())
-        msglogger.info("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
-        msglogger.info("\tremoved_macs={:.2f}".format(self.removed_macs()))
-        msglogger.info("\trest_macs={:.2f}".format(self.rest_macs()))    
-        msglogger.info("\tcurrent_layer_id = %d" % self.current_layer_id)
+        total_macs_before, _ = self.net_wrapper.get_resources_requirements()
+        layer_macs = self.net_wrapper.layer_macs(self.current_layer())
+        msglogger.debug("\tlayer_macs={:.2f}".format(layer_macs / self.dense_model_macs))
+        msglogger.debug("\tremoved_macs={:.2f}".format(self.removed_macs_pct))
+        msglogger.debug("\trest_macs={:.2f}".format(self.rest_macs()))
+        msglogger.debug("\tcurrent_layer_id = %d" % self.current_layer_id)
         self.current_state_id += 1
         if pruning_action > 0:
             pruning_action = self.net_wrapper.remove_structures(self.current_layer_id,
@@ -454,17 +490,17 @@ class DistillerWrapperEnvironment(gym.Env):
             pruning_action = 0
 
         self.action_history.append(pruning_action)
-        total_macs_after_act, total_nnz_after_act = self.net_wrapper.get_model_resources_requirements(self.model)
-        layer_macs_after_action = self.net_wrapper.get_layer_macs(self.current_layer())
+        total_macs_after_act, total_nnz_after_act = self.net_wrapper.get_resources_requirements()
+        layer_macs_after_action = self.net_wrapper.layer_macs(self.current_layer())
 
         # Update the various counters after taking the step
         self._removed_macs += (total_macs_before - total_macs_after_act)
 
-        msglogger.info("\tactual_action={}".format(pruning_action))
-        msglogger.info("\tlayer_macs={} layer_macs_after_action={} removed now={}".format(layer_macs,
+        msglogger.debug("\tactual_action={}".format(pruning_action))
+        msglogger.debug("\tlayer_macs={} layer_macs_after_action={} removed now={}".format(layer_macs,
                                                                                         layer_macs_after_action,
                                                                                         (layer_macs - layer_macs_after_action)))
-        msglogger.info("\tself._removed_macs={}".format(self._removed_macs))
+        msglogger.debug("\tself._removed_macs={}".format(self._removed_macs))
         assert math.isclose(layer_macs_after_action / layer_macs, 1 - pruning_action)
 
         stats = ('Performance/Validation/',
@@ -484,7 +520,7 @@ class DistillerWrapperEnvironment(gym.Env):
                                   normalized_nnz, self.action_history, self.agent_action_history)
             self.episode += 1
         else:
-            self.current_layer_id = self.net_wrapper.DDD.pruned_idxs[self.current_state_id]
+            self.current_layer_id = self.net_wrapper.model_metadata.pruned_idxs[self.current_state_id]
 
             if self.amc_cfg.ft_frequency is not None and self.current_state_id % self.amc_cfg.ft_frequency == 0:
                 self.net_wrapper.train(1, self.episode)
@@ -496,9 +532,10 @@ class DistillerWrapperEnvironment(gym.Env):
         self.prev_action = pruning_action
         if self.episode_is_done():
             info = {"accuracy": top1, "compress_ratio": normalized_macs}
-            msglogger.info(self.removed_macs())
+            msglogger.info(self.removed_macs_pct)
             if self.amc_cfg.protocol == "mac-constrained":
-                assert self.removed_macs() >= 0.49
+                # Sanity check (special case only for "mac-constrained")
+                assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.01
         else:
             info = {}
         return observation, reward, self.episode_is_done(), info
@@ -513,27 +550,33 @@ class DistillerWrapperEnvironment(gym.Env):
         obs = self.model_representation[self.current_state_id, :]
         obs[-1] = self.prev_action
         obs[-2] = self.rest_macs()
-        obs[-3] = self.removed_macs()
-        msglogger.info("obs={}".format(Observation._make(obs)))
-        msglogger.info("{} {} {}".format(self.removed_macs(), current_layer_macs_pct, self.rest_macs()))
-        assert (self.removed_macs() + current_layer_macs_pct + self.rest_macs()) <= 1
+        obs[-3] = self.removed_macs_pct
+        msglogger.debug("obs={}".format(Observation._make(obs)))
+        # Sanity check
+        assert (self.removed_macs_pct + current_layer_macs_pct + self.rest_macs()) <= 1
         return obs
 
     def get_final_obs(self):
-        """Return the final state embedding (observation)
+        """Return the final state embedding (observation).
+
         The final state is reached after we traverse all of the Convolution layers.
         """
         obs = self.model_representation[-1, :]
-        msglogger.info("obs={}".format(Observation._make(obs)))
+        msglogger.debug("obs={}".format(Observation._make(obs)))
         return obs
 
     def get_model_representation(self):
-        """Produce a state embedding (i.e. an observation)"""
+        """Initialize an embedding representation of the entire model.
+
+        At runtime, a specific row in the embedding matrix is chosen (depending on
+        the current state) and the dynamic fields in the resulting state-embedding
+        vector are updated. 
+        """
         num_states = self.net_wrapper.num_pruned_layers()
         network_obs = np.empty(shape=(num_states, ObservationLen))
-        for state_id, layer_id in enumerate(self.net_wrapper.DDD.pruned_idxs):
+        for state_id, layer_id in enumerate(self.net_wrapper.model_metadata.pruned_idxs):
             layer = self.net_wrapper.get_layer(layer_id)
-            layer_macs = self.net_wrapper.get_layer_macs(layer)
+            layer_macs = self.net_wrapper.layer_macs(layer)
             conv_module = distiller.model_find_module(self.model, layer.name)
             obs = [state_id,
                    conv_module.out_channels,
@@ -554,22 +597,31 @@ class DistillerWrapperEnvironment(gym.Env):
             fmax = max(feature_vec)
             if fmax - fmin > 0:
                 network_obs[:, feature] = (feature_vec - fmin) / (fmax - fmin)
-        msglogger.debug("model representation=\n{}".format(network_obs))
+        # msglogger.debug("model representation=\n{}".format(network_obs))
         return network_obs
 
     def rest_macs_raw(self):
         """Return the number of remaining MACs in the layers following the current layer"""
-        rest = 0
-        prunable_rest = 0
-        debug_layers = []
-        for layer_id in range(self.current_layer_id+1, self.net_wrapper.DDD.num_layers()):
-            debug_layers.append(layer_id)
-            if self.net_wrapper.DDD.is_reducible(layer_id):
-                prunable_rest += self.net_wrapper.get_layer_net_macs(self.net_wrapper.get_pruned_layer(layer_id))
+        rest, prunable_rest = 0, 0
+        prunable_layers, rest_layers, layers_to_ignore = list(), list(), list()
+
+        # Create a list of the IDs of the layers that are dependent on the current_layer.
+        # We want to ignore these layers when we compute prunable_layers (and prunable_rest).
+        for dependent_mod in self.current_layer().dependencies:
+            layers_to_ignore.append(self.net_wrapper.name2layer(dependent_mod).id)
+
+        for layer_id in range(self.current_layer_id+1, self.net_wrapper.model_metadata.num_layers()):
+            layer_macs = self.net_wrapper.get_layer_net_macs(self.net_wrapper.get_layer(layer_id))
+            if self.net_wrapper.model_metadata.is_reducible(layer_id):
+                if layer_id not in layers_to_ignore:
+                    prunable_layers.append((layer_id, self.net_wrapper.get_layer(layer_id).name, layer_macs))
+                    prunable_rest += layer_macs
             else:
-                rest += self.net_wrapper.get_layer_net_macs(self.net_wrapper.get_layer(layer_id))
-        # msglogger.info("debug_layers={}".format(debug_layers))
-        # msglogger.info("layer_id=%d, prunable_rest=%.3f rest=%.3f" % (self.current_layer_id, prunable_rest, rest))
+                rest_layers.append((layer_id, self.net_wrapper.get_layer(layer_id).name, layer_macs))
+                rest += layer_macs
+
+        msglogger.debug("prunable_layers={} rest_layers={}".format(prunable_layers, rest_layers))
+        msglogger.debug("layer_id=%d, prunable_rest=%.3f rest=%.3f" % (self.current_layer_id, prunable_rest, rest))
         return prunable_rest, rest
 
     def rest_macs(self):
@@ -641,16 +693,17 @@ class DistillerWrapperEnvironment(gym.Env):
 def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
     dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
-    all_layers = list()
+    all_layers = OrderedDict()
     pruned_indices = list()
-    dependent_indices = set()
+    dependent_layers = set()
     total_macs = 0
     total_params = 0
-    layers = {mod_name: m for mod_name, m in model.named_modules() if isinstance(m, torch.nn.Conv2d)}
+    layers = OrderedDict({mod_name: m for mod_name, m in model.named_modules() 
+                          if isinstance(m, (torch.nn.Conv2d, torch.nn.Linear))})
     for id, (name, m) in enumerate(layers.items()):
         if isinstance(m, torch.nn.Conv2d):
             conv = SimpleNamespace()
-            conv.t = len(pruned_indices) # id
+            conv.t = len(pruned_indices)
             conv.k = m.kernel_size[0]
             conv.stride = m.stride
 
@@ -674,16 +727,44 @@ def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
 
             conv.name = name
             conv.id = id
-            all_layers.append(conv)
+            all_layers[id] = conv
             if layers_to_prune is None or name in layers_to_prune:
                 pruned_indices.append(id)
-            
-            from .utils.data_dependencies import find_dependencies
-            conv.dependencies = list()
-            find_dependencies(dependency_type, g, layers, name, conv.dependencies)
-            dependent_indices.add(tuple(conv.dependencies))
-            #msglogger.info("{} {}".format(name, conv.dependencies))
+                # Find the data-dependent layers
+                from .utils.data_dependencies import find_dependencies
+                conv.dependencies = list()
+                find_dependencies(dependency_type, g, all_layers, name, conv.dependencies)
+                dependent_layers.add(tuple(conv.dependencies))
+        elif isinstance(m, torch.nn.Linear):
+            fc = SimpleNamespace()
+
+            # Use the SummaryGraph to obtain some other details of the models
+            fc_op = g.find_op(normalize_module_name(name))
+            assert fc_op is not None
+
+            fc.weights_vol = fc_op['attrs']['weights_vol']
+            total_params += conv.weights_vol
+            fc.macs = fc_op['attrs']['MACs']
+            fc.n_ofm = fc_op['attrs']['n_ofm']
+            fc.n_ifm = fc_op['attrs']['n_ifm']
+            fc_pname = name + ".weight"
+            fc_p = distiller.model_find_param(model, fc_pname)
+            total_macs += fc.macs
+            fc.name = name
+            fc.id = id
+            all_layers[id] = fc
  
+    def convert_layer_names_to_indices(layer_names):
+        """Args:
+            layer_names - list of layer names
+           Returns:
+            list of layer indices
+        """
+        layer_indices = [index for name in layer_names for index, 
+                            layer in all_layers.items() if layer.name == name[0]]
+        return layer_indices
+
+    dependent_indices = convert_layer_names_to_indices(dependent_layers)
     return all_layers, pruned_indices, dependent_indices, total_macs, total_params
 
 
@@ -706,7 +787,7 @@ def sample_networks(net_wrapper, services):
     top1_sorted_df = df.sort_values(by=['reward'], ascending=False)
     top10pct = top1_sorted_df[:int(len(df.index) * 0.1)]
 
-    dense_macs, _ = net_wrapper.get_model_resources_requirements()
+    dense_macs, _ = net_wrapper.get_resources_requirements()
     layer_sparsities_list = []
     for index, row in top10pct.iterrows():
         layer_sparsities = row['action_history']
@@ -735,7 +816,7 @@ def sample_networks(net_wrapper, services):
 
         """Save the learned-model checkpoint"""
         scheduler = net_wrapper.create_scheduler()
-        total_macs, _ = net_wrapper.get_model_resources_requirements(model)
+        total_macs, _ = net_wrapper.get_resources_requirements()
         fname = "{}_top1_{:2f}__density_{:2f}_sampled".format(net_wrapper.arch, top1, total_macs/dense_macs)
         services.save_checkpoint_fn(epoch=0, model=net_wrapper.model,
                                     scheduler=scheduler, name=fname)

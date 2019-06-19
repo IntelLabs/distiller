@@ -30,8 +30,8 @@ def reward_factory(reward_name):
         "mac-constrained": (amc_mac_constrained_reward_fn, mac_constrained_clamp_action),
         "accuracy-guaranteed": (amc_accuracy_guarantee_reward_fn, None),
         "mac-constrained-experimental": (mac_constrained_experimental_reward_fn, None),
-        "harmonic_mean": (harmonic_mean_reward_fn, None),
-        "punish_agent": (punish_agent_reward_fn, None)
+        "harmonic-mean": (harmonic_mean_reward_fn, None),
+        "punish-agent": (punish_agent_reward_fn, None)
     }[reward_name]
 
 
@@ -60,21 +60,25 @@ def mac_constrained_clamp_action(env, pruning_action):
     """Compute a resource-constrained action"""
 
     # Todo: this is tightly coupled to the environment - refactor
-    flops = env.net_wrapper.get_layer_macs(env.current_layer())
+    flops = env.net_wrapper.layer_macs(env.current_layer())
     assert flops > 0
     reduced = env._removed_macs
     prunable_rest, rest = env.rest_macs_raw()
     rest += prunable_rest * env.action_high  # how much we have to remove in other layers
     target_reduction = (1 - env.amc_cfg.target_density) * env.dense_model_macs
-    assert reduced == env.dense_model_macs - env.net_wrapper.DDD.total_macs
+    assert reduced == env.dense_model_macs - env.net_wrapper.total_macs
     duty = target_reduction - (reduced + rest)
     pruning_action_final = min(env.action_high, max(pruning_action, duty/flops))
 
-    msglogger.info("\t\tflops=%.3f  reduced=%.3f  rest=%.3f  duty=%.3f" % (flops, reduced, rest, duty))
-    msglogger.info("\t\tpruning_action=%.3f  pruning_action_final=%.3f" % (pruning_action, pruning_action_final))
-
+    msglogger.debug("\t\tflops=%.3f  reduced=%.3f  rest=%.3f  duty=%.3f" % (flops, reduced, rest, duty))
+    msglogger.debug("\t\tpruning_action=%.3f  pruning_action_final=%.3f" % (pruning_action, pruning_action_final))
+    msglogger.debug("\t\ttarget={:.2f} reduced={:.2f} rest={:.2f} duty={:.2f} flops={:.2f}".
+                        format( 1-env.amc_cfg.target_density, reduced/env.dense_model_macs,
+                                rest/env.dense_model_macs, 
+                                duty/env.dense_model_macs,
+                                flops/env.dense_model_macs))
     if pruning_action_final != pruning_action:
-        msglogger.info("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
+        msglogger.debug("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
                         format(pruning_action, pruning_action_final, reduced/env.dense_model_macs,
                                 rest/env.dense_model_macs, 1-env.amc_cfg.target_density,
                                 duty/env.dense_model_macs,

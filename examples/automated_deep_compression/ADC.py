@@ -16,7 +16,7 @@
 
 """To execute this code:
 
-$ time python3 compress_classifier.py --arch=plain20_cifar ../../../data.cifar10 --resume=checkpoint.plain20_cifar.pth.tar --lr=0.05 --amc --amc-protocol=mac-constrained --amc-target-density=0.5 -p=50
+$ time python3 compress_classifier.py --arch=plain20_cifar ../../../data.cifar10e --resume=checkpoint.plain20_cifar.pth.tar --lr=0.05 --amc --amc-protocol=mac-constrained --amc-target-density=0.5 -p=50
 
 """
 import math
@@ -41,7 +41,7 @@ from examples.automated_deep_compression.environment import DistillerWrapperEnvi
 from examples.automated_deep_compression.utils.features_collector import collect_intermediate_featuremap_samples
 
 
-msglogger = logging.getLogger()
+msglogger = logging.getLogger("examples.automated_deep_compression")
 
     
 def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
@@ -77,6 +77,15 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'arch': arch,
             'optimizer_data': optimizer_data})
 
+    ddpg_cfg = distiller.utils.MutableNamedTuple({
+            'heatup_noise': 0.5,
+            'initial_training_noise': 0.5,
+            'training_noise_decay': 0.99555, #0.98, #0.996,
+            'num_heatup_epochs': args.amc_heatup_epochs,
+            'num_training_epochs': args.amc_training_epochs,
+            'actor_lr': 1e-4, 
+            'critic_lr': 1e-3})
+
     amc_cfg = distiller.utils.MutableNamedTuple({
             'modules_dict': compression_cfg["network"],  # dict of modules, indexed by arch name
             'protocol': args.amc_protocol,
@@ -87,8 +96,9 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'ft_frequency': args.amc_ft_frequency,
             'pruning_pattern':  args.amc_prune_pattern,
             'pruning_method': args.amc_prune_method,
-            'group_size': 1,
-            'n_points_per_fm':10})
+            'group_size': args.amc_group_size,
+            'n_points_per_fm':10,
+            'ddpg_cfg': ddpg_cfg})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -97,40 +107,36 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     amc_cfg.target_density = args.amc_target_density
     amc_cfg.reward_fn, amc_cfg.action_constrain_fn = reward_factory(args.amc_protocol)
 
-    if args.amc_rllib == "spinningup":
-        amc_cfg.heatup_noise = 0.5
-        amc_cfg.initial_training_noise = 0.5
-        amc_cfg.training_noise_decay = 0.996  # 0.998
-        amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
-        amc_cfg.num_training_epochs = args.amc_training_epochs
-
-        from .rl_libs.spinningup import spinningup_if
-        x = spinningup_if.RlLibInterface()
-        env1 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        env2 = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        steps_per_episode = env1.steps_per_episode
-        x.solve(env1, env2, steps_per_episode)
-    elif args.amc_rllib == "private":
+    def create_environment():
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
+        env.amc_cfg.ddpg_cfg.replay_buffer_size = 100 * env.steps_per_episode
+        return env
+    env1 = create_environment()
+
+    if args.amc_rllib == "spinningup":
+        from .rl_libs.spinningup import spinningup_if
+        rl = spinningup_if.RlLibInterface()
+        env2 = create_environment()
+        steps_per_episode = env1.steps_per_episode
+        rl.solve(env1, env2)
+    elif args.amc_rllib == "private":
         from .rl_libs.private import private_if
-        x = private_if.RlLibInterface()
+        rl = private_if.RlLibInterface()
         args.observation_len = len(Observation._fields)
-        x.solve(env, args)
+        rl.solve(env1, args)
     elif args.amc_rllib == "coach":
         from .rl_libs.coach import coach_if
-        x = coach_if.RlLibInterface()
+        rl = coach_if.RlLibInterface()
         env_cfg  = {'model': model, 
                     'app_args': app_args,
                     'amc_cfg': amc_cfg,
                     'services': services}
-        env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        steps_per_episode = env.steps_per_episode
-        x.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
+        steps_per_episode = env1.steps_per_episode
+        rl.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
     elif args.amc_rllib == "random":
         from .rl_libs.random import random_if
-        x = random_if.RlLibInterface()
-        env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        return x.solve(env)
+        rl = random_if.RlLibInterface()
+        return rl.solve(env1)
     else:
-        raise ValueError("unsupported rl library: ", rl_lib)
+        raise ValueError("unsupported rl library: ", args.amc_rllib)
 
