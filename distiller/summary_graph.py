@@ -251,7 +251,7 @@ class SummaryGraph(object):
                         group = op['attrs']['group']
                     else:
                         kernel_size, group = 1, 1
-                    n_ifm = self.param_shape(conv_in)[1] / group
+                    n_ifm = self.param_shape(conv_in)[1]
                     n_ofm = self.param_shape(conv_out)[1] 
                     weights_vol = kernel_size * n_ifm * n_ofm
                     op['attrs']['n_ifm'] = n_ifm
