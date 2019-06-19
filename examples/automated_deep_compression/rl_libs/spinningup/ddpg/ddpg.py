@@ -51,7 +51,8 @@ Deep Deterministic Policy Gradient (DDPG)
 def ddpg(env, test_env, actor_critic=core.mlp_actor_critic, ac_kwargs=dict(), seed=0,
          steps_per_epoch=5000, epochs=100, replay_size=int(1e6), gamma=0.99,
          polyak=0.995, pi_lr=1e-3, q_lr=1e-3, batch_size=100, start_steps=10000,
-         act_noise=0.1, max_ep_len=1000, logger_kwargs=dict(), save_freq=1):
+         act_noise=0.1, max_ep_len=1000, logger_kwargs=dict(), save_freq=1,
+         noise_decay=0.95):
     """
 
     Args:
@@ -255,7 +256,7 @@ def ddpg(env, test_env, actor_critic=core.mlp_actor_critic, ac_kwargs=dict(), se
             #                                 total_steps=self.amc_cfg.conv_cnt, log_freq=1, loggers=[self.tflogger])
             # Neta: noise decay
             if t > start_steps:
-                act_noise = act_noise * 0.97
+                act_noise = act_noise * noise_decay # 0.95
 
             # Neta: don't learn while in heatup
             if t > start_steps:

@@ -27,11 +27,11 @@ msglogger = logging.getLogger()
 class RlLibInterface(object):
     """Interface to the Spinningup RL library"""
 
-    def solve(self, env1, env2, steps_per_episode):
+    def solve(self, env1, env2):
         msglogger.info("AMC: Using Spinningup")
 
         # training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-        heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
+        heatup_duration = env1.amc_cfg.ddpg_cfg.num_heatup_epochs * env1.steps_per_episode
 
         exp_name = "Test"
         seed = 0
@@ -44,12 +44,13 @@ class RlLibInterface(object):
                   gamma=1,  # discount rate
                   #seed=seed,
                   epochs=400,
-                  replay_size=2000,
+                  replay_size=env1.amc_cfg.ddpg_cfg.replay_buffer_size,
                   batch_size=64,
                   start_steps=heatup_duration,
-                  steps_per_epoch=800 * steps_per_episode,  # every 50 episodes perform 10 episodes of testing
-                  act_noise=0.5,
-                  pi_lr=1e-4,
-                  q_lr=1e-3,
-                  logger_kwargs=logger_kwargs)
+                  steps_per_epoch=800 * env1.steps_per_episode,  # every 50 episodes perform 10 episodes of testing
+                  act_noise=env1.amc_cfg.ddpg_cfg.initial_training_noise,
+                  pi_lr=env1.amc_cfg.ddpg_cfg.actor_lr,
+                  q_lr=env1.amc_cfg.ddpg_cfg.critic_lr,
+                  logger_kwargs=logger_kwargs,
+                  noise_decay=env1.amc_cfg.ddpg_cfg.training_noise_decay)
 
