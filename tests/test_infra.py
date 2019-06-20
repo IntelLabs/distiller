@@ -130,8 +130,7 @@ def test_load_dumb_checkpoint():
 
 
 def test_load_negative():
-    with pytest.raises(FileNotFoundError):
-        model = create_model(False, 'cifar10', 'resnet20_cifar')
+    model = create_model(False, 'cifar10', 'resnet20_cifar')
     with pytest.raises(FileNotFoundError):
         load_checkpoint(model, 'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
 
