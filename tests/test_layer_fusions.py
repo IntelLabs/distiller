@@ -55,7 +55,7 @@ def test_simulated_bn_fold_conv(has_bias, batch_size, input_c, output_c, h, w, k
 
 
 def run_simulated_bn_fold_test(param_layer, bn_layer, x_size, has_bias):
-    folded = SimulatedFoldedBatchNorm(deepcopy(param_layer), deepcopy(bn_layer), quantized=False)
+    folded = SimulatedFoldedBatchNorm(deepcopy(param_layer), deepcopy(bn_layer), param_quantization_fn=None)
     unfolded = nn.Sequential(param_layer, bn_layer)
     folded, unfolded = folded.to(DEVICE), unfolded.to(DEVICE)
     optimizer_folded = torch.optim.SGD(folded.parameters(), LR)

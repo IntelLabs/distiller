@@ -1,4 +1,5 @@
-from .range_linear import *
+import torch
+import torch.nn as nn
 from torch.nn import functional as F
 
 __all__ = ['SimulatedFoldedBatchNorm']
@@ -17,38 +18,28 @@ def _broadcast_correction_factor(c, broadcast_to_shape):
 
 
 class SimulatedFoldedBatchNorm(nn.Module):
-    def __init__(self, param_module, bn, quantized=False, num_bits_accum=32, num_bits_params=8,
-                 mode=LinearQuantMode.SYMMETRIC, dequantize=True,
-                 freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT):
+    def __init__(self, param_module, bn, freeze_bn_delay=FREEZE_BN_DELAY_DEFAULT, param_quantization_fn=None):
         """
         Wrapper for simulated folding of BatchNorm into convolution / linear layers during training
         Args:
             param_module (nn.Linear or nn.Conv2d): the wrapped parameter layer
             bn (nn.BatchNorm1d or nn.BatchNorm2d): batch normalization
-            quantized (bool): whether to quantize the modules.
-            num_bits_accum (int): number of bits to quantize accumulator (or bias)
-            num_bits_params (int): number of bits to quantize weights
-            mode (str or LinearQuantMode): the mode of quantization, see `distiller.quantization.LinearQuantMode`
-            dequantize (bool): whether to dequantized the acts after calculating them
             freeze_bn_delay (int): number of steps before freezing the batchnorm running stats
+            param_quantization_fn (function): function to be used for weight/bias quantization
         Note:
             The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
         """
         SimulatedFoldedBatchNorm.verify_module_types(param_module, bn)
         if not bn.track_running_stats or not bn.affine:
-            raise ValueError("Quantization is only supported for BatchNorm which tracks running stats with"
+            raise ValueError("Simulated BN folding is only supported for BatchNorm which tracks running stats with"
                              "affine weights.")
         super(SimulatedFoldedBatchNorm, self).__init__()
-        self.dequantize = dequantize
-        self.mode = verify_quant_mode(mode)
-        self.num_bits_params = num_bits_params
-        self.num_bits_accum = num_bits_accum
         self.param_module = param_module
         self.bn = bn
         self.freeze_bn_delay = freeze_bn_delay
         self.frozen = False
         self._has_bias = (self.param_module.bias is not None)
-        self.quantized = quantized
+        self.param_quant_fn = param_quantization_fn
         if isinstance(param_module, nn.Linear):
             self.param_forward_fn = self._linear_layer_forward
             self.param_module_type = "fc"
@@ -87,24 +78,24 @@ class SimulatedFoldedBatchNorm(nn.Module):
                 with torch.no_grad():
                     sigma_running = torch.sqrt(self.bn.running_var + self.bn.eps)
                 w_corrected = w * self.broadcast_correction_weight(gamma / sigma_running)
-                w_quantized = self.quant_weights(w_corrected)
+                w_quantized = self._quant_param(w_corrected)
                 recip_c = self.broadcast_correction(sigma_running * recip_sigma_batch)
                 bias_corrected = beta - gamma * batch_mean * recip_sigma_batch
-                bias_quantized = self.broadcast_correction(self.quant_bias(bias_corrected))
+                bias_quantized = self.broadcast_correction(self._quant_param(bias_corrected))
                 y = self.param_forward_fn(x, w_quantized, None)
                 y.mul_(recip_c).add_(bias_quantized)
             else:
                 with torch.no_grad():
                     recip_sigma_running = torch.rsqrt(self.bn.running_var + self.bn.eps)
                 w_corrected = w * self.broadcast_correction_weight(gamma * recip_sigma_running)
-                w_quantized = self.quant_weights(w_corrected)
+                w_quantized = self._quant_param(w_corrected)
                 corrected_mean = self.bn.running_mean - (b if b is not None else 0)
                 bias_corrected = beta - gamma * corrected_mean * recip_sigma_running
-                bias_quantized = self.quant_bias(bias_corrected)
+                bias_quantized = self._quant_param(bias_corrected)
                 y = self.param_forward_fn(x, w_quantized, bias_quantized)
         else:
             w, b = self.param_module.weight, self.param_module.bias
-            w_quantized, bias_quantized = self.quant_weights(w), self.quant_bias(b)
+            w_quantized, bias_quantized = self._quant_param(w), self._quant_param(b)
             y = self.param_forward_fn(x, w_quantized, bias_quantized)
 
         return y
@@ -131,30 +122,13 @@ class SimulatedFoldedBatchNorm(nn.Module):
         expected_view_shape = c.shape + view_filler
         return c.view(*expected_view_shape)
 
-    def quant_weights(self, w: nn.Parameter):
-        if not self.quantized:
-            return w
-        return self._quant_param(w, self.num_bits_params)
-
-    def quant_bias(self, b: nn.Parameter):
-        if b is None or not self.quantized:
-            return b
-        return self._quant_param(b, self.num_bits_accum)
-
-    def _quant_param(self, t: torch.Tensor, num_bits):
+    def _quant_param(self, t: torch.Tensor):
         """
         Quantize a parameter locally.
         """
-        t_min, t_max = get_tensor_min_max(t)
-        t_min, t_max = t_min.item(), t_max.item()
-        if self.mode == LinearQuantMode.SYMMETRIC:
-            t_max = max(abs(t_min), abs(t_max))
-            scale, zero_point = symmetric_linear_quantization_params(num_bits, t_max)
-        else:
-            signed = self.mode == LinearQuantMode.ASYMMETRIC_SIGNED
-            scale, zero_point = asymmetric_linear_quantization_params(num_bits, t_min, t_max,
-                                                                      signed=signed)
-        return LinearQuantizeSTE.apply(t, scale, zero_point, self.dequantize, False)
+        if t is None or self.param_quant_fn is None:
+            return t
+        return self.param_quant_fn(t)
 
     def batch_stats(self, x, bias=None):
         """
