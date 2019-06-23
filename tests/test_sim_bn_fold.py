@@ -2,7 +2,7 @@ import distiller
 import torch
 from torch.testing import assert_allclose
 import torch.nn as nn
-from distiller.quantization.layer_fusions import SimulatedFoldedBatchNorm
+from distiller.quantization.sim_bn_fold import SimulatedFoldedBatchNorm
 from copy import deepcopy
 import pytest
 
