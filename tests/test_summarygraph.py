@@ -49,7 +49,7 @@ def test_connectivity():
     assert g is not None
 
     op_names = [op['name'] for op in g.ops.values()]
-    assert 81 == len(op_names)
+    assert len(op_names) == 80
 
     edges = g.edges
     assert edges[0].src == '0' and edges[0].dst == 'conv1'
@@ -168,10 +168,9 @@ def test_named_params_layers():
 
 
 def test_onnx_name_2_pytorch_name():
-    assert "layer3.0.relu1" == onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1", 'Relu')
-    assert "features.34" == onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]', 'Conv')
-    assert "Relu3" == onnx_name_2_pytorch_name('NameWithNoModule.3', 'Relu')
-    #assert "features.module.34" == onnx_name_2_pytorch_name('VGG/DataParallel[features]/Sequential/Conv2d[34]', 'Conv')
+    assert onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu]") == "layer3.0.relu"
+    assert onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]') == "features.34"
+    assert onnx_name_2_pytorch_name('NameWithNoModule') == 
 
 
 def test_connectivity_summary():
@@ -179,10 +178,10 @@ def test_connectivity_summary():
     assert g is not None
 
     summary = connectivity_summary(g)
-    assert len(summary) == 81
+    assert len(summary) == 80
 
     verbose_summary = connectivity_summary_verbose(g)
-    assert len(verbose_summary) == 81
+    assert len(verbose_summary) == 80
 
 
 def test_sg_macs():
