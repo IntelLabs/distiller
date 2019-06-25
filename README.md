@@ -412,12 +412,12 @@ In IEEE Computer Architecture Letters (CAL), 2019.
   arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
-  *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504v20),*<br>
-  arXiv:1901.09504v2, 2019
+  *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
+  arXiv:1901.09504, 2019
   
 -  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
-   *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872v2)*,<br>
-   arXiv:1812.07872v2, 2018
+   *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872)*,<br>
+   arXiv:1812.07872, 2018
 
 
 If you used Distiller for your work, please use the following citation:
