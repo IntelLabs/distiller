@@ -172,8 +172,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
         if unexpected_keys:
             msglogger.warning("Warning: the loaded checkpoint (%s) contains %d unexpected state keys" % (chkpt_file, len(unexpected_keys)))
         if missing_keys:
-            msglogger.warning("Warning: the loaded checkpoint (%s) is missing %d state keys" % (chkpt_file, len(missing_keys)))
-
+            raise ValueError("The loaded checkpoint (%s) is missing %d state keys" % (chkpt_file, len(missing_keys)))
+            
     if model_device is not None:
         model.to(model_device)
 
