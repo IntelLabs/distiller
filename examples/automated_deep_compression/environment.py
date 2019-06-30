@@ -536,6 +536,7 @@ class DistillerWrapperEnvironment(gym.Env):
             if self.amc_cfg.protocol == "mac-constrained":
                 # Sanity check (special case only for "mac-constrained")
                 assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.01
+                pass
         else:
             info = {}
         return observation, reward, self.episode_is_done(), info
@@ -669,7 +670,9 @@ class DistillerWrapperEnvironment(gym.Env):
             ckpt_name = self.save_checkpoint(is_best=True)
             msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.episode, top1))
         else:
-            ckpt_name = self.save_checkpoint(is_best=False)
+            ckpt_name = ""
+            if self.amc_cfg.save_chkpts:
+                ckpt_name = self.save_checkpoint(is_best=False)
 
         fields = [self.episode, top1, reward, total_macs, normalized_macs,
                   normalized_nnz, ckpt_name, action_history, agent_action_history]

@@ -88,6 +88,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
 
     amc_cfg = distiller.utils.MutableNamedTuple({
             'modules_dict': compression_cfg["network"],  # dict of modules, indexed by arch name
+            'save_chkpts': args.amc_save_chkpts,
             'protocol': args.amc_protocol,
             'agent_algo': args.amc_agent_algo,
             'num_ft_epochs': num_ft_epochs,
@@ -97,7 +98,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'pruning_pattern':  args.amc_prune_pattern,
             'pruning_method': args.amc_prune_method,
             'group_size': args.amc_group_size,
-            'n_points_per_fm':10,
+            'n_points_per_fm': args.amc_fm_reconstruction_n_pts,
             'ddpg_cfg': ddpg_cfg})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
