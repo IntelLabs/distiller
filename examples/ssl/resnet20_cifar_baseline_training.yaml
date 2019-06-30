@@ -2,6 +2,10 @@
 #
 # time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --lr=0.3 --epochs=180 --compress=../ssl/resnet20_cifar_baseline_training.yaml -j=1 --deterministic
 #
+# We can acheive faster and better training with a more complicated training regim which yields a 
+# Top1~ 91.7 - 92.0 on the test set.
+# For backwards compatibility with the results of older examples, the new training schedule is left in remark.
+#
 # Parameters:
 # +----+-------------------------------------+----------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
 # |    | Name                                | Shape          |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
@@ -60,3 +64,21 @@ policies:
       starting_epoch: 45
       ending_epoch: 200
       frequency: 1
+
+# This is the faster training, referred to above.
+# Use this command line:
+#
+# time python3 compress_classifier.py --arch resnet20_cifar  ../data.cifar10 -p=50 --epochs=110 --compress=../ssl/resnet20_cifar_baseline_training.yaml --vs=0 --gpus=0 -j=4 --lr=0.4
+#
+# lr_schedulers:
+#   training_lr:
+#     class: CosineAnnealingLR
+#     T_max: 20
+
+
+# policies:
+#   - lr_scheduler:
+#       instance_name: training_lr
+#     starting_epoch: 0
+#     ending_epoch: 100
+#     frequency: 1
