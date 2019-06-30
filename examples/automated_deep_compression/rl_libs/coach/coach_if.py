@@ -15,8 +15,9 @@
 #
 
 from rl_coach.base_parameters import TaskParameters
-from rl_coach.core_types import EnvironmentSteps
+from rl_coach.core_types import EnvironmentSteps, EnvironmentEpisodes, TrainingSteps
 from rl_coach.schedules import ConstantSchedule, PieceWiseSchedule, ExponentialSchedule
+from rl_coach.memories.memory import MemoryGranularity
 import logging
 import os
 
@@ -33,32 +34,27 @@ class RlLibInterface(object):
         # Coach to create and use our DistillerWrapperEnvironment environment.
         # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
         if args.amc_agent_algo == "DDPG":
-            # amc_cfg.heatup_noise = 0.5
-            amc_cfg.initial_training_noise = 0.5
-            amc_cfg.training_noise_decay = 0.996  # 0.998
-            amc_cfg.num_heatup_epochs = args.amc_heatup_epochs
-            amc_cfg.num_training_epochs = args.amc_training_epochs
-            #training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-            #heatup_duration = amc_cfg.num_heatup_epochs * steps_per_episode
-
-            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_DDPG import graph_manager, agent_params
-            # agent_params.exploration.noise_percentage_schedule = PieceWiseSchedule([
-            #     (ConstantSchedule(amc_cfg.heatup_noise), EnvironmentSteps(heatup_duration)),
-            #     (ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay),
-            #      EnvironmentSteps(training_noise_duration))])
-            #agent_params.exploration.noise_percentage_schedule = ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay)
-            agent_params.exploration.noise_schedule = ExponentialSchedule(amc_cfg.initial_training_noise, 0, amc_cfg.training_noise_decay)
+            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_DDPG import (graph_manager, 
+                                                                                            agent_params)
+            graph_manager.agent_params.exploration.noise_schedule = ExponentialSchedule(amc_cfg.ddpg_cfg.initial_training_noise, 
+                                                                          0, 
+                                                                          amc_cfg.ddpg_cfg.training_noise_decay)
             # Number of iterations to train 
-            agent_params.algorithm.num_consecutive_training_steps = steps_per_episode
-            # How many act iterations, before training
-            agent_params.algorithm.num_consecutive_playing_steps = EnvironmentSteps(steps_per_episode)
-            agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(steps_per_episode)
-            # agent_params.exploration.noise_percentage_schedule = ConstantSchedule(0)
+            graph_manager.agent_params.algorithm.num_consecutive_training_steps = steps_per_episode
+            graph_manager.agent_params.algorithm.num_steps_between_copying_online_weights_to_target = TrainingSteps(1)
+            # Heatup
+            graph_manager.heatup_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_heatup_epochs)
+            amc_cfg.ddpg_cfg.num_heatup_epochs
+            # Replay buffer size
+            graph_manager.agent_params.memory.max_size = (MemoryGranularity.Transitions, amc_cfg.ddpg_cfg.replay_buffer_size)
         elif "ClippedPPO" in args.amc_agent_algo:
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params
         elif "TD3" in args.amc_agent_algo:
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_TD3 import graph_manager, agent_params
 
+        # Number of training steps
+        graph_manager.improve_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
+        graph_manager.steps_between_evaluation_periods = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
         # These parameters are passed to the Distiller environment
         env_cfg  = {'model': model, 
                     'app_args': app_args,
