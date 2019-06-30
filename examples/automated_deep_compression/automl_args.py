@@ -23,7 +23,7 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='Density action range (a_min, a_max)')
     group.add_argument('--amc-heatup-epochs', type=int, default=100,
                        help='The number of epochs for heatup/exploration')
-    group.add_argument('--amc-training-epochs', type=int, default=300,
+    group.add_argument('--amc-training-epochs', type=int, default=700,
                        help='The number of epochs for training/exploitation')
     group.add_argument('--amc-reward-frequency', type=int, default=None,
                        help='Reward computation frequency (measured in agent steps)')
@@ -41,9 +41,17 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        'By default there is no fine-tuning between steps.')
     group.add_argument('--amc-prune-pattern', choices=["filters", "channels"],
                        default="filters", help="The pruning pattern")
-    group.add_argument('--amc-prune-method', choices=["l1-rank", "stochastic-l1-rank", "fm-reconstruction"],
+    group.add_argument('--amc-prune-method', choices=["l1-rank",
+                                                      "stochastic-l1-rank",
+                                                      "fm-reconstruction"],
                        default="l1-rank", help="The pruning method")
-    group.add_argument('--amc-rllib', choices=["coach", "spinningup", "private", "random"],
+    group.add_argument('--amc-rllib', choices=["coach",
+                                               "spinningup",
+                                               "private",
+                                               "random"],
                        default=None, help="Choose which RL library to use")
     group.add_argument('--amc-group-size', type=int, default=1,
                        help="Number of filters/channels to group")
+    group.add_argument('--amc-reconstruct-pts', dest="amc_fm_reconstruction_n_pts", type=int, default=10,
+                       help="Number of filters/channels to group")
+    
