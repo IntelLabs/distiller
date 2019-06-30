@@ -6,6 +6,8 @@ from rl_coach.environments.environment import SingleLevelSelection
 from rl_coach.environments.gym_environment import GymVectorEnvironment, mujoco_v2
 from rl_coach.graph_managers.basic_rl_graph_manager import BasicRLGraphManager
 from rl_coach.graph_managers.graph_manager import ScheduleParameters
+from rl_coach.exploration_policies.truncated_normal import TruncatedNormalParameters
+from rl_coach.exploration_policies.additive_noise import AdditiveNoiseParameters
 
 ####################
 # Graph Scheduling #
@@ -26,6 +28,13 @@ agent_params.network_wrappers['actor'].middleware_parameters.scheme = [Dense(300
 agent_params.network_wrappers['critic'].input_embedders_parameters['observation'].scheme = EmbedderScheme.Empty
 agent_params.network_wrappers['critic'].input_embedders_parameters['action'].scheme = EmbedderScheme.Empty
 agent_params.network_wrappers['critic'].middleware_parameters.scheme = [Dense(400), Dense(300)]
+
+agent_params.exploration = TruncatedNormalParameters()
+agent_params.exploration.noise_as_percentage_from_action_space = False
+agent_params.exploration.evaluation_noise = 0  # Neta new
+agent_params.algorithm.use_target_network_for_evaluation = True
+agent_params.algorithm.act_for_full_episodes = True
+
 
 
 ###############
