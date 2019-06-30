@@ -54,7 +54,7 @@ def collect_intermediate_featuremap_samples(model, forward_fn, module_filter_fn,
                                                                 intermediate_fms=intermediate_fms)))
 
     # Register to the forward hooks, then run the forward-pass and collect the data
-    msglogger.info("\nCollecting input/ouptput feature-map pairs")
+    msglogger.warning("==> Collecting input/ouptput feature-map pairs")
     distiller.assign_layer_fq_names(model)
     hook_handles = []
     intermediate_fms = {"output_fms": dict(), "input_fms": dict()}
@@ -76,5 +76,5 @@ def collect_intermediate_featuremap_samples(model, forward_fn, module_filter_fn,
         inputs[layer_name] = torch.cat(X, dim=0)
         outputs[layer_name] = torch.cat(Y, dim=0)
 
-    msglogger.info("Done.")
+    msglogger.warning("<== Done.")
     del intermediate_fms 
