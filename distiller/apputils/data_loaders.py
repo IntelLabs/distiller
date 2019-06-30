@@ -134,11 +134,13 @@ def cifar10_get_datasets(data_dir):
     [1] C.-Y. Lee, S. Xie, P. Gallagher, Z. Zhang, and Z. Tu. Deeply Supervised Nets.
     arXiv:1409.5185, 2014
     """
+    normalize = transforms.Normalize(mean=(0.4914, 0.4822, 0.44656),
+                                     std=(0.2471, 0.2435, 0.2616))
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        normalize,
     ])
 
     train_dataset = datasets.CIFAR10(root=data_dir, train=True,
@@ -146,7 +148,7 @@ def cifar10_get_datasets(data_dir):
 
     test_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        normalize
     ])
 
     test_dataset = datasets.CIFAR10(root=data_dir, train=False,
