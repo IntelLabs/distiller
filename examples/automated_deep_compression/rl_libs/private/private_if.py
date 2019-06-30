@@ -39,7 +39,7 @@ class RlLibInterface(object):
         agent_args.epsilon = 50000
         agent_args.init_delta = 0.5
         agent_args.delta_decay = 0.95
-        agent_args.warmup = 100
+        agent_args.warmup = env.amc_cfg.ddpg_cfg.num_heatup_epochs
         agent_args.lr_c = env.amc_cfg.ddpg_cfg.critic_lr
         agent_args.lr_a = env.amc_cfg.ddpg_cfg.actor_lr
         agent_args.hidden1 = 300
@@ -47,7 +47,8 @@ class RlLibInterface(object):
         agent_args.rmsize = 100
         agent_args.rmsize = env.amc_cfg.ddpg_cfg.replay_buffer_size
         agent_args.window_length = 1
-        agent_args.train_episode = 800
+        agent_args.train_episode = (env.amc_cfg.ddpg_cfg.num_heatup_epochs +
+                                    env.amc_cfg.ddpg_cfg.num_training_epochs)
         agent_args.output = "."
         agent = DDPG(args.observation_len, 1, agent_args)
         train(agent_args.train_episode, agent, env, agent_args.output, agent_args.warmup)
