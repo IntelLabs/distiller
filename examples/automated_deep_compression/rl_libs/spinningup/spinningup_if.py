@@ -47,7 +47,7 @@ class RlLibInterface(object):
                   replay_size=env1.amc_cfg.ddpg_cfg.replay_buffer_size,
                   batch_size=64,
                   start_steps=heatup_duration,
-                  steps_per_epoch=800 * env1.steps_per_episode,  # every 50 episodes perform 10 episodes of testing
+                  steps_per_epoch=env1.steps_per_episode,
                   act_noise=env1.amc_cfg.ddpg_cfg.initial_training_noise,
                   pi_lr=env1.amc_cfg.ddpg_cfg.actor_lr,
                   q_lr=env1.amc_cfg.ddpg_cfg.critic_lr,
