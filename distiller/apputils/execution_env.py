@@ -117,7 +117,7 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
                 logger.debug('Failed to copy of config file: {}'.format(str(e)))
 
 
-def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
+def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=False):
     """Configure the Python logger.
 
     For each execution of the application, we'd like to create a unique log directory.
@@ -137,6 +137,8 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
     msglogger = logging.getLogger()
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
+    if verbose:
+        msglogger.setLevel(logging.DEBUG)
     msglogger.info('Log file for this run: ' + os.path.realpath(log_filename))
 
     # Create a symbollic link to the last log file created (for easier access)
