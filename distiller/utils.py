@@ -567,8 +567,18 @@ def _validate_input_shape(dataset, input_shape):
         if input_shape is None:
             raise ValueError('Must provide either dataset name or input shape')
         if not isinstance(input_shape, tuple):
-            raise ValueError('input shape should be a tuple')
-        return input_shape
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        def val_recurse(in_shape):
+            if all(isinstance(x, int) for x in in_shape):
+                if any(x < 0 for x in in_shape):
+                    raise ValueError("Shape can't contain negative dimensions: {}".format(in_shape))
+                return in_shape
+            if all(isinstance(x, tuple) for x in in_shape):
+                return tuple(val_recurse(x) for x in in_shape)
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        return val_recurse(input_shape)
 
 
 def get_dummy_input(dataset=None, device=None, input_shape=None):
@@ -579,13 +589,22 @@ def get_dummy_input(dataset=None, device=None, input_shape=None):
     Args:
         dataset (str): Name of dataset from which to infer the shape
         device (str or torch.device): Device on which to create the input
-        input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
+        input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+          arbitrarily complex collections of tensors. Used only if 'dataset' is None
     """
-    shape = _validate_input_shape(dataset, input_shape)
-    dummy_input = torch.randn(shape)
-    if device:
-        dummy_input = dummy_input.to(device)
-    return dummy_input
+    def create_single(shape):
+        t = torch.randn(shape)
+        if device:
+            t = t.to(device)
+        return t
+
+    def create_recurse(shape):
+        if all(isinstance(x, int) for x in shape):
+            return create_single(shape)
+        return tuple(create_recurse(s) for s in shape)
+
+    input_shape = _validate_input_shape(dataset, input_shape)
+    return create_recurse(input_shape)
 
 
 def set_model_input_shape_attr(model, dataset=None, input_shape=None):
@@ -594,7 +613,8 @@ def set_model_input_shape_attr(model, dataset=None, input_shape=None):
     Args:
           model (nn.Module): Model instance
           dataset (str): Name of dataset from which to infer input shape
-          input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
+          input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+            arbitrarily complex collections of tensors. Used only if 'dataset' is None
     """
     if not hasattr(model, 'input_shape'):
         model.input_shape = _validate_input_shape(dataset, input_shape)

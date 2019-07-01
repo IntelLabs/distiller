@@ -190,3 +190,83 @@ def test_load_gpu_model_on_cpu_with_thinning():
     cpu_model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
     load_lean_checkpoint(cpu_model, "checkpoints/checkpoint.pth.tar")
     assert distiller.model_device(cpu_model) == 'cpu'
+
+
+def test_validate_input_shape():
+    with pytest.raises(ValueError):
+        distiller.utils._validate_input_shape(, None)
+    with pytest.raises(ValueError):
+        distiller.utils._validate_input_shape('not_a_dataset', None)
+    with pytest.raises(TypeError):
+        distiller.utils._validate_input_shape(, 'non_numeric_shape')
+    with pytest.raises(TypeError):
+        distiller.utils._validate_input_shape(, ('blah', 2))
+    with pytest.raises(TypeError):
+        distiller.utils._validate_input_shape(, (1.5, 2))
+    with pytest.raises(TypeError):
+        # Mix "flattened" shape and tuple
+        distiller.utils._validate_input_shape(, (1, 2, (3, 4)))
+
+    s = distiller.utils._validate_input_shape('imagenet', None)
+    assert s == (1, 3, 224, 224)
+    s = distiller.utils._validate_input_shape('imagenet', (1, 2))
+    assert s == (1, 3, 224, 224)
+    s = distiller.utils._validate_input_shape(, (1, 2))
+    assert s == (1, 2)
+    s = distiller.utils._validate_input_shape(, ((1, 2), (3, 4)))
+    assert s == ((1, 2), (3, 4))
+    s = distiller.utils._validate_input_shape(, ((1, 2), ((3, 4), (5, 6))))
+    assert s == ((1, 2), ((3, 4), (5, 6)))
+
+
+@pytest.mark.parametrize('device', [None, 'cpu', 'cuda:0'])
+def test_get_dummy_input(device):
+    def check_shape_device(t, exp_shape, exp_device):
+        assert t.shape == exp_shape
+        assert str(t.device) == exp_device
+
+    if device is None:
+        expected_device = 'cpu'
+    else:
+        if 'cuda' in device and not torch.cuda.is_available():
+            return
+        expected_device = device
+
+    with pytest.raises(ValueError):
+        distiller.utils.get_dummy_input(, None)
+    with pytest.raises(ValueError):
+        distiller.utils.get_dummy_input(dataset='not_a_dataset')
+    with pytest.raises(TypeError):
+        distiller.utils.get_dummy_input(input_shape='non_numeric_shape')
+    with pytest.raises(TypeError):
+        distiller.utils.get_dummy_input(input_shape=('blah', 2))
+    with pytest.raises(TypeError):
+        distiller.utils.get_dummy_input(input_shape=(1.5, 2))
+    with pytest.raises(TypeError):
+        # Mix "flattened" shape and tuple
+        distiller.utils.get_dummy_input(input_shape=(1, 2, (3, 4)))
+
+    t = distiller.utils.get_dummy_input(dataset='imagenet', device=device)
+    check_shape_device(t, (1, 3, 224, 224), expected_device)
+
+    t = distiller.utils.get_dummy_input(dataset='imagenet', device=device, input_shape=(1, 2))
+    check_shape_device(t, (1, 3, 224, 224), expected_device)
+
+    shape = 1, 2
+    t = distiller.utils.get_dummy_input(dataset=, device=device, input_shape=shape)
+    check_shape_device(t, shape, expected_device)
+
+    shape = ((1, 2), (3, 4))
+    t = distiller.utils.get_dummy_input(device=device, input_shape=shape)
+    assert isinstance(t, tuple)
+    check_shape_device(t[0], shape[0], expected_device)
+    check_shape_device(t[1], shape[1], expected_device)
+
+    shape = ((1, 2), ((3, 4), (5, 6)))
+    t = distiller.utils.get_dummy_input(device=device, input_shape=shape)
+    assert isinstance(t, tuple)
+    assert isinstance(t[0], torch.Tensor)
+    assert isinstance(t[1], tuple)
+    check_shape_device(t[0], shape[0], expected_device)
+    check_shape_device(t[1][0], shape[1][0], expected_device)
+    check_shape_device(t[1][1], shape[1][1], expected_device)
