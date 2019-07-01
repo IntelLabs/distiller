@@ -29,7 +29,6 @@ import copy
 import logging
 import numpy as np
 import torch
-import csv
 try:
     import gym
 except ImportError as e:
@@ -42,6 +41,7 @@ from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
 from .utils.features_collector import collect_intermediate_featuremap_samples
+from .utils.ac_loggers import AMCStatsLogger, FineTuneStatsLogger
 
 
 msglogger = logging.getLogger("examples.automated_deep_compression")
@@ -49,34 +49,6 @@ Observation = namedtuple('Observation', ['t', 'n', 'c',  'h', 'w', 'stride', 'k'
                                          'Weights', 'reduced', 'rest', 'prev_a'])
 ObservationLen = len(Observation._fields)
 ALMOST_ONE = 0.9999
-
-
-class CSVFile(object):
-    def __init__(self, fname, headers):
-        """Create the CSV file and write the column names"""
-        with open(fname, 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-        self.fname = fname
-
-    def add_record(self, fields):
-        # We close the file each time to flush on every write, and protect against data-loss on crashes
-        with open(self.fname, 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
-
-
-class AMCStatsFile(CSVFile):
-    def __init__(self, fname):
-        headers = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs',
-                   'normalized_nnz', 'ckpt_name', 'action_history', 'agent_action_history']
-        super().__init__(fname, headers)
-
-
-class FineTuneStatsFile(CSVFile):
-    def __init__(self, fname):
-        headers = ['episode', 'ft_top1_list']
-        super().__init__(fname, headers)
 
 
 def is_using_continuous_action_space(agent):
@@ -372,8 +344,8 @@ class DistillerWrapperEnvironment(gym.Env):
         else:
             self.action_space = spaces.Discrete(10)
         self.observation_space = spaces.Box(0, float("inf"), shape=(len(Observation._fields),))
-        self.stats_file = AMCStatsFile(os.path.join(logdir, 'amc.csv'))
-        self.ft_stats_file = FineTuneStatsFile(os.path.join(logdir, 'ft_top1.csv'))
+        self.stats_logger = AMCStatsLogger(os.path.join(logdir, 'amc.csv'))
+        self.ft_stats_logger = FineTuneStatsLogger(os.path.join(logdir, 'ft_top1.csv'))
 
         if self.amc_cfg.pruning_method == "fm-reconstruction":
             if self.amc_cfg.pruning_pattern != "channels":
@@ -639,7 +611,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
         # Fine-tune (this is a nop if self.amc_cfg.num_ft_epochs==0)
         accuracies = self.net_wrapper.train(self.amc_cfg.num_ft_epochs, self.episode)
-        self.ft_stats_file.add_record([self.episode, accuracies])
+        self.ft_stats_logger.add_record([self.episode, accuracies])
 
         top1, top5, vloss = self.net_wrapper.validate()
         reward = self.amc_cfg.reward_fn(self, top1, top5, vloss, total_macs)
@@ -664,7 +636,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
     def finalize_episode(self, top1, reward, total_macs, normalized_macs,
                          normalized_nnz, action_history, agent_action_history):
-        """Write the details of one network to a CSV file and create a checkpoint file"""
+        """Write the details of one network to the logger and create a checkpoint file"""
         if reward > self.best_reward:
             self.best_reward = reward
             ckpt_name = self.save_checkpoint(is_best=True)
@@ -676,7 +648,7 @@ class DistillerWrapperEnvironment(gym.Env):
 
         fields = [self.episode, top1, reward, total_macs, normalized_macs,
                   normalized_nnz, ckpt_name, action_history, agent_action_history]
-        self.stats_file.add_record(fields)
+        self.stats_logger.add_record(fields)
 
     def save_checkpoint(self, is_best=False):
         """Save the learned-model checkpoint"""
