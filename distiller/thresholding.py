@@ -184,6 +184,7 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria, binar
 def threshold_policy(weights, thresholds, threshold_criteria, dim=1):
     """
     """
+    thresholds = thresholds.type(weights.type())
     if threshold_criteria in ['Mean_Abs', 'Mean_L1']:
         return weights.data.norm(p=1, dim=dim).div(weights.size(dim)).gt(thresholds).type(weights.type())
     if threshold_criteria == 'Mean_L2':

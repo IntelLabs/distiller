@@ -26,26 +26,29 @@ def get_test_tensor():
 
 
 def test_row_thresholding():
-    p = get_test_tensor().cuda()
-    group_th = distiller.GroupThresholdMixin()
-    mask = group_th.group_threshold_mask(p, 'Rows', 7, 'Max')
-    assert torch.eq(mask, torch.tensor([[ 0.,  0.,  0.],
-                                        [ 0.,  0.,  0.],
-                                        [ 1.,  1.,  1.],
-                                        [ 1.,  1.,  1.]], device=mask.device)).all()
+    for dtype in [torch.float16, torch.float32]:
+        p = get_test_tensor().type(dtype).cuda()
+        group_th = distiller.GroupThresholdMixin()
+        mask = group_th.group_threshold_mask(p, 'Rows', 7, 'Max')
+        assert torch.eq(mask, torch.tensor([[ 0.,  0.,  0.],
+                                            [ 0.,  0.,  0.],
+                                            [ 1.,  1.,  1.],
+                                            [ 1.,  1.,  1.]], device=mask.device).type(dtype)).all()
     return mask
 
 
 def test_col_thresholding():
-    p = get_test_tensor().cuda()
-    group_th = distiller.GroupThresholdMixin()
-    mask = group_th.group_threshold_mask(p, 'Cols', 11, 'Max')
-    assert torch.eq(mask, torch.tensor([[ 0.,  0.,  1.],
-                                        [ 0.,  0.,  1.],
-                                        [ 0.,  0.,  1.],
-                                        [ 0.,  0.,  1.]], device=mask.device)).all()
+    for dtype in [torch.float16, torch.float32]:
+        p = get_test_tensor().type(dtype).cuda()
+        group_th = distiller.GroupThresholdMixin()
+        mask = group_th.group_threshold_mask(p, 'Cols', 11, 'Max')
+        assert torch.eq(mask, torch.tensor([[ 0.,  0.,  1.],
+                                            [ 0.,  0.,  1.],
+                                            [ 0.,  0.,  1.],
+                                            [ 0.,  0.,  1.]], device=mask.device).type(dtype)).all()
     return mask
 
 if __name__ == '__main__':
+    test_row_thresholding()
     m = test_col_thresholding()
     print(m)
