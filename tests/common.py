@@ -15,8 +15,18 @@
 #
 import torch
 import pytest
+import os
+import errno
 import distiller
 from distiller.models import create_model
+
+
+PYTEST_COLLATERALS_DIR = os.path.join(os.path.dirname(__file__), 'pytest_collaterals')
+try:
+    os.makedirs(PYTEST_COLLATERALS_DIR)
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
 
 
 def setup_test(arch, dataset, parallel):

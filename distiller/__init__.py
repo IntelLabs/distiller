@@ -26,6 +26,8 @@ from .thinning import *
 from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLossWeights
 from .summary_graph import SummaryGraph, onnx_name_2_pytorch_name
 
+import logging
+logging.captureWarnings(True)
 
 del dict_config
 del thinning

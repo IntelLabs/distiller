@@ -17,6 +17,7 @@
 import logging
 import distiller
 import pytest
+import os
 import common  # common test code
 
 
@@ -29,13 +30,15 @@ logger.addHandler(fh)
 
 SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 
+
 @pytest.mark.parametrize('display_param_nodes', [True, False])
 def test_png_generation(display_param_nodes):
     dataset = "cifar10"
     arch = "resnet20_cifar"
     model, _ = common.setup_test(arch, dataset, parallel=True)
     # 2 different ways to create a PNG
-    distiller.draw_img_classifier_to_file(model, 'model.png', dataset, display_param_nodes)
+    png_fname = os.path.join(common.PYTEST_COLLATERALS_DIR, 'model.png')
+    distiller.draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes)
 
 
 def test_compute_summary():
@@ -64,7 +67,7 @@ def test_summary(what):
     dataset = "cifar10"
     arch = "resnet20_cifar"
     model, _ = common.setup_test(arch, dataset, parallel=True)
-    distiller.model_summary(model, what, dataset=dataset)
+    distiller.model_summary(model, what, dataset=dataset, logdir=common.PYTEST_COLLATERALS_DIR)
 
 
 @pytest.mark.parametrize('what', SUMMARY_CHOICES)
@@ -72,4 +75,4 @@ def test_mnist(what):
     dataset = "mnist"
     arch = "simplenet_mnist"
     model, _ = common.setup_test(arch, dataset, parallel=True)
-    distiller.model_summary(model, what, dataset=dataset)
+    distiller.model_summary(model, what, dataset=dataset, logdir=common.PYTEST_COLLATERALS_DIR)
