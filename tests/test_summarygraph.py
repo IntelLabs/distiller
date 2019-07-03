@@ -126,26 +126,28 @@ def test_simplenet():
     assert len(preds) == 1
 
 
-def name_test(dataset, arch):
-    model = create_model(False, dataset, arch, parallel=False)
-    modelp = create_model(False, dataset, arch, parallel=True)
-    assert model is not None and modelp is not None
-
-    mod_names   = [mod_name for mod_name, _ in model.named_modules()]
-    mod_names_p = [mod_name for mod_name, _ in modelp.named_modules()]
-    assert mod_names is not None and mod_names_p is not None
-    assert len(mod_names)+1 == len(mod_names_p)
-
-    for i in range(len(mod_names)-1):
-        assert mod_names[i+1] == normalize_module_name(mod_names_p[i+2])
-        logging.debug("{} {} {}".format(mod_names_p[i+2], mod_names[i+1], normalize_module_name(mod_names_p[i+2])))
-        assert mod_names_p[i+2] == denormalize_module_name(modelp, mod_names[i+1])
-
-
 def test_normalize_module_name():
-    assert "features.0" == normalize_module_name("features.module.0")
-    assert "features.0" == normalize_module_name("module.features.0")
-    assert "features" == normalize_module_name("features.module")
+    def name_test(dataset, arch):
+        model = create_model(False, dataset, arch, parallel=False)
+        modelp = create_model(False, dataset, arch, parallel=True)
+        assert model is not None and modelp is not None
+
+        mod_names = [mod_name for mod_name, _ in model.named_modules()]
+        mod_names_p = [mod_name for mod_name, _ in modelp.named_modules()]
+        assert mod_names is not None and mod_names_p is not None
+        assert len(mod_names) + 1 == len(mod_names_p)
+
+        for i in range(len(mod_names) - 1):
+            assert mod_names[i + 1] == normalize_module_name(mod_names_p[i + 2])
+            logging.debug(
+                "{} {} {}".format(mod_names_p[i + 2], mod_names[i + 1], normalize_module_name(mod_names_p[i + 2])))
+            assert mod_names_p[i + 2] == denormalize_module_name(modelp, mod_names[i + 1])
+
+    assert normalize_module_name("features.module.0") == "features.0"
+    assert normalize_module_name("module.features.0") == "features.0"
+    assert normalize_module_name("features.module") == "features"
+    assert normalize_module_name('module') == ''
+    assert normalize_module_name('no.parallel.modules') == 'no.parallel.modules'
     name_test('imagenet', 'vgg19')
     name_test('cifar10', 'resnet20_cifar')
     name_test('imagenet', 'alexnet')
