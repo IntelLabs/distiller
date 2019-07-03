@@ -73,7 +73,7 @@ class SummaryGraph(object):
         model_clone = distiller.make_non_parallel_copy(model)
         with torch.onnx.set_training(model_clone, False):
             
-            device = next(model_clone.parameters()).device
+            device = distiller.model_device(model_clone)
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
             trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
 
@@ -81,6 +81,9 @@ class SummaryGraph(object):
             # Gemm nodes get the scope name of the last non-Gemm node that came before them. This can make
             # it impossible, in some cases, to derive the connectivity of the model using the original
             # module names. So we save the scope names for these nodes from the un-optimized trace.
+            #
+            # Note that if the node prior to the Gemm node isn't the result of a dedicated module call,
+            # then this issue doesn't occur. For simplicity we just track all Gemms.
             aten_addmm_nodes_scope_names = [n.scopeName() for n in trace.graph().nodes() if n.kind() == 'aten::addmm']
             onnx_gemm_count = 0
 
@@ -110,13 +113,17 @@ class SummaryGraph(object):
 
                 # Convert the graph node's scope name to a PyTorch module name
                 module_name = onnx_name_2_pytorch_name(new_op['orig-name'])
-                new_op['module-name'] = module_name
                 if len(module_name) == 0:
                     # Special case where the module name is an empty string - this happens
                     # when the op is called from the "top-level" of the model
                     new_op['name'] = 'top_level_op'
                 else:
                     new_op['name'] = module_name
+
+                # Save the calling module name in the op dict. Denormalize it so it can
+                # be directly matched with the actual model
+                module_name = distiller.denormalize_module_name(self._src_model, module_name)
+                new_op['module-name'] = module_name
 
                 # The node's scope name in the graph corresponds to the module from which the op was called.
                 # This means that when ops are invoked from the same module via functional calls or direct
@@ -260,7 +267,8 @@ class SummaryGraph(object):
                 ofm_vol = self.param_volume(conv_out)
                 try:
                     # MACs = volume(OFM) * (#IFM * K^2) / #Groups
-                    op['attrs']['MACs'] = int(ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1] / groups)
+                    op['attrs']['MACs'] = int(
+                        ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1] / groups)
                 except IndexError:
                     # Todo: change the method for calculating MACs
                     msglogger.error("An input to a Convolutional layer is missing shape information "
@@ -318,7 +326,7 @@ class SummaryGraph(object):
     def find_param(self, data_name):
         return self.params.get(data_name, None)
 
-    def predecessors(self, node, depth, done_list=None):
+    def predecessors(self, node, depth, done_list=None, denorm_names=True):
         """Returns a list of <op>'s predecessors"""
         if done_list is None:
             done_list = []
@@ -333,11 +341,13 @@ class SummaryGraph(object):
         else:
             ret = []
             for predecessor in preds:
-                ret += self.predecessors(predecessor, depth-1, done_list)
+                ret += self.predecessors(predecessor, depth - 1, done_list, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        if denorm_names:
+            ret = [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        return ret
 
-    def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None):
+    def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None, denorm_names=True):
         """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
         """
         node_name = distiller.normalize_module_name(node_name)
@@ -362,7 +372,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in predecessors_types and len(done_list) > 1:
-                return [distiller.denormalize_module_name(self._src_model, node_name)]
+                return [distiller.denormalize_module_name(self._src_model, node_name) if denorm_names else node_name]
 
             # This is an operation node
             preds = [edge.src for edge in self.edges if (edge.dst == node_name and
@@ -373,11 +383,11 @@ class SummaryGraph(object):
                                                          edge.src not in done_list)]
         ret = []
         for predecessor in preds:
-            ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging)
+            ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
+        return ret
 
-    def successors(self, node, depth, done_list=None):
+    def successors(self, node, depth, done_list=None, denorm_names=True):
         """Returns a list of <op>'s successors"""
         if done_list is None:
             done_list = []
@@ -392,11 +402,13 @@ class SummaryGraph(object):
         else:
             ret = []
             for successor in succs:
-                ret += self.successors(successor, depth-1, done_list)
+                ret += self.successors(successor, depth - 1, done_list, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        if denorm_names:
+            ret = [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        return ret
 
-    def successors_f(self, node_name, successors_types, done_list=None, logging=None):
+    def successors_f(self, node_name, successors_types, done_list=None, logging=None, denorm_names=True):
         """Returns a list of <op>'s successors, if they match the <successors_types> criteria.
 
         Traverse the graph, starting at node <node_name>, and search for successor
@@ -412,7 +424,7 @@ class SummaryGraph(object):
             node_is_an_op = False
             node = self.find_param(node_name)
             if node is None:
-                #raise ValueError("something went wrong")
+                msglogger.warning("successors_f: Could not find node {}".format(node_name))
                 return []
 
         if done_list is None:
@@ -427,7 +439,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in successors_types and len(done_list) > 1:
-                return [distiller.denormalize_module_name(self._src_model, node_name)]
+                return [distiller.denormalize_module_name(self._src_model, node_name) if denorm_names else node_name]
 
             # This is an operation node
             succs = [edge.dst for edge in self.edges if (edge.src == node_name and
@@ -438,9 +450,9 @@ class SummaryGraph(object):
                                                          edge.dst not in done_list)]
         ret = []
         for successor in succs:
-            ret += self.successors_f(successor, successors_types, done_list, logging)
+            ret += self.successors_f(successor, successors_types, done_list, logging, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
+        return ret
 
     def named_params_layers(self):
         for param_name, param in self._src_model.named_parameters():
@@ -466,30 +478,57 @@ class SummaryGraph(object):
               functional calls, such as "F.relu()", and tensor operations, such as "t3 = t1 + t2".
         """
         adj_map = OrderedDict()
+        named_modules = OrderedDict(self._src_model.named_modules())
 
         for op_name, op in self.ops.items():
             def dedicated_module_check(n):
-                module_name = self.ops[distiller.normalize_module_name(n)]['module-name']
-                return len(self.module_ops_map[module_name]) == 1 or not dedicated_modules_only
+                if not dedicated_modules_only:
+                    return True
+                module_name = self.ops[n]['module-name']
+                module = named_modules[module_name]
+                return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
+
+            def op_meta(n):
+                return OpSimpleMetadata(distiller.denormalize_module_name(self._src_model, n), self.ops[n]['type'])
 
             if not dedicated_module_check(op_name):
                 continue
 
-            entry = AdjacentsEntry()
+            entry = AdjacentsEntry(op_meta(op_name))
             # Find the immediate preceding and succeeding modules. Depth of 1 gets us the
             # input and output tensors, depth of 2 gets the actual modules
-            entry.predecessors = [n for n in self.predecessors(op, 2) if dedicated_module_check(n)]
-            entry.successors = [n for n in self.successors(op, 2) if dedicated_module_check(n)]
+            entry.predecessors = [op_meta(n) for n in self.predecessors(op, 2, denorm_names=False)
+                                  if dedicated_module_check(n)]
+            entry.successors = [op_meta(n) for n in self.successors(op, 2, denorm_names=False)
+                                if dedicated_module_check(n)]
 
-            adj_map[distiller.denormalize_module_name(self._src_model, op_name)] = entry
+            adj_map[entry.op_meta.name] = entry
 
         return adj_map
 
 
+class OpSimpleMetadata(object):
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
+
+    def __repr__(self):
+        return "Op('{}' | {})".format(self.name, self.type)
+
+    def __eq__(self, other):
+        return self.name == other.name and self.type == other.type
+
+
 class AdjacentsEntry(object):
-    def __init__(self):
+    def __init__(self, op_meta):
+        self.op_meta = op_meta
         self.predecessors = []
         self.successors = []
 
     def __repr__(self):
-        return 'Predecessors: {0} ; Successors: {1}'.format(self.predecessors, self.successors)
+        return 'OP: {0} ; PREDECESSORS: {1} ; SUCCESSORS: {2}'.format(self.op_meta, self.predecessors, self.successors)
+
+    def __eq__(self, other):
+        return self.op_meta == other.op_meta and \
+               self.predecessors == other.predecessors and \
+               self.successors == other.successors
