@@ -85,7 +85,7 @@ def compare_values(name, expected, actual):
         return True
 
 
-def accuracy_checker(log, expected_top1, expected_top5):
+def accuracy_checker(log, run_dir, expected_top1, expected_top5):
     tops = re.findall(r"Top1: (?P<top1>\d*\.\d*) *Top5: (?P<top5>\d*\.\d*)", log)
     if not tops:
         error('No accuracy results in log')
@@ -95,7 +95,7 @@ def accuracy_checker(log, expected_top1, expected_top5):
     return compare_values('Top-5', expected_top5, float(tops[-1][1]))
 
 
-def collateral_checker(log, *collateral_list):
+def collateral_checker(log, run_dir, *collateral_list):
     """Test that the test produced the expected collaterals.
 
     A collateral_list is a list of tuples, where tuple elements are:
@@ -103,7 +103,8 @@ def collateral_checker(log, *collateral_list):
         1: expected file size
     """
     for collateral in collateral_list:
-        statinfo = os.stat(collateral[0])
+        file_path = os.path.join(run_dir, collateral[0])
+        statinfo = os.stat(file_path)
         if statinfo.st_size != collateral[1]:
             return False
     return True
@@ -202,7 +203,7 @@ def run_tests():
                             format(p.returncode), idx, cmd, log_path, failed_tests, log)
             continue
         test_progress('Running checker: ' + colorize(tc.checker_fn.__name__, Colors.YELLOW))
-        if not tc.checker_fn(log, *tc.checker_args):
+        if not tc.checker_fn(log, os.path.split(log_path)[0], *tc.checker_args):
             process_failure('Checker failed', idx, cmd, log_path, failed_tests, log)
             continue
         success('TEST PASSED')
