@@ -127,9 +127,13 @@ def normalize_module_name(layer_name):
     module and want to use the same module name whether the module is parallel or not.
     We call this module name normalization, and this is implemented here.
     """
-    if layer_name.find("module.") >= 0:
-        return layer_name.replace("module.", "")
-    return layer_name.replace(".module", "")
+    modules = layer_name.split('.')
+    try:
+        idx = modules.index('module')
+    except ValueError:
+        return layer_name
+    del modules[idx]
+    return '.'.join(modules)
 
 
 def denormalize_module_name(parallel_model, normalized_name):
