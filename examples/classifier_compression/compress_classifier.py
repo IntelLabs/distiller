@@ -667,8 +667,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
                                                          sparsities=sparsities,
                                                          test_func=test_fnc,
                                                          group=args.sensitivity)
-    distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
-    distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
+    distiller.sensitivities_to_png(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.png'))
+    distiller.sensitivities_to_csv(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.csv'))
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):
