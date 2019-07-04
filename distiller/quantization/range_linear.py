@@ -872,7 +872,8 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
         self.replacement_factory[nn.Embedding] = replace_embedding
 
-        self.save_per_layer_parameters(msglogger.logdir)
+        if hasattr(msglogger, 'logdir'):
+            self.save_per_layer_parameters(msglogger.logdir)
 
     @classmethod
     def from_args(cls, model, args):
