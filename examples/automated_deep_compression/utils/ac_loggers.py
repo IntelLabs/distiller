@@ -37,8 +37,8 @@ class _CSVLogger(object):
 
 class AMCStatsLogger(_CSVLogger):
     def __init__(self, fname):
-        headers = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs',
-                   'normalized_nnz', 'ckpt_name', 'action_history', 'agent_action_history']
+        headers = ['episode', 'top1', 'reward', 'total_macs', 'normalized_macs', 'normalized_nnz',
+                   'ckpt_name', 'action_history', 'agent_action_history', 'performance']
         super().__init__(fname, headers)
 
 
