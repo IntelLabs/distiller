@@ -422,7 +422,7 @@ class StructureRemover(ScheduledTrainingPolicy):
             return
         self.__apply(model, zeros_mask_dict, optimizer)
 
-    def on_epoch_end(self, model, zeros_mask_dict, meta):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
         self.done = False
 
@@ -502,55 +502,56 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
 
     assert len(recipe.parameters) > 0
 
-    for param_name, param_directives in recipe.parameters.items():
-        msglogger.debug("{} : {}".format(param_name, param_directives))
-        param = distiller.model_find_param(model, param_name)
-        assert param is not None
-        for directive in param_directives:
-            dim = directive[0]
-            indices = directive[1].to(device)
-            len_indices = indices.nelement()
-            if len(directive) == 4:  # TODO: this code is hard to follow
-                msglogger.debug("{}-{}-{}: SHAPE = {}".format(param_name, param.shape, id(param), list(directive[2])))
-                selection_view = param.view(*directive[2])
-                # Check that we're not trying to trim a parameter that is already "thin"
-                if param.data.size(dim) != len_indices:
-                    param.data = torch.index_select(selection_view, dim, indices)
+    with torch.no_grad():
+        for param_name, param_directives in recipe.parameters.items():
+            msglogger.debug("{} : {}".format(param_name, param_directives))
+            param = distiller.model_find_param(model, param_name)
+            assert param is not None
+            for directive in param_directives:
+                dim = directive[0]
+                indices = directive[1].to(device)
+                len_indices = indices.nelement()
+                if len(directive) == 4:  # TODO: this code is hard to follow
+                    msglogger.debug("{}-{}-{}: SHAPE = {}".format(param_name, param.shape, id(param), list(directive[2])))
+                    selection_view = param.view(*directive[2])
+                    # Check that we're not trying to trim a parameter that is already "thin"
+                    if param.data.size(dim) != len_indices:
+                        param.data = torch.index_select(selection_view, dim, indices)
+                        if param.grad is not None:
+                            # We also need to change the dimensions of the gradient tensor.
+                            grad_selection_view = param.grad.resize(*directive[2])
+                            if grad_selection_view.size(dim) != len_indices:
+                                param.grad = torch.index_select(grad_selection_view, dim, indices)
+                                # update optimizer
+                                if optimizer_thinning(optimizer, param, dim, indices, directive[3]):
+                                    msglogger.debug("Updated [4D] velocity buffer for {} (dim={},size={},shape={})".
+                                                    format(param_name, dim, len_indices, directive[3]))
+
+                    param.data = param.view(*directive[3])
                     if param.grad is not None:
-                        # We also need to change the dimensions of the gradient tensor.
-                        grad_selection_view = param.grad.resize_(*directive[2])
-                        if grad_selection_view.size(dim) != len_indices:
-                            param.grad = torch.index_select(grad_selection_view, dim, indices)
-                            # update optimizer
-                            if optimizer_thinning(optimizer, param, dim, indices, directive[3]):
-                                msglogger.debug("Updated [4D] velocity buffer for {} (dim={},size={},shape={})".
-                                                format(param_name, dim, len_indices, directive[3]))
+                        param.grad = param.grad.resize_(*directive[3])
+                else:
+                    if param.data.size(dim) != len_indices:
+                        msglogger.debug("[thinning] changing param {} ({})  dim:{}  new len: {}".format(
+                            param_name, param.shape, dim, len_indices))
+                        assert param.size(dim) > len_indices
+                        param.data = torch.index_select(param.data, dim, indices.to(param.device))
+                        msglogger.debug("[thinning] changed param {}".format(param_name))
+                    # We also need to change the dimensions of the gradient tensor.
+                    # If have not done a backward-pass thus far, then the gradient will
+                    # not exist, and therefore won't need to be re-dimensioned.
+                    if param.grad is not None and param.grad.size(dim) != len_indices:
+                        param.grad = torch.index_select(param.grad, dim, indices.to(param.device))
+                        # update optimizer
+                        if optimizer_thinning(optimizer, param, dim, indices):
+                            msglogger.debug("Updated velocity buffer %s" % param_name)
 
-                param.data = param.view(*directive[3])
-                if param.grad is not None:
-                    param.grad = param.grad.resize_(*directive[3])
-            else:
-                if param.data.size(dim) != len_indices:
-                    msglogger.debug("[thinning] changing param {} ({})  dim:{}  new len: {}".format(
-                        param_name, param.shape, dim, len_indices))
-                    assert param.size(dim) > len_indices
-                    param.data = torch.index_select(param.data, dim, indices.to(param.device))
-                    msglogger.debug("[thinning] changed param {}".format(param_name))
-                # We also need to change the dimensions of the gradient tensor.
-                # If have not done a backward-pass thus far, then the gradient will
-                # not exist, and therefore won't need to be re-dimensioned.
-                if param.grad is not None and param.grad.size(dim) != len_indices:
-                    param.grad = torch.index_select(param.grad, dim, indices.to(param.device))
-                    # update optimizer
-                    if optimizer_thinning(optimizer, param, dim, indices):
-                         msglogger.debug("Updated velocity buffer %s" % param_name)
-
-            if not loaded_from_file:
-                # If the masks are loaded from a checkpoint file, then we don't need to change
-                # their shape, because they are already correctly shaped
-                mask = zeros_mask_dict[param_name].mask
-                if mask is not None and (mask.size(dim) != len_indices):
-                    zeros_mask_dict[param_name].mask = torch.index_select(mask, dim, indices)
+                if not loaded_from_file:
+                    # If the masks are loaded from a checkpoint file, then we don't need to change
+                    # their shape, because they are already correctly shaped
+                    mask = zeros_mask_dict[param_name].mask
+                    if mask is not None and (mask.size(dim) != len_indices):
+                        zeros_mask_dict[param_name].mask = torch.index_select(mask, dim, indices)
 
 # Todo: consider removing this function
 def resnet_cifar_remove_layers(model):

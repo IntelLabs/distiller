@@ -37,7 +37,7 @@ Network compression can reduce the memory footprint of a neural network, increas
 
 #### Note on Release 0.3 - Possible BREAKING Changes
 
-As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.0.1, which might also cause older code to break due to some API changes.  
+As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.X, which might also cause older code to break due to some API changes.  
 If updating from an earlier revision of the code, please make sure to follow the instructions in the [install](#install-the-package) section to make sure proper installation of Distiller and all dependencies.
 <details><summary><b>What's New in November?</b></summary>
 <p>
@@ -222,6 +222,8 @@ $ source env/bin/activate
 ```
 
 ### Install the package
+If you do not use CUDA 9 in your environment, please refer to [Pytorch website](https://pytorch.org/get-started/locally/) to install the compatible build of Pytorch 1.1 and torchvision 0.3, before installing the package.
+
 Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
 $ cd distiller
@@ -229,8 +231,7 @@ $ pip3 install -e .
 ```
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
 
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.
-If you do not use CUDA 9 in your environment, please refer to [Pytorch website](https://pytorch.org/get-started/locally/) to install the compatible build of Pytorch 1.0.1. Use `pip3 install --force` to reinstall.
+PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.1.0 for CUDA 9.0.  This is the setup we've used for testing Distiller.
 
 ## Getting Started
 

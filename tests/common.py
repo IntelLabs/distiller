@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 import torch
+import pytest
 import os
 import errno
 import distiller
@@ -49,3 +50,10 @@ def find_module_by_name(model, module_to_find):
 
 def almost_equal(a , b, max_diff=0.000001):
     return abs(a - b) <= max_diff
+
+
+def pytest_raises_wrapper(exc_type, msg, func, *args, **kwargs):
+    with pytest.raises(exc_type):
+        func(*args, **kwargs)
+        if msg:
+            pytest.fail(msg)

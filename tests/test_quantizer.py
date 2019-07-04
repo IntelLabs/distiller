@@ -25,6 +25,7 @@ from distiller.quantization import Quantizer
 from distiller.quantization.quantizer import QBits, _ParamToQuant
 from distiller.quantization.quantizer import FP_BKP_PREFIX
 from distiller import has_children
+from common import pytest_raises_wrapper
 
 
 #############################
@@ -216,12 +217,14 @@ def test_no_quantization(model):
 
 
 def test_overrides_ordered_dict(model):
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides is not an OrderedDict'):
-        DummyQuantizer(model, overrides={'testing': '123'})
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides is not an OrderedDict',
+                          DummyQuantizer, model, overrides={'testing': {'testing': '123'}})
+
 
 acts_key = 'bits_activations'
 wts_key = 'bits_weights'
 bias_key = 'bits_bias'
+
 
 @pytest.mark.parametrize(
     "qbits, overrides, explicit_expected_overrides",
@@ -386,27 +389,25 @@ def test_param_quantization(model, optimizer, qbits, overrides, explicit_expecte
 
 
 def test_overridable_args(model, optimizer, train_with_fp_copy):
-    with pytest.raises(ValueError, message='Expecting ValueError when overriding args without overriding bits.'):
-        model_copy = deepcopy(model)
-        conv_override = OrderedDict([(acts_key, None), (wts_key, None), (bias_key, None), ('prop', 123)])
-        overrides = OrderedDict([('conv1', conv_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([(acts_key, None), (wts_key, None), (bias_key, None), ('prop', 123)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(ValueError, 'Expecting ValueError when overriding args without overriding bits',
+                          q.prepare_model)
 
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
-        model_copy = deepcopy(model)
-        conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123), ('unexpetcted_prop', 456)])
-        overrides = OrderedDict([('conv1', conv_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123), ('unexpetcted_prop', 456)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides contains unexpected args', q.prepare_model)
 
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
-        model_copy = deepcopy(model)
-        relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
-                                     ('overridable_prop', 123), ('unexpetcted_prop', 456)])
-        overrides = OrderedDict([('relu1', relu_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
+                                 ('overridable_prop', 123), ('unexpetcted_prop', 456)])
+    overrides = OrderedDict([('relu1', relu_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides contains unexpected args', q.prepare_model)
 
     model_copy = deepcopy(model)
     conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123)])
