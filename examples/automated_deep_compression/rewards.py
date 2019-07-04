@@ -47,7 +47,7 @@ def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
     """A more intuitive reward for constraining the compute and optimizing the
     accuracy under this constraint.
     """
-    macs_normalized = total_macs/env.dense_model_macs
+    macs_normalized = total_macs/env.original_model_macs
     reward = top1/100
     if macs_normalized > (env.amc_cfg.target_density+0.002):
         reward = -3 - macs_normalized
@@ -65,24 +65,24 @@ def mac_constrained_clamp_action(env, pruning_action):
     reduced = env._removed_macs
     prunable_rest, rest = env.rest_macs_raw()
     rest += prunable_rest * env.action_high  # how much we have to remove in other layers
-    target_reduction = (1 - env.amc_cfg.target_density) * env.dense_model_macs
-    assert reduced == env.dense_model_macs - env.net_wrapper.total_macs
+    target_reduction = (1 - env.amc_cfg.target_density) * env.original_model_macs
+    assert reduced == env.original_model_macs - env.net_wrapper.total_macs
     duty = target_reduction - (reduced + rest)
     pruning_action_final = min(env.action_high, max(pruning_action, duty/flops))
 
     msglogger.debug("\t\tflops=%.3f  reduced=%.3f  rest=%.3f  duty=%.3f" % (flops, reduced, rest, duty))
     msglogger.debug("\t\tpruning_action=%.3f  pruning_action_final=%.3f" % (pruning_action, pruning_action_final))
     msglogger.debug("\t\ttarget={:.2f} reduced={:.2f} rest={:.2f} duty={:.2f} flops={:.2f}".
-                        format( 1-env.amc_cfg.target_density, reduced/env.dense_model_macs,
-                                rest/env.dense_model_macs, 
-                                duty/env.dense_model_macs,
-                                flops/env.dense_model_macs))
+                        format( 1-env.amc_cfg.target_density, reduced/env.original_model_macs,
+                                rest/env.original_model_macs, 
+                                duty/env.original_model_macs,
+                                flops/env.original_model_macs))
     if pruning_action_final != pruning_action:
         msglogger.debug("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
-                        format(pruning_action, pruning_action_final, reduced/env.dense_model_macs,
-                                rest/env.dense_model_macs, 1-env.amc_cfg.target_density,
-                                duty/env.dense_model_macs,
-                                flops/env.dense_model_macs))
+                        format(pruning_action, pruning_action_final, reduced/env.original_model_macs,
+                                rest/env.original_model_macs, 1-env.amc_cfg.target_density,
+                                duty/env.original_model_macs,
+                                flops/env.original_model_macs))
     return pruning_action_final
 
 
@@ -94,7 +94,7 @@ def harmonic_mean_reward_fn(env, top1, top5, vloss, total_macs):
     """
     beta = 1
     #beta = 0.75  # How much to favor accuracy
-    macs_normalized = total_macs/env.dense_model_macs
+    macs_normalized = total_macs/env.original_model_macs
     reward = (1 + beta**2) * top1/100 * macs_normalized / (beta**2 * macs_normalized + top1/100)
     return reward
 
@@ -104,7 +104,7 @@ def punish_agent_reward_fn(env, top1, top5, vloss, total_macs):
     (the negative reward is in proportion to the network density).  Otherwise, the reward is the Top1 accuracy.
     """
     if not env.is_macs_constraint_achieved(total_macs):
-        current_density = total_macs / env.dense_model_macs
+        current_density = total_macs / env.original_model_macs
         reward = env.amc_cfg.target_density - current_density
     else:
         reward = top1/100
