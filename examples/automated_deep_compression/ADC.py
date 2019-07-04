@@ -49,7 +49,6 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     arch = args.arch
     num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
-    np.random.seed()
 
     # Read the experiment configuration
     amc_cfg_fname = args.amc_cfg_file
@@ -75,7 +74,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     app_args = distiller.utils.MutableNamedTuple({
             'dataset': dataset,
             'arch': arch,
-            'optimizer_data': optimizer_data})
+            'optimizer_data': optimizer_data,
+            'seed': args.seed})
 
     ddpg_cfg = distiller.utils.MutableNamedTuple({
             'heatup_noise': 0.5,
@@ -99,7 +99,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'pruning_method': args.amc_prune_method,
             'group_size': args.amc_group_size,
             'n_points_per_fm': args.amc_fm_reconstruction_n_pts,
-            'ddpg_cfg': ddpg_cfg})
+            'ddpg_cfg': ddpg_cfg,
+            'ranking_noise': args.amc_ranking_noise})
 
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
@@ -133,7 +134,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
                     'amc_cfg': amc_cfg,
                     'services': services}
         steps_per_episode = env1.steps_per_episode
-        rl.solve(**env_cfg, args=args, steps_per_episode=steps_per_episode)
+        rl.solve(**env_cfg, steps_per_episode=steps_per_episode)
     elif args.amc_rllib == "random":
         from .rl_libs.random import random_if
         rl = random_if.RlLibInterface()
