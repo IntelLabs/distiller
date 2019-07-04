@@ -422,7 +422,7 @@ class StructureRemover(ScheduledTrainingPolicy):
             return
         self.__apply(model, zeros_mask_dict, optimizer)
 
-    def on_epoch_end(self, model, zeros_mask_dict, meta):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         # The epoch has ended and we reset the 'done' flag, so that the FilterRemover instance can be reused
         self.done = False
 
