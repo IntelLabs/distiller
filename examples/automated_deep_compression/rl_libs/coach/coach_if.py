@@ -27,13 +27,13 @@ msglogger = logging.getLogger()
 class RlLibInterface(object):
     """Interface to the Coach RL algorithm framework"""
 
-    def solve(self, model, app_args, amc_cfg, services, args, steps_per_episode):
+    def solve(self, model, app_args, amc_cfg, services, steps_per_episode):
         msglogger.info("AMC: Using coach")
 
         # When we import the graph_manager from the ADC_DDPG preset, we implicitly instruct
         # Coach to create and use our DistillerWrapperEnvironment environment.
         # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
-        if args.amc_agent_algo == "DDPG":
+        if amc_cfg.agent_algo == "DDPG":
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_DDPG import (graph_manager, 
                                                                                             agent_params)
             graph_manager.agent_params.exploration.noise_schedule = ExponentialSchedule(amc_cfg.ddpg_cfg.initial_training_noise, 
@@ -47,14 +47,17 @@ class RlLibInterface(object):
             amc_cfg.ddpg_cfg.num_heatup_epochs
             # Replay buffer size
             graph_manager.agent_params.memory.max_size = (MemoryGranularity.Transitions, amc_cfg.ddpg_cfg.replay_buffer_size)
-        elif "ClippedPPO" in args.amc_agent_algo:
+        elif "ClippedPPO" in amc_cfg.agent_algo:
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params
-        elif "TD3" in args.amc_agent_algo:
+        elif "TD3" in amc_cfg.agent_algo:
             from examples.automated_deep_compression.rl_libs.coach.presets.ADC_TD3 import graph_manager, agent_params
+        else:
+            raise ValueError("The agent algorithm you are trying to use (%s) is not supported" % amc_cfg.amc_agent_algo)
 
         # Number of training steps
         graph_manager.improve_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
         graph_manager.steps_between_evaluation_periods = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
+
         # These parameters are passed to the Distiller environment
         env_cfg  = {'model': model, 
                     'app_args': app_args,
@@ -65,5 +68,8 @@ class RlLibInterface(object):
         coach_logs_dir = os.path.join(msglogger.logdir, 'coach')
         os.mkdir(coach_logs_dir)
         task_parameters = TaskParameters(experiment_path=coach_logs_dir)
+        # Set Coach's PRNG seed
+        if app_args.seed is not None:
+            task_parameters.seed = app_args.seed
         graph_manager.create_graph(task_parameters)
         graph_manager.improve()
