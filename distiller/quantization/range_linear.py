@@ -46,7 +46,7 @@ class ClipMode(Enum):
     NONE = 0
     # Clip value calculated by averaging over the max absolute values of samples within a batch
     AVG = 1
-    # Clip value calculated as mean of tesnsor + N standard deviations. N should be specified separately
+    # Clip value calculated as mean of tensor + N standard deviations. N should be specified separately
     N_STD = 2
 
 
@@ -872,6 +872,8 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
         self.replacement_factory[nn.Embedding] = replace_embedding
 
+        self.save_per_layer_parameters(msglogger.logdir)
+
     @classmethod
     def from_args(cls, model, args):
         """
@@ -897,6 +899,28 @@ class PostTrainLinearQuantizer(Quantizer):
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides)
+
+    def save_per_layer_parameters(self, save_dir=''):
+        defaults = OrderedDict(self.model.quantizer_metadata['params'])
+        defaults.pop('bits_activations')
+        defaults.pop('bits_parameters')
+        defaults.pop('bits_accum')
+        out = OrderedDict()
+        for n, m in self.model.named_modules():
+            if distiller.has_children(m):
+                continue
+            qbits = self.module_qbits_map[n]
+            d = OrderedDict()
+            d['bits_activations'] = qbits.acts
+            d['bits_weights'] = qbits.wts
+            d['bits_bias'] = qbits.bias
+            for k, v in defaults.items():
+                actual_v = self.module_overrides_map[n].get(k, v)
+                d[k] = actual_v
+            out[n] = d
+        save_path = os.path.join(save_dir, 'layer_quant_params.yaml')
+        distiller.yaml_ordered_save(save_path, out)
+        msglogger.info('Per-layer quantization parameters saved to ' + save_path)
 
 
 ###############################################################################

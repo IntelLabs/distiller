@@ -686,6 +686,16 @@ def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict)
     return yaml.load(stream, OrderedLoader)
 
 
+def yaml_ordered_save(fname, ordered_dict):
+    def ordered_dict_representer(self, value):
+        return self.represent_mapping('tag:yaml.org,2002:map', value.items())
+
+    yaml.add_representer(OrderedDict, ordered_dict_representer)
+
+    with open(fname, 'w') as f:
+        yaml.dump(ordered_dict, f, default_flow_style=False)
+
+
 def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=False):
     def checker(val_str):
         val = float(val_str)

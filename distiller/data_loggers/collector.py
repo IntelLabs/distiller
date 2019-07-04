@@ -475,10 +475,6 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         activation_stats[module.distiller_name]['output'] = module.quant_stats.output
 
     def save(self, fname):
-        def ordered_dict_representer(self, value):
-            return self.represent_mapping('tag:yaml.org,2002:map', value.items())
-        yaml.add_representer(OrderedDict, ordered_dict_representer)
-
         if not fname.endswith('.yaml'):
             fname = ".".join([fname, 'yaml'])
         try:
@@ -487,8 +483,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             pass
 
         records_dict = self.value()
-        with open(fname, 'w') as f:
-            yaml.dump(records_dict, f, default_flow_style=False)
+        distiller.yaml_ordered_save(fname, records_dict)
 
         return fname
 
