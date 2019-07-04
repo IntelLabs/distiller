@@ -94,7 +94,8 @@ def main():
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
+    msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir,
+                                         args.verbose)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
@@ -666,8 +667,8 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
                                                          sparsities=sparsities,
                                                          test_func=test_fnc,
                                                          group=args.sensitivity)
-    distiller.sensitivities_to_png(sensitivity, 'sensitivity.png')
-    distiller.sensitivities_to_csv(sensitivity, 'sensitivity.csv')
+    distiller.sensitivities_to_png(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.png'))
+    distiller.sensitivities_to_csv(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.csv'))
 
 
 def automated_deep_compression(model, criterion, optimizer, loggers, args):

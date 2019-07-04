@@ -127,9 +127,13 @@ def normalize_module_name(layer_name):
     module and want to use the same module name whether the module is parallel or not.
     We call this module name normalization, and this is implemented here.
     """
-    if layer_name.find("module.") >= 0:
-        return layer_name.replace("module.", "")
-    return layer_name.replace(".module", "")
+    modules = layer_name.split('.')
+    try:
+        idx = modules.index('module')
+    except ValueError:
+        return layer_name
+    del modules[idx]
+    return '.'.join(modules)
 
 
 def denormalize_module_name(parallel_model, normalized_name):
@@ -567,8 +571,18 @@ def _validate_input_shape(dataset, input_shape):
         if input_shape is None:
             raise ValueError('Must provide either dataset name or input shape')
         if not isinstance(input_shape, tuple):
-            raise ValueError('input shape should be a tuple')
-        return input_shape
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        def val_recurse(in_shape):
+            if all(isinstance(x, int) for x in in_shape):
+                if any(x < 0 for x in in_shape):
+                    raise ValueError("Shape can't contain negative dimensions: {}".format(in_shape))
+                return in_shape
+            if all(isinstance(x, tuple) for x in in_shape):
+                return tuple(val_recurse(x) for x in in_shape)
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        return val_recurse(input_shape)
 
 
 def get_dummy_input(dataset=None, device=None, input_shape=None):
@@ -579,13 +593,22 @@ def get_dummy_input(dataset=None, device=None, input_shape=None):
     Args:
         dataset (str): Name of dataset from which to infer the shape
         device (str or torch.device): Device on which to create the input
-        input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
+        input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+          arbitrarily complex collections of tensors. Used only if 'dataset' is None
     """
-    shape = _validate_input_shape(dataset, input_shape)
-    dummy_input = torch.randn(shape)
-    if device:
-        dummy_input = dummy_input.to(device)
-    return dummy_input
+    def create_single(shape):
+        t = torch.randn(shape)
+        if device:
+            t = t.to(device)
+        return t
+
+    def create_recurse(shape):
+        if all(isinstance(x, int) for x in shape):
+            return create_single(shape)
+        return tuple(create_recurse(s) for s in shape)
+
+    input_shape = _validate_input_shape(dataset, input_shape)
+    return create_recurse(input_shape)
 
 
 def set_model_input_shape_attr(model, dataset=None, input_shape=None):
@@ -594,7 +617,8 @@ def set_model_input_shape_attr(model, dataset=None, input_shape=None):
     Args:
           model (nn.Module): Model instance
           dataset (str): Name of dataset from which to infer input shape
-          input_shape (tuple): List of integers representing the input shape. Used only if 'dataset' is None
+          input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+            arbitrarily complex collections of tensors. Used only if 'dataset' is None
     """
     if not hasattr(model, 'input_shape'):
         model.input_shape = _validate_input_shape(dataset, input_shape)
@@ -660,6 +684,16 @@ def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict)
         construct_mapping)
 
     return yaml.load(stream, OrderedLoader)
+
+
+def yaml_ordered_save(fname, ordered_dict):
+    def ordered_dict_representer(self, value):
+        return self.represent_mapping('tag:yaml.org,2002:map', value.items())
+
+    yaml.add_representer(OrderedDict, ordered_dict_representer)
+
+    with open(fname, 'w') as f:
+        yaml.dump(ordered_dict, f, default_flow_style=False)
 
 
 def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=False):

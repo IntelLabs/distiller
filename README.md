@@ -127,7 +127,7 @@ Beware.
 - [Built With](#built-with)
 - [Versioning](#versioning)
 - [License](#license)
-- [Citation](#citation)
+- [Community](#community)
 - [Acknowledgments](#acknowledgments)
 - [Disclaimer](#disclaimer)
 
@@ -384,16 +384,48 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
-## Citation
+## Community
 
-Research papers citing Distiller:
--  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
-   *"Fast Adjustable Threshold For Uniform Neural Network Quantization,"*<br>
-   [arXiv:1812.07872v2](https://arxiv.org/abs/1812.07872v2), 2018
+### Github projects using Distiller:
+- [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
+
+### Research papers citing Distiller:
+
+- Gil Shomron, Tal Horowitz, Uri Weiser.<br>
+*[SMT-SA: Simultaneous Multithreading in Systolic Arrays](https://ieeexplore.ieee.org/document/8742541)*,<br>
+In IEEE Computer Architecture Letters (CAL), 2019.
+
+- Shangqian Gao , Cheng Deng , and Heng Huang.<br>
+ *[Cross Domain Model Compression by Structurally Weight Sharing](http://openaccess.thecvf.com/content_CVPR_2019/html/Gao_Cross_Domain_Model_Compression_by_Structurally_Weight_Sharing_CVPR_2019_paper.html),*<br>
+ In The IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2019, pp. 8973-8982.
+ 
+- Moin Nadeem, Wei Fang, Brian Xu, Mitra Mohtarami, James Glass.<br>
+  *[FAKTA: An Automatic End-to-End Fact Checking System](https://arxiv.org/abs/1906.04164),*<br>
+  In North American Chapter of the Association for Computational Linguistics (NAACL), 2019.
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
+  *[SinReQ: Generalized Sinusoidal Regularization for Low-Bitwidth Deep Quantized Training](https://arxiv.org/abs/1905.01416),*<br>
+  arXiv:1905.01416, 2019.
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
+  *[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*
+  arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
-  *"Improving Neural Network Quantization without Retraining using Outlier Channel Splitting,"*<br>
-  [arXiv:1901.09504v2](https://arxiv.org/abs/1901.09504v20), 2019
+  *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
+  arXiv:1901.09504, 2019
+
+- Angad S. Rekhi, Brian Zimmer, Nikola Nedovic, Ningxi Liu, Rangharajan Venkatesan, Miaorong Wang, Brucek Khailany, William J. Dally, C. Thomas Gray.<br>
+*[Analog/Mixed-Signal Hardware Error Modeling for Deep Learning Inference](https://research.nvidia.com/sites/default/files/pubs/2019-06_Analog/Mixed-Signal-Hardware-Error/40_2_Rekhi_AMS_ML.pdf)*,<br>
+Nvidia Research, 2019.
+
+- Norio Nakata.<br>
+*[Recent Technical Development of Artificial Intelligence for Diagnostic Medical Imaging]( https://rd.springer.com/article/10.1007/s11604-018-0804-6)*,<br>
+In Japanese Journal of Radiology, February 2019, Volume 37, Issue 2, pp 103–108.
+
+-  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
+   *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872)*,<br>
+   arXiv:1812.07872, 2018
 
 
 If you used Distiller for your work, please use the following citation:
@@ -402,6 +434,8 @@ If you used Distiller for your work, please use the following citation:
 @misc{neta_zmora_2018_1297430,
   author       = {Neta Zmora and
                   Guy Jacob and
+                  Lev Zlotnik and
+                  Bar Elharar and
                   Gal Novik},
   title        = {Neural Network Distiller},
   month        = jun,

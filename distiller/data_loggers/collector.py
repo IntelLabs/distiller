@@ -146,7 +146,9 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
     """
-    def __init__(self, model, stat_name, summary_fn, classes=[torch.nn.ReLU]):
+    def __init__(self, model, stat_name, summary_fn, classes=[torch.nn.ReLU,
+                                                              torch.nn.ReLU6,
+                                                              torch.nn.LeakyReLU]):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
 
@@ -223,7 +225,9 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
 
     For obvious reasons, this is slower than SummaryActivationStatsCollector.
     """
-    def __init__(self, model, classes=[torch.nn.ReLU]):
+    def __init__(self, model, classes=[torch.nn.ReLU,
+                                       torch.nn.ReLU6,
+                                       torch.nn.LeakyReLU]):
         super(RecordsActivationStatsCollector, self).__init__(model, "statistics_records", classes)
 
     def _activation_stats_cb(self, module, input, output):
@@ -471,10 +475,6 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         activation_stats[module.distiller_name]['output'] = module.quant_stats.output
 
     def save(self, fname):
-        def ordered_dict_representer(self, value):
-            return self.represent_mapping('tag:yaml.org,2002:map', value.items())
-        yaml.add_representer(OrderedDict, ordered_dict_representer)
-
         if not fname.endswith('.yaml'):
             fname = ".".join([fname, 'yaml'])
         try:
@@ -483,8 +483,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             pass
 
         records_dict = self.value()
-        with open(fname, 'w') as f:
-            yaml.dump(records_dict, f, default_flow_style=False)
+        distiller.yaml_ordered_save(fname, records_dict)
 
         return fname
 
