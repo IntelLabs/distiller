@@ -774,23 +774,8 @@ def save_collectors_data(collectors, directory):
         msglogger.info("Saved to {}".format(file_path))
 
 
-def check_pytorch_version():
-    from pkg_resources import parse_version
-    if parse_version(torch.__version__) < parse_version('1.0.1'):
-        print("\nNOTICE:")
-        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
-              "PyTorch API changes which are not backward-compatible.\n"
-              "Please install PyTorch 1.0.1 or its derivative.\n"
-              "If you are using a virtual environment, do not forget to update it:\n"
-              "  1. Deactivate the old environment\n"
-              "  2. Install the new environment\n"
-              "  3. Activate the new environment")
-        exit(1)
-
-
 if __name__ == '__main__':
     try:
-        check_pytorch_version()
         main()
     except KeyboardInterrupt:
         print("\n-- KeyboardInterrupt --")
