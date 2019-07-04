@@ -251,7 +251,7 @@ def test_merge_pad_avgpool():
     assert sg.ops[avgpool_ops[0]]['type'] == 'AveragePool'
 
 
-def test_gemm_nodes_scope_names():
+def test_scope_name_workarounds():
     class ModelWithGemms(nn.Module):
         def __init__(self):
             super(ModelWithGemms, self).__init__()
@@ -262,22 +262,55 @@ def test_gemm_nodes_scope_names():
             self.fc2 = nn.Linear(50, 25)
             self.relu2 = nn.ReLU(inplace=True)
             self.fc3 = nn.Linear(25, 1)
+            self.drop3 = nn.Dropout()
 
         def forward(self, x):
-            # Isn't this pretty...
-            return self.fc3(self.relu2(self.fc2(self.drop2(self.relu1(self.fc1(self.drop1(x)))))))
+            x = self.drop1(x)
+            x = self.fc1(x)
+            x = self.relu1(x)
+            x = self.drop2(x)
+            x = self.fc2(x)
+            x = self.relu2(x)
+            x = self.fc3(x)
+            x = self.drop3(x)
+            return x
 
     m = ModelWithGemms()
-    sg = SummaryGraph(m, distiller.get_dummy_input(input_shape=(1, 100)))
+    dummy_input = distiller.get_dummy_input(input_shape=(1, 100))
+    expected_types = ('Gemm', 'Relu', 'Gemm', 'Relu', 'Gemm')
 
-    # For the model above we expect the ops to be named (in order):
-    #   'drop1', 'fc1', 'relu1', 'drop2', 'fc2', 'relu2', 'fc3'
-    # But without our workaround in place, they'll be named:
-    #   'drop1', 'drop1__1', 'relu1', 'drop2', 'drop2__1', 'relu2', 'relu2__1'
-    # (that is - each FC node gets the name of the node before)
+    # We have workarounds for 2 issues:
+    #   1. GEMM ops get the scope name of the op that came before them
+    #   2. Ops that come before a dropout op get the scope name of the dropout op
+    # If both conditions apply, empirically that #2 is the issue that manifests
+
+    # For the model above we expect the ops in the graph to be named (in order):
+    #   'fc1', 'relu1', 'fc2', 'relu2', 'fc3'
+    # (note that dropout ops are dropped)
+    #
+    # But without our workarounds in place, we'll get:
+    #   'drop1', 'drop2', 'drop2__1', 'relu2', 'drop3'
+    #
+    # What happens is:
+    #   * 'fc1' - issue #1 applies, so 'fc1' --> 'drop1'
+    #   * 'relu1' - issue #2 applies, so 'relu1' --> 'drop2'
+    #   * 'fc2' - issue #1 applies, so 'fc1' --> 'drop2__1' ('__1' suffix because 'drop2' already exists)
+    #   * 'relu2' should be ok as-is
+    #   * 'fc3' is susceptible to both issues - it's a GEMM op AND it comes before a dropout. As mentioned above,
+    #     issue #2 "wins", so 'fc3' --> 'drop3'
+
+    # We test without the workarounds as a means to see if the issues still exist. New PyTorch versions
+    # may fix them, in which case we can remove the workarounds
+    sg = SummaryGraph(m, dummy_input, apply_scope_name_workarounds=False)
     names, types = zip(*[(op_name, op['type']) for op_name, op in sg.ops.items()])
-    assert names == ('drop1', 'fc1', 'relu1', 'drop2', 'fc2', 'relu2', 'fc3')
-    assert types == ('Dropout', 'Gemm', 'Relu', 'Dropout', 'Gemm', 'Relu', 'Gemm')
+    assert names == ('drop1', 'drop2', 'drop2__1', 'relu2', 'drop3')
+    assert types == expected_types
+
+    # Now test with the workarounds
+    sg = SummaryGraph(m, dummy_input)
+    names, types = zip(*[(op_name, op['type']) for op_name, op in sg.ops.items()])
+    assert names == ('fc1', 'relu1', 'fc2', 'relu2', 'fc3')
+    assert types == expected_types
 
 
 @pytest.fixture(params=[False, True], ids=['dedicated_modules_off', 'dedicated_modules_on'])

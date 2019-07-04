@@ -29,8 +29,8 @@ For each epoch:
     compression_scheduler.on_epoch_begin(epoch)
     train()
     validate()
-    save_checkpoint()
     compression_scheduler.on_epoch_end(epoch)
+    save_checkpoint()
 
 train():
     For each training step:
@@ -278,8 +278,7 @@ def main():
         # This is the main training loop.
         msglogger.info('\n')
         if compression_scheduler:
-            compression_scheduler.on_epoch_begin(epoch,
-                metrics=(vloss if (epoch != start_epoch) else 10**6))
+            compression_scheduler.on_epoch_begin(epoch)
 
         # Train for one epoch
         with collectors_context(activations_collectors["train"]) as collectors:
@@ -306,7 +305,7 @@ def main():
                                         loggers=[tflogger])
 
         if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch, optimizer)
+            compression_scheduler.on_epoch_end(epoch, optimizer, metrics={'min': vloss, 'max': top1})
 
         # Update the list of top scores achieved so far, and save the checkpoint
         update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
@@ -775,23 +774,8 @@ def save_collectors_data(collectors, directory):
         msglogger.info("Saved to {}".format(file_path))
 
 
-def check_pytorch_version():
-    from pkg_resources import parse_version
-    if parse_version(torch.__version__) < parse_version('1.0.1'):
-        print("\nNOTICE:")
-        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
-              "PyTorch API changes which are not backward-compatible.\n"
-              "Please install PyTorch 1.0.1 or its derivative.\n"
-              "If you are using a virtual environment, do not forget to update it:\n"
-              "  1. Deactivate the old environment\n"
-              "  2. Install the new environment\n"
-              "  3. Activate the new environment")
-        exit(1)
-
-
 if __name__ == '__main__':
     try:
-        check_pytorch_version()
         main()
     except KeyboardInterrupt:
         print("\n-- KeyboardInterrupt --")
