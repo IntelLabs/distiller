@@ -130,10 +130,9 @@ def test_load_dumb_checkpoint():
 
 
 def test_load_negative():
+    model = create_model(False, 'cifar10', 'resnet20_cifar')
     with pytest.raises(FileNotFoundError):
-        model = create_model(False, 'cifar10', 'resnet20_cifar')
-        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model,
-            'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
+        load_checkpoint(model, 'THIS_IS_AN_ERROR/checkpoint_trained_dense.pth.tar')
 
 
 def test_load_gpu_model_on_cpu():

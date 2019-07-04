@@ -19,11 +19,11 @@
 - PruningPolicy: prunning policy
 - RegularizationPolicy: regulization scheduling
 - LRPolicy: learning-rate decay scheduling
+- QuantizationPolicy: quantization scheduling
 """
 import torch
 import torch.optim.lr_scheduler
 from collections import namedtuple
-#from functools import partial
 import logging
 msglogger = logging.getLogger()
 
@@ -75,7 +75,7 @@ class ScheduledTrainingPolicy(object):
         """The mini-batch training pass has ended"""
         pass
 
-    def on_epoch_end(self, model, zeros_mask_dict, meta):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         """The current epoch has ended"""
         pass
 
@@ -177,7 +177,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
             for param_name, param in model.named_parameters():
                 zeros_mask_dict[param_name].mask = None
 
-    def on_epoch_end(self, model, zeros_mask_dict, meta):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         """The current epoch has ended"""
         if self.is_last_epoch:
             for param_name, param in model.named_parameters():
@@ -241,12 +241,13 @@ class LRPolicy(ScheduledTrainingPolicy):
         super(LRPolicy, self).__init__()
         self.lr_scheduler = lr_scheduler
 
-    def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         if isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             # Note: ReduceLROnPlateau doesn't inherit from _LRScheduler
-            self.lr_scheduler.step(kwargs['metrics'], epoch=meta['current_epoch'])
+            self.lr_scheduler.step(kwargs['metrics'][self.lr_scheduler.mode],
+                                   epoch=meta['current_epoch'] + 1)
         else:
-            self.lr_scheduler.step(epoch=meta['current_epoch'])
+            self.lr_scheduler.step(epoch=meta['current_epoch'] + 1)
 
 
 class QuantizationPolicy(ScheduledTrainingPolicy):

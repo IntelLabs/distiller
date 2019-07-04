@@ -16,6 +16,8 @@
 
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
+import copy
+
 import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
@@ -32,9 +34,12 @@ msglogger = logging.getLogger()
 # TorchVision's version.
 RESNET_SYMS = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
-IMAGENET_MODEL_NAMES = sorted(name for name in torch_models.__dict__
-                              if name.islower() and not name.startswith("__")
-                              and callable(torch_models.__dict__[name]))
+TORCHVISION_MODEL_NAMES = sorted(
+                            name for name in torch_models.__dict__
+                            if name.islower() and not name.startswith("__")
+                            and callable(torch_models.__dict__[name]))
+
+IMAGENET_MODEL_NAMES = copy.deepcopy(TORCHVISION_MODEL_NAMES)
 IMAGENET_MODEL_NAMES.extend(sorted(name for name in imagenet_extra_models.__dict__
                                    if name.islower() and not name.startswith("__")
                                    and callable(imagenet_extra_models.__dict__[name])))
@@ -72,15 +77,22 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     if dataset == 'imagenet':
         if arch in RESNET_SYMS:
             model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
-        elif arch in torch_models.__dict__:
-            model = torch_models.__dict__[arch](pretrained=pretrained)
-        elif (arch in imagenet_extra_models.__dict__) and not pretrained:
+        elif arch in TORCHVISION_MODEL_NAMES:
+            try:
+                model = getattr(torch_models, arch)(pretrained=pretrained)
+            except NotImplementedError:
+                # In torchvision 0.3, trying to download a model that has no
+                # pretrained image available will raise NotImplementedError
+                if not pretrained:
+                    raise
+        if model is None and (arch in imagenet_extra_models.__dict__) and not pretrained:
             model = imagenet_extra_models.__dict__[arch]()
-        elif arch in pretrainedmodels.model_names:
+        if model is None and (arch in pretrainedmodels.model_names):
             cadene = True
-            model = pretrainedmodels.__dict__[arch](num_classes=1000,
-                                                    pretrained=(dataset if pretrained else None))
-        else:
+            model = pretrainedmodels.__dict__[arch](
+                        num_classes=1000,
+                        pretrained=(dataset if pretrained else None))
+        if model is None:
             error_message = 
             if arch not in IMAGENET_MODEL_NAMES:
                 error_message = "Model {} is not supported for dataset ImageNet".format(arch)
