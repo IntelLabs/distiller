@@ -161,6 +161,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
         msglogger.info('Loaded quantizer metadata from the checkpoint')
         qmd = checkpoint['quantizer_metadata']
         quantizer = qmd['type'](model, **qmd['params'])
+        # The optimizer is included in the quantizer_metadata checkpoint if
+        # it was defined in the previous session.
+        # If not - just use the current optimizer.
+        optimizer = quantizer.optimizer or optimizer
         quantizer.prepare_model()
 
     if normalize_dataparallel_keys:
@@ -189,14 +193,15 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
         dest_optimizer.load_state_dict(src_state_dict)
         return dest_optimizer
 
-    try:
-        optimizer = _load_optimizer(checkpoint['optimizer_type'],
-            checkpoint['optimizer_state_dict'], model)
-    except KeyError:
-        # Older checkpoints do support optimizer loading: They either had an 'optimizer' field 
-        # (different name) which was not used during the load, or they didn't even checkpoint
-        # the optimizer. 
-        optimizer = None
+    if optimizer is None:
+        try:
+            optimizer = _load_optimizer(checkpoint['optimizer_type'],
+                checkpoint['optimizer_state_dict'], model)
+        except KeyError:
+            # Older checkpoints do support optimizer loading: They either had an 'optimizer' field
+            # (different name) which was not used during the load, or they didn't even checkpoint
+            # the optimizer.
+            optimizer = None
 
     if optimizer is not None:
         msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
