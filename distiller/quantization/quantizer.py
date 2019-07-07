@@ -103,7 +103,7 @@ class Quantizer(object):
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
-                 overrides=None, train_with_fp_copy=False):
+                 overrides=None, train_with_fp_copy=False, prep_required=True):
         if overrides is None:
             overrides = OrderedDict()
         if not isinstance(overrides, OrderedDict):
@@ -123,7 +123,10 @@ class Quantizer(object):
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_weights': bits_weights,
                                                     'bits_bias': bits_bias,
-                                                    'overrides': copy.deepcopy(overrides)}}
+                                                    'overrides': copy.deepcopy(overrides),
+                                                    'prep_required': prep_required}}
+        if optimizer is not None:
+            self.model.quantizer_metadata['params']['optimizer'] = optimizer
 
         for k, v in self.overrides.items():
             if any(old_bits_key in v.keys() for old_bits_key in ['acts', 'wts', 'bias']):
@@ -178,6 +181,18 @@ class Quantizer(object):
         # A dictionary of replaced modules and their respective names.
         self.modules_processed = OrderedDict()
 
+    @property
+    def prep_required(self):
+        """
+        Indicates whether the quantizer still hasn't quantized
+        the model by a call to `quantizer.prepare_model()`.
+        """
+        return self.model.quantizer_metadata['params'].get('prep_required', True)
+
+    @prep_required.setter
+    def prep_required(self, val):
+        self.model.quantizer_metadata['params']['prep_required'] = bool(val)
+
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
@@ -195,6 +210,9 @@ class Quantizer(object):
         defined by the Quantizer sub-class being used.
 
         Note:
+            Only has to be called once. After the first call, any subsequent calls will be ignored;
+            This includes any quantized models loaded from checkpoints.
+
             If multiple sub-modules within the model actually reference the same module, then that module
             is replaced only once, according to the configuration (bit-width and/or overrides) of the
             first encountered reference.
@@ -209,9 +227,14 @@ class Quantizer(object):
             with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
             will be ignored. A warning message will be shown.
         """
+        if not self.prep_required:
+            # Skip preparation
+            msglogger.info('The underlying model has already been quantized.')
+            return
         self._prepare_model_impl()
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+        self.prep_required = False
 
     def _prepare_model_impl(self):
         r"""
