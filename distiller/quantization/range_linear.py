@@ -21,12 +21,14 @@ from collections import OrderedDict
 from functools import reduce, partial
 import logging
 import os
+from copy import deepcopy
 
 import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
 import distiller.modules
+import distiller.model_transforms as mt
 
 msglogger = logging.getLogger()
 
@@ -411,7 +413,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
-        clip_n_stds (int): See RangeLinearQuantWrapper
+        clip_n_stds (float): See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
@@ -781,7 +783,7 @@ class PostTrainLinearQuantizer(Quantizer):
             calculations.
             If None, scale factors will be kept in their original FP32 values.
     Note:
-        If fp16 is set to True, all the layers (except those overriden in `overrides`) will be converted
+        If fp16 is set to True, all the layers (except those overridden in `overrides`) will be converted
         to half precision, regardless of bits_activations/parameters/accum.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
@@ -1073,9 +1075,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         self.activation_replace_fn = activation_replace_fn
         self.replacement_factory[nn.ReLU] = self.activation_replace_fn
 
-    def _prepare_model_impl(self):
-        super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()
-
+    def _post_prepare_model(self):
         if self.quantize_inputs:
             if isinstance(self.model, nn.DataParallel):
                 m = self.model.module
