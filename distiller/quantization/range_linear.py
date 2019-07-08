@@ -925,6 +925,93 @@ class PostTrainLinearQuantizer(Quantizer):
         distiller.yaml_ordered_save(save_path, out)
         msglogger.info('Per-layer quantization parameters saved to ' + save_path)
 
+    def prepare_model(self, dummy_input=None):
+        if dummy_input is None:
+            raise ValueError('PostTrainLinearQuantizer requires dummy input in order to perform certain optimizations')
+        super(PostTrainLinearQuantizer, self).prepare_model(dummy_input)
+
+    def _pre_prepare_model(self, dummy_input):
+        msglogger.info('Applying batch-norm folding ahead of post-training quantization')
+        mt.fold_batch_norms_inference(self.model, dummy_input)
+
+        # After BN folding model need to re-generate the adjacency map
+        summary_graph = distiller.SummaryGraph(self.model, dummy_input)
+        self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+
+        if not self.model_activation_stats:
+            return
+
+        # Update the activation stats to reflect BN folding
+        named_modules = OrderedDict(self.model.named_modules())
+        model_stats = self.model_activation_stats
+        for n, m in named_modules.items():
+            try:
+                # Look for the mark left by distiller.model_transforms.fold_batch_norms
+                folded_bn_module = distiller.normalize_module_name(m.fused_modules[0])
+                # Propagate the output stats of the folded BN module to this module
+                # If stats were collected after folding was applied, then stats for the BN module won't exist,
+                # in which case we just move on
+                model_stats[distiller.normalize_module_name(n)]['output'] = model_stats.pop(folded_bn_module)['output']
+            except (AttributeError, KeyError):
+                pass
+            continue
+
+        # Now we look for certain "fusions" of layers and activations
+        # We modify stats to make sure we quantize only the ranges relevant to the activation function
+        # By doing so we reduce quantization error while still keeping all
+        for n, m in named_modules.items():
+            if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+                continue
+            successor = self.adjacency_map[n].successors[0]
+            n = distiller.normalize_module_name(n)
+            m_stats = model_stats[n]
+
+            succ_type = successor.type
+            succ_stats = model_stats.get(distiller.normalize_module_name(successor.name), None)
+            if succ_type == 'Split':
+                # Handling case where layer output is split, with each chunk going into an activation function
+                # This pattern occurs in LSTM, for example. If all the activations are "similar", we can still
+                # optimize the quantization ranges of the output of the layer prior to the split
+                post_split_ops = self.adjacency_map[successor.name].successors
+                if all(op.type == 'Relu' for op in post_split_ops):
+                    succ_type = 'Relu'
+                elif all(op.type == 'Tanh' for op in post_split_ops):
+                    # Tanh non-saturated input range is smaller than sigmoid, so we try this first
+                    succ_type = 'Tanh'
+                elif all(op.type in ('Sigmoid', 'Tanh') for op in post_split_ops):
+                    # If we have both sigmoid and tanh (as in LSTM), we can go with sigmoid
+                    succ_type = 'Sigmoid'
+                succ_stats = None
+
+            def clip_stats(entry, min_val, max_val):
+                if entry['max'] < min_val:
+                    entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = min_val
+                elif entry['min'] > max_val:
+                    entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = max_val
+                else:
+                    entry['min'] = max(min_val, entry['min'])
+                    entry['avg_min'] = max(min_val, entry['avg_min'])
+                    entry['max'] = min(max_val, entry['max'])
+                    entry['avg_max'] = min(max_val, entry['avg_max'])
+
+            if succ_type == 'Relu':
+                # ReLU zeros out all negative values, so there's no need to quantize them
+                msglogger.debug('Module {} followed by Relu, updating stats'.format(n))
+                if succ_stats is not None:
+                    m_stats['output'] = deepcopy(succ_stats['output'])
+                    succ_stats['inputs'][0] = deepcopy(succ_stats['output'])
+                else:
+                    msglogger.debug("Relu op not a module or post-split, can't update mean and std".format(n))
+                    clip_stats(m_stats['output'], 0., m_stats['output']['max'])
+            elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
+                # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
+                # of these ranges
+                msglogger.debug('Module {} followed by {}, updating stats'.format(n, succ_type))
+                sat_val = 4. if succ_type == 'Tanh' else 6.
+                clip_stats(m_stats['output'], -sat_val, sat_val)
+                if succ_stats is not None:
+                    succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+
 
 ###############################################################################
 # Quantization-aware training
