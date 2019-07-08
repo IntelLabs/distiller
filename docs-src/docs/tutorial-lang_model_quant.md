@@ -8,4 +8,5 @@ The tutorial covers the following:
 * Converting the model to use Distiller's modular LSTM implementation, which allows flexible quantization of internal LSTM operations.
 * Collecting activation statistics prior to quantization
 * Creating a `PostTrainLinearQuantizer` and preparing the model for quantization
+* "Net-aware quantization" capability of `PostTrainLinearQuantizer`
 * Progressively tweaking the quantization settings in order to improve accuracy
