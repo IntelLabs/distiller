@@ -248,6 +248,8 @@ For more details, there are some other resources you can refer to:
 + [Usage](https://nervanasystems.github.io/distiller/usage.html)
 + [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
 + [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
++ [Tutorial: Post-Training Quantization of a Language Model
+](https://nervanasystems.github.io/distiller/tutorial-lang_model_quant.html)
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)
