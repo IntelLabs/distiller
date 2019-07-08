@@ -27,6 +27,10 @@ from distiller.modules import EltwiseAdd, Split
 from common import WrappedSequential
 
 
+###############################################################################
+# Test base fusion mechanism
+###############################################################################
+
 class BypassModel(nn.Module):
     def __init__(self, prologue, bypassed):
         super(BypassModel, self).__init__()
@@ -171,3 +175,61 @@ def test_fuse_models(parallel):
     # Node with multiple outputs
     model = BypassModel((DummyA(), DummyB()), DummyD())
     fuse_and_check(model, deepcopy(model), input_shape, parallel)
+
+
+###############################################################################
+# Test BN folding for inference
+###############################################################################
+
+# This warning seems to be a bug in batch_norm implementation, which compares a tensor to the value 1
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean might cause the trace to be incorrect')
+@pytest.mark.parametrize(
+    'model, input_shape',
+    [
+        (WrappedSequential(nn.ReLU(), nn.BatchNorm1d(5)), (10, 5)),
+        (WrappedSequential(nn.Conv1d(10, 20, 3), nn.ReLU()), (10, 10, 10)),
+        (WrappedSequential(nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20, track_running_stats=False)), (10, 10, 50, 50)),
+        (WrappedSequential(nn.Linear(10, 20), nn.BatchNorm1d(20, track_running_stats=False)), (10, 10)),
+        (BypassModel((nn.Conv2d(10, 20, 3),), nn.BatchNorm2d(20)), (10, 10, 50, 50))
+    ],
+    ids=['relu->bn', 'conv->relu', 'conv->bn_no_stats', 'linear->bn_no_stats', 'conv_multiple_outputs->bn']
+)
+def test_fold_batch_norms_inference_no_fold(model, input_shape):
+    orig_model = deepcopy(model)
+    folded_model = mt.fold_batch_norms_inference(model, dummy_input=torch.randn(input_shape))
+    for (n_orig, m_orig), (n_folded, m_folded) in zip(orig_model.named_modules(), folded_model.named_modules()):
+        assert n_folded == n_orig
+        assert type(m_folded) == type(m_orig)
+
+    for (n_orig, p_orig), (n_folded, p_folded) in zip(orig_model.named_parameters(), folded_model.named_parameters()):
+        assert n_folded == n_orig
+        assert (p_folded == p_orig).all().item() == 1
+
+
+@pytest.mark.parametrize(
+    'model, input_shape',
+    [
+        (WrappedSequential(nn.Conv1d(10, 20, 3), nn.BatchNorm1d(20)), (10, 10, 50)),
+        (WrappedSequential(nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20)), (10, 10, 50, 50)),
+        (WrappedSequential(nn.Conv3d(10, 20, 3), nn.BatchNorm3d(20)), (10, 10, 20, 20, 20)),
+        (WrappedSequential(nn.Linear(10, 20), nn.BatchNorm1d(20)), (10, 10))
+    ],
+    ids=['conv1d->bn1d', 'conv2d->bn2d', 'conv3d->bn3d', 'lienar->bn1d']
+)
+def test_fold_batch_norms_inference(model, input_shape):
+    # Make sure we have non-trivial values to work with
+    nn.init.uniform_(model.seq[1].weight)
+    nn.init.uniform_(model.seq[1].bias)
+    nn.init.uniform_(model.seq[1].running_mean)
+    nn.init.uniform_(model.seq[1].running_var)
+
+    model.eval()
+    orig_model = deepcopy(model)
+    dummy_input = torch.randn(input_shape)
+    folded_model = mt.fold_batch_norms_inference(model, dummy_input=dummy_input)
+    assert type(folded_model.seq[0]) == type(orig_model.seq[0])
+    assert type(folded_model.seq[1]) == nn.Identity
+
+    y_orig = orig_model(dummy_input)
+    y_folded = folded_model(dummy_input)
+    torch.testing.assert_allclose(y_folded, y_orig)

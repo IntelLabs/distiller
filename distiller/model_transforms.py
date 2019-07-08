@@ -95,3 +95,30 @@ def fuse_modules(model, dummy_input, types_sequence, fuse_fn):
             curr_sequence = []
     return model
 
+
+def fold_batch_norms_inference(model, dummy_input):
+    """Scans the model for convolution / linear modules followed by batch-normalization. For each such valid pair,
+    folds the parameters of the batch normalization module into the parameters of the parameter module, and replaces
+    the batch normalization module with an identity operation.
+
+    To infer the order of modules it is required to perform a forward pass on the model. Hence the need to pass the
+    expected input shape.
+
+    Args:
+        model (nn.Module): Model instance on which the transformation is performed
+        dummy_input (torch.Tensor or tuple): Dummy input to the model
+    """
+    def fold_bn(sequence):
+        # Re-use this functionality from simulated BN folding implementation
+        param_module, bn_module = sequence[0], sequence[1]
+        try:
+            folded_module = SimulatedFoldedBatchNorm(param_module, bn_module)
+        except ValueError:
+            msglogger.debug("Can't fold, {} does not track running stats".format(bn_module.distiller_name))
+            return None
+        folded_module.freeze()
+        return folded_module.param_module
+
+    foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
+    batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
+    return fuse_modules(model, dummy_input, (foldables, batchnorms), fold_bn)
