@@ -79,18 +79,26 @@ def fuse_modules(model, dummy_input, types_sequence, fuse_fn):
 
     for node_name, adj_entry in adjacency_map.items():
         module = named_modules.get(node_name, None)
-        if module and isinstance(module, types_sequence[in_sequence_idx]):
-            curr_sequence.append(module)
-            in_sequence_idx += 1
-            if in_sequence_idx == len(types_sequence):
-                _fuse_sequence(curr_sequence, named_modules, fuse_fn)
-                in_sequence_idx = 0
-                curr_sequence = []
-            elif len(adj_entry.successors) > 1:
-                msglogger.debug(node_name + " is connected to multiple outputs, not fuse-able")
-                in_sequence_idx = 0
-                curr_sequence = []
+        if module is None:
+            reset = True
         else:
+            reset = False
+            if isinstance(module, types_sequence[in_sequence_idx]):
+                curr_sequence.append(module)
+                in_sequence_idx += 1
+                if in_sequence_idx == len(types_sequence):
+                    _fuse_sequence(curr_sequence, named_modules, fuse_fn)
+                    reset = True
+                elif len(adj_entry.successors) > 1:
+                    msglogger.debug(node_name + " is connected to multiple outputs, not fuse-able")
+                    reset = True
+            elif isinstance(module, types_sequence[0]):
+                # Current module breaks the current sequence, check if it's the start of a new sequence
+                in_sequence_idx = 1
+                curr_sequence = [module]
+            else:
+                reset = True
+        if reset:
             in_sequence_idx = 0
             curr_sequence = []
     return model

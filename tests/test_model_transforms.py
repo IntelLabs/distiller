@@ -71,6 +71,8 @@ class DummyD(Dummy):
 
 
 def fuse_fn(sequence):
+    if any(not m.fuseable for m in sequence):
+        return None
     return sequence[0]
 
 
@@ -90,7 +92,7 @@ def fuse_and_check(model, expected, input_shape, parallel):
     nm_fused = OrderedDict(fused.named_modules())
     nm_expected = OrderedDict(expected.named_modules())
     assert nm_fused.keys() == nm_expected.keys()
-    assert [type(v) for v in nm_fused.values()] == [type(v) for v in nm_fused.values()]
+    assert [type(v) for v in nm_fused.values()] == [type(v) for v in nm_expected.values()]
 
 
 @pytest.fixture(params=[False, True], ids=['parallel_off', 'parallel_on'])
@@ -117,10 +119,10 @@ def test_fuse_models(parallel):
     model = WrappedSequential(DummyB())
     fuse_and_check(model, deepcopy(model), input_shape, parallel)
 
-    model = WrappedSequential(DummyA(), DummyA(), DummyB(), DummyD())
+    model = WrappedSequential(DummyB(), DummyD())
     fuse_and_check(model, deepcopy(model), input_shape, parallel)
 
-    model = WrappedSequential(DummyB(), DummyD())
+    model = WrappedSequential(DummyA(), DummyB(), DummyA(), DummyD())
     fuse_and_check(model, deepcopy(model), input_shape, parallel)
 
     model = WrappedSequential(DummyA(), DummyB(), DummyC(), DummyD())
