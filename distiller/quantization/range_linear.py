@@ -808,6 +808,15 @@ class PostTrainLinearQuantizer(Quantizer):
                     model_activation_stats = distiller.utils.yaml_ordered_load(stream)
             elif not isinstance(model_activation_stats, (dict, OrderedDict)):
                 raise TypeError('model_activation_stats must either be a string, a dict / OrderedDict or None')
+        else:
+            msglogger.warning("\nWARNING:\nNo stats file passed - Dynamic quantization will be used\n"
+                              "At the moment, this mode isn't as fully featured as stats-based quantization, and "
+                              "the accuracy results obtained are likely not as representative of real-world results."
+                              "\nSpecifically:\n"
+                              "  * Not all modules types are supported in this mode. Unsupported modules will remain "
+                              "in FP32.\n"
+                              "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
+                              "supported when statistics are used.\nEND WARNING\n")
 
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
@@ -932,16 +941,18 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def _pre_prepare_model(self, dummy_input):
         msglogger.info('Applying batch-norm folding ahead of post-training quantization')
-        mt.fold_batch_norms_inference(self.model, dummy_input)
+        mt.fold_batch_norms_inference(self.model, adjacency_map=self.adjacency_map)
 
         # After BN folding model need to re-generate the adjacency map
         summary_graph = distiller.SummaryGraph(self.model, dummy_input)
         self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
 
         if not self.model_activation_stats:
+            msglogger.info("No activation stats - skipping optimizations for modules followed by Relu/Tanh/Sigmoid")
             return
 
         # Update the activation stats to reflect BN folding
+        msglogger.info('Propagating output statistics from BN modules to folded modules')
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
         for n, m in named_modules.items():
@@ -952,13 +963,14 @@ class PostTrainLinearQuantizer(Quantizer):
                 # If stats were collected after folding was applied, then stats for the BN module won't exist,
                 # in which case we just move on
                 model_stats[distiller.normalize_module_name(n)]['output'] = model_stats.pop(folded_bn_module)['output']
+                msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
             except (AttributeError, KeyError):
-                pass
-            continue
+                continue
 
         # Now we look for certain "fusions" of layers and activations
         # We modify stats to make sure we quantize only the ranges relevant to the activation function
         # By doing so we reduce quantization error while still keeping all
+        msglogger.info('Optimizing output statistics for modules followed by ReLU/Tanh/Sigmoid')
         for n, m in named_modules.items():
             if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
                 continue
@@ -996,17 +1008,17 @@ class PostTrainLinearQuantizer(Quantizer):
 
             if succ_type == 'Relu':
                 # ReLU zeros out all negative values, so there's no need to quantize them
-                msglogger.debug('Module {} followed by Relu, updating stats'.format(n))
+                msglogger.debug('  Module {} followed by Relu, updating stats'.format(n))
                 if succ_stats is not None:
                     m_stats['output'] = deepcopy(succ_stats['output'])
                     succ_stats['inputs'][0] = deepcopy(succ_stats['output'])
                 else:
-                    msglogger.debug("Relu op not a module or post-split, can't update mean and std".format(n))
+                    msglogger.debug("    Relu op not a module or post-split, can't update mean and std".format(n))
                     clip_stats(m_stats['output'], 0., m_stats['output']['max'])
             elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
                 # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
                 # of these ranges
-                msglogger.debug('Module {} followed by {}, updating stats'.format(n, succ_type))
+                msglogger.debug('  Module {} followed by {}, updating stats'.format(n, succ_type))
                 sat_val = 4. if succ_type == 'Tanh' else 6.
                 clip_stats(m_stats['output'], -sat_val, sat_val)
                 if succ_stats is not None:

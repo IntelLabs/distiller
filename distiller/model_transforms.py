@@ -39,7 +39,7 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
         setattr(container, sub_module_name, nn.Identity())
 
 
-def fuse_modules(model, dummy_input, types_sequence, fuse_fn):
+def fuse_modules(model, types_sequence, fuse_fn, dummy_input=None, adjacency_map=None):
     """
     Scans the module for sequences of modules of the specified types and "fuses" them. As an example, consider the
     following sequence of 3 modules: 'm_1' --> 'm_2' --> 'm_3'. Assuming they match the specified sequence of types,
@@ -63,16 +63,22 @@ def fuse_modules(model, dummy_input, types_sequence, fuse_fn):
 
     Args:
         model (nn.Module): Model instance on which the transformation is performed
-        dummy_input (torch.Tensor or tuple): Dummy input to the model
         types_sequence (list or tuple): Sequence of module types. Each item in the sequence may itself be a
           list / tuple. For example - to fuse all possible convolution types with ReLU, pass:
           [[nn.Conv1d, nn.Conv2d, nn.Conv3d], nn.ReLU]
         fuse_fn (function): Function that takes a list of models to be fused, and returns a single fused module.
           If the sequence cannot be fused, this function should return None
+        dummy_input (torch.Tensor or tuple): Dummy input to the model. Required if summary_graph is None
+        adjacency_map (OrderedDict): Pre-computed adjacency map, via SummaryGraph.adjacency_map(). Must be based
+          on the passed model, otherwise results are unexpected. If None, then the adjacency map will be created
+          internally using the passed dummy_input.
     """
     distiller.assign_layer_fq_names(model)
-    sg = distiller.SummaryGraph(model, dummy_input)
-    adjacency_map = sg.adjacency_map(dedicated_modules_only=False)
+    if adjacency_map is None:
+        if dummy_input is None:
+            raise ValueError('Must pass either valid adjacency map instance or valid dummy input')
+        summary_graph = distiller.SummaryGraph(model, dummy_input)
+        adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
     named_modules = OrderedDict(model.named_modules())
     in_sequence_idx = 0
     curr_sequence = []
@@ -104,7 +110,7 @@ def fuse_modules(model, dummy_input, types_sequence, fuse_fn):
     return model
 
 
-def fold_batch_norms_inference(model, dummy_input):
+def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
     """Scans the model for convolution / linear modules followed by batch-normalization. For each such valid pair,
     folds the parameters of the batch normalization module into the parameters of the parameter module, and replaces
     the batch normalization module with an identity operation.
@@ -114,7 +120,10 @@ def fold_batch_norms_inference(model, dummy_input):
 
     Args:
         model (nn.Module): Model instance on which the transformation is performed
-        dummy_input (torch.Tensor or tuple): Dummy input to the model
+        dummy_input (torch.Tensor or tuple): Dummy input to the model. Required if summary_graph is None
+        adjacency_map (OrderedDict): Pre-computed adjacency map, via SummaryGraph.adjacency_map(). Must be based
+          on the passed model, otherwise results are unexpected. If None, then the adjacency map will be created
+          internally using the passed dummy_input.
     """
     def fold_bn(sequence):
         # Re-use this functionality from simulated BN folding implementation
@@ -129,4 +138,4 @@ def fold_batch_norms_inference(model, dummy_input):
 
     foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
     batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
-    return fuse_modules(model, dummy_input, (foldables, batchnorms), fold_bn)
+    return fuse_modules(model, (foldables, batchnorms), fold_bn, dummy_input, adjacency_map)

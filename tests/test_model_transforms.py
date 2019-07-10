@@ -22,6 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.testing
 
+from distiller import SummaryGraph
 import distiller.model_transforms as mt
 from distiller.modules import EltwiseAdd, Split
 from common import WrappedSequential
@@ -83,16 +84,20 @@ def fused_reference():
     return WrappedSequential(DummyA(), nn.Identity(), nn.Identity())
 
 
+def compare_models(actual, expected):
+    nm_actual = OrderedDict(actual.named_modules())
+    nm_expected = OrderedDict(expected.named_modules())
+    assert nm_actual.keys() == nm_expected.keys()
+    assert [type(v) for v in nm_actual.values()] == [type(v) for v in nm_expected.values()]
+
+
 def fuse_and_check(model, expected, input_shape, parallel):
     if parallel:
         model = nn.DataParallel(model)
         expected = nn.DataParallel(expected)
     dummy_input = torch.randn(input_shape)
-    fused = mt.fuse_modules(model, dummy_input, types_sequence=types_sequence, fuse_fn=fuse_fn)
-    nm_fused = OrderedDict(fused.named_modules())
-    nm_expected = OrderedDict(expected.named_modules())
-    assert nm_fused.keys() == nm_expected.keys()
-    assert [type(v) for v in nm_fused.values()] == [type(v) for v in nm_expected.values()]
+    fused = mt.fuse_modules(model, types_sequence=types_sequence, fuse_fn=fuse_fn, dummy_input=dummy_input)
+    compare_models(fused, expected)
 
 
 @pytest.fixture(params=[False, True], ids=['parallel_off', 'parallel_on'])
@@ -100,7 +105,7 @@ def parallel(request):
     return request.param
 
 
-def test_fuse_models(parallel):
+def test_fuse_modules(parallel):
     input_shape = (10, 10)
 
     # Simple negative tests
@@ -177,6 +182,28 @@ def test_fuse_models(parallel):
     # Node with multiple outputs
     model = BypassModel((DummyA(), DummyB()), DummyD())
     fuse_and_check(model, deepcopy(model), input_shape, parallel)
+
+
+def test_fuse_modules_with_pre_exist_adj_map():
+    model = WrappedSequential(DummyA(), DummyB(), DummyD())
+    with pytest.raises(ValueError):
+        mt.fuse_modules(model, types_sequence, fuse_fn, dummy_input=None, adjacency_map=None)
+
+    dummy_input = torch.randn(10, 10)
+    sg = SummaryGraph(deepcopy(model), dummy_input)
+    adj_map = sg.adjacency_map()
+
+    fused_dummy_input = mt.fuse_modules(deepcopy(model), types_sequence, fuse_fn,
+                                        dummy_input=dummy_input, adjacency_map=None)
+    compare_models(fused_dummy_input, fused_reference())
+
+    fused_pre_sg = mt.fuse_modules(deepcopy(model), types_sequence, fuse_fn,
+                                   dummy_input=None, adjacency_map=adj_map)
+    compare_models(fused_pre_sg, fused_reference())
+
+    fused_both = mt.fuse_modules(deepcopy(model), types_sequence, fuse_fn,
+                                 dummy_input=dummy_input, adjacency_map=adj_map)
+    compare_models(fused_both, fused_reference())
 
 
 ###############################################################################
