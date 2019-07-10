@@ -1024,6 +1024,11 @@ class PostTrainLinearQuantizer(Quantizer):
                 if succ_stats is not None:
                     succ_stats['inputs'][0] = deepcopy(m_stats['output'])
 
+        if hasattr(msglogger, 'logdir'):
+            save_path = os.path.join(msglogger.logdir, 'quant_stats_after_prepare_model.yaml')
+            distiller.yaml_ordered_save(save_path, self.model_activation_stats)
+            msglogger.info('Updated stats saved to ' + save_path)
+
 
 ###############################################################################
 # Quantization-aware training
