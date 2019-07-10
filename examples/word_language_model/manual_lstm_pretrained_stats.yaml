@@ -16,7 +16,7 @@ encoder:
     mean: 0.0011389567903235516
     std: 0.106637374597835
     shape: (35, 10, 1500)
-rnn.cells.0.fc_gate_x:
+rnn.cell_0.fc_gate_x:
   inputs:
     0:
       min: -1.0055707693099976
@@ -34,7 +34,7 @@ rnn.cells.0.fc_gate_x:
     mean: -0.5324024169690869
     std: 1.136934240306631
     shape: (10, 6000)
-rnn.cells.0.fc_gate_h:
+rnn.cell_0.fc_gate_h:
   inputs:
     0:
       min: -0.9941717386245728
@@ -52,7 +52,7 @@ rnn.cells.0.fc_gate_h:
     mean: -0.24742181252201967
     std: 0.6138123563333803
     shape: (10, 6000)
-rnn.cells.0.eltwiseadd_gate:
+rnn.cell_0.eltwiseadd_gate:
   inputs:
     0:
       min: -7.170577049255371
@@ -78,7 +78,7 @@ rnn.cells.0.eltwiseadd_gate:
     mean: -0.7798242293363614
     std: 1.3385719958875721
     shape: (10, 6000)
-rnn.cells.0.act_f:
+rnn.cell_0.act_f:
   inputs:
     0:
       min: -15.612003326416016
@@ -96,7 +96,7 @@ rnn.cells.0.act_f:
     mean: 0.31776015875831237
     std: 0.18128372322608863
     shape: (10, 1500)
-rnn.cells.0.act_i:
+rnn.cell_0.act_i:
   inputs:
     0:
       min: -12.639559745788574
@@ -114,7 +114,7 @@ rnn.cells.0.act_i:
     mean: 0.26847494655177206
     std: 0.2133546549199177
     shape: (10, 1500)
-rnn.cells.0.act_o:
+rnn.cell_0.act_o:
   inputs:
     0:
       min: -9.940855979919434
@@ -132,7 +132,7 @@ rnn.cells.0.act_o:
     mean: 0.318497704179476
     std: 0.19847815427571672
     shape: (10, 1500)
-rnn.cells.0.act_c_ex:
+rnn.cell_0.act_g:
   inputs:
     0:
       min: -11.641252517700195
@@ -150,7 +150,7 @@ rnn.cells.0.act_c_ex:
     mean: -6.53550379788874e-05
     std: 0.7375218759945332
     shape: (10, 1500)
-rnn.cells.0.eltwisemult_cell_forget:
+rnn.cell_0.eltwisemult_cell_forget:
   inputs:
     0:
       min: 1.6587961226832704e-07
@@ -176,7 +176,7 @@ rnn.cells.0.eltwisemult_cell_forget:
     mean: -3.0967179330471856e-05
     std: 0.13354148372150612
     shape: (10, 1500)
-rnn.cells.0.eltwisemult_cell_input:
+rnn.cell_0.eltwisemult_cell_input:
   inputs:
     0:
       min: 3.2412126529379748e-06
@@ -202,7 +202,7 @@ rnn.cells.0.eltwisemult_cell_input:
     mean: -0.0009125015388671264
     std: 0.2702341313401001
     shape: (10, 1500)
-rnn.cells.0.eltwiseadd_cell:
+rnn.cell_0.eltwiseadd_cell:
   inputs:
     0:
       min: -18.10362434387207
@@ -228,7 +228,7 @@ rnn.cells.0.eltwiseadd_cell:
     mean: -0.0009434687136402496
     std: 0.3030323653891493
     shape: (10, 1500)
-rnn.cells.0.act_h:
+rnn.cell_0.act_h:
   inputs:
     0:
       min: -18.4894962310791
@@ -246,7 +246,7 @@ rnn.cells.0.act_h:
     mean: -0.0007417835671436678
     std: 0.26512230259603614
     shape: (10, 1500)
-rnn.cells.0.eltwisemult_hidden:
+rnn.cell_0.eltwisemult_hidden:
   inputs:
     0:
       min: 4.816373984795064e-05
@@ -272,7 +272,7 @@ rnn.cells.0.eltwisemult_hidden:
     mean: 0.00019907324964651022
     std: 0.10292063063382816
     shape: (10, 1500)
-rnn.cells.1.fc_gate_x:
+rnn.cell_1.fc_gate_x:
   inputs:
     0:
       min: -0.9941717386245728
@@ -290,7 +290,7 @@ rnn.cells.1.fc_gate_x:
     mean: -0.2753187046971623
     std: 1.2196254520335272
     shape: (10, 6000)
-rnn.cells.1.fc_gate_h:
+rnn.cell_1.fc_gate_h:
   inputs:
     0:
       min: -0.9998947978019714
@@ -308,7 +308,7 @@ rnn.cells.1.fc_gate_h:
     mean: -0.2947964010912462
     std: 1.2404614338320914
     shape: (10, 6000)
-rnn.cells.1.eltwiseadd_gate:
+rnn.cell_1.eltwiseadd_gate:
   inputs:
     0:
       min: -14.241074562072754
@@ -334,7 +334,7 @@ rnn.cells.1.eltwiseadd_gate:
     mean: -0.5701151059095978
     std: 1.9359252436683256
     shape: (10, 6000)
-rnn.cells.1.act_f:
+rnn.cell_1.act_f:
   inputs:
     0:
       min: -9.876046180725098
@@ -352,7 +352,7 @@ rnn.cells.1.act_f:
     mean: 0.41393780546997105
     std: 0.25393672173390425
     shape: (10, 1500)
-rnn.cells.1.act_i:
+rnn.cell_1.act_i:
   inputs:
     0:
       min: -16.290634155273438
@@ -370,7 +370,7 @@ rnn.cells.1.act_i:
     mean: 0.2965666530026901
     std: 0.2653741353156098
     shape: (10, 1500)
-rnn.cells.1.act_o:
+rnn.cell_1.act_o:
   inputs:
     0:
       min: -16.701549530029297
@@ -388,7 +388,7 @@ rnn.cells.1.act_o:
     mean: 0.3911302530009079
     std: 0.30228075066032956
     shape: (10, 1500)
-rnn.cells.1.act_c_ex:
+rnn.cell_1.act_g:
   inputs:
     0:
       min: -18.20545196533203
@@ -406,7 +406,7 @@ rnn.cells.1.act_c_ex:
     mean: 0.006299477315604894
     std: 0.8122228369780807
     shape: (10, 1500)
-rnn.cells.1.eltwisemult_cell_forget:
+rnn.cell_1.eltwisemult_cell_forget:
   inputs:
     0:
       min: 5.1388426072662696e-05
@@ -432,7 +432,7 @@ rnn.cells.1.eltwisemult_cell_forget:
     mean: 0.004142155777030078
     std: 0.5223340602367401
     shape: (10, 1500)
-rnn.cells.1.eltwisemult_cell_input:
+rnn.cell_1.eltwisemult_cell_input:
   inputs:
     0:
       min: 8.415258179184093e-08
@@ -458,7 +458,7 @@ rnn.cells.1.eltwisemult_cell_input:
     mean: 0.0014335625686553053
     std: 0.3403960596000532
     shape: (10, 1500)
-rnn.cells.1.eltwiseadd_cell:
+rnn.cell_1.eltwiseadd_cell:
   inputs:
     0:
       min: -48.25635528564453
@@ -484,7 +484,7 @@ rnn.cells.1.eltwiseadd_cell:
     mean: 0.0055757183429154394
     std: 0.6651466271437165
     shape: (10, 1500)
-rnn.cells.1.act_h:
+rnn.cell_1.act_h:
   inputs:
     0:
       min: -48.280601501464844
@@ -502,7 +502,7 @@ rnn.cells.1.act_h:
     mean: 0.0021621192841517175
     std: 0.38166194375973717
     shape: (10, 1500)
-rnn.cells.1.eltwisemult_hidden:
+rnn.cell_1.eltwisemult_hidden:
   inputs:
     0:
       min: 5.579678230560603e-08
