@@ -8,7 +8,7 @@ Post-training quantization can either be configured straight from the command-li
 
 **All the examples shown below are using command-line configuration.**  
 
-**For an example of how to use a YAML config file, please see `resnet18_imagenet_post_train.yaml` in this directory. It shows how to override the configuration of specific layers in order to obtain better accuracy.**  
+**For an example of how to use a YAML config file, please see `resnet18_imagenet_post_train.yaml` in this directory ([link to view in GitHub repo](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)). It shows how to override the configuration of specific layers in order to obtain better accuracy.**  
 
 ## Available Command Line Arguments
 
