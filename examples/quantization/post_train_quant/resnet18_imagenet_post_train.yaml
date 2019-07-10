@@ -84,15 +84,15 @@ quantizers:
 #        clip_acts: NONE  # Don't clip activations in last layer before softmax
 
     # Overrides section for run 6
-    overrides:
-    # First and last layers + element-wise add layers in 8-bits
-      conv1:
-        bits_weights: 8
-        bits_activations: 8
-      .*add:
-        bits_weights: 8
-        bits_activations: 8
-      fc:
-        bits_weights: 8
-        bits_activations: 8
-        clip_acts: NONE
+#    overrides:
+#    # First and last layers + element-wise add layers in 8-bits
+#      conv1:
+#        bits_weights: 8
+#        bits_activations: 8
+#      .*add:
+#        bits_weights: 8
+#        bits_activations: 8
+#      fc:
+#        bits_weights: 8
+#        bits_activations: 8
+#        clip_acts: NONE
