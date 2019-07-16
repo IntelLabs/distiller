@@ -274,6 +274,11 @@ class Quantizer(object):
                     replace_msg(full_name)
                 continue
             current_qbits = self.module_qbits_map[full_name]
+            if current_qbits.acts == 32 and current_qbits.wts:
+                valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name], self.quantize_weights)
+                self.quantize_weights(module, current_qbits.wts, **valid_kwargs)
+                self.modules_processed[module] = full_name, None
+                continue
             if current_qbits.acts is None and current_qbits.wts is None:
                 if self.module_overrides_map[full_name]:
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
@@ -334,3 +339,6 @@ class Quantizer(object):
                 setattr(ptq.module, ptq.q_attr_name, q_param)
             else:
                 getattr(ptq.module, ptq.q_attr_name).data = q_param.data
+
+    def quantize_weights(self):
+        pass

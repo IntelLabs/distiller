@@ -866,11 +866,27 @@ class PostTrainLinearQuantizer(Quantizer):
             return RangeLinearEmbeddingWrapper(module, qbits_map[name].wts, mode=mode,
                                                stats=self.model_activation_stats.get(norm_name, None))
 
+        def _quantize_weights(module, num_bits_params, per_channel_wts=per_channel_wts, mode=mode):
+            params_min_q_val, params_max_q_val = get_quantized_range(num_bits_params,
+                                                                     signed=mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+            w_scale, w_zero_point = _get_quant_params_from_tensor(module.weight, num_bits_params, self.mode,
+                                                                  per_channel=per_channel_wts)
+            linear_quantize_clamp(module.weight.data, w_scale, w_zero_point, params_min_q_val, params_max_q_val,
+                                  inplace=True)
+            linear_dequantize(module.weight.data, w_scale, w_zero_point, inplace=True)
+            has_bias = hasattr(module, 'bias') and module.bias is not None
+            if has_bias:
+                b_scale, b_zero_point = _get_quant_params_from_tensor(module.bias, num_bits_params, mode)
+                linear_quantize_clamp(module.bias.data, b_scale, b_zero_point,
+                                      params_min_q_val, params_max_q_val, inplace=True)
+                linear_dequantize(module.bias.data, b_scale, b_zero_point, inplace=True)
+
         self.clip_acts = clip_acts
         self.clip_n_stds = clip_n_stds
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
         self.mode = mode
+        self.quantize_weights = _quantize_weights
 
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
