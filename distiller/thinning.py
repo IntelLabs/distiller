@@ -513,9 +513,9 @@ def execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer, loaded_fr
                 len_indices = indices.nelement()
                 if len(directive) == 4:  # TODO: this code is hard to follow
                     msglogger.debug("{}-{}-{}: SHAPE = {}".format(param_name, param.shape, id(param), list(directive[2])))
-                    selection_view = param.view(*directive[2])
                     # Check that we're not trying to trim a parameter that is already "thin"
                     if param.data.size(dim) != len_indices:
+                        selection_view = param.view(*directive[2])
                         param.data = torch.index_select(selection_view, dim, indices)
                         if param.grad is not None:
                             # We also need to change the dimensions of the gradient tensor.
