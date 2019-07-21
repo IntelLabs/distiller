@@ -600,9 +600,9 @@ class LinearBNSplitAct(nn.Module):
         super(LinearBNSplitAct, self).__init__()
         self.linear = nn.Linear(10, 40)
         self.bn = nn.BatchNorm1d(40)
-        acts_map = {'relu': nn.ReLU(), 'tanh': nn.Tanh(), 'sigmoid': nn.Sigmoid()}
-        self.act1 = acts_map[act1_type]
-        self.act2 = acts_map[act2_type]
+        acts_map = {'relu': nn.ReLU, 'tanh': nn.Tanh, 'sigmoid': nn.Sigmoid}
+        self.act1 = acts_map[act1_type]()
+        self.act2 = acts_map[act2_type]()
 
     def forward(self, x):
         x = self.linear(x)
