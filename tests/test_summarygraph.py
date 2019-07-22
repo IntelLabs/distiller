@@ -18,13 +18,15 @@ import logging
 import torch
 import torch.nn as nn
 import pytest
+from copy import deepcopy
+from collections import OrderedDict
 import distiller
 from distiller.models import ALL_MODEL_NAMES, create_model
 from distiller.apputils import *
 from distiller import normalize_module_name, denormalize_module_name, \
     SummaryGraph, onnx_name_2_pytorch_name
 from distiller.model_summaries import connectivity_summary, connectivity_summary_verbose
-from distiller.summary_graph import AdjacentsEntry, OpSimpleMetadata
+from distiller.summary_graph import AdjacentsEntry, OpSimpleMetadata, _DistillerModuleList, _to_distiller_modulelist
 
 # Logging configuration
 logging.basicConfig(level=logging.DEBUG)
@@ -324,12 +326,16 @@ def test_adjacency_map(parallel, dedicated_modules):
             super(TestModel, self).__init__()
             self.conv = nn.Conv2d(3, 10, 5)
             self.bn = nn.BatchNorm2d(10)
-            self.relu = nn.ReLU()
+            self.post_conv_bn = nn.ModuleList([
+                nn.Tanh(),
+                nn.ReLU()
+            ])
 
         def forward(self, x):
             res = self.conv(x)
             y = self.bn(res)
-            y = self.relu(y)
+            for m in self.post_conv_bn:
+                y = m(y)
             return y + res
 
     def check_adj_entry(actual, expected):
@@ -346,13 +352,14 @@ def test_adjacency_map(parallel, dedicated_modules):
     adj_map = sg.adjacency_map(dedicated_modules_only=dedicated_modules)
 
     if dedicated_modules:
-        assert len(adj_map) == 3
-    else:
         assert len(adj_map) == 4
+    else:
+        assert len(adj_map) == 5
 
     conv_op_meta = OpSimpleMetadata(prefix + 'conv', 'Conv')
     bn_op_meta = OpSimpleMetadata(prefix + 'bn', 'BatchNormalization')
-    relu_op_meta = OpSimpleMetadata(prefix + 'relu', 'Relu')
+    tanh_op_meta = OpSimpleMetadata(prefix + 'post_conv_bn.0', 'Tanh')
+    relu_op_meta = OpSimpleMetadata(prefix + 'post_conv_bn.1', 'Relu')
     add_op_meta = OpSimpleMetadata('top_level_op', 'Add')
 
     name = conv_op_meta.name
@@ -365,13 +372,20 @@ def test_adjacency_map(parallel, dedicated_modules):
     assert name in adj_map
     expected = AdjacentsEntry(bn_op_meta)
     expected.predecessors = [conv_op_meta]
+    expected.successors = [tanh_op_meta]
+    check_adj_entry(adj_map[name], expected)
+
+    name = tanh_op_meta.name
+    assert name in adj_map
+    expected = AdjacentsEntry(tanh_op_meta)
+    expected.predecessors = [bn_op_meta]
     expected.successors = [relu_op_meta]
     check_adj_entry(adj_map[name], expected)
 
     name = relu_op_meta.name
     assert name in adj_map
     expected = AdjacentsEntry(relu_op_meta)
-    expected.predecessors = [bn_op_meta]
+    expected.predecessors = [tanh_op_meta]
     expected.successors = [] if dedicated_modules else [add_op_meta]
     check_adj_entry(adj_map[name], expected)
 
@@ -383,6 +397,158 @@ def test_adjacency_map(parallel, dedicated_modules):
         expected = AdjacentsEntry(add_op_meta)
         expected.predecessors = [relu_op_meta, conv_op_meta]
         check_adj_entry(adj_map[name], expected)
+
+
+def test_distiller_module_list():
+    #############################################################
+    # Model for testing conversion of nested ModuleLists
+    #############################################################
+    class ListsModule(nn.Module):
+        def __init__(self):
+            super(ListsModule, self).__init__()
+            self.conv1 = nn.Conv2d(3, 10, 5)
+            self.post_conv1 = nn.ModuleList([
+                nn.BatchNorm2d(10),
+                nn.ModuleList([
+                    nn.ReLU(),
+                    nn.ModuleList([nn.Tanh(), nn.MaxPool2d(2)])])])
+            self.conv2 = nn.Conv2d(10, 20, 3)
+            self.post_conv2 = nn.ModuleList([nn.ReLU6(), nn.MaxPool2d(4)])
+
+            self.expected_mlist_to_dmlist = OrderedDict([
+                ('post_conv1', ['post_conv1']),
+                ('post_conv1.1', ['post_conv1', '1']),
+                ('post_conv1.1.1', ['post_conv1', '1', '1']),
+                ('post_conv2', ['post_conv2']),
+            ])
+            self.expected_list_contents_name_changes = OrderedDict([
+                ('post_conv1.0', 'post_conv1_0'),
+                ('post_conv1.1.0', 'post_conv1_1_0'),
+                ('post_conv1.1.1.0', 'post_conv1_1_1_0'),
+                ('post_conv1.1.1.1', 'post_conv1_1_1_1'),
+                ('post_conv2.0', 'post_conv2_0'),
+                ('post_conv2.1', 'post_conv2_1'),
+            ])
+
+        def forward(self, x):
+            x = self.conv1(x)
+            x = self.post_conv1[0](x)
+            x = self.post_conv1[1][0](x)
+            for m in self.post_conv1[1][1]:
+                x = m(x)
+            x = self.conv2(x)
+            for m in self.post_conv2:
+                x = m(x)
+            return x
+
+    #############################################################
+    # Model for testing conversion in case of nested containers
+    #############################################################
+    class Block(nn.Module):
+        def __init__(self, in_ch):
+            super(Block, self).__init__()
+            self.in_ch = in_ch
+            self.out_ch = in_ch * 2
+            self.conv = nn.Conv2d(in_ch, self.out_ch, 3)
+            self.post_conv = nn.ModuleList([nn.BatchNorm2d(self.out_ch), nn.ReLU()])
+
+        def forward(self, x):
+            x = self.conv(x)
+            for m in self.post_conv:
+                x = m(x)
+            return x
+
+    class BlocksModule(nn.Module):
+        def __init__(self):
+            super(BlocksModule, self).__init__()
+            self.block1 = Block(3)
+            self.blocks2_3 = nn.Sequential(Block(6), Block(12))
+            self.blocks4_5 = nn.ModuleList([Block(24), Block(48)])
+            self.block6 = Block(96)
+
+            self.expected_mlist_to_dmlist = OrderedDict([
+                ('block1.post_conv', ['block1', 'post_conv']),
+                ('blocks2_3.0.post_conv', ['blocks2_3', '0', 'post_conv']),
+                ('blocks2_3.1.post_conv', ['blocks2_3', '1', 'post_conv']),
+                ('blocks4_5', ['blocks4_5']),
+                ('blocks4_5.0.post_conv', ['blocks4_5', '0', 'post_conv']),
+                ('blocks4_5.1.post_conv', ['blocks4_5', '1', 'post_conv']),
+                ('block6.post_conv', ['block6', 'post_conv']),
+            ])
+            self.expected_list_contents_name_changes = OrderedDict([
+                ('block1.post_conv.0', 'block1.post_conv_0'),
+                ('block1.post_conv.1', 'block1.post_conv_1'),
+                ('blocks2_3.0.post_conv.0', 'blocks2_3.0.post_conv_0'),
+                ('blocks2_3.0.post_conv.1', 'blocks2_3.0.post_conv_1'),
+                ('blocks2_3.1.post_conv.0', 'blocks2_3.1.post_conv_0'),
+                ('blocks2_3.1.post_conv.1', 'blocks2_3.1.post_conv_1'),
+                ('blocks4_5.0', 'blocks4_5_0'),
+                ('blocks4_5.0.conv', 'blocks4_5_0.conv'),
+                ('blocks4_5.0.post_conv.0', 'blocks4_5_0.post_conv_0'),
+                ('blocks4_5.0.post_conv.1', 'blocks4_5_0.post_conv_1'),
+                ('blocks4_5.1', 'blocks4_5_1'),
+                ('blocks4_5.1.conv', 'blocks4_5_1.conv'),
+                ('blocks4_5.1.post_conv.0', 'blocks4_5_1.post_conv_0'),
+                ('blocks4_5.1.post_conv.1', 'blocks4_5_1.post_conv_1'),
+                ('block6.post_conv.0', 'block6.post_conv_0'),
+                ('block6.post_conv.1', 'block6.post_conv_1'),
+            ])
+
+        def forward(self, x):
+            x = self.block1(x)
+            x = self.blocks2_3(x)
+            for block in self.blocks4_5:
+                x = block(x)
+            x = self.block6(x)
+            return x
+
+    def check(m):
+        def check_equal_tensors(actual, expected):
+            assert (actual == expected).all().item() == 1
+
+        m_dml, converted_module_names_map = _to_distiller_modulelist(deepcopy(m))
+
+        # Check all modules converted as expected
+        named_modules_dmlist = OrderedDict(m_dml.named_modules())
+        for name_orig, module_orig in m.named_modules():
+            if name_orig in m.expected_mlist_to_dmlist:
+                # Check ModuleLists were converted to an attribute with the expected name, which is not
+                # registered as a module in the converted model
+                assert name_orig not in named_modules_dmlist
+                attr_dml = m_dml
+                for attr_name in m.expected_mlist_to_dmlist[name_orig]:
+                    try:
+                        attr_dml = attr_dml[int(attr_name)]
+                    except ValueError:
+                        attr_dml = getattr(attr_dml, attr_name)
+                assert isinstance(attr_dml, _DistillerModuleList)
+            else:
+                # Check module name changed as expected, and that the module type didn't change
+                expected_name_dml = m.expected_list_contents_name_changes.get(name_orig, name_orig)
+                assert expected_name_dml in named_modules_dmlist
+                assert expected_name_dml in converted_module_names_map
+                assert converted_module_names_map[expected_name_dml] == name_orig
+                assert type(named_modules_dmlist[expected_name_dml]) == type(module_orig)
+                converted_module_names_map.pop(expected_name_dml)
+                named_modules_dmlist.pop(expected_name_dml)
+
+        assert not converted_module_names_map, 'Unexpected contents in converted_module_names_map'
+        assert not named_modules_dmlist, 'Unexpected contents in converted model named_modules'
+
+        # Now make sure all parameters and buffers didn't change
+        for p_orig, p_dml in zip(m.parameters(), m_dml.parameters()):
+            check_equal_tensors(p_dml, p_orig)
+        for b_orig, b_dml in zip(m.buffers(), m_dml.buffers()):
+            check_equal_tensors(b_dml, b_orig)
+
+        # Check forward pass gives identical results
+        x = torch.randn(1, 3, 50, 50)
+        y_orig = m(x)
+        y_dml = m_dml(x)
+        check_equal_tensors(y_dml, y_orig)
+
+    check(ListsModule())
+    check(BlocksModule())
 
 
 if __name__ == '__main__':

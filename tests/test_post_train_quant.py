@@ -423,12 +423,12 @@ def rnn_model_stats(rnn_model):
         (None, ClipMode.AVG, 0),
 
         (distiller.utils.yaml_ordered_load("""
-        rnn.cell_0.eltwisemult_hidden:
+        rnn.cells.0.eltwisemult_hidden:
             clip_acts: NONE
         """), ClipMode.NONE, 0),
 
         (distiller.utils.yaml_ordered_load("""
-        rnn.cell_0.eltwisemult_hidden:
+        rnn.cells.0.eltwisemult_hidden:
             clip_acts: N_STD
             clip_n_stds: 2
         """), ClipMode.N_STD, 2)
