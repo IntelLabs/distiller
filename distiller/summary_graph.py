@@ -574,7 +574,6 @@ class AdjacentsEntry(object):
                self.successors == other.successors
 
 
-# class _DistillerModuleList(MutableSequence):
 class _DistillerModuleList(object):
     r"""A almost-drop-in replacement for torch.nn.ModuleList that results in full and unique scope-names when traced
 
@@ -607,13 +606,14 @@ class _DistillerModuleList(object):
         sub-modules of the "parent module". That is - the contents of a DistillerModuleList are "flattened" within the
         "parent module".
       * In addition, we can't use the '.' character to denote the "nesting" of a module within the list. We use '_'.
-      * All of This means that calls to functions like state_dict() / named_modules() / named_children() / etc. on the
+      * All of this means that calls to functions like state_dict() / named_modules() / named_children() / etc. on the
         "parent_module" return different results when this class is used compared to torch.nn.ModuleList.
 
     At the moment we don't see a usage for this class "in the wild", outside of SummaryGraph generation.
     In the context of SummaryGraph, we're going to take a pre-created model and replace any torch.nn.ModuleList
-    instances with DistillerModuleLists. Once that is done, during model execution we expect the lists are being
-    as read-only. We're not supporting loading state_dict "across" converted models.
+    instances with DistillerModuleLists. Once that is done, during model execution we expect that lists are being
+    used as read-only (no modules are added to/removed from the list). We're not supporting loading state_dict "across"
+    converted models.
     This means that:
       * We implement only a subset of the standard API of a Python sequence (see collections.abc.MutableSequence):
         'append()', 'extend()', '__len__()' and '__getitem()_'
