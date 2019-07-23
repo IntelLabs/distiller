@@ -619,7 +619,7 @@ class GradientRankedFilterPruner(_RankedStructureParameterPruner):
 
 from sklearn.linear_model import LinearRegression
 
-def _least_square_sklearn(X, Y, random_state):
+def _least_square_sklearn(X, Y):
     model = LinearRegression(fit_intercept=False)
     model.fit(X, Y)
     return model.coef_
@@ -726,7 +726,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
 
     def __init__(self, name, group_type, desired_sparsity, weights,
                  group_dependency=None, kwargs=None, magnitude_fn=l1_magnitude, 
-                 group_size=1, rounding_fn=math.floor, ranking_noise=0., random_state=None):
+                 group_size=1, rounding_fn=math.floor, ranking_noise=0.):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency,
                          group_size=group_size, rounding_fn=rounding_fn, noise=ranking_noise)
         if group_type != "Channels":
@@ -735,7 +735,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
                              format(group_type))
         assert magnitude_fn is not None
         self.magnitude_fn = magnitude_fn
-        self.random_state = random_state
 
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
@@ -744,15 +743,14 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
                                                   zeros_mask_dict, model, binary_map, 
                                                   group_size=self.group_size, 
                                                   rounding_fn=self.rounding_fn,
-                                                  noise=self.noise, 
-                                                  random_state=self.random_state)
+                                                  noise=self.noise)
         return binary_map
 
     @staticmethod
     def rank_and_prune_channels(fraction_to_prune, param, param_name=None,
                                 zeros_mask_dict=None, model=None, binary_map=None, 
                                 magnitude_fn=l2_magnitude, group_size=1, rounding_fn=math.floor,
-                                noise=0, random_state=None):
+                                noise=0):
         assert binary_map is None
         if binary_map is None:
             bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(
@@ -782,6 +780,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
             #psize("X", X)
             #debug_print(conv)
+            #debug_print("-------------------------------------------")
 
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
@@ -808,7 +807,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
 
             #psize("Y", Y)
             # Approximate the weights given input-FMs and output-FMs
-            new_w = _least_square_sklearn(X, Y, random_state)
+            new_w = _least_square_sklearn(X, Y)
             #debug_print(new_w.shape)                
 
             new_w = torch.from_numpy(new_w) # shape: (num_filters, num_non_masked_channels * k^2)
@@ -816,7 +815,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             #msglogger.info(cnt_retained_channels)
             # Expand the weights back to their original size,
             new_w = new_w.contiguous().view(param.size(0), cnt_retained_channels, param.size(2), param.size(3))
-            #debug_print("====> W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
+            debug_print("====> W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
             #msglogger.info("=====> indices = %d" % len(indices))
             #msglogger.info("--------------new_w sparsity: %.3f" % distiller.sparsity_ch(new_w))
             #debug_print("W'={} W={}".format(new_w.shape, param.shape))
