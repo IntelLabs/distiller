@@ -112,6 +112,8 @@ class Quantizer(object):
         if train_with_fp_copy and optimizer is None:
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
+        self.adjacency_map = None  # To be populated during prepare_model()
+
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
         self.overrides = overrides
 
@@ -176,7 +178,7 @@ class Quantizer(object):
         self.params_to_quantize = []
 
         # A dictionary of replaced modules and their respective names.
-        self.modules_replaced = OrderedDict()
+        self.modules_processed = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
@@ -188,7 +190,7 @@ class Quantizer(object):
     def _add_override_entry(self, module_name, entry):
         self.module_overrides_map[module_name] = entry
 
-    def prepare_model(self):
+    def prepare_model(self, dummy_input=None):
         """
         Traverses the model and replaces sub-modules with quantized counterparts according to the bit-width
         and overrides configuration provided to __init__(), and according to the replacement_factory as
@@ -209,18 +211,15 @@ class Quantizer(object):
             with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
             will be ignored. A warning message will be shown.
         """
-        self._prepare_model_impl()
-
-        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
-
-    def _prepare_model_impl(self):
-        r"""
-        Iterates over the model and replaces modules with their quantized counterparts as defined by
-        self.replacement_factory
-        """
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
-        self._pre_process_container(self.model)
 
+        if dummy_input is not None:
+            summary_graph = distiller.SummaryGraph(self.model, dummy_input)
+            self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+
+        self._pre_prepare_model(dummy_input)
+
+        self._pre_process_container(self.model)
         for module_name, module in self.model.named_modules():
             qbits = self.module_qbits_map[module_name]
             curr_parameters = dict(module.named_parameters())
@@ -244,22 +243,43 @@ class Quantizer(object):
             new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
 
+        self._post_prepare_model()
+
+        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+
+    def _pre_prepare_model(self, dummy_input):
+        pass
+
     def _pre_process_container(self, container, prefix=''):
+        def replace_msg(module_name, modules=None):
+            msglogger.debug('Module ' + module_name)
+            if modules:
+                msglogger.debug('\tReplacing: {}.{}'.format(modules[0].__module__, modules[0].__class__.__name__))
+                msglogger.debug('\tWith:      {}.{}'.format(modules[1].__module__, modules[1].__class__.__name__))
+            else:
+                msglogger.debug('\tSkipping')
+
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
-            if module in self.modules_replaced:
-                previous_name, previous_wrapper = self.modules_replaced[module]
+            if module in self.modules_processed:
+                previous_name, previous_wrapper = self.modules_processed[module]
                 warnings.warn("Module '{0}' references to same module as '{1}'."
                               ' Replacing with reference the same wrapper.'.format(full_name, previous_name),
                               UserWarning)
-                msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, previous_wrapper))
-                setattr(container, name, previous_wrapper)
+                if previous_wrapper:
+                    replace_msg(full_name, (module, previous_wrapper))
+                    setattr(container, name, previous_wrapper)
+                else:
+                    replace_msg(full_name)
                 continue
             current_qbits = self.module_qbits_map[full_name]
             if current_qbits.acts is None and current_qbits.wts is None:
                 if self.module_overrides_map[full_name]:
                     raise ValueError("Adding overrides while not quantizing is not allowed.")
+                # We indicate this module wasn't replaced by a wrapper
+                replace_msg(full_name)
+                self.modules_processed[module] = full_name, None
                 continue
 
             # We use a type hint comment to let IDEs know replace_fn is a function
@@ -272,9 +292,9 @@ class Quantizer(object):
                                         as override arguments for %s. Allowed kwargs: %s"""
                                     % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
                 new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
-                msglogger.debug('Module {0}: Replacing \n{1} with \n{2}'.format(full_name, module, new_module))
+                replace_msg(full_name, (module, new_module))
                 # Add to history of prepared submodules
-                self.modules_replaced[module] = full_name, new_module
+                self.modules_processed[module] = full_name, new_module
                 setattr(container, name, new_module)
 
                 # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
@@ -300,6 +320,9 @@ class Quantizer(object):
         """
         # Default implementation - just return all model parameters as one group
         return [{'params': self.model.parameters()}]
+
+    def _post_prepare_model(self):
+        pass
 
     def quantize_params(self):
         """

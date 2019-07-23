@@ -17,6 +17,7 @@
 import torch
 import pytest
 from distiller.quantization import q_utils as qu
+from common import pytest_raises_wrapper
 
 
 def test_symmetric_qparams():
@@ -161,11 +162,12 @@ test_tensor = torch.tensor([-93, 33, -77, -42, -89, -55, 79, -19, -94,
 test_tensor_4d = test_tensor.reshape(2, 2, 3, 3)
 test_tensor_2d = test_tensor.reshape(6, 6)
 
+too_large_dim_msg = "Expecting ValueError when passing too large dim"
+
 
 def test_get_tensor_min_max():
-    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_min_max, test_tensor_2d, per_dim=2)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_min_max, test_tensor_2d, per_dim=6)
 
     t_min, t_max = qu.get_tensor_min_max(test_tensor_4d)
     assert torch.equal(t_min, torch.tensor(-95.))
@@ -181,9 +183,8 @@ def test_get_tensor_min_max():
 
 
 def test_get_tensor_avg_min_max():
-    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
-        qu.get_tensor_avg_min_max(test_tensor_2d, across_dim=2)
-        qu.get_tensor_avg_min_max(test_tensor_2d, across_dim=6)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_avg_min_max, test_tensor_2d, across_dim=2)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_avg_min_max, test_tensor_2d, across_dim=6)
 
     t_min, t_max = qu.get_tensor_avg_min_max(test_tensor_2d)
     assert torch.equal(t_min, torch.tensor(-95.))
@@ -199,9 +200,8 @@ def test_get_tensor_avg_min_max():
 
 
 def test_get_tensor_max_abs():
-    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_max_abs, test_tensor_2d, per_dim=2)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_max_abs, test_tensor_2d, per_dim=6)
 
     t_abs = qu.get_tensor_max_abs(test_tensor_4d)
     assert torch.equal(t_abs, torch.tensor(95.))
@@ -214,9 +214,8 @@ def test_get_tensor_max_abs():
 
 
 def test_get_tensor_avg_max_abs():
-    with pytest.raises(ValueError, message="Expecting ValueError when passing too large dim"):
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=2)
-        qu.get_tensor_min_max(test_tensor_2d, per_dim=6)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_avg_max_abs, test_tensor_2d, across_dim=2)
+    pytest_raises_wrapper(ValueError, too_large_dim_msg, qu.get_tensor_avg_max_abs, test_tensor_2d, across_dim=6)
 
     t_abs = qu.get_tensor_avg_max_abs(test_tensor_2d)
     assert torch.equal(t_abs, torch.tensor(95.))
@@ -229,8 +228,8 @@ def test_get_tensor_avg_max_abs():
 
 
 def test_get_tensor_mean_n_stds_min_max():
-    with pytest.raises(ValueError, message='Expecting ValueError with n_stds = 0'):
-        qu.get_tensor_mean_n_stds_min_max(test_tensor, n_stds=0)
+    pytest_raises_wrapper(ValueError, 'Expecting ValueError with n_stds = 0',
+                          qu.get_tensor_mean_n_stds_min_max, test_tensor, n_stds=0)
 
     mean = torch.tensor(-16.)
     std = torch.tensor(62.87447738647461)

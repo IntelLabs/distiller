@@ -25,15 +25,48 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data.sampler import Sampler
 import numpy as np
-
 import distiller
 
-DATASETS_NAMES = ['imagenet', 'cifar10']
+
+DATASETS_NAMES = ['imagenet', 'cifar10', 'mnist']
+
+
+def classification_dataset_str_from_arch(arch):
+    if 'cifar' in arch:
+        dataset = 'cifar10' 
+    elif 'mnist' in arch:
+        dataset = 'mnist' 
+    else:
+        dataset = 'imagenet'
+    return dataset
+
+
+def classification_num_classes(dataset):
+    return {'cifar10': 10,
+            'mnist': 10,
+            'imagenet': 1000}.get(dataset, None)
+
+
+def classification_get_input_shape(dataset):
+    if dataset == 'imagenet':
+        return 1, 3, 224, 224
+    elif dataset == 'cifar10':
+        return 1, 3, 32, 32
+    elif dataset == 'mnist':
+        return 1, 1, 28, 28
+    else:
+        raise ValueError("dataset %s is not supported" % dataset)
+
+
+def __dataset_factory(dataset):
+    return {'cifar10': cifar10_get_datasets,
+            'mnist': mnist_get_datasets,
+            'imagenet': imagenet_get_datasets}.get(dataset, None)
 
 
 def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
               effective_train_size=1., effective_valid_size=1., effective_test_size=1.,
-              fixed_subset=False):
+              fixed_subset=False, sequential=False):
     """Load a dataset.
 
     Args:
@@ -45,18 +78,42 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
         deterministic: set to True if you want the data loading process to be deterministic.
           Note that deterministic data loading suffers from poor performance.
         effective_train/valid/test_size: portion of the datasets to load on each epoch.
-          The subset is chosen randomly each time. For the training and validation sets, this is applied AFTER
-          the split to those sets according to the validation_split parameter
-        fixed_subset: set to True to keep the same subset of data throughout the run (the size of the subset
-          is still determined according to the effective_train/valid/test_size args)
+          The subset is chosen randomly each time. For the training and validation sets,
+          this is applied AFTER the split to those sets according to the validation_split parameter
+        fixed_subset: set to True to keep the same subset of data throughout the run
+          (the size of the subset is still determined according to the effective_train/valid/test
+          size args)
     """
     if dataset not in DATASETS_NAMES:
         raise ValueError('load_data does not support dataset %s" % dataset')
-    datasets_fn = cifar10_get_datasets if dataset == 'cifar10' else imagenet_get_datasets
-    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, validation_split=validation_split,
-                            deterministic=deterministic, effective_train_size=effective_train_size,
-                            effective_valid_size=effective_valid_size, effective_test_size=effective_test_size,
-                            fixed_subset=fixed_subset)
+    datasets_fn = __dataset_factory(dataset)
+    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, 
+                            validation_split=validation_split,
+                            deterministic=deterministic, 
+                            effective_train_size=effective_train_size,
+                            effective_valid_size=effective_valid_size, 
+                            effective_test_size=effective_test_size,
+                            fixed_subset=fixed_subset,
+                            sequential=sequential)
+
+
+def mnist_get_datasets(data_dir):
+    """Load the MNIST dataset."""
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    train_dataset = datasets.MNIST(root=data_dir, train=True,
+                                   download=True, transform=train_transform)
+
+    test_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    test_dataset = datasets.MNIST(root=data_dir, train=False,
+                                  transform=test_transform)
+
+    return train_dataset, test_dataset
 
 
 def cifar10_get_datasets(data_dir):
@@ -170,23 +227,43 @@ class SwitchingSubsetRandomSampler(Sampler):
         return self.subset_length
 
 
+class SubsetSequentialSampler(torch.utils.data.Sampler):
+    """Sequentially samples a subset of the dataset, without replacement.
+
+    Arguments:
+        indices (sequence): a sequence of indices
+    """
+    def __init__(self, indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return (self.indices[i] for i in range(len(self.indices)))
+
+    def __len__(self):
+        return len(self.indices)
+
+
 def _get_subset_length(data_source, effective_size):
     if effective_size <= 0 or effective_size > 1:
         raise ValueError('effective_size must be in (0..1]')
     return int(np.floor(len(data_source) * effective_size))
 
 
-def _get_sampler(data_source, effective_size, fixed_subset=False):
+def _get_sampler(data_source, effective_size, fixed_subset=False, sequential=False):
     if fixed_subset:
         subset_length = _get_subset_length(data_source, effective_size)
         indices = np.random.permutation(len(data_source))
         subset_indices = indices[:subset_length]
-        return torch.utils.data.SubsetRandomSampler(subset_indices)
+        if sequential:
+            return SubsetSequentialSampler(subset_indices)
+        else:
+            return torch.utils.data.SubsetRandomSampler(subset_indices)
     return SwitchingSubsetRandomSampler(data_source, effective_size)
 
 
 def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
-                     effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False):
+                     effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False,
+                     sequential=False):
     train_dataset, test_dataset = datasets_fn(data_dir)
 
     worker_init_fn = None
@@ -205,7 +282,7 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
 
     valid_indices, train_indices = __split_list(indices, validation_split)
 
-    train_sampler = _get_sampler(train_indices, effective_train_size, fixed_subset)
+    train_sampler = _get_sampler(train_indices, effective_train_size, fixed_subset, sequential)
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size, sampler=train_sampler,
                                                num_workers=num_workers, pin_memory=True,
@@ -213,14 +290,14 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
 
     valid_loader = None
     if valid_indices:
-        valid_sampler = _get_sampler(valid_indices, effective_valid_size, fixed_subset)
+        valid_sampler = _get_sampler(valid_indices, effective_valid_size, fixed_subset, sequential)
         valid_loader = torch.utils.data.DataLoader(train_dataset,
                                                    batch_size=batch_size, sampler=valid_sampler,
                                                    num_workers=num_workers, pin_memory=True,
                                                    worker_init_fn=worker_init_fn)
 
     test_indices = list(range(len(test_dataset)))
-    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset)
+    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset, sequential)
     test_loader = torch.utils.data.DataLoader(test_dataset,
                                               batch_size=batch_size, sampler=test_sampler,
                                               num_workers=num_workers, pin_memory=True)

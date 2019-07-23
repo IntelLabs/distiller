@@ -20,10 +20,12 @@ from copy import deepcopy
 from collections import OrderedDict
 import pytest
 
+import distiller
 from distiller.quantization import Quantizer
 from distiller.quantization.quantizer import QBits, _ParamToQuant
 from distiller.quantization.quantizer import FP_BKP_PREFIX
 from distiller import has_children
+from common import pytest_raises_wrapper
 
 
 #############################
@@ -215,12 +217,14 @@ def test_no_quantization(model):
 
 
 def test_overrides_ordered_dict(model):
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides is not an OrderedDict'):
-        DummyQuantizer(model, overrides={'testing': '123'})
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides is not an OrderedDict',
+                          DummyQuantizer, model, overrides={'testing': {'testing': '123'}})
+
 
 acts_key = 'bits_activations'
 wts_key = 'bits_weights'
 bias_key = 'bits_bias'
+
 
 @pytest.mark.parametrize(
     "qbits, overrides, explicit_expected_overrides",
@@ -385,27 +389,25 @@ def test_param_quantization(model, optimizer, qbits, overrides, explicit_expecte
 
 
 def test_overridable_args(model, optimizer, train_with_fp_copy):
-    with pytest.raises(ValueError, message='Expecting ValueError when overriding args without overriding bits.'):
-        model_copy = deepcopy(model)
-        conv_override = OrderedDict([(acts_key, None), (wts_key, None), (bias_key, None), ('prop', 123)])
-        overrides = OrderedDict([('conv1', conv_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([(acts_key, None), (wts_key, None), (bias_key, None), ('prop', 123)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(ValueError, 'Expecting ValueError when overriding args without overriding bits',
+                          q.prepare_model)
 
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
-        model_copy = deepcopy(model)
-        conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123), ('unexpetcted_prop', 456)])
-        overrides = OrderedDict([('conv1', conv_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123), ('unexpetcted_prop', 456)])
+    overrides = OrderedDict([('conv1', conv_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides contains unexpected args', q.prepare_model)
 
-    with pytest.raises(TypeError, message='Expecting TypeError when overrides contains unexpected args.'):
-        model_copy = deepcopy(model)
-        relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
-                                     ('overridable_prop', 123), ('unexpetcted_prop', 456)])
-        overrides = OrderedDict([('relu1', relu_override)])
-        q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
-        q.prepare_model()
+    model_copy = deepcopy(model)
+    relu_override = OrderedDict([(acts_key, 8), (wts_key, None), (bias_key, None),
+                                 ('overridable_prop', 123), ('unexpetcted_prop', 456)])
+    overrides = OrderedDict([('relu1', relu_override)])
+    q = DummyQuantizer(model_copy, optimizer=optimizer, overrides=overrides, train_with_fp_copy=train_with_fp_copy)
+    pytest_raises_wrapper(TypeError, 'Expecting TypeError when overrides contains unexpected args', q.prepare_model)
 
     model_copy = deepcopy(model)
     conv_override = OrderedDict([(acts_key, 8), (wts_key, 8), (bias_key, 32), ('prop', 123)])
@@ -423,14 +425,34 @@ def test_overridable_args(model, optimizer, train_with_fp_copy):
     assert model_copy.relu1.overridable_prop == 123
 
 
-def test_shared_submodule(optimizer, train_with_fp_copy):
+@pytest.mark.parametrize(
+    "overrides, expected_relu_type, is_skipped",
+    [
+        (None, DummyQuantLayer, False),
+        (distiller.utils.yaml_ordered_load("""
+        dense1.relu:
+            bits_activations: null
+            bits_weights: null
+        """), nn.ReLU, True)
+    ]
+)
+def test_shared_submodule(optimizer, train_with_fp_copy, overrides, expected_relu_type, is_skipped):
     with pytest.warns(UserWarning,
                       match="Module '{0}' references to same module as '{1}'.".format('dense2.relu', 'dense1.relu')):
         densenet = DummyModelWithSharedSubmodule(1024, 1024, 1000)
+        relu = densenet.dense1.relu
         quantizer = DummyQuantizer(densenet,
                                    bits_weights=8, bits_activations=8, bits_bias=32,
                                    optimizer=optimizer,
-                                   train_with_fp_copy=train_with_fp_copy)
+                                   train_with_fp_copy=train_with_fp_copy,
+                                   overrides=deepcopy(overrides))
         quantizer.prepare_model()
-        assert isinstance(quantizer.model.dense1.relu, DummyQuantLayer)
+        assert isinstance(quantizer.model.dense1.relu, expected_relu_type)
         assert quantizer.model.dense1.relu == quantizer.model.dense2.relu
+        assert quantizer.modules_processed[relu] is not None
+        if is_skipped:
+            assert quantizer.modules_processed[relu][1] is None
+        else:
+            assert quantizer.modules_processed[relu][1] == quantizer.model.dense1.relu
+            assert quantizer.modules_processed[relu][1] == quantizer.model.dense2.relu
+

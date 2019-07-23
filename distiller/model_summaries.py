@@ -42,12 +42,13 @@ __all__ = ['model_summary',
            'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
-def model_summary(model, what, dataset=None):
+def model_summary(model, what, dataset=None, logdir=''):
     if what.startswith('png'):
-        draw_img_classifier_to_file(model, 'model.png', dataset, what == 'png_w_params')
+        png_fname = os.path.join(logdir, 'model.png')
+        draw_img_classifier_to_file(model, png_fname, dataset, what == 'png_w_params')
     elif what == 'sparsity':
         pylogger = PythonLogger(msglogger)
-        csvlogger = CsvLogger()
+        csvlogger = CsvLogger(logdir=logdir)
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
         try:
@@ -165,8 +166,7 @@ def conv_visitor(self, input, output, df, model, memo):
     assert isinstance(self, torch.nn.Conv2d)
     if self in memo:
         return
-
-    weights_vol = self.out_channels * self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+    weights_vol = distiller.volume(self.weight)
 
     # Multiply-accumulate operations: MACs = volume(OFM) * (#IFM * K^2) / #Groups
     # Bias is ignored
@@ -183,7 +183,7 @@ def fc_visitor(self, input, output, df, model, memo):
 
     # Multiply-accumulate operations: MACs = #IFM * #OFM
     # Bias is ignored
-    weights_vol = macs = self.in_features * self.out_features
+    weights_vol = macs = distiller.volume(self.weight)
     module_visitor(self, input, output, df, model, weights_vol, macs)
 
 
@@ -418,8 +418,8 @@ def draw_model_to_file(sgraph, png_fname, display_param_nodes=False, rankdir='TB
         fid.write(png)
 
 
-def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=False,
-                                rankdir='TB', styles=None):
+def draw_img_classifier_to_file(model, png_fname, dataset=None, display_param_nodes=False,
+                                rankdir='TB', styles=None, input_shape=None):
     """Draw a PyTorch image classifier to a PNG file.  This a helper function that
     simplifies the interface of draw_model_to_file().
 
@@ -436,8 +436,12 @@ def draw_img_classifier_to_file(model, png_fname, dataset, display_param_nodes=F
                 styles['conv1'] = {'shape': 'oval',
                                    'fillcolor': 'gray',
                                    'style': 'rounded, filled'}
+        input_shape (tuple): List of integers representing the input shape.
+                             Used only if 'dataset' is None
     """
-    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+    dummy_input = distiller.get_dummy_input(dataset=dataset,
+                                            device=distiller.model_device(model),
+                                            input_shape=input_shape)
     try:
         non_para_model = distiller.make_non_parallel_copy(model)
         g = SummaryGraph(non_para_model, dummy_input)
