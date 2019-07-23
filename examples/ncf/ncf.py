@@ -103,7 +103,7 @@ def predict(model, users, items, batch_size=1024, use_cuda=True):
                 if use_cuda:
                     x = x.cuda(async=True)
                 return torch.autograd.Variable(x)
-            outp = model(proc(user), proc(item), sigmoid=True)
+            outp = model(proc(user), proc(item), torch.tensor([True], dtype=torch.bool))
             outp = outp.data.cpu().numpy()
             preds += list(outp.flatten())
         return preds
@@ -354,7 +354,8 @@ def main():
         if args.quantize_eval and args.qe_calibration is None:
             model.cpu()
             quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
-            quantizer.prepare_model()
+            dummy_input = (torch.tensor([1]), torch.tensor([1]), torch.tensor([True], dtype=torch.bool))
+            quantizer.prepare_model(dummy_input)
             model.cuda()
 
         distiller.utils.assign_layer_fq_names(model)
@@ -406,7 +407,7 @@ def main():
             if compression_scheduler:
                 compression_scheduler.on_minibatch_begin(epoch, batch_index, steps_per_epoch, optimizer)
 
-            outputs = model(user, item)
+            outputs = model(user, item, torch.tensor([False], dtype=torch.bool))
             loss = criterion(outputs, label)
 
             if compression_scheduler:

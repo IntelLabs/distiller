@@ -98,7 +98,7 @@ class NeuMF(nn.Module):
 
         super(NeuMF, self).load_state_dict(state_dict, strict)
 
-    def forward(self, user, item, sigmoid=False):
+    def forward(self, user, item, sigmoid):
         xmfu = self.mf_user_embed(user)  # .to(self.post_embed_device)
         xmfi = self.mf_item_embed(item)  # .to(self.post_embed_device)
         xmf = self.mf_mult(xmfu, xmfi)
