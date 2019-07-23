@@ -4,7 +4,7 @@
 
 network:
   mobilenet:
-      # Only conv 1x1     
+      # Only conv 1x1   
       ["module.model.1.3",  "module.model.2.3",
       "module.model.3.3",  "module.model.4.3", "module.model.5.3",
       "module.model.6.3",  "module.model.7.3", "module.model.8.3",
@@ -12,24 +12,42 @@ network:
       "module.model.12.3", "module.model.13.3"]
 
   mobilenet_v2:
-      ["module.features.1.conv.1",
-      "module.features.2.conv.0.0",   "module.features.2.conv.2", 
-      "module.features.3.conv.0.0",   "module.features.3.conv.2", 
-      "module.features.4.conv.0.0",   "module.features.4.conv.2", 
-      "module.features.5.conv.0.0",   "module.features.5.conv.2", 
-      "module.features.6.conv.0.0",   "module.features.6.conv.2", 
-      "module.features.7.conv.0.0",   "module.features.7.conv.2", 
-      "module.features.8.conv.0.0",   "module.features.8.conv.2", 
-      "module.features.9.conv.0.0",   "module.features.9.conv.2",
-      "module.features.10.conv.0.0",  "module.features.10.conv.2", 
-      "module.features.11.conv.0.0",  "module.features.11.conv.2", 
-      "module.features.12.conv.0.0",  "module.features.12.conv.2", 
-      "module.features.13.conv.0.0",  "module.features.13.conv.2", 
-      "module.features.14.conv.0.0",  "module.features.14.conv.2", 
-      "module.features.15.conv.0.0",  "module.features.15.conv.2", 
-      "module.features.16.conv.0.0",  "module.features.16.conv.2", 
-      "module.features.17.conv.0.0",  "module.features.17.conv.2", 
-      "module.features.18.0"]
+      # Only conv 1x1, without shortcut connection dependencies
+      [
+      "module.features.1.conv.1",
+      "module.features.2.conv.0.0",  "module.features.2.conv.2", 
+      # "module.features.3.conv.0.0",   
+      "module.features.3.conv.2", 
+      # "module.features.4.conv.0.0",   
+      "module.features.4.conv.2", 
+      # "module.features.5.conv.0.0",   
+      "module.features.5.conv.2", 
+      # "module.features.6.conv.0.0",   
+      "module.features.6.conv.2", 
+      # "module.features.7.conv.0.0",  
+       "module.features.7.conv.2", 
+      # "module.features.8.conv.0.0",   
+      "module.features.8.conv.2", 
+      # "module.features.9.conv.0.0",   
+      "module.features.9.conv.2",
+      # "module.features.10.conv.0.0",  
+      "module.features.10.conv.2", 
+      # "module.features.11.conv.0.0",  
+      "module.features.11.conv.2", 
+      # "module.features.12.conv.0.0",  
+      "module.features.12.conv.2", 
+      # "module.features.13.conv.0.0",  
+      "module.features.13.conv.2", 
+      # "module.features.14.conv.0.0",  
+      "module.features.14.conv.2", 
+      # "module.features.15.conv.0.0",  
+      "module.features.15.conv.2", 
+      # "module.features.16.conv.0.0",  
+      "module.features.16.conv.2", 
+      #"module.features.17.conv.0.0",  
+      "module.features.17.conv.2", 
+      "module.features.18.0"
+      ]
 
   resnet50:
      ["module.layer1.0.conv3", "module.layer1.0.conv2",
