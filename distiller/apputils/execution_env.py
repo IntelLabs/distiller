@@ -77,7 +77,11 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
         logger.debug("Active Git branch: %s", branch_name)
         logger.debug("Git commit: %s" % repo.head.commit.hexsha)
 
-    logger.debug("Number of CPUs: %d", len(os.sched_getaffinity(0)))
+    try:
+        num_cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        num_cpus = os.cpu_count()
+    logger.debug("Number of CPUs: %d", num_cpus)
     logger.debug("Number of GPUs: %d", torch.cuda.device_count())
     logger.debug("CUDA version: %s", torch.version.cuda)
     logger.debug("CUDNN version: %s", torch.backends.cudnn.version())

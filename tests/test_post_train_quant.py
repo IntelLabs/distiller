@@ -17,14 +17,22 @@ import pytest
 import torch
 import torch.testing
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import OrderedDict
+import random
+from copy import deepcopy
 
 from distiller.quantization import RangeLinearQuantParamLayerWrapper, LinearQuantMode, ClipMode, \
     RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper, \
     PostTrainLinearQuantizer
 from distiller.data_loggers import QuantCalibrationStatsCollector, collector_context
 import distiller.modules
+from common import WrappedSequential
 
+
+###############################################################################
+# Test Convolution
+###############################################################################
 
 @pytest.fixture()
 def conv_input():
@@ -123,6 +131,10 @@ def test_conv_layer_wrapper(conv_input, conv_weights, mode, clip_acts, per_chann
     torch.testing.assert_allclose(output, expected_output)
 
 
+###############################################################################
+# Test Linear
+###############################################################################
+
 @pytest.fixture()
 def linear_input():
     return torch.tensor([[-7, 5, 2, -3]], dtype=torch.float32)
@@ -171,6 +183,10 @@ def test_linear_layer_wrapper(linear_input, linear_weights, linear_bias,
 
     torch.testing.assert_allclose(output, expected_output)
 
+
+###############################################################################
+# Test Concat
+###############################################################################
 
 @pytest.fixture()
 def inputs():
@@ -255,6 +271,10 @@ def test_concat_layer_wrapper(inputs, concat_stats, mode, clip_acts, expected_ou
     torch.testing.assert_allclose(output, expected_output)
 
 
+###############################################################################
+# Test Element-Wise Multiplication
+###############################################################################
+
 @pytest.fixture()
 def eltwise_mult_stats():
     stats = OrderedDict()
@@ -305,6 +325,10 @@ def test_eltwise_mult_layer_wrapper(inputs, eltwise_mult_stats, mode, clip_acts,
 
     torch.testing.assert_allclose(output, expected_output)
 
+
+###############################################################################
+# Test Element-Wise Addition
+###############################################################################
 
 @pytest.fixture()
 def eltwise_add_stats():
@@ -357,6 +381,10 @@ def test_eltwise_add_layer_wrapper(inputs, eltwise_add_stats, mode, clip_acts, e
     torch.testing.assert_allclose(output, expected_output)
 
 
+###############################################################################
+# Test Clipping Overrides
+###############################################################################
+
 class DummyRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
         super(DummyRNN, self).__init__()
@@ -379,10 +407,16 @@ def rnn_model_stats(rnn_model):
     collector = QuantCalibrationStatsCollector(rnn_model)
     dummy_input = torch.randn(35, 50, 20)
     with collector_context(collector):
-        y,h = rnn_model(dummy_input)
+        y, h = rnn_model(dummy_input)
     return collector.value()
 
-
+# This warning is a PyTorch bug, to be fixed in a future release (https://github.com/pytorch/pytorch/pull/20026)
+@pytest.mark.filterwarnings('ignore:new_zeros is a legacy constructor and is not supported in the JIT')
+# The next 2 warning are the result of the  LSTM implementation iterating over tensors, which the PyTorch tracing
+# mechanism doesn't like. Since the tracing done within PostTrainLinearQuantizer always uses the same input, there
+# is no actual problem and we can ignore the warnings.
+@pytest.mark.filterwarnings('ignore:Iterating over a tensor might cause the trace to be incorrect')
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python index might cause the trace to be incorrect')
 @pytest.mark.parametrize(
     "overrides, e_clip_acts, e_n_stds",
     [
@@ -403,7 +437,202 @@ def rnn_model_stats(rnn_model):
 def test_override_no_clip(overrides, e_clip_acts, e_n_stds, rnn_model, rnn_model_stats):
     quantizer = PostTrainLinearQuantizer(rnn_model, clip_acts="AVG", clip_n_stds=0, overrides=overrides,
                                          model_activation_stats=rnn_model_stats)
-    quantizer.prepare_model()
+    quantizer.prepare_model(torch.randn(1, 1, 20))
     assert isinstance(quantizer.model.rnn.cells[0].eltwisemult_hidden, RangeLinearQuantEltwiseMultWrapper)
     assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_acts == e_clip_acts
     assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_n_stds == e_n_stds
+
+
+###############################################################################
+# Stats Fusion Testing Utilities
+###############################################################################
+
+def stats_entry(min, max, min_avg, max_avg, mean, std):
+    return OrderedDict([('min', min), ('max', max),
+                        ('avg_min', min_avg), ('avg_max', max_avg),
+                        ('mean', mean), ('std', std)])
+
+
+def gen_stats_for_model(model):
+    def gen_entry():
+        entry = OrderedDict()
+        a, b = random.uniform(-10, 10), random.uniform(-10, 10)
+        entry['min'] = min(a, b)
+        entry['max'] = max(a, b)
+        c, d = random.uniform(a, b), random.uniform(a, b)
+        entry['avg_min'] = min(c, d)
+        entry['avg_max'] = max(c, d)
+        entry['mean'] = (c + d) / 2.
+        entry['std'] = random.random()
+        return entry
+
+    stats = OrderedDict()
+    last = None
+    for n, m in model.named_modules():
+        if distiller.has_children(m):
+            continue
+        curr_stats = OrderedDict()
+        curr_stats['inputs'] = OrderedDict()
+        curr_stats['inputs'][0] = deepcopy(last['output']) if last else gen_entry()
+        curr_stats['output'] = gen_entry()
+        stats[n] = curr_stats
+        last = curr_stats
+    return stats
+
+
+###############################################################################
+# Test Stats Fusion - No Fusion
+###############################################################################
+
+# This warning seems to be a bug in batch_norm implementation, which compares a tensor to the value 1
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean might cause the trace to be incorrect')
+@pytest.mark.parametrize(
+    'model, input_shape',
+    [
+        (WrappedSequential(nn.ReLU(), nn.BatchNorm1d(5)), (10, 5)),
+        (WrappedSequential(nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20, track_running_stats=False)), (10, 10, 50, 50)),
+        (WrappedSequential(nn.Linear(10, 20), nn.BatchNorm1d(20, track_running_stats=False)), (10, 10)),
+        (WrappedSequential(nn.Conv2d(10, 20, 3), nn.MaxPool2d(2)), (10, 10, 50, 50)),
+    ],
+    ids=['relu->bn', 'conv->bn_no_stats', 'linear->bn_no_stats', 'conv->pool']
+)
+def test_stats_fusion_no_fuse(model, input_shape):
+    stats = gen_stats_for_model(model)
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer.prepare_model(torch.randn(input_shape))
+    assert quantizer.model_activation_stats == stats
+
+
+###############################################################################
+# Test Stats Fusion - No Activation
+###############################################################################
+
+class ConvBnActPool(nn.Module):
+    def __init__(self, act_type, act_as_module):
+        super(ConvBnActPool, self).__init__()
+        self.conv = nn.Conv2d(10, 20, 3)
+        self.bn = nn.BatchNorm2d(20)
+        self.act_type = act_type
+        self.act_as_module = act_as_module
+        if act_type is not None:
+            if act_as_module:
+                self.act = {'relu': nn.ReLU(), 'tanh': nn.Tanh(), 'sigmoid': nn.Sigmoid()}[act_type]
+        self.pool = nn.MaxPool2d(2)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        if self.act_type is not None:
+            if self.act_as_module:
+                x = self.act(x)
+            else:
+                f = {'relu': F.relu, 'tanh': torch.tanh, 'sigmoid': torch.sigmoid}[self.act_type]
+                x = f(x)
+        x = self.pool(x)
+        return x
+
+
+def test_stats_fusion_just_bn():
+    model = ConvBnActPool(None, False)
+    stats = gen_stats_for_model(model)
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer.prepare_model(torch.randn((10, 10, 20, 20)))
+
+    expected = deepcopy(stats)
+    expected.pop('bn')  # After BN folding BN stats are removed
+    expected['conv']['output'] = deepcopy(stats['bn']['output'])
+    assert quantizer.model_activation_stats == expected
+
+
+###############################################################################
+# Test Stats Fusion - Sequential, single activation
+###############################################################################
+
+@pytest.mark.parametrize(
+    'act_type, act_as_module, bn_out_stats, conv_out_expected_stats',
+    [
+        ('relu', True, stats_entry(-5., 5., -3., 3., 0., 0.5), None),
+        ('relu', False, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
+        ('relu', False, stats_entry(1., 5., 2., 3., 2.5, 0.5), stats_entry(1., 5., 2., 3., 2.5, 0.5)),
+        ('relu', False, stats_entry(-5., -1., -4., -2., -2.5, 0.5), stats_entry(0., 0, 0, 0., -2.5, 0.5)),
+        ('tanh', True, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(-4., 4., -3., 3., 0., 0.5)),
+        ('tanh', False, stats_entry(-6., 3., -5., 1., 0., 0.5), stats_entry(-4., 3., -4., 1., 0., 0.5)),
+        ('tanh', False, stats_entry(1., 6., 2., 3., 2.5, 0.5), stats_entry(1., 4., 2., 3., 2.5, 0.5)),
+        ('tanh', False, stats_entry(-2., 3., -1., 2., 0, 0.5), stats_entry(-2., 3., -1., 2., 0, 0.5)),
+        ('sigmoid', True, stats_entry(-8., 8., -7., 7., 0., 0.5), stats_entry(-6., 6., -6., 6., 0., 0.5)),
+        ('sigmoid', False, stats_entry(-8., 3., -7., 1., 0., 0.5), stats_entry(-6., 3., -6., 1., 0., 0.5)),
+        ('sigmoid', False, stats_entry(1., 8., 2., 3., 2.5, 0.5), stats_entry(1., 6., 2., 3., 2.5, 0.5)),
+        ('sigmoid', False, stats_entry(-2., 3., -1., 2., 0, 0.5), stats_entry(-2., 3., -1., 2., 0, 0.5)),
+    ],
+    ids=['relu_as_module', 'relu_pos_neg', 'relu_all_pos', 'relu_all_neg',
+         'tanh_as_module_all_out', 'tanh_min_out', 'tanh_max_out', 'tanh_all_in',
+         'sigmoid_as_module_all_out', 'sigmoid_min_out', 'sigmoid_max_out', 'sigmoid_all_in']
+)
+def test_stats_fusion_sequential(act_type, act_as_module, bn_out_stats, conv_out_expected_stats):
+    model = ConvBnActPool(act_type, act_as_module)
+    stats = gen_stats_for_model(model)
+    stats['bn']['output'] = bn_out_stats
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer.prepare_model(torch.randn((10, 10, 20, 20)))
+
+    expected = deepcopy(stats)
+    expected.pop('bn')  # After BN folding BN stats are removed
+    if act_type == 'relu':
+        if act_as_module:
+            expected['conv']['output'] = deepcopy(stats['act']['output'])
+            expected['act']['inputs'][0] = deepcopy(stats['act']['output'])
+        else:
+            expected['conv']['output'] = conv_out_expected_stats
+    else:
+        expected['conv']['output'] = conv_out_expected_stats
+        if act_as_module:
+            expected['act']['inputs'][0] = conv_out_expected_stats
+
+    assert quantizer.model_activation_stats == expected
+
+
+###############################################################################
+# Test Stats Fusion - Split before activation
+###############################################################################
+
+class LinearBNSplitAct(nn.Module):
+    def __init__(self, act1_type, act2_type):
+        super(LinearBNSplitAct, self).__init__()
+        self.linear = nn.Linear(10, 40)
+        self.bn = nn.BatchNorm1d(40)
+        acts_map = {'relu': nn.ReLU, 'tanh': nn.Tanh, 'sigmoid': nn.Sigmoid}
+        self.act1 = acts_map[act1_type]()
+        self.act2 = acts_map[act2_type]()
+
+    def forward(self, x):
+        x = self.linear(x)
+        x = self.bn(x)
+        t1, t2 = x.chunk(2, dim=1)
+        a1 = self.act1(t1)
+        a2 = self.act2(t2)
+        return a1 + a2
+
+
+@pytest.mark.parametrize(
+    'act1_type, act2_type, bn_out_stats, linear_out_expected_stats',
+    [
+        ('relu', 'relu', stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
+        ('relu', 'sigmoid', stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(-5., 5., -3., 3., 0., 0.5)),
+        ('relu', 'tanh', stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(-5., 5., -3., 3., 0., 0.5)),
+        ('tanh', 'tanh', stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(-4., 4., -3., 3., 0., 0.5)),
+        ('tanh', 'sigmoid', stats_entry(-8., 8., -7., 7., 0., 0.5), stats_entry(-6., 6., -6., 6., 0., 0.5)),
+        ('sigmoid', 'sigmoid', stats_entry(-8., 8., -7., 7., 0., 0.5), stats_entry(-6., 6., -6., 6., 0., 0.5))
+    ],
+    ids=['relu-relu', 'relu-sigmoid', 'relu-tanh', 'tanh-tanh', 'tanh-sigmoid', 'sigmoid-sigmoid']
+)
+def test_stats_fusion_split_act(act1_type, act2_type, bn_out_stats, linear_out_expected_stats):
+    model = LinearBNSplitAct(act1_type, act2_type)
+    stats = gen_stats_for_model(model)
+    stats['bn']['output'] = bn_out_stats
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer.prepare_model(torch.randn(10, 10))
+
+    expected = deepcopy(stats)
+    expected.pop('bn')  # After BN folding BN stats are removed
+    expected['linear']['output'] = linear_out_expected_stats
+    assert quantizer.model_activation_stats == expected
