@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-from .adc_random_env import random_agent
+from .random_agent import random_agent
 import logging
 
 

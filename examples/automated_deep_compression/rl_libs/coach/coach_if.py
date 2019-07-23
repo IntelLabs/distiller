@@ -41,10 +41,10 @@ class RlLibInterface(object):
                                                                           amc_cfg.ddpg_cfg.training_noise_decay)
             # Number of iterations to train 
             graph_manager.agent_params.algorithm.num_consecutive_training_steps = steps_per_episode
-            graph_manager.agent_params.algorithm.num_steps_between_copying_online_weights_to_target = TrainingSteps(1)
+            #graph_manager.agent_params.algorithm.num_steps_between_copying_online_weights_to_target = TrainingSteps(1)
+            graph_manager.agent_params.algorithm.num_steps_between_copying_online_weights_to_target = TrainingSteps(steps_per_episode)
             # Heatup
-            graph_manager.heatup_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_heatup_epochs)
-            amc_cfg.ddpg_cfg.num_heatup_epochs
+            graph_manager.heatup_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_heatup_episodes)
             # Replay buffer size
             graph_manager.agent_params.memory.max_size = (MemoryGranularity.Transitions, amc_cfg.ddpg_cfg.replay_buffer_size)
         elif "ClippedPPO" in amc_cfg.agent_algo:
@@ -55,8 +55,10 @@ class RlLibInterface(object):
             raise ValueError("The agent algorithm you are trying to use (%s) is not supported" % amc_cfg.amc_agent_algo)
 
         # Number of training steps
-        graph_manager.improve_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
-        graph_manager.steps_between_evaluation_periods = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_training_epochs)
+        n_training_episodes = amc_cfg.ddpg_cfg.num_training_episodes
+        graph_manager.improve_steps = EnvironmentEpisodes(n_training_episodes)
+        # Don't evaluate until the end
+        graph_manager.steps_between_evaluation_periods = EnvironmentEpisodes(n_training_episodes)
 
         # These parameters are passed to the Distiller environment
         env_cfg  = {'model': model, 

@@ -30,8 +30,8 @@ class RlLibInterface(object):
     def solve(self, env1, env2):
         msglogger.info("AMC: Using Spinningup")
 
-        # training_noise_duration = amc_cfg.num_training_epochs * steps_per_episode
-        heatup_duration = env1.amc_cfg.ddpg_cfg.num_heatup_epochs * env1.steps_per_episode
+        # training_noise_duration = amc_cfg.num_training_episodes * steps_per_episode
+        heatup_duration = env1.amc_cfg.ddpg_cfg.num_heatup_episodes * env1.steps_per_episode
 
         exp_name = "Test"
         seed = 0
