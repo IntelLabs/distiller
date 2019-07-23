@@ -132,7 +132,7 @@ rnn.cells.0.act_o:
     mean: 0.318497704179476
     std: 0.19847815427571672
     shape: (10, 1500)
-rnn.cells.0.act_c_ex:
+rnn.cells.0.act_g:
   inputs:
     0:
       min: -11.641252517700195
@@ -388,7 +388,7 @@ rnn.cells.1.act_o:
     mean: 0.3911302530009079
     std: 0.30228075066032956
     shape: (10, 1500)
-rnn.cells.1.act_c_ex:
+rnn.cells.1.act_g:
   inputs:
     0:
       min: -18.20545196533203

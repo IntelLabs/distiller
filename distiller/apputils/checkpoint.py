@@ -33,7 +33,7 @@ msglogger = logging.getLogger()
 
 
 def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
-                    extras=None, is_best=False, name=None, dir='.'):
+                    extras=None, is_best=False, name=None, dir='.', compression_scheduler=None):
     """Save a pytorch training checkpoint
 
     Args:
@@ -102,7 +102,7 @@ def get_contents_table(d):
 
 
 def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, 
-                    lean_checkpoint=False, strict=False):
+                    lean_checkpoint=False, strict=False, compression_scheduler=None):
     """Load a pytorch training checkpoint.
 
     Args:

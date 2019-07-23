@@ -96,9 +96,10 @@ class ActivationStatsCollector(object):
 
         Eligible modules are currently filtered by their class type.
         """
-        is_leaf_node = len(list(module.children())) == 0
+        if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+            return
         register_all_class_types = not self.classes
-        if is_leaf_node and (register_all_class_types or (type(module) in self.classes)):
+        if register_all_class_types or isinstance(module, tuple(self.classes)):
             self.fwd_hook_handles.append(module.register_forward_hook(self._activation_stats_cb))
             self._start_counter(module)
 
@@ -458,8 +459,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
     def _reset_counter(self, module):
         # We don't know the number of inputs at this stage so we defer records creation to the actual callback
-        module.quant_stats = _QuantStatsRecord()
-        module.batch_idx = 0
+        if hasattr(module, 'quant_stats'):
+            module.quant_stats = _QuantStatsRecord()
+            module.batch_idx = 0
 
     def _collect_activations_stats(self, module, activation_stats, name=''):
         if distiller.utils.has_children(module):
