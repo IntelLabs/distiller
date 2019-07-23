@@ -224,7 +224,7 @@ class NetworkWrapper(object):
         return scheduler
 
     def remove_structures(self, layer_id, fraction_to_prune, prune_what, prune_how, 
-                          group_size, apply_thinning, ranking_noise, random_state):
+                          group_size, apply_thinning, ranking_noise):
         """Physically remove channels and corresponding filters from the model
 
         Returns the compute-sparsity of the layer with index 'layer_id'
@@ -267,7 +267,7 @@ class NetworkWrapper(object):
         elif prune_how == "fm-reconstruction":
             pruner = distiller.pruning.FMReconstructionChannelPruner(
                 "auto_pruner", group_type, fraction_to_prune, conv_pname, 
-                group_size, math.ceil, ranking_noise=ranking_noise, random_state=random_state)
+                group_size, math.ceil, ranking_noise=ranking_noise)
             meta = {'model': self.model}
         else:
             raise ValueError("Unknown pruning method")
@@ -334,7 +334,7 @@ class DistillerWrapperEnvironment(gym.Env):
         self.app_args = app_args
         self.amc_cfg = amc_cfg
         self.services = services
-        self.random_state = np.random.RandomState(app_args.seed) # for scikit-learn PRNG
+
         try:
             modules_list = amc_cfg.modules_dict[app_args.arch]
         except KeyError:
@@ -483,8 +483,8 @@ class DistillerWrapperEnvironment(gym.Env):
                                                                 prune_how=self.amc_cfg.pruning_method,
                                                                 group_size=self.amc_cfg.group_size,
                                                                 apply_thinning=self.episode_is_done(),
-                                                                ranking_noise=self.amc_cfg.ranking_noise,
-                                                                random_state=self.random_state)
+                                                                ranking_noise=self.amc_cfg.ranking_noise)
+                                                                #random_state=self.random_state)
         else:
             pruning_action = 0
 
@@ -534,7 +534,7 @@ class DistillerWrapperEnvironment(gym.Env):
             msglogger.info(self.removed_macs_pct)
             if self.amc_cfg.protocol == "mac-constrained":
                 # Sanity check (special case only for "mac-constrained")
-                assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.01
+                #assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.01
                 pass
         else:
             info = {}
@@ -669,9 +669,7 @@ class DistillerWrapperEnvironment(gym.Env):
             ckpt_name = self.save_checkpoint(is_best=True)
             msglogger.info("Best reward={}  episode={}  top1={}".format(reward, self.episode, top1))
         else:
-            ckpt_name = ""
-            if self.amc_cfg.save_chkpts:
-                ckpt_name = self.save_checkpoint(is_best=False)
+            ckpt_name = self.save_checkpoint(is_best=False)
 
         import json
         performance = self.net_wrapper.performance_summary()
@@ -682,20 +680,63 @@ class DistillerWrapperEnvironment(gym.Env):
 
     def save_checkpoint(self, is_best=False):
         """Save the learned-model checkpoint"""
-        scheduler = self.net_wrapper.create_scheduler()
         episode = str(self.episode).zfill(3)
         if is_best:
             fname = "BEST_adc_episode_{}".format(episode)
         else:
             fname = "adc_episode_{}".format(episode)
-
-        self.services.save_checkpoint_fn(epoch=0, model=self.model,
-                                         scheduler=scheduler, name=fname)
-        del scheduler
+        if is_best or self.amc_cfg.save_chkpts:
+            # Always save the best episodes, and depending on amc_cfg.save_chkpts save all other episodes
+            scheduler = self.net_wrapper.create_scheduler()
+            self.services.save_checkpoint_fn(epoch=0, model=self.model,
+                                            scheduler=scheduler, name=fname)
+            del scheduler
         return fname
 
 
 def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
+    def make_conv(model, conv_module, g, name, seq_id, layer_id):
+        conv = SimpleNamespace()
+        conv.name = name
+        conv.id = layer_id
+        conv.t = seq_id
+        conv.k = conv_module.kernel_size[0]
+        conv.stride = conv_module.stride
+
+        # Use the SummaryGraph to obtain some other details of the models
+        conv_op = g.find_op(normalize_module_name(name))
+        assert conv_op is not None
+
+        conv.weights_vol = conv_op['attrs']['weights_vol']
+        conv.macs = conv_op['attrs']['MACs']
+        conv.n_ofm = conv_op['attrs']['n_ofm']
+        conv.n_ifm = conv_op['attrs']['n_ifm']
+        conv_pname = name + ".weight"
+        conv_p = distiller.model_find_param(model, conv_pname)
+        conv.ofm_h = g.param_shape(conv_op['outputs'][0])[2]
+        conv.ofm_w = g.param_shape(conv_op['outputs'][0])[3]
+        conv.ifm_h = g.param_shape(conv_op['inputs'][0])[2]
+        conv.ifm_w = g.param_shape(conv_op['inputs'][0])[3]
+        return conv
+
+    def make_fc(model, fc_module, g, name, seq_id, layer_id):
+        fc = SimpleNamespace()
+        fc.name = name
+        fc.id = layer_id
+        fc.t = seq_id
+
+        # Use the SummaryGraph to obtain some other details of the models
+        fc_op = g.find_op(normalize_module_name(name))
+        assert fc_op is not None
+
+        fc.weights_vol = fc_op['attrs']['weights_vol']
+        fc.macs = fc_op['attrs']['MACs']
+        fc.n_ofm = fc_op['attrs']['n_ofm']
+        fc.n_ifm = fc_op['attrs']['n_ifm']
+        fc_pname = name + ".weight"
+        fc_p = distiller.model_find_param(model, fc_pname)
+        return fc
+
     dummy_input = distiller.get_dummy_input(dataset)
     g = SummaryGraph(model, dummy_input)
     all_layers = OrderedDict()
@@ -705,59 +746,25 @@ def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
     total_params = 0
     layers = OrderedDict({mod_name: m for mod_name, m in model.named_modules() 
                           if isinstance(m, (torch.nn.Conv2d, torch.nn.Linear))})
-    for id, (name, m) in enumerate(layers.items()):
+    for layer_id, (name, m) in enumerate(layers.items()):
         if isinstance(m, torch.nn.Conv2d):
-            conv = SimpleNamespace()
-            conv.t = len(pruned_indices)
-            conv.k = m.kernel_size[0]
-            conv.stride = m.stride
-
-            # Use the SummaryGraph to obtain some other details of the models
-            conv_op = g.find_op(normalize_module_name(name))
-            assert conv_op is not None
-
-            conv.weights_vol = conv_op['attrs']['weights_vol']
+            conv = make_conv(model, m, g, name, seq_id=len(pruned_indices), layer_id=layer_id)
+            all_layers[layer_id] = conv
             total_params += conv.weights_vol
-            conv.macs = conv_op['attrs']['MACs']
-            conv.n_ofm = conv_op['attrs']['n_ofm']
-            conv.n_ifm = conv_op['attrs']['n_ifm']
-            conv_pname = name + ".weight"
-            conv_p = distiller.model_find_param(model, conv_pname)
             total_macs += conv.macs
 
-            conv.ofm_h = g.param_shape(conv_op['outputs'][0])[2]
-            conv.ofm_w = g.param_shape(conv_op['outputs'][0])[3]
-            conv.ifm_h = g.param_shape(conv_op['inputs'][0])[2]
-            conv.ifm_w = g.param_shape(conv_op['inputs'][0])[3]
-
-            conv.name = name
-            conv.id = id
-            all_layers[id] = conv
             if layers_to_prune is None or name in layers_to_prune:
-                pruned_indices.append(id)
-                # Find the data-dependent layers
+                pruned_indices.append(layer_id)
+                # Find the data-dependent layers of this convolution
                 from .utils.data_dependencies import find_dependencies
                 conv.dependencies = list()
                 find_dependencies(dependency_type, g, all_layers, name, conv.dependencies)
                 dependent_layers.add(tuple(conv.dependencies))
         elif isinstance(m, torch.nn.Linear):
-            fc = SimpleNamespace()
-
-            # Use the SummaryGraph to obtain some other details of the models
-            fc_op = g.find_op(normalize_module_name(name))
-            assert fc_op is not None
-
-            fc.weights_vol = fc_op['attrs']['weights_vol']
-            total_params += conv.weights_vol
-            fc.macs = fc_op['attrs']['MACs']
-            fc.n_ofm = fc_op['attrs']['n_ofm']
-            fc.n_ifm = fc_op['attrs']['n_ifm']
-            fc_pname = name + ".weight"
-            fc_p = distiller.model_find_param(model, fc_pname)
+            fc = make_fc(model, m, g, name, seq_id=len(pruned_indices), layer_id=layer_id)
+            all_layers[layer_id] = fc
             total_macs += fc.macs
-            fc.name = name
-            fc.id = id
-            all_layers[id] = fc
+            total_params += fc.weights_vol
  
     def convert_layer_names_to_indices(layer_names):
         """Args:
