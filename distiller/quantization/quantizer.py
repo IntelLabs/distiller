@@ -213,6 +213,7 @@ class Quantizer(object):
         """
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
 
+        self.model.quantizer_metadata["dummy_input"] = dummy_input
         if dummy_input is not None:
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
