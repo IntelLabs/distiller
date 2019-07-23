@@ -21,10 +21,10 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help='Save checkpoints of all discovered networks')
     group.add_argument('--amc-action-range',  type=float, nargs=2, default=[0.0, 0.80],
                        help='Density action range (a_min, a_max)')
-    group.add_argument('--amc-heatup-epochs', type=int, default=100,
-                       help='The number of epochs for heatup/exploration')
-    group.add_argument('--amc-training-epochs', type=int, default=700,
-                       help='The number of epochs for training/exploitation')
+    group.add_argument('--amc-heatup-episodes', type=int, default=100,
+                       help='The number of episodes for heatup/exploration')
+    group.add_argument('--amc-training-episodes', type=int, default=700,
+                       help='The number of episodes for training/exploitation')
     group.add_argument('--amc-reward-frequency', type=int, default=None,
                        help='Reward computation frequency (measured in agent steps)')
     group.add_argument('--amc-target-density', type=float,
