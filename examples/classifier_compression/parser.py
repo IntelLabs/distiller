@@ -51,6 +51,7 @@ def get_parser():
 
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Emit debug log messages')
 
     load_checkpoint_group = parser.add_argument_group('Resuming arguments')
     load_checkpoint_group_exc = load_checkpoint_group.add_mutually_exclusive_group()
@@ -81,24 +82,29 @@ def get_parser():
     parser.add_argument('--masks-sparsity', dest='masks_sparsity', action='store_true', default=False,
                         help='print masks sparsity table at end of each epoch')
     parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
-                        help='log the parameter tensors histograms to file (WARNING: this can use significant disk space)')
+                        help='log the parameter tensors histograms to file '
+                             '(WARNING: this can use significant disk space)')
     parser.add_argument('--summary', type=lambda s: s.lower(), choices=SUMMARY_CHOICES, action='append',
                         help='print a summary of the model, and exit - options: | '.join(SUMMARY_CHOICES))
     parser.add_argument('--export-onnx', action='store', nargs='?', type=str, const='model.onnx', default=None,
                         help='export model to ONNX format')
     parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
                         help='configuration file for pruning the model (default is to use hard-coded schedule)')
-    parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'], type=lambda s: s.lower(),
-                        help='test the sensitivity of layers to pruning')
+    parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
+                        type=lambda s: s.lower(), help='test the sensitivity of layers to pruning')
     parser.add_argument('--sense-range', dest='sensitivity_range', type=float, nargs=3, default=[0.0, 0.95, 0.05],
-                        help='an optional parameter for sensitivity testing providing the range of sparsities to test.\n'
-                        'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
+                        help='an optional parameter for sensitivity testing '
+                             'providing the range of sparsities to test.\n'
+                             'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
     parser.add_argument('--extras', default=None, type=str,
                         help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='seed the PRNG for CPU, CUDA, numpy, and Python')
     parser.add_argument('--gpus', metavar='DEV_ID', default=None,
-                        help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
+                        help='Comma-separated list of GPU device IDs to be used '
+                             '(default is to use all available devices)')
     parser.add_argument('--cpu', action='store_true', default=False,
                         help='Use CPU only. \n'
                         'Flag not set => uses GPUs according to the --gpus flag value.'

@@ -20,14 +20,15 @@ This is helpful if you want to recreate an experiment at a later time, or if
 you want to understand the environment in which you execute the training.
 """
 
-import contextlib
 import logging
 import logging.config
+import operator
 import os
 import platform
 import shutil
 import sys
 import time
+import pkg_resources
 
 from git import Repo, InvalidGitRepositoryError
 import numpy as np
@@ -41,16 +42,16 @@ except ImportError:
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
+def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
     """Log information about the execution environment.
 
-    File 'config_path' will be copied to directory 'logdir'. A common use-case
+    Files in 'config_paths' will be copied to directory 'logdir'. A common use-case
     is passing the path to a (compression) schedule YAML file. Storing a copy
     of the schedule file, with the experiment logs, is useful in order to
     reproduce experiments.
 
     Args:
-        config_path: path to config file, used only when logdir is set
+        config_paths: path(s) to config file(s), used only when logdir is set
         logdir: log directory
         git_root: the path to the .git root directory
     """
@@ -76,7 +77,11 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
         logger.debug("Active Git branch: %s", branch_name)
         logger.debug("Git commit: %s" % repo.head.commit.hexsha)
 
-    logger.debug("Number of CPUs: %d", len(os.sched_getaffinity(0)))
+    try:
+        num_cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        num_cpus = os.cpu_count()
+    logger.debug("Number of CPUs: %d", num_cpus)
     logger.debug("Number of GPUs: %d", torch.cuda.device_count())
     logger.debug("CUDA version: %s", torch.version.cuda)
     logger.debug("CUDNN version: %s", torch.backends.cudnn.version())
@@ -84,29 +89,39 @@ def log_execution_env_state(config_path=None, logdir=None, gitroot='.'):
     if HAVE_LSB:
         logger.debug("OS: %s", lsb_release.get_lsb_information()['DESCRIPTION'])
     logger.debug("Python: %s", sys.version)
-    logger.debug("PyTorch: %s", torch.__version__)
-    logger.debug("Numpy: %s", np.__version__)
+    try:
+        logger.debug("PYTHONPATH: %s", os.environ['PYTHONPATH'])
+    except KeyError:
+        pass
+    def _pip_freeze():
+        return {x.key:x.version for x in sorted(pkg_resources.working_set,
+                                                key=operator.attrgetter('key'))}
+    logger.debug("pip freeze: {}".format(_pip_freeze()))
     log_git_state()
     logger.debug("Command line: %s", " ".join(sys.argv))
 
-    if (logdir is None) or (config_path is None):
+    if (logdir is None) or (config_paths is None):
         return
+
     # clone configuration files to output directory
     configs_dest = os.path.join(logdir, 'configs')
-    with contextlib.suppress(FileExistsError):
-        os.makedirs(configs_dest)
-    if os.path.exists(os.path.join(configs_dest,
-                                   os.path.basename(config_path))):
-        logger.debug('{} already exists in logdir'.format(
-            os.path.basename(config_path) or config_path))
-    else:
-        try:
-            shutil.copy(config_path, configs_dest)
-        except OSError as e:
-            logger.debug('Failed to copy of config file: {}'.format(str(e)))
+
+    if isinstance(config_paths, str) or not hasattr(config_paths, '__iter__'):
+        config_paths = [config_paths]
+    for cpath in config_paths:
+        os.makedirs(configs_dest, exist_ok=True)
+
+        if os.path.exists(os.path.join(configs_dest, os.path.basename(cpath))):
+            logger.debug('{} already exists in logdir'.format(
+                os.path.basename(cpath) or cpath))
+        else:
+            try:
+                shutil.copy(cpath, configs_dest)
+            except OSError as e:
+                logger.debug('Failed to copy of config file: {}'.format(str(e)))
 
 
-def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
+def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=False):
     """Configure the Python logger.
 
     For each execution of the application, we'd like to create a unique log directory.
@@ -126,6 +141,8 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs'):
     msglogger = logging.getLogger()
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
+    if verbose:
+        msglogger.setLevel(logging.DEBUG)
     msglogger.info('Log file for this run: ' + os.path.realpath(log_filename))
 
     # Create a symbollic link to the last log file created (for easier access)

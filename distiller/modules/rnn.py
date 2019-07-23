@@ -23,6 +23,13 @@ from itertools import product
 __all__ = ['DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm']
 
 
+# There is prevalent use of looping that depends on tensor sizes done in this implementation.
+# This does not play well with the PyTorch tracing mechanism, and emits several different warnings.
+# For "simple" cases, such as SummaryGraph creating a single trace based on a single forward pass,
+# this is not an actual problem.
+# TODO: Check if/how it's possible to have a tracer-friendly implementation
+
+
 class DistillerLSTMCell(nn.Module):
     """
     A single LSTM block.
@@ -194,13 +201,8 @@ class DistillerLSTM(nn.Module):
                 # # Process each timestep at the entire layers chain -
                 # # each timestep is forwarded through `front` and `back` chains independently,
                 # # similarily to a unidirectional LSTM.
-                # self.cells = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                #                            [LSTMCell(hidden_size, hidden_size, bias)
-                #                             for _ in range(1, num_layers)])
-                #
-                # self.cells_reverse = nn.ModuleList([LSTMCell(input_size, hidden_size, bias)] +
-                #                                    [LSTMCell(hidden_size, hidden_size, bias)
-                #                                     for _ in range(1, num_layers)])
+                # self.cells = self._create_cells_list(1)
+                # self.cells_reverse = self._create_cells_list(2)
                 # self.forward_fn = self.process_layer_wise
                 # self.layer_chain_fn = self._layer_chain_bidirectional_type1
 
@@ -208,26 +210,26 @@ class DistillerLSTM(nn.Module):
                 # Process the entire sequence at each layer consecutively -
                 # the output of one layer is the sequence processed through the `front` and `back` cells
                 # and the input to the next layers are both `output_front` and `output_back`.
-                self.cells = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
-                                           [DistillerLSTMCell(2 * hidden_size, hidden_size, bias)
-                                            for _ in range(1, num_layers)])
-
-                self.cells_reverse = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
-                                                   [DistillerLSTMCell(2 * hidden_size, hidden_size, bias)
-                                                    for _ in range(1, num_layers)])
+                self.cells = self._create_cells_list(2)
+                self.cells_reverse = self._create_cells_list(2)
                 self.forward_fn = self._bidirectional_type2_forward
 
             else:
                 raise ValueError("The only allowed types are [1, 2].")
         else:
-            self.cells = nn.ModuleList([DistillerLSTMCell(input_size, hidden_size, bias)] +
-                                       [DistillerLSTMCell(hidden_size, hidden_size, bias)
-                                        for _ in range(1, num_layers)])
+            self.cells = self._create_cells_list()
             self.forward_fn = self.process_layer_wise
             self.layer_chain_fn = self._layer_chain_unidirectional
 
         self.dropout = nn.Dropout(dropout)
         self.dropout_factor = dropout
+
+    def _create_cells_list(self, hidden_size_scale=1):
+        # We always have the first layer
+        cells = nn.ModuleList([DistillerLSTMCell(self.input_size, self.hidden_size, self.bias)])
+        for i in range(1, self.num_layers):
+            cells.append(DistillerLSTMCell(hidden_size_scale * self.hidden_size, self.hidden_size, self.bias))
+        return cells
 
     def forward(self, x, h=None):
         is_packed_seq = isinstance(x, nn.utils.rnn.PackedSequence)
