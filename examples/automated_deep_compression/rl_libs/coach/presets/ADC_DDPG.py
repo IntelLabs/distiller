@@ -11,7 +11,7 @@ from rl_coach.architectures.tensorflow_components.layers import Dense
 from rl_coach.base_parameters import EmbeddingMergerType
 from rl_coach.filters.filter import InputFilter
 # !!!! Enable when using branch "distiller-AMC-induced-changes" 
-# from rl_coach.filters.reward import RewardEwmaNormalizationFilter
+from rl_coach.filters.reward import RewardEwmaNormalizationFilter
 import numpy as np
 
 ####################
@@ -49,7 +49,7 @@ agent_params.network_wrappers['actor'].learning_rate = 1e-4
 agent_params.network_wrappers['critic'].learning_rate = 1e-3
 
 # !!!! Enable when using branch "distiller-AMC-induced-changes" 
-# agent_params.algorithm.override_episode_rewards_with_the_last_transition_reward = True
+agent_params.algorithm.override_episode_rewards_with_the_last_transition_reward = True
 
 agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
 #agent_params.algorithm.num_steps_between_copying_online_weights_to_target = EnvironmentSteps(1)
@@ -65,8 +65,8 @@ agent_params.algorithm.use_target_network_for_evaluation = True
 agent_params.algorithm.act_for_full_episodes = True
 
 # !!!! Enable when using branch "distiller-AMC-induced-changes" 
-#agent_params.pre_network_filter = InputFilter()
-#agent_params.pre_network_filter.add_reward_filter('ewma_norm', RewardEwmaNormalizationFilter(alpha=0.5))
+agent_params.pre_network_filter = InputFilter()
+agent_params.pre_network_filter.add_reward_filter('ewma_norm', RewardEwmaNormalizationFilter(alpha=0.5))
 
 ##############################
 #      Gym                   #
