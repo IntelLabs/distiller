@@ -81,9 +81,9 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
             'heatup_noise': 0.5,
             'initial_training_noise': 0.5,
             'training_noise_decay': 0.99555, #0.98, #0.996,
-            'num_heatup_epochs': args.amc_heatup_epochs,
-            'num_training_epochs': args.amc_training_epochs,
-            'actor_lr': 1e-4, 
+            'num_heatup_episodes': args.amc_heatup_episodes,
+            'num_training_episodes': args.amc_training_episodes,
+            'actor_lr': 1e-4,
             'critic_lr': 1e-3})
 
     amc_cfg = distiller.utils.MutableNamedTuple({
@@ -113,6 +113,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
         env.amc_cfg.ddpg_cfg.replay_buffer_size = 100 * env.steps_per_episode
         return env
+
     env1 = create_environment()
 
     if args.amc_rllib == "spinningup":
