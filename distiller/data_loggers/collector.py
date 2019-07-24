@@ -416,8 +416,17 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
-            min_per_sample = act.min(dim=1)[0]
-            max_per_sample = act.max(dim=1)[0]
+
+            # In the general case, the average min/max that we're collecting are averages over the per-sample
+            # min/max values. That is - we first calculate the min/max for each sample in the batch, then average
+            # over that.
+            # But - If each sample contains just a single value, then such a per-sample calculation we'll result in
+            # avg_min = avg_max. So in that case we "revert" to calculating "global" values, for the whole batch,
+            # instead of per-sample values
+            dim = 0 if act.numel() == act.shape[0] else 1
+
+            min_per_sample = act.min(dim=dim)[0]
+            max_per_sample = act.max(dim=dim)[0]
             record['min'] = min(record['min'], min_per_sample.min().item())
             record['max'] = max(record['max'], max_per_sample.max().item())
             try:
