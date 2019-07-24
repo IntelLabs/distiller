@@ -165,7 +165,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
         # it was defined in the previous session.
         # If not - just use the current optimizer.
         optimizer = quantizer.optimizer or optimizer
-        quantizer.prepare_model()
+        quantizer.prepare_model(qmd['dummy_input'])
 
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
