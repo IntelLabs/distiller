@@ -129,10 +129,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
 
-    compression_scheduler = None
     normalize_dataparallel_keys = False
     if 'compression_sched' in checkpoint:
-        compression_scheduler = distiller.CompressionScheduler(model)
+        compression_scheduler = compression_scheduler or distiller.CompressionScheduler(model)
         try:
             compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
         except KeyError as e:
@@ -165,7 +164,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
         # it was defined in the previous session.
         # If not - just use the current optimizer.
         optimizer = quantizer.optimizer or optimizer
-        quantizer.prepare_model(qmd['dummy_input'])
+        # quantizer.prepare_model(qmd['dummy_input'])
 
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}

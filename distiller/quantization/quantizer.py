@@ -119,6 +119,7 @@ class Quantizer(object):
 
         self.model = model
         self.optimizer = optimizer
+        self.model.is_quantized = False  # A flag to prevent from transforming the model twice.
 
         # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
         self.model.quantizer_metadata = {'type': type(self),
@@ -197,6 +198,7 @@ class Quantizer(object):
         defined by the Quantizer sub-class being used.
 
         Note:
+            If the model was already prepared in the past - this call is ignored.
             If multiple sub-modules within the model actually reference the same module, then that module
             is replaced only once, according to the configuration (bit-width and/or overrides) of the
             first encountered reference.
@@ -211,6 +213,9 @@ class Quantizer(object):
             with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
             will be ignored. A warning message will be shown.
         """
+        if self.model.is_quantized:
+            msglogger.info('The model is already quantized, ignoring subsequent calls to prepare_model.')
+            return
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
 
         self.model.quantizer_metadata["dummy_input"] = dummy_input
@@ -238,15 +243,18 @@ class Quantizer(object):
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
+        self.update_optimizer()
+
+        self._post_prepare_model()
+        self.model.is_quantized = True
+        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+
+    def update_optimizer(self):
         # If an optimizer was passed, assume we need to update it
         if self.optimizer:
             optimizer_type = type(self.optimizer)
             new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
             self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
-
-        self._post_prepare_model()
-
-        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_prepare_model(self, dummy_input):
         pass
