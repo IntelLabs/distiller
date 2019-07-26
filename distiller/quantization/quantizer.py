@@ -126,7 +126,8 @@ class Quantizer(object):
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_weights': bits_weights,
                                                     'bits_bias': bits_bias,
-                                                    'overrides': copy.deepcopy(overrides)}}
+                                                    'overrides': copy.deepcopy(overrides),
+                                                    'optimizer': optimizer}}
 
         for k, v in self.overrides.items():
             if any(old_bits_key in v.keys() for old_bits_key in ['acts', 'wts', 'bias']):
@@ -249,8 +250,10 @@ class Quantizer(object):
         self.model.is_quantized = True
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
-    def update_optimizer(self):
+    def update_optimizer(self, new_optimizer=None):
         # If an optimizer was passed, assume we need to update it
+        if new_optimizer is not None:
+            self.optimizer = new_optimizer
         if self.optimizer:
             optimizer_type = type(self.optimizer)
             new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)

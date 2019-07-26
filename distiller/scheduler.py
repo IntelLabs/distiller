@@ -93,6 +93,10 @@ class CompressionScheduler(object):
             masker = ParameterMasker(name)
             self.zeros_mask_dict[name] = masker
 
+        # There can only be a single quantization policy, and we want direct access to it
+        # so we can expose the said quantizer outside for operations.
+        self.quantization_policy = None
+
     def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
         """Add a new policy to the schedule.
 
@@ -113,6 +117,9 @@ class CompressionScheduler(object):
         self.sched_metadata[policy] = {'starting_epoch': starting_epoch,
                                        'ending_epoch': ending_epoch,
                                        'frequency': frequency}
+        # save direct access to the quantization policy
+        if isinstance(policy, distiller.QuantizationPolicy):
+            self.quantization_policy = policy
 
     def on_epoch_begin(self, epoch, optimizer=None, **kwargs):
         for policy in self.policies.get(epoch, list()):
