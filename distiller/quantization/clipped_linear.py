@@ -105,10 +105,10 @@ class WRPNQuantizer(Quantizer):
     """
     def __init__(self, model, optimizer,
                  bits_activations=32, bits_weights=32, bits_bias=None,
-                 overrides=None, prep_required=True):
+                 overrides=None):
         super(WRPNQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
                                             bits_weights=bits_weights, bits_bias=bits_bias,
-                                            train_with_fp_copy=True, overrides=overrides, prep_required=prep_required)
+                                            train_with_fp_copy=True, overrides=overrides)
 
         def wrpn_quantize_param(param_fp, param_meta):
             scale, zero_point = symmetric_linear_quantization_params(param_meta.num_bits, 1)
@@ -161,10 +161,10 @@ class DorefaQuantizer(Quantizer):
     """
     def __init__(self, model, optimizer,
                  bits_activations=32, bits_weights=32, bits_bias=None,
-                 overrides=None, prep_required=True):
+                 overrides=None):
         super(DorefaQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
                                               bits_weights=bits_weights, bits_bias=bits_bias,
-                                              train_with_fp_copy=True, overrides=overrides, prep_required=prep_required)
+                                              train_with_fp_copy=True, overrides=overrides)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -191,10 +191,10 @@ class PACTQuantizer(Quantizer):
     """
     def __init__(self, model, optimizer,
                  bits_activations=32, bits_weights=32, bits_bias=None,
-                 overrides=None, act_clip_init_val=8.0, act_clip_decay=None, prep_required=True):
+                 overrides=None, act_clip_init_val=8.0, act_clip_decay=None):
         super(PACTQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
                                             bits_weights=bits_weights, bits_bias=bits_bias,
-                                            overrides=overrides, train_with_fp_copy=True, prep_required=prep_required)
+                                            overrides=overrides, train_with_fp_copy=True)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts

@@ -169,11 +169,23 @@ def main():
             args.reset_optimizer = True
         args.resumed_checkpoint_path = args.deprecated_resume
 
-    # We can optionally resume from a checkpoint
     optimizer = None
+    if args.compress:
+        # Default optimizer
+        optimizer = torch.optim.SGD(model.parameters(),
+            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        # The main use-case for this sample application is CNN compression. Compression
+        # requires a compression schedule configuration file in YAML.
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
+        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
+        model.to(args.device)
+    elif compression_scheduler is None:
+        compression_scheduler = distiller.CompressionScheduler(model)
+
+    # We can optionally resume from a checkpoint
     if args.resumed_checkpoint_path:
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.resumed_checkpoint_path, model_device=args.device)
+            model, args.resumed_checkpoint_path, model_device=args.device, compression_scheduler=compression_scheduler)
     elif args.load_model_path:
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
@@ -230,16 +242,6 @@ def main():
     if args.evaluate:
         return evaluate_model(model, criterion, test_loader, pylogger, activations_collectors, args,
                               compression_scheduler)
-
-    if args.compress:
-        # The main use-case for this sample application is CNN compression. Compression
-        # requires a compression schedule configuration file in YAML.
-        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
-            (start_epoch-1) if args.resumed_checkpoint_path else None)
-        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
-        model.to(args.device)
-    elif compression_scheduler is None:
-        compression_scheduler = distiller.CompressionScheduler(model)
 
     if args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)

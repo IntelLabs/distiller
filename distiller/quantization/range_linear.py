@@ -789,11 +789,10 @@ class PostTrainLinearQuantizer(Quantizer):
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
                  overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  per_channel_wts=False, model_activation_stats=None, fp16=False, clip_n_stds=None,
-                 scale_approx_mult_bits=None, prep_required=True):
+                 scale_approx_mult_bits=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
-                                                       overrides=overrides, train_with_fp_copy=False,
-                                                       prep_required=prep_required)
+                                                       overrides=overrides, train_with_fp_copy=False)
 
         mode = verify_quant_mode(mode)
         clip_acts = verify_clip_mode(clip_acts)
@@ -1130,13 +1129,13 @@ class FakeQuantizationWrapper(nn.Module):
 class QuantAwareTrainRangeLinearQuantizer(Quantizer):
     def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
                  overrides=None, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False,
-                 quantize_inputs=True, num_bits_inputs=None, prep_required=True):
+                 quantize_inputs=True, num_bits_inputs=None):
         super(QuantAwareTrainRangeLinearQuantizer, self).__init__(model, optimizer=optimizer,
                                                                   bits_activations=bits_activations,
                                                                   bits_weights=bits_weights,
                                                                   bits_bias=bits_bias,
                                                                   overrides=overrides,
-                                                                  train_with_fp_copy=True, prep_required=prep_required)
+                                                                  train_with_fp_copy=True)
 
         mode = verify_quant_mode(mode)
 
