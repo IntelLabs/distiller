@@ -186,6 +186,7 @@ def main():
     if args.resumed_checkpoint_path:
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
             model, args.resumed_checkpoint_path, model_device=args.device, compression_scheduler=compression_scheduler)
+        compression_scheduler.quantization_policy.quantizer.update_optimizer(optimizer)
     elif args.load_model_path:
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
