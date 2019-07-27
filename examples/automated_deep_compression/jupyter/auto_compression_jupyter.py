@@ -157,3 +157,112 @@ def plot_performance(title, dfs, alpha, window_size, top1, macs, params, reward,
         # Collect all of the labels
         ylabel = " / ".join([ax[1] for ax in left_axs]) #left_axs[0][1]
         ax.set(ylabel=ylabel)
+
+
+def plot_2d_embeddings(top1, normalized_macs):
+    plt.figure(figsize=(15,7))        
+    plt.title('Projection of Discovered Networks ({})'.format(len(top1)))     
+    plt.xlabel('Normalized MACs')
+    plt.ylabel('Top1 Accuracy')
+
+    # Create the formatter using the function to_percent. This multiplies all the
+    # default labels by 100, making them all percentages
+    formatter = FuncFormatter(to_percent)
+
+    # Set the formatter
+    plt.gca().yaxis.set_major_formatter(formatter)
+    plt.gca().xaxis.set_major_formatter(formatter)
+
+    # Use color gradients to show the "age" of the network:
+    # Lighter networks were discovered earlier than darker ones.
+    color_grad = [str(1-i/len(top1)) for i in range(len(top1))]
+    plt.scatter(normalized_macs, top1, color=color_grad, s=80, edgecolors='gray');
+
+    
+INTERVAL = 30 # Animation speed
+WINDOW = 20
+
+font = {'family': 'serif',
+        'color':  'darkred',
+        'weight': 'normal',
+        'alpha': 0.50,
+        'size': 32,
+        }
+
+# Based on these two helpful example code: 
+# https://stackoverflow.com/questions/9401658/how-to-animate-a-scatter-plot
+# http://louistiao.me/posts/notebooks/embedding-matplotlib-animations-in-jupyter-notebooks/.
+# Specifically, the use of IPython.display is missing from the first example, but most of the animation code
+# leverages code from there.
+class AnimatedScatter(object):
+    """An animated scatter plot using matplotlib.animations.FuncAnimation."""
+    def __init__(self, xdata, ydata):
+        assert len(xdata) == len(ydata)
+        self.numpoints = len(xdata)
+        self.xdata = xdata
+        self.ydata = ydata
+        self.stream = self.data_stream()
+
+        # Setup the figure and axes...
+        self.fig, self.ax = plt.subplots(figsize=(15,7))
+        # Then setup FuncAnimation.
+        self.ani = animation.FuncAnimation(self.fig, self.update, interval=INTERVAL,
+                                           frames=self.numpoints-2, 
+                                           init_func=self.setup_plot, blit=True)
+
+    def setup_plot(self):
+        """Initialize drawing of the scatter plot."""
+        x, y, s, c = next(self.stream)
+        #self.annot = self.ax.annotate("txt", (10, 10))
+        self.scat = self.ax.scatter(x, y, c=c, s=s, animated=False)
+        self.scat.set_edgecolors('gray')
+        self.scat.set_cmap('gray')
+        self.width = max(self.xdata) - min(self.xdata) + 4
+        self.height = max(self.ydata) - min(self.ydata) + 4
+        self.ax.axis([min(self.xdata)-2, max(self.xdata)+2, 
+                      min(self.ydata)-2, max(self.ydata)+2])
+        
+        self.annot = self.ax.text(min(self.xdata) + self.width/2, self.height/2, 
+                     "", fontdict=font)
+        # For FuncAnimation's sake, we need to return the artist we'll be using
+        # Note that it expects a sequence of artists, thus the trailing comma.
+        return self.scat, 
+
+    def data_stream(self):
+        numpoints = 0#len(self.xdata)
+        colors = []
+        xxx = 0
+        while True:
+            numpoints += 1
+            win_len = min(WINDOW, numpoints)
+            data = np.ndarray((4, win_len))
+            start = max(0,numpoints-WINDOW-1)
+            data[0, :] = self.xdata[start:start+win_len]
+            data[1, :] = self.ydata[start:start+win_len]
+            data[2, :] = [70] * win_len  # point size
+            #data[3, :] = [np.random.random() for p in range(numpoints)]  # color
+            # The color of the points is a gradient with larger values for "younger" points.
+            # At each new frame we show one more point, and "age" each existing point by incrementaly  
+            # reducing its color gradient.
+            data[3, :] = [(1-i/(win_len+1)) for i in range(win_len)] 
+            yield data
+
+    def update(self, i):      
+        """Update the scatter plot."""
+        data = next(self.stream)
+        self.annot.set_text(i)
+        i = i % len(data)
+            
+        # Set x and y data
+        xy = [(data[0,i], data[1,i]) for i in range(len(data[0,:]))]
+        self.scat.set_offsets(xy)
+        
+        # Set colors
+        self.scat.set_array(data[3])
+        
+        # We need to return the updated artist for FuncAnimation to draw..
+        # Note that it expects a sequence of artists, thus the trailing comma.
+        return self.scat, self.annot
+
+    def show(self):
+        plt.show()
