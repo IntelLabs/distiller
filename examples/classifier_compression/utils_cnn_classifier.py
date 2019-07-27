@@ -75,25 +75,38 @@ class ClassifierCompressor(object):
         """Load the datasets"""
         self.train_loader, self.val_loader, self.test_loader = load_data(self.args)
 
-    def train_epoch(self, epoch):
-        """Train for a single epoch"""
+    def train_one_epoch(self, epoch, verbose=True):
         if self.train_loader is None:
             self.load_datasets()
-        return train(self.train_loader, self.model, self.criterion, self.optimizer, epoch, 
-              self.compression_scheduler, loggers=[self.tflogger, self.pylogger], args=self.args)
 
-    def _train_one_epoch(self, epoch):
         # Train for one epoch
         with collectors_context(self.activations_collectors["train"]) as collectors:
-            self.train_epoch(epoch)
-            distiller.log_weights_sparsity(model, epoch, [self.tflogger, self.pylogger])
+            top1, top5, loss = train(self.train_loader, self.model, self.criterion, self.optimizer, 
+                                     epoch, self.compression_scheduler, 
+                                     loggers=[self.tflogger, self.pylogger], args=self.args)
+            if verbose:
+                distiller.log_weights_sparsity(self.model, epoch, [self.tflogger, self.pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
-            if args.masks_sparsity:
+            if self.args.masks_sparsity:
                 msglogger.info(distiller.masks_sparsity_tbl_summary(self.model, 
                                                                     self.compression_scheduler))
+        return top1, top5, loss
 
-    def _validate_one_epoch(self, epoch):
+    def train_validate_with_scheduling(self, epoch, validate=True, verbose=True):
+        if self.compression_scheduler:
+            self.compression_scheduler.on_epoch_begin(epoch)
+
+        top1, top5, loss = self.train_one_epoch(epoch, verbose)
+        if validate:
+            top1, top5, loss = self.validate_one_epoch(epoch, verbose)
+
+        if self.compression_scheduler:
+            self.compression_scheduler.on_epoch_end(epoch, self.optimizer, 
+                                                    metrics={'min': loss, 'max': top1})
+        return top1, top5, loss
+
+    def validate_one_epoch(self, epoch, verbose=True):
         # evaluate on validation set
         with collectors_context(self.activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(self.val_loader, self.model, self.criterion, 
@@ -101,6 +114,15 @@ class ClassifierCompressor(object):
             distiller.log_activation_statsitics(epoch, "valid", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
+
+        if verbose:
+            stats = ('Performance/Validation/',
+            OrderedDict([('Loss', vloss),
+                         ('Top1', top1),
+                         ('Top5', top5)]))
+            distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
+                                            loggers=[self.tflogger])
+
         return top1, top5, vloss
 
     def _finalize_epoch(self, epoch, perf_scores_history, top1, top5):
@@ -127,32 +149,16 @@ class ClassifierCompressor(object):
         if self.train_loader is None:
             self.load_datasets()
 
-        model, criterion, optimizer, compression_scheduler, args, start_epoch, ending_epoch = (
-            self.model, self.criterion, self.optimizer, self.compression_scheduler, self.args, 
-            self.start_epoch, self.ending_epoch)
+        # model, criterion, optimizer, compression_scheduler, args, start_epoch, ending_epoch = (
+        #     self.model, self.criterion, self.optimizer, self.compression_scheduler, self.args, 
+        #     self.start_epoch, self.ending_epoch)
 
         #self.activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
-        perf_scores_history = []
-        
+        perf_scores_history = []       
         for epoch in range(start_epoch, ending_epoch):
             msglogger.info('\n')
-            if compression_scheduler:
-                compression_scheduler.on_epoch_begin(epoch)
-
-            _train_one_epoch(epoch)
-            top1, top5, vloss = _validate_one_epoch(epoch)
-
-            stats = ('Performance/Validation/',
-                    OrderedDict([('Loss', vloss),
-                                ('Top1', top1),
-                                ('Top5', top5)]))
-            distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
-                                            loggers=[self.tflogger])
-
-            if compression_scheduler:
-                compression_scheduler.on_epoch_end(epoch, optimizer, metrics={'min': vloss, 'max': top1})
-
-            _finalize_epoch(epoch, perf_scores_history, top1, top5)
+            top1, top5, loss = self.train_validate_with_scheduling(epoch)
+            self._finalize_epoch(epoch, perf_scores_history, top1, top5)
 
     def validate(self, epoch=-1):
         return validate(self.val_loader, self.model, self.criterion,
@@ -580,8 +586,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                             steps_per_epoch, args.print_freq,
                                             loggers)
         end = time.time()
-    return acc_stats
-
+    #return acc_stats
+    # NOTE: this breaks previous behavior, which returned a history of (top1, top5) values
+    return classerr.value(1), classerr.value(5), losses[OVERALL_LOSS_KEY]
 
 def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     """Model validation"""
