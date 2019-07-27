@@ -64,27 +64,16 @@ class FTStatsLogger(_CSVLogger):
         super().__init__(fname, headers)
 
 
-def add_parallel_args(argparser):
-    group = argparser.add_argument_group('parallel fine-tuning')
-    group.add_argument('--processes', type=int, default=4,
-                       help="Number of parallel experiment processes to run in parallel")
-    group.add_argument('--scan-dir', metavar='DIR', required=True, help='path to checkpoints')
-    group.add_argument('--output-csv', metavar='DIR', required=True, help='name of the CSV file containing the output')
-    #group.add_argument('--ft-epochs', type=int, default=1,
-    #                   help='The number of epochs to fine-tune each discovered network')
-
-
-class Task(object):
+class FinetuningTask(object):
     def __init__(self, args):
         self.args = args
         
     def __call__(self, data_loader):
         return finetune_checkpoint(*self.args, data_loader)
-    # def __str__(self):
-    #     return '%s * %s' % (self.a, self.b)
+
 
 # Boiler-plat code (src: https://pymotw.com/2/multiprocessing/communication.html)
-class Consumer(Process):  
+class FinetuningProcess(Process):  
     def __init__(self, task_queue, result_queue, data_loader):
         multiprocessing.Process.__init__(self)
         self.task_queue = task_queue
@@ -96,7 +85,6 @@ class Consumer(Process):
         while True:
             next_task = self.task_queue.get()
             if next_task is None:
-                # Poison pill means shutdown
                 print('%s: Exiting' % proc_name)
                 self.task_queue.task_done()
                 break
@@ -107,48 +95,50 @@ class Consumer(Process):
             self.result_queue.put(answer)
         return
 
-# Producer
-def finetune_directory(stats_file, ft_dir, app_args, data_loaders):
+
+def finetune_directory(ft_dir, stats_file, app_args):
+    """Fine tune all the checkpoint files we find in the immediate-directory specified.
+
+    For each checkpoint file we find, we create and queue a FinetuningTask.  
+    A FinetuningProcess will pickup the FinetuningTask and process it.
+    """
     print("Fine-tuning directory %s" % ft_dir)
+    # Get a list of the checkpoint files
     checkpoints = glob.glob(os.path.join(ft_dir, "*checkpoint.pth.tar"))
     assert checkpoints
-    n_processes = app_args.processes
 
+    # We create a subdirectory, where we will write all of our output
     ft_output_dir = os.path.join(ft_dir, "ft")
     os.makedirs(ft_output_dir, exist_ok=True)
     app_args.output_dir = ft_output_dir
 
-    # Establish communication queues
+    # Multi-process queues
     tasks = multiprocessing.JoinableQueue()
     results = multiprocessing.Queue()
     
-    # Start consumers
-    num_consumers = n_processes
-    #print 'Creating %d consumers' % num_consumers
-    
-    # Pre-load the data-loaders of each fine-tuning process once
-    data_loaders = []
-    for i in range(num_consumers):
+    # Create and launch the fine-tuning processes
+    processes = []
+    for i in range(app_args.processes):
+        # Pre-load the data-loaders of each fine-tuning process once
         app = ClassifierCompressor(app_args)
-        data_loaders.append(load_data(app.args))
+        data_loader = load_data(app.args)
         # Delete log directories
         shutil.rmtree(app.logdir)
-
-    workers = [ Consumer(tasks, results, data_loaders[i])
-                  for i in range(num_consumers) ]
-    for w in workers:
-        w.start()    
-
-    # Enqueue jobs
+        processes.append(FinetuningProcess(tasks, results, data_loader))
+        # Start the process
+        processes[-1].start()
+    
     n_gpus = torch.cuda.device_count()
+
+    # Enqueue all of the fine-tuning tasks
     for (instance, ckpt_file) in enumerate(checkpoints):
-        tasks.put(Task(args=(ckpt_file, instance%n_gpus, app_args)))
-                             
-    # Add a poison pill for each consumer
-    for i in range(num_consumers):
+        tasks.put(FinetuningTask(args=(ckpt_file, instance%n_gpus, app_args)))
+
+    # Push an end-of-tasks marker
+    for i in range(app_args.processes):
         tasks.put(None)
 
-    # Wait for all of the tasks to finish
+    # Wait until all tasks finish
     tasks.join()
     
     # Start printing results
@@ -157,10 +147,11 @@ def finetune_directory(stats_file, ft_dir, app_args, data_loaders):
         result = results.get()
         return_dict[result[0]] = result[1]
 
+    # Read the results of the AMC experiment (we'll want to use some of the data)
     import pandas as pd
     df = pd.read_csv(os.path.join(ft_dir, "amc.csv"))
     assert len(return_dict) > 0
-    
+    # Log some info for each checkpoint
     for ckpt_name in sorted (return_dict.keys()):
         net_search_results = df[df["ckpt_name"] == ckpt_name[:-len("_checkpoint.pth.tar")]]
         search_top1 = net_search_results["top1"].iloc[0]
@@ -169,9 +160,9 @@ def finetune_directory(stats_file, ft_dir, app_args, data_loaders):
                      search_top1, *return_dict[ckpt_name])
         print("%s <>  %s: %.2f %.2f %.2f %.2f %.2f" % log_entry)
         stats_file.add_record(log_entry)
-    
     # cleanup: remove the "ft"
     shutil.rmtree(ft_output_dir)
+
 
 def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     # Usually when we train, we also want to look at and graph, the validation score of each epoch.
@@ -200,34 +191,30 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     return (name, best)
 
 
-def get_immediate_subdirs(a_dir):
-    return [os.path.join(a_dir, name) for name in os.listdir(a_dir)
-            if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
-
-
 if __name__ == '__main__':
+    def get_immediate_subdirs(a_dir):
+        return [os.path.join(a_dir, name) for name in os.listdir(a_dir)
+                if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
+
+    def add_parallel_args(argparser):
+        group = argparser.add_argument_group('parallel fine-tuning')
+        group.add_argument('--processes', type=int, default=4,
+                           help="Number of parallel experiment processes to run in parallel")
+        group.add_argument('--scan-dir', metavar='DIR', required=True, help='path to checkpoints')
+        group.add_argument('--output-csv', metavar='DIR', required=True, 
+                           help='name of the CSV file containing the output')
+
     try:
         set_start_method('forkserver')
     except RuntimeError:
         pass
-
     # Parse arguments
     argparser = parser.get_parser(init_classifier_compression_arg_parser())
     add_parallel_args(argparser)
     app_args = argparser.parse_args()
-    data_loaders = []
-
-    #app_args.instances *= 2
-
-    # Can't call CUDA API before spawning - see: https://github.com/pytorch/pytorch/issues/15734
-    #n_gpus = len(os.environ["CUDA_VISIBLE_DEVICES"].split(",")) # torch.cuda.device_count()
-    #n_gpus = torch.cuda.device_count()
-    #n_processes = app_args.processes
-    #assert n_processes <= n_gpus
 
     print("Starting fine-tuning")
     stats_file = FTStatsLogger(os.path.join(app_args.scan_dir, app_args.output_csv))
     ft_dirs = get_immediate_subdirs(app_args.scan_dir)
     for ft_dir in ft_dirs:
-        finetune_directory(stats_file, ft_dir, app_args, data_loaders)
-
+        finetune_directory(ft_dir, stats_file, app_args)
