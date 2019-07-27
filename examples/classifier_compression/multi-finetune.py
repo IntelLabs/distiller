@@ -14,7 +14,8 @@
 # limitations under the License.
 #
 
-"""A script to run various configurations of a specified fine-tuning template-configuration.
+"""A script to fine-tune a directory of classifier checkpoints, using multiple processes
+running in parallel.
 
 Format:
     $ python multi-run.py --scan-dir=<directory containing the output of multi-run.py> 
@@ -25,6 +26,8 @@ Example:
 
 import os
 import glob
+import math
+import shutil
 import torch
 import traceback
 import logging
@@ -63,85 +66,144 @@ class FTStatsLogger(_CSVLogger):
 
 def add_parallel_args(argparser):
     group = argparser.add_argument_group('parallel fine-tuning')
-    group.add_argument('--instances', type=int, default=4,
-                       help="Number of parallel experiment instances to run simultaneously")
+    group.add_argument('--processes', type=int, default=4,
+                       help="Number of parallel experiment processes to run in parallel")
     group.add_argument('--scan-dir', metavar='DIR', required=True, help='path to checkpoints')
     group.add_argument('--output-csv', metavar='DIR', required=True, help='name of the CSV file containing the output')
     #group.add_argument('--ft-epochs', type=int, default=1,
     #                   help='The number of epochs to fine-tune each discovered network')
 
 
+class Task(object):
+    def __init__(self, args):
+        self.args = args
+        
+    def __call__(self, data_loader):
+        return finetune_checkpoint(*self.args, data_loader)
+    # def __str__(self):
+    #     return '%s * %s' % (self.a, self.b)
+
+# Boiler-plat code (src: https://pymotw.com/2/multiprocessing/communication.html)
+class Consumer(Process):  
+    def __init__(self, task_queue, result_queue, data_loader):
+        multiprocessing.Process.__init__(self)
+        self.task_queue = task_queue
+        self.result_queue = result_queue
+        self.data_loader = data_loader
+
+    def run(self):
+        proc_name = self.name
+        while True:
+            next_task = self.task_queue.get()
+            if next_task is None:
+                # Poison pill means shutdown
+                print('%s: Exiting' % proc_name)
+                self.task_queue.task_done()
+                break
+            
+            print('executing on %s: %s' % (proc_name, next_task))
+            answer = next_task(self.data_loader)
+            self.task_queue.task_done()
+            self.result_queue.put(answer)
+        return
+
+# Producer
 def finetune_directory(stats_file, ft_dir, app_args, data_loaders):
     print("Fine-tuning directory %s" % ft_dir)
     checkpoints = glob.glob(os.path.join(ft_dir, "*checkpoint.pth.tar"))
     assert checkpoints
-    n_instances = app_args.instances
+    n_processes = app_args.processes
 
     ft_output_dir = os.path.join(ft_dir, "ft")
     os.makedirs(ft_output_dir, exist_ok=True)
     app_args.output_dir = ft_output_dir
 
-    # Fine-tune several checkpoints in parallel, and collect their results in `return_dict`
-    manager = multiprocessing.Manager()
-    return_dict = manager.dict()
-    processes = [Process(target=finetune_checkpoint, 
-                         args=(ckpt_file, instance%n_instances, app_args,
-                               data_loaders[instance%n_instances], return_dict))
-                            for (instance, ckpt_file) in enumerate(checkpoints)]
-    assert processes
-    # a list of running processes
-    running = []
-    def start_process(processes, running):
-        p = processes.pop()
-        p.start()
-        running.append(p)
+    # Establish communication queues
+    tasks = multiprocessing.JoinableQueue()
+    results = multiprocessing.Queue()
+    
+    # Start consumers
+    num_consumers = n_processes
+    #print 'Creating %d consumers' % num_consumers
+    
+    # Pre-load the data-loaders of each fine-tuning process once
+    data_loaders = []
+    for i in range(num_consumers):
+        app = ClassifierCompressor(app_args)
+        data_loaders.append(load_data(app.args))
+        # Delete log directories
+        shutil.rmtree(app.logdir)
 
-    while len(running) < n_instances and processes:
-        start_process(processes, running)
+    workers = [ Consumer(tasks, results, data_loaders[i])
+                  for i in range(num_consumers) ]
+    for w in workers:
+        w.start()    
 
-    while running:
-        try:
-            p = running.pop(0)
-            p.join()
-            if processes:
-                start_process(processes, running)
-        except KeyboardInterrupt:
-            for p in processes + running:
-                p.terminate()
-                p.join()
+    # Enqueue jobs
+    n_gpus = torch.cuda.device_count()
+    for (instance, ckpt_file) in enumerate(checkpoints):
+        tasks.put(Task(args=(ckpt_file, instance%n_gpus, app_args)))
+                             
+    # Add a poison pill for each consumer
+    for i in range(num_consumers):
+        tasks.put(None)
+
+    # Wait for all of the tasks to finish
+    tasks.join()
+    
+    # Start printing results
+    return_dict = OrderedDict()
+    while not results.empty():
+        result = results.get()
+        return_dict[result[0]] = result[1]
 
     import pandas as pd
     df = pd.read_csv(os.path.join(ft_dir, "amc.csv"))
     assert len(return_dict) > 0
-    print(return_dict)
     
     for ckpt_name in sorted (return_dict.keys()):
         net_search_results = df[df["ckpt_name"] == ckpt_name[:-len("_checkpoint.pth.tar")]]
-        print(net_search_results)
         search_top1 = net_search_results["top1"].iloc[0]
-        print(search_top1)
         normalized_macs = net_search_results["normalized_macs"].iloc[0]
-        print(normalized_macs)
         log_entry = (ft_output_dir, ckpt_name, normalized_macs, 
                      search_top1, *return_dict[ckpt_name])
-        print("%s-%s: %.2f %.2f %.2f %.2f %.2f" % log_entry)
+        print("%s <>  %s: %.2f %.2f %.2f %.2f %.2f" % log_entry)
         stats_file.add_record(log_entry)
+    
+    # cleanup: remove the "ft"
+    shutil.rmtree(ft_output_dir)
 
-
-def finetune_checkpoint(ckpt_file, gpu, app_args, loaders, return_dict):
+def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
+    # Usually when we train, we also want to look at and graph, the validation score of each epoch.
+    # When we run many fine-tuning sessions at once, we don't care to look at the validation score.
+    # However, we want to perform a sort-of "early-stopping" in which we use the checkpoint of the 
+    # best performing training epoch, and not the checkpoint created by the last epoch.
+    # We evaluate what is the "best" checkpoint by looking at the validation accuracy 
+    VALIDATE_ENABLE_FACTOR = 0.8
     name = os.path.basename(ckpt_file)
+    print("Fine-tuning checkpoint %s" % name)
+ 
     app_args.gpus = str(gpu)
     app_args.name = name
     app_args.deprecated_resume = ckpt_file
     app = ClassifierCompressor(app_args)
-    app.train_loader, app.val_loader, app.test_loader = loaders 
-    for e in range(app_args.epochs):
-        app.train_epoch(e)
-    return_dict[name] = app.test() # app.validate()
+    app.train_loader, app.val_loader, app.test_loader = loaders
+    best = [float("-inf"), float("-inf"), float("inf")]
+    for epoch in range(app_args.epochs):
+        validate = epoch >= math.floor(VALIDATE_ENABLE_FACTOR * app_args.epochs)
+        top1, top5, loss = app.train_validate_with_scheduling(epoch, validate=validate, verbose=False)
+        #app.train_one_epoch(e, verbose=False)
+        if validate:
+            if top1 > best[0]:
+                best = [top1, top5, loss]
+    #return (name, app.test())
+    return (name, best)
+
 
 def get_immediate_subdirs(a_dir):
     return [os.path.join(a_dir, name) for name in os.listdir(a_dir)
             if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
+
 
 if __name__ == '__main__':
     try:
@@ -155,20 +217,17 @@ if __name__ == '__main__':
     app_args = argparser.parse_args()
     data_loaders = []
 
+    #app_args.instances *= 2
+
     # Can't call CUDA API before spawning - see: https://github.com/pytorch/pytorch/issues/15734
     #n_gpus = len(os.environ["CUDA_VISIBLE_DEVICES"].split(",")) # torch.cuda.device_count()
-    n_gpus = torch.cuda.device_count()
-    n_instances = app_args.instances
-    assert n_instances <= n_gpus
-    for i in range(n_instances):
-        app = ClassifierCompressor(app_args)
-        data_loaders.append(load_data(app.args))
-        #todo: delete directories
-        import shutil
-        shutil.rmtree(app.logdir)
+    #n_gpus = torch.cuda.device_count()
+    #n_processes = app_args.processes
+    #assert n_processes <= n_gpus
 
-    ft_dirs = get_immediate_subdirs(app_args.scan_dir)
     print("Starting fine-tuning")
     stats_file = FTStatsLogger(os.path.join(app_args.scan_dir, app_args.output_csv))
+    ft_dirs = get_immediate_subdirs(app_args.scan_dir)
     for ft_dir in ft_dirs:
         finetune_directory(stats_file, ft_dir, app_args, data_loaders)
+
