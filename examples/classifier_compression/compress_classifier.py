@@ -165,14 +165,6 @@ def early_exit_init(args):
     args.exiterrors = []
     msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
-<<<<<<< HEAD
-=======
-    if args.quantize_eval:
-        model.cpu()
-        quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
-        quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
-        model.to(args.device)
->>>>>>> master
 
 class ClassifierCompressorSampleApp(ClassifierCompressor):
     def __init__(self, args):
