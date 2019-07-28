@@ -692,6 +692,7 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
     with collector_context(quant_stats_collector):
         test_fn(model=model)
     msglogger.info('Stats collection complete')
+
     if save_dir is not None:
         save_path = os.path.join(save_dir, 'acts_quantization_stats.yaml')
         quant_stats_collector.save(save_path)
