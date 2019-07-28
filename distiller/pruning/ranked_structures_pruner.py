@@ -165,14 +165,13 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
         #channel_mags = torch.abs(param).sum((0, 2, 3))
 
         # Round the number of channels to prune, (floor/ceil) to the nearest integer.
-
-        #k = int(rounding_fn(fraction_to_prune * num_channels / group_size) * group_size)
         k = rounding_fn(fraction_to_prune * num_channels)
-        # 
         k = int(rounding_fn(k * 1. / group_size) * group_size)
         
-        if k == num_channels:
-            k = num_channels - group_size  # We can't allow removing all of the channels!
+        # We can't allow removing all of the channels! --
+        # Except when the fraction_to_prune is explicitly instructing us to do so.
+        if k == num_channels and fraction_to_prune != 1.0:
+            k = num_channels - group_size
         if k == 0:
             msglogger.info("Too few channels (%d)- can't prune %.1f%% channels",
                             num_channels, 100*fraction_to_prune)
@@ -228,7 +227,9 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
         num_filters = param.size(0)
         num_filters_to_prune = rounding_fn(fraction_to_prune * num_filters)
         num_filters_to_prune = int(rounding_fn(num_filters_to_prune * 1. / group_size) * group_size)
-        if num_filters_to_prune == num_filters:
+        # We can't allow removing all of the filters! --
+        # Except when the fraction_to_prune is explicitly instructing us to do so.
+        if num_filters_to_prune == num_filters and fraction_to_prune != 1.0:
             num_filters_to_prune = num_filters - group_size  # We can't allow removing all of the filters!
 
         if binary_map is None:
@@ -384,9 +385,11 @@ class L1RankedStructureParameterPruner(LpRankedStructureParameterPruner):
     This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, noise=0.0, group_size=1):
+                 group_dependency=None, kwargs=None, noise=0.0,
+                 group_size=1, rounding_fn=math.floor):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency, 
-                         kwargs, magnitude_fn=l1_magnitude, noise=noise, group_size=group_size)
+                         kwargs, magnitude_fn=l1_magnitude, noise=noise,
+                         group_size=group_size, rounding_fn=rounding_fn)
 
 
 class L2RankedStructureParameterPruner(LpRankedStructureParameterPruner):
@@ -395,9 +398,11 @@ class L2RankedStructureParameterPruner(LpRankedStructureParameterPruner):
     This class prunes to a prescribed percentage of structured-sparsity (level pruning).
     """
     def __init__(self, name, group_type, desired_sparsity, weights,
-                 group_dependency=None, kwargs=None, noise=0.0, group_size=1):
+                 group_dependency=None, kwargs=None, noise=0.0,
+                 group_size=1, rounding_fn=math.floor):
         super().__init__(name, group_type, desired_sparsity, weights, group_dependency, 
-                         kwargs, magnitude_fn=l2_magnitude, noise=noise, group_size=group_size)
+                         kwargs, magnitude_fn=l2_magnitude, noise=noise,
+                         group_size=group_size, rounding_fn=rounding_fn)
 
 
 class RandomLevelStructureParameterPruner(L1RankedStructureParameterPruner):
