@@ -641,13 +641,6 @@ def _param_name_2_layer_name(param_name):
     return param_name[:-len('.weight')]
 
 
-## ERASE!!!
-debug_print = msglogger.info
-
-def psize(name, t):
-    debug_print("%s = %s" % (name, t.size()))
-
-
 class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
     """Uses feature-map (channel) reconstruction to prune weights tensors.
 
@@ -772,7 +765,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             indices = binary_map.nonzero().squeeze()
             if len(indices.shape) == 0:
                 indices = indices.expand(1)
-            # msglogger.info("{} {} {}".format(binary_map.sum(), fraction_to_prune, len(indices)))
 
             # Find the module representing this layer
             distiller.assign_layer_fq_names(model)
@@ -783,9 +775,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
                 X = model.intermediate_fms['input_fms'][layer_name]
             except AttributeError:
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
-            #psize("X", X)
-            #debug_print(conv)
-            #debug_print("-------------------------------------------")
 
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
@@ -793,48 +782,30 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             # a smaller weights tensor.
             if conv.kernel_size == (1,1):
                 X = X[:, binary_map, :]
-                #psize("X after mask", X)
                 X = X.transpose(1, 2)
                 X = X.contiguous().view(-1, X.size(2))
             else:
                 # X is (batch, ck^2, num_pts)
                 # we want:   (batch, c, k^2, num_pts)
                 X = X.view(X.size(0), -1, np.prod(conv.kernel_size), X.size(2))
-                #psize("X after extracting channel", X)
                 X = X[:,binary_map,:,:]
-                #psize("X after mask", X)
                 X = X.view(X.size(0), -1, X.size(3))
-                #psize("X after view", X)
                 X = X.transpose(1, 2)
-                #psize("X after transpose", X)
                 X = X.contiguous().view(-1, X.size(2))
-                #psize("X after contig", X)
 
-            #psize("Y", Y)
             # Approximate the weights given input-FMs and output-FMs
             new_w = _least_square_sklearn(X, Y)
-            #debug_print(new_w.shape)                
-
             new_w = torch.from_numpy(new_w) # shape: (num_filters, num_non_masked_channels * k^2)
             cnt_retained_channels = binary_map.sum()
-            #msglogger.info(cnt_retained_channels)
+
             # Expand the weights back to their original size,
             new_w = new_w.contiguous().view(param.size(0), cnt_retained_channels, param.size(2), param.size(3))
             debug_print("====> W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
-            #msglogger.info("=====> indices = %d" % len(indices))
-            #msglogger.info("--------------new_w sparsity: %.3f" % distiller.sparsity_ch(new_w))
-            #debug_print("W'={} W={}".format(new_w.shape, param.shape))
-            
-            # param.data = torch.zeros_like(param)
-            #param.detach().zero_()
-            #msglogger.info("=====> param sparsity = %d" % distiller.sparsity_ch(param))
             
             # Copy the weights that we learned from minimizing the feature-maps least squares error,
             # to our actual weights tensor.
             param.detach()[:,indices,:,:] = new_w.type(param.type())
             
-            #msglogger.info("=====> param sparsity = %d" % distiller.sparsity_ch(param))
- 
         if zeros_mask_dict is not None:
             binary_map = binary_map.type(param.type())
             zeros_mask_dict[param_name].mask = LpRankedStructureParameterPruner.ch_binary_map_to_mask(binary_map, param)
