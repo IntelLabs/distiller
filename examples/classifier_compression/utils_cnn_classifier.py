@@ -796,7 +796,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     if args.quantize_eval:
         model.cpu()
         quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
-        quantizer.prepare_model()
+        quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
         model.to(args.device)
 
     top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)

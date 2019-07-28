@@ -96,9 +96,10 @@ class ActivationStatsCollector(object):
 
         Eligible modules are currently filtered by their class type.
         """
-        is_leaf_node = len(list(module.children())) == 0
+        if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+            return
         register_all_class_types = not self.classes
-        if is_leaf_node and (register_all_class_types or (type(module) in self.classes)):
+        if register_all_class_types or isinstance(module, tuple(self.classes)):
             self.fwd_hook_handles.append(module.register_forward_hook(self._activation_stats_cb))
             self._start_counter(module)
 
@@ -415,8 +416,17 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
-            min_per_sample = act.min(dim=1)[0]
-            max_per_sample = act.max(dim=1)[0]
+
+            # In the general case, the average min/max that we're collecting are averages over the per-sample
+            # min/max values. That is - we first calculate the min/max for each sample in the batch, then average
+            # over that.
+            # But - If each sample contains just a single value, then such a per-sample calculation we'll result in
+            # avg_min = avg_max. So in that case we "revert" to calculating "global" values, for the whole batch,
+            # instead of per-sample values
+            dim = 0 if act.numel() == act.shape[0] else 1
+
+            min_per_sample = act.min(dim=dim)[0]
+            max_per_sample = act.max(dim=dim)[0]
             record['min'] = min(record['min'], min_per_sample.min().item())
             record['max'] = max(record['max'], max_per_sample.max().item())
             try:
@@ -458,8 +468,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
     def _reset_counter(self, module):
         # We don't know the number of inputs at this stage so we defer records creation to the actual callback
-        module.quant_stats = _QuantStatsRecord()
-        module.batch_idx = 0
+        if hasattr(module, 'quant_stats'):
+            module.quant_stats = _QuantStatsRecord()
+            module.batch_idx = 0
 
     def _collect_activations_stats(self, module, activation_stats, name=''):
         if distiller.utils.has_children(module):

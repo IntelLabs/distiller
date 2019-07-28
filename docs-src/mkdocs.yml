@@ -33,3 +33,4 @@ nav:
   - Tutorials:
     - Pruning Filters and Channels: tutorial-struct_pruning.md
     - Pruning a Language Model: tutorial-lang_model.md
+    - Quantizing a Language Model: tutorial-lang_model_quant.md

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import torch
+import torch.nn as nn
 import pytest
 import os
 import errno
@@ -57,3 +57,12 @@ def pytest_raises_wrapper(exc_type, msg, func, *args, **kwargs):
         func(*args, **kwargs)
         if msg:
             pytest.fail(msg)
+
+
+class WrappedSequential(nn.Module):
+    def __init__(self, *args):
+        super(WrappedSequential, self).__init__()
+        self.seq = nn.Sequential(*args)
+
+    def forward(self, x):
+        return self.seq(x)

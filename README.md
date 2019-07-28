@@ -248,6 +248,9 @@ For more details, there are some other resources you can refer to:
 + [Usage](https://nervanasystems.github.io/distiller/usage.html)
 + [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
 + [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
++ [Tutorial: Post-Training Quantization of a Language Model
+](https://nervanasystems.github.io/distiller/tutorial-lang_model_quant.html)
++ [Post-training quantization command line examples](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md)
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)
@@ -392,6 +395,10 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 
 ### Research papers citing Distiller:
 
+- Soroush Ghodrati, Hardik Sharma, Sean Kinzer, Amir Yazdanbakhsh, Kambiz Samadi, Nam Sung Kim, Doug Burger, Hadi Esmaeilzadeh.<br>
+*[Mixed-Signal Charge-Domain Acceleration of Deep Neural networks through Interleaved Bit-Partitioned Arithmetic]( https://arxiv.org/abs/1906.11915)*,<br>
+arXiv:1906.11915, 2019.
+
 - Gil Shomron, Tal Horowitz, Uri Weiser.<br>
 *[SMT-SA: Simultaneous Multithreading in Systolic Arrays](https://ieeexplore.ieee.org/document/8742541)*,<br>
 In IEEE Computer Architecture Letters (CAL), 2019.
@@ -408,13 +415,18 @@ In IEEE Computer Architecture Letters (CAL), 2019.
   *[SinReQ: Generalized Sinusoidal Regularization for Low-Bitwidth Deep Quantized Training](https://arxiv.org/abs/1905.01416),*<br>
   arXiv:1905.01416, 2019.
 
+- Goncharenko A., Denisov A., Alyamkin S., Terentev E.<br>
+*[Trainable Thresholds for Neural Network Quantization](https://rd.springer.com/chapter/10.1007/978-3-030-20518-8_26),*<br>
+In: Rojas I., Joya G., Catala A. (eds) Advances in Computational Intelligence Lecture Notes in Computer Science, vol 11507. Springer, Cham.  International Work-Conference on Artificial Neural Networks (IWANN 2019).
+
 - Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
   *[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*
   arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
   *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
-  arXiv:1901.09504, 2019
+  arXiv:1901.09504, 2019<br>
+  [Code](https://github.com/cornell-zhang/dnn-quant-ocs)
 
 - Angad S. Rekhi, Brian Zimmer, Nikola Nedovic, Ningxi Liu, Rangharajan Venkatesan, Miaorong Wang, Brucek Khailany, William J. Dally, C. Thomas Gray.<br>
 *[Analog/Mixed-Signal Hardware Error Modeling for Deep Learning Inference](https://research.nvidia.com/sites/default/files/pubs/2019-06_Analog/Mixed-Signal-Hardware-Error/40_2_Rekhi_AMS_ML.pdf)*,<br>
