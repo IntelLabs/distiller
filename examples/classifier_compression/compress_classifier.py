@@ -172,9 +172,8 @@ class ClassifierCompressorSampleApp(ClassifierCompressor):
         early_exit_init(args)
 
     def handle_subapps(self):
-        model, criterion, optimizer, compression_scheduler, pylogger, args = (
-            self.model, self.criterion, self.optimizer, self.compression_scheduler, self.pylogger, self.args)
-        return handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger, args)
+        return handle_subapps(self.model, self.criterion, self.optimizer,
+                              self.compression_scheduler, self.pylogger, self.args)
 
 
 def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsities):
