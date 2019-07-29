@@ -111,6 +111,6 @@ def batch_padded_sequences(seq, batch_first=False, sort=False):
 def debug_tensor(tensor, name):
     logging.info(name)
     tensor = tensor.float().cpu().numpy()
-    logging.info(f'MIN: {tensor.min()} MAX: {tensor.max()} '
-                 f'AVG: {tensor.mean()} STD: {tensor.std()} '
-                 f'NAN: {np.isnan(tensor).sum()} INF: {np.isinf(tensor).sum()}')
+    logging.info('MIN: {min} MAX: {max} AVG: {mean} STD: {std} NAN: {nans} INF: {infs}'
+                 .format(min=tensor.min(), max=tensor.max(), mean=tensor.mean(),
+                         std=tensor.std(), nans=np.isnan(tensor).sum(), infs=np.isinf(tensor).sum()))

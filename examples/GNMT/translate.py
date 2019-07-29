@@ -283,10 +283,10 @@ def main():
 
         if i % 5 == 0:
             log = []
-            log += f'TEST '
-            log += f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-            log += f'Decoder iters {iterations.val:.1f} ({iterations.avg:.1f})\t'
-            log += f'Tok/s {tot_tok_per_sec.val:.0f} ({tot_tok_per_sec.avg:.0f})'
+            log += 'TEST '
+            log += 'Time {:.3f} ({:.3f})\t'.format(batch_time.val, batch_time.avg)
+            log += 'Decoder iters {:.1f} ({:.1f})\t'.format(iterations.val, iterations.avg)
+            log += 'Tok/s {:.0f} ({:.0f})'.format(tot_tok_per_sec.val, tot_tok_per_sec.avg)
             log = ''.join(log)
             print(log)
 
@@ -294,14 +294,14 @@ def main():
     # summary timing
     time_per_sentence = (batch_time.avg / batch_size)
     log = []
-    log += f'TEST SUMMARY:\n'
-    log += f'Lines translated: {len(test_loader.dataset)}\t'
-    log += f'Avg total tokens/s: {tot_tok_per_sec.avg:.0f}\n'
-    log += f'Avg time per batch: {batch_time.avg:.3f} s\t'
-    log += f'Avg time per sentence: {1000*time_per_sentence:.3f} ms\n'
-    log += f'Avg encoder seq len: {enc_seq_len.avg:.2f}\t'
-    log += f'Avg decoder seq len: {dec_seq_len.avg:.2f}\t'
-    log += f'Total decoder iterations: {int(iterations.sum)}'
+    log += 'TEST SUMMARY:\n'
+    log += 'Lines translated: {}\t'.format(len(test_loader.dataset))
+    log += 'Avg total tokens/s: {:.0f}\n'.format(tot_tok_per_sec.avg)
+    log += 'Avg time per batch: {:.3f} s\t'.format(batch_time.avg)
+    log += 'Avg time per sentence: {:.3f} ms\n'.format(1000 * time_per_sentence)
+    log += 'Avg encoder seq len: {:.2f}\t'.format(enc_seq_len.avg)
+    log += 'Avg decoder seq len: {:.2f}\t'.format(dec_seq_len.avg)
+    log += 'Total decoder iterations: {}'.format(int(iterations.sum))
     log = ''.join(log)
     print(log)
 
@@ -316,21 +316,21 @@ def main():
 
         with open(detok_test_path, 'w') as detok_test_file, \
                 open(test_path, 'r') as test_file:
-            subprocess.run(['perl', f'{detok_path}'], stdin=test_file,
+            subprocess.run(['perl', detok_path], stdin=test_file,
                            stdout=detok_test_file, stderr=subprocess.DEVNULL)
 
 
         # run sacrebleu
         reference_path = os.path.join(args.dataset_dir,
                                       config.TGT_TEST_TARGET_FNAME)
-        sacrebleu = subprocess.run([f'sacrebleu --input {detok_test_path} '
-                                    f'{reference_path} --score-only -lc --tokenize intl'],
+        sacrebleu = subprocess.run(['sacrebleu --input {} {} --score-only -lc --tokenize intl'.format(detok_test_path,
+                                                                                                      reference_path)],
                                    stdout=subprocess.PIPE, shell=True)
         bleu = float(sacrebleu.stdout.strip())
 
-        print(f'BLEU on test dataset: {bleu}')
+        print('BLEU on test dataset: {}'.format(bleu))
 
-        print(f'Finished evaluation on test set')
+        print('Finished evaluation on test set')
 
 if __name__ == '__main__':
     main()

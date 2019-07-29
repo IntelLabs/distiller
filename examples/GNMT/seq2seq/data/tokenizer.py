@@ -11,7 +11,7 @@ class Tokenizer:
 
         self.separator = separator
 
-        logging.info(f'building vocabulary from {vocab_fname}')
+        logging.info('building vocabulary from {}'.format(vocab_fname))
         vocab = [config.PAD_TOKEN, config.UNK_TOKEN,
                  config.BOS_TOKEN, config.EOS_TOKEN]
 
@@ -19,7 +19,7 @@ class Tokenizer:
             for line in vfile:
                 vocab.append(line.strip())
 
-        logging.info(f'size of vocabulary: {len(vocab)}')
+        logging.info('size of vocabulary: {}'.format(len(vocab)))
         self.vocab_size = len(vocab)
 
 

@@ -8,8 +8,6 @@ import torch
 import torch.optim
 import torch.utils.data
 
-from mlperf_compliance import mlperf_log
-
 from seq2seq.train.distributed import DistributedDataParallel as DDP
 from seq2seq.train.fp_optimizers import Fp16Optimizer, Fp32Optimizer
 from seq2seq.utils import AverageMeter
@@ -67,16 +65,6 @@ class Seq2SeqTrainer:
         opt_name = opt_config['optimizer']
         lr = opt_config['lr']
         self.optimizer = torch.optim.__dict__[opt_name](params, lr=lr)
-        mlperf_log.gnmt_print(key=mlperf_log.OPT_NAME,
-                              value=opt_name)
-        mlperf_log.gnmt_print(key=mlperf_log.OPT_LR,
-                              value=lr)
-        mlperf_log.gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA1,
-                              value=self.optimizer.defaults['betas'][0])
-        mlperf_log.gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA2,
-                              value=self.optimizer.defaults['betas'][1])
-        mlperf_log.gnmt_print(key=mlperf_log.OPT_HP_ADAM_EPSILON,
-                              value=self.optimizer.defaults['eps'])
 
     def iterate(self, src, tgt, update=True, training=True):
         src, src_length = src
@@ -157,15 +145,15 @@ class Seq2SeqTrainer:
             if i % self.print_freq == 0:
                 phase = 'TRAIN' if training else 'EVAL'
                 log = []
-                log += [f'{phase} [{self.epoch}][{i}/{len(data_loader)}]']
-                log += [f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})']
-                log += [f'Data {data_time.val:.3f} ({data_time.avg:.3f})']
-                log += [f'Tok/s {tot_tok_time.val:.0f} ({tot_tok_time.avg:.0f})']
+                log += ['{} [{}][{}/{}]'.format(phase, self.epoch, i, len(data_loader))]
+                log += ['Time {:.3f} ({:.3f})'.format(batch_time.val, batch_time.avg)]
+                log += ['Data {:.3f} ({:.3f})'.format(data_time.val, data_time.avg)]
+                log += ['Tok/s {:.0f} ({:.0f})'.format(tot_tok_time.val, tot_tok_time.avg)]
                 if self.verbose:
-                    log += [f'Src tok/s {src_tok_time.val:.0f} ({src_tok_time.avg:.0f})']
-                    log += [f'Tgt tok/s {tgt_tok_time.val:.0f} ({tgt_tok_time.avg:.0f})']
-                    log += [f'Loss/sentence {losses_per_sentence.val:.1f} ({losses_per_sentence.avg:.1f})']
-                log += [f'Loss/tok {losses_per_token.val:.8f} ({losses_per_token.avg:.8f})']
+                    log += ['Src tok/s {:.0f} ({:.0f})'.format(src_tok_time.val, src_tok_time.avg)]
+                    log += ['Tgt tok/s {:.0f} ({:.0f})'.format(tgt_tok_time.val, tgt_tok_time.avg)]
+                    log += ['Loss/sentence {:.1f} ({:.1f})'.format(losses_per_sentence.val, losses_per_sentence.avg)]
+                log += ['Loss/tok {:.8f} ({:.8f})'.format(losses_per_token.val, losses_per_token.avg)]
                 log = '\t'.join(log)
                 logging.info(log)
 
@@ -225,15 +213,15 @@ class Seq2SeqTrainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.epoch = checkpoint['epoch']
             self.loss = checkpoint['loss']
-            logging.info(f'loaded checkpoint {filename} (epoch {self.epoch})')
+            logging.info('loaded checkpoint {} (epoch {})'.format(filename, self.epoch))
         else:
-            logging.error(f'invalid checkpoint: {filename}')
+            logging.error('invalid checkpoint: {}'.format(filename))
 
     def save(self, identifier=None, is_best=False, save_all=False):
 
         def write_checkpoint(state, filename):
             filename = os.path.join(self.save_path, filename)
-            logging.info(f'saving model to {filename}')
+            logging.info('saving model to {}'.format(filename))
             torch.save(state, filename)
 
         state = {
@@ -253,5 +241,5 @@ class Seq2SeqTrainer:
             write_checkpoint(state, filename)
 
         if save_all:
-            filename = f'checkpoint_epoch_{self.epoch:03d}.pth'
+            filename = 'checkpoint_epoch_{:03d}.pth'.format(self.epoch)
             write_checkpoint(state, filename)

@@ -62,13 +62,13 @@ class Fp16Optimizer:
             else:
                 self.loss_scale /= self.dls_downscale
                 self.since_last_invalid = 0
-                logging.info(f'Gradient norm: {norm}')
-                logging.info(f'Skipped batch, new scale: {self.loss_scale}')
+                logging.info('Gradient norm: {}'.format(norm))
+                logging.info('Skipped batch, new scale: {}'.format(self.loss_scale))
 
             if self.since_last_invalid >= self.dls_upscale_interval:
                 self.loss_scale *= self.dls_upscale
                 self.loss_scale = min(self.loss_scale, 8192.0)
-                logging.info(f'Upscaling, new scale: {self.loss_scale}')
+                logging.info('Upscaling, new scale: {}'.format(self.loss_scale))
                 self.since_last_invalid = 0
 
 

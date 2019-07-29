@@ -1,7 +1,5 @@
 import torch
 
-from mlperf_compliance import mlperf_log
-
 from seq2seq.data.config import BOS
 from seq2seq.data.config import EOS
 
@@ -25,17 +23,6 @@ class SequenceGenerator(object):
         self.cov_penalty_factor = cov_penalty_factor
 
         self.batch_first = self.model.batch_first
-
-        mlperf_log.gnmt_print(key=mlperf_log.EVAL_HP_BEAM_SIZE,
-                              value=self.beam_size)
-        mlperf_log.gnmt_print(key=mlperf_log.EVAL_HP_MAX_SEQ_LEN,
-                              value=self.max_seq_len)
-        mlperf_log.gnmt_print(key=mlperf_log.EVAL_HP_LEN_NORM_CONST,
-                              value=self.len_norm_const)
-        mlperf_log.gnmt_print(key=mlperf_log.EVAL_HP_LEN_NORM_FACTOR,
-                              value=self.len_norm_factor)
-        mlperf_log.gnmt_print(key=mlperf_log.EVAL_HP_COV_PENALTY_FACTOR,
-                              value=self.cov_penalty_factor)
 
     def greedy_search(self, batch_size, initial_input, initial_context=None):
         max_seq_len = self.max_seq_len

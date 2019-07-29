@@ -68,7 +68,7 @@ class ParallelDataset(Dataset):
         self.tgt = [self.tgt[idx] for idx in indices]
 
     def filter_data(self, min_len, max_len):
-        logging.info(f'filtering data, min len: {min_len}, max len: {max_len}')
+        logging.info('filtering data, min len: {}, max len: {}'.format(min_len, max_len))
 
         initial_len = len(self.src)
 
@@ -84,10 +84,10 @@ class ParallelDataset(Dataset):
         self.tgt = filtered_tgt
 
         filtered_len = len(self.src)
-        logging.info(f'pairs before: {initial_len}, after: {filtered_len}')
+        logging.info('pairs before: {}, after: {}'.format(initial_len, filtered_len))
 
     def process_data(self, fname, tokenizer, max_size):
-        logging.info(f'processing data from {fname}')
+        logging.info('processing data from {}'.format(fname))
         data = []
         with open(fname) as dfile:
             for idx, line in enumerate(dfile):
