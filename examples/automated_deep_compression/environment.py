@@ -291,7 +291,6 @@ class NetworkWrapper(object):
         return final_action
 
     def validate(self):
-        assert distiller.model_device(self.model) == 'cuda'
         top1, top5, vloss = self.services.validate_fn(model=self.model)
         return top1, top5, vloss
 
