@@ -147,15 +147,11 @@ class ClassifierCompressor(object):
             finalize_epoch
         """
         if self.train_loader is None:
+            # Load the datasets lazily
             self.load_datasets()
 
-        # model, criterion, optimizer, compression_scheduler, args, start_epoch, ending_epoch = (
-        #     self.model, self.criterion, self.optimizer, self.compression_scheduler, self.args, 
-        #     self.start_epoch, self.ending_epoch)
-
-        #self.activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
         perf_scores_history = []       
-        for epoch in range(start_epoch, ending_epoch):
+        for epoch in range(self.start_epoch, self.ending_epoch):
             msglogger.info('\n')
             top1, top5, loss = self.train_validate_with_scheduling(epoch)
             self._finalize_epoch(epoch, perf_scores_history, top1, top5)
