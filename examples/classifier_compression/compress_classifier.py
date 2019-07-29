@@ -81,6 +81,11 @@ import operator
 msglogger = None
 
 
+def default_optimizer(model, args):
+    return torch.optim.SGD(model.parameters(),
+            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+
+
 def main():
     script_dir = os.path.dirname(__file__)
     module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
@@ -172,8 +177,7 @@ def main():
     optimizer = None
     if args.compress:
         # Default optimizer
-        optimizer = torch.optim.SGD(model.parameters(),
-            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = default_optimizer(model, args)
         # The main use-case for this sample application is CNN compression. Compression
         # requires a compression schedule configuration file in YAML.
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler)
@@ -200,8 +204,7 @@ def main():
     criterion = nn.CrossEntropyLoss().to(args.device)
 
     if optimizer is None:
-        optimizer = torch.optim.SGD(model.parameters(),
-            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = default_optimizer(model, args)
         msglogger.info('Optimizer Type: %s', type(optimizer))
         msglogger.info('Optimizer Args: %s', optimizer.defaults)
 
