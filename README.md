@@ -17,11 +17,11 @@
       Getting Started
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/algo_pruning/index.html">
+    <a href="https://nervanasystems.github.io/distiller/algo_pruning.html">
       Algorithms
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/design/index.html">
+    <a href="https://nervanasystems.github.io/distiller/design.html">
       Design
     </a>
     <span> | </span>
@@ -37,7 +37,7 @@ Network compression can reduce the memory footprint of a neural network, increas
 
 #### Note on Release 0.3 - Possible BREAKING Changes
 
-As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.0.1, which might also cause older code to break due to some API changes.  
+As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.X, which might also cause older code to break due to some API changes.  
 If updating from an earlier revision of the code, please make sure to follow the instructions in the [install](#install-the-package) section to make sure proper installation of Distiller and all dependencies.
 <details><summary><b>What's New in November?</b></summary>
 <p>
@@ -127,7 +127,7 @@ Beware.
 - [Built With](#built-with)
 - [Versioning](#versioning)
 - [License](#license)
-- [Citation](#citation)
+- [Community](#community)
 - [Acknowledgments](#acknowledgments)
 - [Disclaimer](#disclaimer)
 
@@ -158,16 +158,16 @@ Beware.
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
   - Post-training quantization of trained full-precision models, dynamic and static (statistics-based)
-  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/quantization/index.html#quantization-aware-training) in the loop
+  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/algo_quantization.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
-  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation/index.html), in conjunction with the other available pruning / regularization / quantization methods.
+  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
   - Sample implementation of Early Exit, with more to come
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
   + [This notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
-* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html).
+* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html).
 * Logging to the console, text file and TensorBoard-formatted file.
 * Export to **ONNX** (export of quantized models pending ONNX standardization)
 
@@ -176,7 +176,7 @@ Beware.
 These instructions will help get Distiller up and running on your local machine.
 1. [Clone Distiller](#clone-distiller)
 2. [Create a Python virtual environment](#create-a-python-virtual-environment)
-3. [Install dependencies](#install-dependencies)
+3. [Install the package](#install-the-package)
 
 Notes:
 - Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
@@ -222,6 +222,8 @@ $ source env/bin/activate
 ```
 
 ### Install the package
+If you do not use CUDA 9 in your environment, please refer to [Pytorch website](https://pytorch.org/get-started/locally/) to install the compatible build of Pytorch 1.1 and torchvision 0.3, before installing the package.
+
 Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
 $ cd distiller
@@ -229,7 +231,7 @@ $ pip3 install -e .
 ```
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
 
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.0.1 for CUDA 9.0.  This is the setup we've used for testing Distiller.
+PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.1.0 for CUDA 9.0.  This is the setup we've used for testing Distiller.
 
 ## Getting Started
 
@@ -241,10 +243,14 @@ We'll show you how to use it for some simple use-cases, and will point you to so
 
 For more details, there are some other resources you can refer to:
 + [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
-+ [Model zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html)
-+ [Compression scheduling](https://nervanasystems.github.io/distiller/schedule/index.html)
-+ [Usage](https://nervanasystems.github.io/usage/index.html)
-+ [Tutorial: Using Distiller to prune a PyTorch language model](https://github.com/NervanaSystems/distiller/wiki/Tutorial:-Using-Distiller-to-prune-a-PyTorch-language-model)
++ [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
++ [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
++ [Usage](https://nervanasystems.github.io/distiller/usage.html)
++ [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
++ [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
++ [Tutorial: Post-Training Quantization of a Language Model
+](https://nervanasystems.github.io/distiller/tutorial-lang_model_quant.html)
++ [Post-training quantization command line examples](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md)
 
 ### Example invocations of the sample application
 + [Training-only](#training-only)
@@ -297,10 +303,10 @@ This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've include
 $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resume ../ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize-eval --evaluate
 ```
 
-The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant.md).
+The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
 
 ### Explore the sample Jupyter notebooks
-The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter/index.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
+The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
 After installing and running the server, take a look at the [notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
@@ -382,16 +388,57 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
-## Citation
+## Community
 
-Research papers citing Distiller:
--  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
-   *"Fast Adjustable Threshold For Uniform Neural Network Quantization,"*<br>
-   [arXiv:1812.07872v2](https://arxiv.org/abs/1812.07872v2), 2018
+### Github projects using Distiller:
+- [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
+
+### Research papers citing Distiller:
+
+- Soroush Ghodrati, Hardik Sharma, Sean Kinzer, Amir Yazdanbakhsh, Kambiz Samadi, Nam Sung Kim, Doug Burger, Hadi Esmaeilzadeh.<br>
+*[Mixed-Signal Charge-Domain Acceleration of Deep Neural networks through Interleaved Bit-Partitioned Arithmetic]( https://arxiv.org/abs/1906.11915)*,<br>
+arXiv:1906.11915, 2019.
+
+- Gil Shomron, Tal Horowitz, Uri Weiser.<br>
+*[SMT-SA: Simultaneous Multithreading in Systolic Arrays](https://ieeexplore.ieee.org/document/8742541)*,<br>
+In IEEE Computer Architecture Letters (CAL), 2019.
+
+- Shangqian Gao , Cheng Deng , and Heng Huang.<br>
+ *[Cross Domain Model Compression by Structurally Weight Sharing](http://openaccess.thecvf.com/content_CVPR_2019/html/Gao_Cross_Domain_Model_Compression_by_Structurally_Weight_Sharing_CVPR_2019_paper.html),*<br>
+ In The IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2019, pp. 8973-8982.
+ 
+- Moin Nadeem, Wei Fang, Brian Xu, Mitra Mohtarami, James Glass.<br>
+  *[FAKTA: An Automatic End-to-End Fact Checking System](https://arxiv.org/abs/1906.04164),*<br>
+  In North American Chapter of the Association for Computational Linguistics (NAACL), 2019.
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
+  *[SinReQ: Generalized Sinusoidal Regularization for Low-Bitwidth Deep Quantized Training](https://arxiv.org/abs/1905.01416),*<br>
+  arXiv:1905.01416, 2019.
+
+- Goncharenko A., Denisov A., Alyamkin S., Terentev E.<br>
+*[Trainable Thresholds for Neural Network Quantization](https://rd.springer.com/chapter/10.1007/978-3-030-20518-8_26),*<br>
+In: Rojas I., Joya G., Catala A. (eds) Advances in Computational Intelligence Lecture Notes in Computer Science, vol 11507. Springer, Cham.  International Work-Conference on Artificial Neural Networks (IWANN 2019).
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
+  *[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*
+  arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
-  *"Improving Neural Network Quantization without Retraining using Outlier Channel Splitting,"*<br>
-  [arXiv:1901.09504v2](https://arxiv.org/abs/1901.09504v20), 2019
+  *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
+  arXiv:1901.09504, 2019<br>
+  [Code](https://github.com/cornell-zhang/dnn-quant-ocs)
+
+- Angad S. Rekhi, Brian Zimmer, Nikola Nedovic, Ningxi Liu, Rangharajan Venkatesan, Miaorong Wang, Brucek Khailany, William J. Dally, C. Thomas Gray.<br>
+*[Analog/Mixed-Signal Hardware Error Modeling for Deep Learning Inference](https://research.nvidia.com/sites/default/files/pubs/2019-06_Analog/Mixed-Signal-Hardware-Error/40_2_Rekhi_AMS_ML.pdf)*,<br>
+Nvidia Research, 2019.
+
+- Norio Nakata.<br>
+*[Recent Technical Development of Artificial Intelligence for Diagnostic Medical Imaging]( https://rd.springer.com/article/10.1007/s11604-018-0804-6)*,<br>
+In Japanese Journal of Radiology, February 2019, Volume 37, Issue 2, pp 103–108.
+
+-  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
+   *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872)*,<br>
+   arXiv:1812.07872, 2018
 
 
 If you used Distiller for your work, please use the following citation:
@@ -400,6 +447,8 @@ If you used Distiller for your work, please use the following citation:
 @misc{neta_zmora_2018_1297430,
   author       = {Neta Zmora and
                   Guy Jacob and
+                  Lev Zlotnik and
+                  Bar Elharar and
                   Gal Novik},
   title        = {Neural Network Distiller},
   month        = jun,
@@ -413,7 +462,7 @@ If you used Distiller for your work, please use the following citation:
 
 Any published work is built on top of the work of many other people, and the credit belongs to too many people to list here.
 * The Python and PyTorch developer communities have shared many invaluable insights, examples and ideas on the Web.
-* The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo/index.html) have shared their research ideas, theoretical background and results.
+* The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
 
 
 

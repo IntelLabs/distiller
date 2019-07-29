@@ -21,12 +21,14 @@ from collections import OrderedDict
 from functools import reduce, partial, update_wrapper
 import logging
 import os
+from copy import deepcopy
 
 import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
 import distiller.modules
+import distiller.model_transforms as mt
 
 msglogger = logging.getLogger()
 
@@ -46,7 +48,7 @@ class ClipMode(Enum):
     NONE = 0
     # Clip value calculated by averaging over the max absolute values of samples within a batch
     AVG = 1
-    # Clip value calculated as mean of tesnsor + N standard deviations. N should be specified separately
+    # Clip value calculated as mean of tensor + N standard deviations. N should be specified separately
     N_STD = 2
 
 
@@ -411,7 +413,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
-        clip_n_stds (int or float): See RangeLinearQuantWrapper
+        clip_n_stds (int): See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
@@ -911,7 +913,7 @@ class PostTrainLinearQuantizer(Quantizer):
             calculations.
             If None, scale factors will be kept in their original FP32 values.
     Note:
-        If fp16 is set to True, all the layers (except those overriden in `overrides`) will be converted
+        If fp16 is set to True, all the layers (except those overridden in `overrides`) will be converted
         to half precision, regardless of bits_activations/parameters/accum.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
@@ -936,6 +938,15 @@ class PostTrainLinearQuantizer(Quantizer):
                     model_activation_stats = distiller.utils.yaml_ordered_load(stream)
             elif not isinstance(model_activation_stats, (dict, OrderedDict)):
                 raise TypeError('model_activation_stats must either be a string, a dict / OrderedDict or None')
+        else:
+            msglogger.warning("\nWARNING:\nNo stats file passed - Dynamic quantization will be used\n"
+                              "At the moment, this mode isn't as fully featured as stats-based quantization, and "
+                              "the accuracy results obtained are likely not as representative of real-world results."
+                              "\nSpecifically:\n"
+                              "  * Not all modules types are supported in this mode. Unsupported modules will remain "
+                              "in FP32.\n"
+                              "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
+                              "supported when statistics are used.\nEND WARNING\n")
 
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
@@ -1015,6 +1026,9 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[distiller.modules.BatchMatmul] = factory_matmul
         self.replacement_factory[nn.Embedding] = replace_embedding
 
+        if hasattr(msglogger, 'logdir'):
+            self.save_per_layer_parameters(msglogger.logdir)
+
     @classmethod
     def from_args(cls, model, args):
         """
@@ -1040,6 +1054,154 @@ class PostTrainLinearQuantizer(Quantizer):
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides)
+
+    def save_per_layer_parameters(self, save_dir=''):
+        defaults = OrderedDict(self.model.quantizer_metadata['params'])
+        defaults.pop('bits_activations')
+        defaults.pop('bits_parameters')
+        defaults.pop('bits_accum')
+        out = OrderedDict()
+        for n, m in self.model.named_modules():
+            if distiller.has_children(m):
+                continue
+            qbits = self.module_qbits_map[n]
+            d = OrderedDict()
+            d['bits_activations'] = qbits.acts
+            d['bits_weights'] = qbits.wts
+            d['bits_bias'] = qbits.bias
+            for k, v in defaults.items():
+                actual_v = self.module_overrides_map[n].get(k, v)
+                d[k] = actual_v
+            out[n] = d
+        save_path = os.path.join(save_dir, 'layer_quant_params.yaml')
+        distiller.yaml_ordered_save(save_path, out)
+        msglogger.info('Per-layer quantization parameters saved to ' + save_path)
+
+    def prepare_model(self, dummy_input=None):
+        self.has_bidi_distiller_lstm = any(isinstance(m, distiller.modules.DistillerLSTM) and m.bidirectional for
+                                           _, m in self.model.named_modules())
+        if self.has_bidi_distiller_lstm:
+            warnings.warn('Model contains a bidirectional DistillerLSTM module. '
+                          'Automatic BN folding and statistics optimization based on tracing is not yet '
+                          'supported for models containing such modules.\n'
+                          'Will perform specific optimization for the DistillerLSTM modules, but any other potential '
+                          'opportunities for optimization in the model will be ignored.', UserWarning)
+            # Setting dummy_input to None to make sure SummaryGraph won't be called
+            dummy_input = None
+        elif dummy_input is None:
+            raise ValueError('PostTrainLinearQuantizer requires dummy input in order to perform certain optimizations')
+        super(PostTrainLinearQuantizer, self).prepare_model(dummy_input)
+
+    def _pre_prepare_model(self, dummy_input):
+        if not self.has_bidi_distiller_lstm:
+            self._apply_bn_folding(dummy_input)
+            self._apply_activation_stats_fusions()
+        else:
+            self._apply_bidi_distiller_lstm_stats_fusion()
+
+        if hasattr(msglogger, 'logdir'):
+            save_path = os.path.join(msglogger.logdir, 'quant_stats_after_prepare_model.yaml')
+            distiller.yaml_ordered_save(save_path, self.model_activation_stats)
+            msglogger.info('Updated stats saved to ' + save_path)
+
+    def _clip_stats(self, entry, min_val, max_val):
+        if entry['max'] < min_val:
+            entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = min_val
+        elif entry['min'] > max_val:
+            entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = max_val
+        else:
+            entry['min'] = max(min_val, entry['min'])
+            entry['avg_min'] = max(min_val, entry['avg_min'])
+            entry['max'] = min(max_val, entry['max'])
+            entry['avg_max'] = min(max_val, entry['avg_max'])
+
+    def _apply_bn_folding(self, dummy_input):
+        msglogger.info('Applying batch-norm folding ahead of post-training quantization')
+        mt.fold_batch_norms_inference(self.model, adjacency_map=self.adjacency_map)
+
+        # After BN folding model need to re-generate the adjacency map
+        summary_graph = distiller.SummaryGraph(self.model, dummy_input)
+        self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+
+        if not self.model_activation_stats:
+            msglogger.info("No activation stats - skipping optimizations for modules followed by Relu/Tanh/Sigmoid")
+            return
+
+        # Update the activation stats to reflect BN folding
+        msglogger.info('Propagating output statistics from BN modules to folded modules')
+        named_modules = OrderedDict(self.model.named_modules())
+        model_stats = self.model_activation_stats
+        for n, m in named_modules.items():
+            try:
+                # Look for the mark left by distiller.model_transforms.fold_batch_norms
+                folded_bn_module = distiller.normalize_module_name(m.fused_modules[0])
+                # Propagate the output stats of the folded BN module to this module
+                # If stats were collected after folding was applied, then stats for the BN module won't exist,
+                # in which case we just move on
+                model_stats[distiller.normalize_module_name(n)]['output'] = model_stats.pop(folded_bn_module)['output']
+                msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
+            except (AttributeError, KeyError):
+                continue
+
+    def _apply_activation_stats_fusions(self):
+        # Now we look for certain "fusions" of layers and activations
+        # We modify stats to make sure we quantize only the ranges relevant to the activation function
+        # By doing so we reduce quantization error while still keeping all
+        msglogger.info('Optimizing output statistics for modules followed by ReLU/Tanh/Sigmoid')
+
+        named_modules = OrderedDict(self.model.named_modules())
+        model_stats = self.model_activation_stats
+        for n, m in named_modules.items():
+            if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+                continue
+            successor = self.adjacency_map[n].successors[0]
+            n = distiller.normalize_module_name(n)
+            m_stats = model_stats[n]
+
+            succ_type = successor.type
+            succ_stats = model_stats.get(distiller.normalize_module_name(successor.name), None)
+            if succ_type == 'Split':
+                # Handling case where layer output is split, with each chunk going into an activation function
+                # This pattern occurs in LSTM, for example. If all the activations are "similar", we can still
+                # optimize the quantization ranges of the output of the layer prior to the split
+                post_split_ops = self.adjacency_map[successor.name].successors
+                if all(op.type == 'Relu' for op in post_split_ops):
+                    succ_type = 'Relu'
+                elif all(op.type == 'Tanh' for op in post_split_ops):
+                    # Tanh non-saturated input range is smaller than sigmoid, so we try this first
+                    succ_type = 'Tanh'
+                elif all(op.type in ('Sigmoid', 'Tanh') for op in post_split_ops):
+                    # If we have both sigmoid and tanh (as in LSTM), we can go with sigmoid
+                    succ_type = 'Sigmoid'
+                succ_stats = None
+
+            if succ_type == 'Relu':
+                # ReLU zeros out all negative values, so there's no need to quantize them
+                msglogger.debug('  Module {} followed by Relu, updating stats'.format(n))
+                if succ_stats is not None:
+                    m_stats['output'] = deepcopy(succ_stats['output'])
+                    succ_stats['inputs'][0] = deepcopy(succ_stats['output'])
+                else:
+                    msglogger.debug("    Relu op not a module or post-split, can't update mean and std".format(n))
+                    self._clip_stats(m_stats['output'], 0., m_stats['output']['max'])
+            elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
+                # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
+                # of these ranges
+                msglogger.debug('  Module {} followed by {}, updating stats'.format(n, succ_type))
+                sat_val = 4. if succ_type == 'Tanh' else 6.
+                self._clip_stats(m_stats['output'], -sat_val, sat_val)
+                if succ_stats is not None:
+                    succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+
+    def _apply_bidi_distiller_lstm_stats_fusion(self):
+        distiller_lstm_cells = [n for n, m in self.model.named_modules() if
+                                isinstance(m, distiller.modules.DistillerLSTMCell)]
+
+        for name in distiller_lstm_cells:
+            name += '.eltwiseadd_gate'
+            msglogger.debug('  Module {} followed by Sigmoid, updating stats'.format(name))
+            sat_val = 6.
+            self._clip_stats(self.model_activation_stats[name]['output'], -sat_val, sat_val)
 
 
 ###############################################################################
@@ -1149,10 +1311,6 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                                                   overrides=overrides,
                                                                   train_with_fp_copy=True)
 
-        if isinstance(model, nn.DataParallel) and len(model.device_ids) > 1:
-            raise RuntimeError('QuantAwareTrainRangeLinearQuantizer currently does not support running with '
-                               'multiple GPUs')
-
         mode = verify_quant_mode(mode)
 
         self.model.quantizer_metadata['params']['mode'] = str(mode).split('.')[1]
@@ -1195,9 +1353,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         self.activation_replace_fn = activation_replace_fn
         self.replacement_factory[nn.ReLU] = self.activation_replace_fn
 
-    def _prepare_model_impl(self):
-        super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()
-
+    def _post_prepare_model(self):
         if self.quantize_inputs:
             if isinstance(self.model, nn.DataParallel):
                 m = self.model.module

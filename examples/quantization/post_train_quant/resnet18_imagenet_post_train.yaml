@@ -11,28 +11,41 @@
 #
 # To invoke, run:
 #
-# python compress_classifier.py -a=resnet18 -p=10 -j=22 <path_to_imagenet_dataset> --pretrained --evaluate --quantize-eval --qe-config-file ../quantization/post_train_quant/resnet18_imagenet_post_train.yaml
+# python compress_classifier.py -a resnet18 -p 10 -j 22 <path_to_imagenet_dataset> --pretrained --evaluate --quantize-eval --qe-config-file ../quantization/post_train_quant/resnet18_imagenet_post_train.yaml
 # (Note that when '--qe-config-file' is passed, all other '--qe*' arguments are ignored. Only the settings in the YAML file are used)
 #
 # Specifically, configuring with a YAML file allows us to define the 'overrides' section, which is cumbersome
-# to define programatically and not exposed as a command-line argument.
+# to define programmatically and not exposed as a command-line argument.
 #
 # To illustrate how this may come in handy, we'll try post-training quantization of ResNet-18 using 6-bits for weights
 # and activations. First we'll see what we get when we quantize all layers with 6-bits, and then we'll see how we
 # can get better results by selectively quantizing some layers to 8-bits.
 #
-# FP32: (Run the above command line without the part starting with '--quantize-eval')
-#   ==> Top1: 69.758    Top5: 89.076    Loss: 1.251
+# +-----+----------+------------------------------------------+--------+--------+-----------------------------------+
+# | Run | Num Bits |                 Overrides                | Top-1  | Diff   | How-To                            |
+# + No. + Default  +------------------------------------------+        +        +                                   +
+# |     |          | Num Bits     | Num Bits | Clip output of |        |        |                                   |
+# |     |          | First & Last | EltWise  | final layer    |        |        |                                   |
+# |     |          | Layers       | Adds     | before softmax |        |        |                                   |
+# +-----+----------+--------------+----------+----------------+--------+--------+-----------------------------------+
+# | 1   | FP32     | N/A          | N/A      | N/A            | 69.758 |        | Run command line without part     |
+# |     |          |              |          |                |        |        | starting with '--quantize-eval'   |
+# +-----+----------+--------------+----------+----------------+--------+--------+-----------------------------------+
+# | 2   | 6        | 6            | 6        | Yes            | 62.776 | -6.982 | Comment out all override sections |
+# |     |          |              |          |                |        |        | Run full command line             |
+# +-----+----------+--------------+----------+----------------+--------+--------+-----------------------------------+
+# | 3   | 6        | 6            | 6        | No             | 67.748 | −2.01  | Uncomment override section for    |
+# +-----+----------+--------------+----------+----------------+--------+--------+ the specific run (all others      +
+# | 4   | 6        | 6            | 8        | No             | 67.928 | −1.83  | commented out)                    |
+# +-----+----------+--------------+----------+----------------+--------+--------+                                   +
+# | 5   | 6        | 8            | 6        | No             | 68.872 | −0.886 | Run full command line             |
+# +-----+----------+--------------+----------+----------------+--------+--------+                                   +
+# | 6   | 6        | 8            | 8        | No             | 68.976 | −0.782 |                                   |
+# +-----+----------+--------------+----------+----------------+--------+--------+-----------------------------------+
 #
-# All layers 6-bits: (Just comment out the entire 'overrides' section)
-#   ==> Top1: 64.702    Top5: 85.990    Loss: 1.467
-#
-# First + last layer with 8-bits, everything else in 6-bits (comment out just the section with the header '.*add')
-#   ==> Top1: 67.040    Top5: 87.548    Loss: 1.366
-#
-# First + last layers AND element-wise add layers with 8-bits, everything else in 6-bits (un-comment everything):
-#   ==> Top1: 68.382    Top5: 88.308    Loss: 1.306
-#
+# We can see that the largest boost to accuracy, ~5%, is obtained by disabling activations clipping for the final layer
+# Quantizing the first and last layers to 8 bits instead of 6 bits boosts accuracy by another ~1.1%
+# Quantizing the element-wise add layers to 8-bits gives another small boost of ~0.2%
 
 quantizers:
   post_train_quantizer:
@@ -45,15 +58,41 @@ quantizers:
     model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True
     clip_acts: AVG
-    no_clip_layers: fc
-    overrides:
-    # First and last layers + element-wise add layers in 8-bits
-      conv1:
-        bits_weights: 8
-        bits_activations: 8
-      .*add:
-        bits_weights: 8
-        bits_activations: 8
-      fc:
-        bits_weights: 8
-        bits_activations: 8
+
+    # Overrides section for run 3
+#    overrides:
+#      fc:
+#        clip_acts: NONE  # Don't clip activations in last layer before softmax
+
+    # Overrides section for run 4
+#    overrides:
+#      .*add:
+#        bits_weights: 8
+#        bits_activations: 8
+#      fc:
+#        clip_acts: NONE  # Don't clip activations in last layer before softmax
+
+    # Overrides section for run 5
+#    overrides:
+#    # First and last layers in 8-bits
+#      conv1:
+#        bits_weights: 8
+#        bits_activations: 8
+#      fc:
+#        bits_weights: 8
+#        bits_activations: 8
+#        clip_acts: NONE  # Don't clip activations in last layer before softmax
+
+    # Overrides section for run 6
+#    overrides:
+#    # First and last layers + element-wise add layers in 8-bits
+#      conv1:
+#        bits_weights: 8
+#        bits_activations: 8
+#      .*add:
+#        bits_weights: 8
+#        bits_activations: 8
+#      fc:
+#        bits_weights: 8
+#        bits_activations: 8
+#        clip_acts: NONE
