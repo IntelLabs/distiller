@@ -800,7 +800,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
 
             # Expand the weights back to their original size,
             new_w = new_w.contiguous().view(param.size(0), cnt_retained_channels, param.size(2), param.size(3))
-            debug_print("====> W={} W'={} Y={} X={}".format(param.shape, new_w.shape, Y.shape, X.shape))
             
             # Copy the weights that we learned from minimizing the feature-maps least squares error,
             # to our actual weights tensor.
