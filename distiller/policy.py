@@ -256,10 +256,11 @@ class QuantizationPolicy(ScheduledTrainingPolicy):
         self.quantizer = quantizer
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
-        dummy_input = kwargs.get("dummy_input", None)
-        device = next(model.parameters()).device
-        self.quantizer.prepare_model(dummy_input)
-        self.quantizer.model.to(device)
+        if not model.is_quantized:
+            dummy_input = kwargs.get("dummy_input", None)
+            device = next(model.parameters()).device
+            self.quantizer.prepare_model(dummy_input)
+            self.quantizer.model.to(device)
         self.quantizer.quantize_params()
 
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
