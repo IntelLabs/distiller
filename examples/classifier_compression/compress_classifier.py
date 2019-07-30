@@ -67,7 +67,10 @@ import distiller.apputils as apputils
 import distiller.quantization as quantization
 import examples.automated_deep_compression as adc
 from distiller.models import create_model
-from utils_cnn_classifier import *
+#from utils_cnn_classifier import *
+import distiller.apputils.image_classifier as classifier
+from distiller.apputils.image_classifier import *
+import parser
 
 
 # Logger handle
@@ -76,8 +79,8 @@ msglogger = logging.getLogger()
 
 def main():
     # Parse arguments
-    args = parser.get_parser(init_classifier_compression_arg_parser()).parse_args()
-    app = ClassifierCompressorSampleApp(args)
+    args = parser.get_parser(classifier.init_classifier_compression_arg_parser()).parse_args()
+    app = ClassifierCompressorSampleApp(args, script_dir = os.path.dirname(__file__))
     if app.handle_subapps():
         return
     init_knowledge_distillation(app.args)
@@ -88,7 +91,7 @@ def main():
     
 def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger, args):
     def load_test_data(args):
-        test_loader = load_data(args, load_train=False, load_val=False, load_test=True)
+        test_loader = classifier.load_data(args, load_train=False, load_val=False, load_test=True)
         return test_loader
 
     do_exit = False
@@ -109,10 +112,10 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                                 args.dataset, add_softmax=True, verbose=False)
         do_exit = True
     elif args.qe_calibration:
-        acts_quant_stats_collection(model, criterion, pylogger, args)
+        classifier.acts_quant_stats_collection(model, criterion, pylogger, args)
         do_exit = True
     elif args.activation_histograms:
-        acts_histogram_collection(model, criterion, pylogger, args)
+        classifier.acts_histogram_collection(model, criterion, pylogger, args)
         do_exit = True
     elif args.sensitivity is not None:
         test_loader = load_test_data(args)
@@ -122,9 +125,9 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.evaluate:
         test_loader = load_test_data(args)
-        activations_collectors = create_activation_stats_collectors(model, *args.activation_stats)
-        evaluate_model(model, criterion, test_loader, pylogger, activations_collectors,
-                       args, compression_scheduler)
+        activations_collectors = classifier.create_activation_stats_collectors(model, *args.activation_stats)
+        classifier.evaluate_model(model, criterion, test_loader, pylogger, activations_collectors,
+                                  args, compression_scheduler)
         do_exit = True
     elif args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)
@@ -166,9 +169,9 @@ def early_exit_init(args):
     msglogger.info('=> using early-exit threshold values of %s', args.earlyexit_thresholds)
 
 
-class ClassifierCompressorSampleApp(ClassifierCompressor):
-    def __init__(self, args):
-        super().__init__(args)
+class ClassifierCompressorSampleApp(classifier.ClassifierCompressor):
+    def __init__(self, args, script_dir):
+        super().__init__(args, script_dir)
         early_exit_init(args)
 
     def handle_subapps(self):
@@ -182,9 +185,9 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
     msglogger.info("Running sensitivity tests")
     if not isinstance(loggers, list):
         loggers = [loggers]
-    test_fnc = partial(test, test_loader=data_loader, criterion=criterion,
+    test_fnc = partial(classifier.test, test_loader=data_loader, criterion=criterion,
                        loggers=loggers, args=args,
-                       activations_collectors=create_activation_stats_collectors(model))
+                       activations_collectors=classifier.create_activation_stats_collectors(model))
     which_params = [param_name for param_name, _ in model.named_parameters()]
     sensitivity = distiller.perform_sensitivity_analysis(model,
                                                          net_params=which_params,
@@ -199,12 +202,12 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
     using_fm_reconstruction = args.amc_prune_method == 'fm-reconstruction' 
     fixed_subset, sequential = (using_fm_reconstruction, using_fm_reconstruction)
     msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
-    train_loader, val_loader, test_loader = load_data(args, fixed_subset, sequential)
+    train_loader, val_loader, test_loader = classifier.load_data(args, fixed_subset, sequential)
 
     args.display_confusion = True
-    validate_fn = partial(test, test_loader=val_loader, criterion=criterion,
+    validate_fn = partial(classifier.test, test_loader=val_loader, criterion=criterion,
                           loggers=loggers, args=args, activations_collectors=None)
-    train_fn = partial(train, train_loader=train_loader, criterion=criterion,
+    train_fn = partial(classifier.train, train_loader=train_loader, criterion=criterion,
                        loggers=loggers, args=args)
 
     save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
@@ -216,11 +219,11 @@ def automated_deep_compression(model, criterion, optimizer, loggers, args):
 
 
 def greedy(model, criterion, optimizer, loggers, args):
-    train_loader, val_loader, test_loader = load_data(args)
+    train_loader, val_loader, test_loader = classifier.load_data(args)
 
-    test_fn = partial(test, test_loader=test_loader, criterion=criterion,
+    test_fn = partial(classifier.test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
-    train_fn = partial(train, train_loader=train_loader, criterion=criterion, args=args)
+    train_fn = partial(classifier.train, train_loader=train_loader, criterion=criterion, args=args)
     assert args.greedy_target_density is not None
     distiller.pruning.greedy_filter_pruning.greedy_pruner(model, args,
                                                           args.greedy_target_density,
