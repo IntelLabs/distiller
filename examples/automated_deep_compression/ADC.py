@@ -26,6 +26,8 @@ import logging
 import numpy as np
 import torch
 import csv
+import traceback
+from functools import partial
 try:
     import gym
 except ImportError as e:
@@ -39,9 +41,53 @@ from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
 from examples.automated_deep_compression.environment import DistillerWrapperEnvironment, Observation
 from examples.automated_deep_compression.utils.features_collector import collect_intermediate_featuremap_samples
+import distiller.apputils as apputils
+import distiller.apputils.image_classifier as classifier
+#from distiller.apputils.image_classifier import init_classifier_compression_arg_parser
+from rewards import reward_factory
 
 
-msglogger = logging.getLogger("examples.automated_deep_compression")
+msglogger = logging.getLogger()
+
+
+class AutoCompressionSampleApp(classifier.ClassifierCompressor):
+    def __init__(self, args, script_dir):
+        super().__init__(args, script_dir)
+
+    def train_auto_compressor(self):
+        using_fm_reconstruction = self.args.amc_prune_method == 'fm-reconstruction'
+        fixed_subset, sequential = (using_fm_reconstruction, using_fm_reconstruction)
+        msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
+        train_loader, val_loader, test_loader = classifier.load_data(self.args, fixed_subset, sequential)
+
+        self.args.display_confusion = True
+        validate_fn = partial(classifier.test, test_loader=val_loader, criterion=self.criterion,
+                              loggers=self.pylogger, args=self.args, activations_collectors=None)
+        train_fn = partial(classifier.train, train_loader=train_loader, criterion=self.criterion,
+                           loggers=self.pylogger, args=self.args)
+
+        save_checkpoint_fn = partial(apputils.save_checkpoint, arch=self.args.arch, dir=msglogger.logdir)
+        optimizer_data = {'lr': self.args.lr, 'momentum': self.args.momentum, 'weight_decay': self.args.weight_decay}
+        msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
+                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+
+        #adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+        return train_auto_compressor(self.model, self.args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
+
+
+def get_arg_parser(parser):
+    import examples.automated_deep_compression as adc
+    adc.automl_args.add_automl_args(parser)
+    return parser
+
+
+def main():
+    # Parse arguments
+    args = get_arg_parser(classifier.init_classifier_compression_arg_parser()).parse_args()
+    #args = init_classifier_compression_arg_parser().parse_args()
+    #adc.automl_args.add_automl_args(args)
+    app = AutoCompressionSampleApp(args, script_dir=os.path.dirname(__file__))
+    return app.train_auto_compressor()
 
     
 def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn):
@@ -105,7 +151,6 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     #net_wrapper = NetworkWrapper(model, app_args, services)
     #return sample_networks(net_wrapper, services)
 
-    from .rewards import reward_factory
     amc_cfg.target_density = args.amc_target_density
     amc_cfg.reward_fn, amc_cfg.action_constrain_fn = reward_factory(args.amc_protocol)
 
@@ -117,13 +162,13 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     env1 = create_environment()
 
     if args.amc_rllib == "spinningup":
-        from .rl_libs.spinningup import spinningup_if
+        from rl_libs.spinningup import spinningup_if
         rl = spinningup_if.RlLibInterface()
         env2 = create_environment()
         steps_per_episode = env1.steps_per_episode
         rl.solve(env1, env2)
     elif args.amc_rllib == "private":
-        from .rl_libs.private import private_if
+        from rl_libs.private import private_if
         rl = private_if.RlLibInterface()
         args.observation_len = len(Observation._fields)
         rl.solve(env1, args)
@@ -137,9 +182,30 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         steps_per_episode = env1.steps_per_episode
         rl.solve(**env_cfg, steps_per_episode=steps_per_episode)
     elif args.amc_rllib == "random":
-        from .rl_libs.random import random_if
+        from rl_libs.random import random_if
         rl = random_if.RlLibInterface()
         return rl.solve(env1)
     else:
         raise ValueError("unsupported rl library: ", args.amc_rllib)
 
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n-- KeyboardInterrupt --")
+    except Exception as e:
+        if msglogger is not None:
+            # We catch unhandled exceptions here in order to log them to the log file
+            # However, using the msglogger as-is to do that means we get the trace twice in stdout - once from the
+            # logging operation and once from re-raising the exception. So we remove the stdout logging handler
+            # before logging the exception
+            handlers_bak = msglogger.handlers
+            msglogger.handlers = [h for h in msglogger.handlers if type(h) != logging.StreamHandler]
+            msglogger.error(traceback.format_exc())
+            msglogger.handlers = handlers_bak
+        raise
+    finally:
+        if msglogger is not None and hasattr(msglogger, 'log_filename'):
+            msglogger.info('')
+            msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))

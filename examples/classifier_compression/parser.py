@@ -28,7 +28,5 @@ def get_parser(parser):
     parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
                         help='List of EarlyExit thresholds (e.g. --earlyexit_thresholds 1.2 0.9)')
     distiller.knowledge_distillation.add_distillation_args(parser, models.ALL_MODEL_NAMES, True)
-    distiller.quantization.add_post_train_quant_args(parser)
     distiller.pruning.greedy_filter_pruning.add_greedy_pruner_args(parser)
-    adc.automl_args.add_automl_args(parser)
     return parser

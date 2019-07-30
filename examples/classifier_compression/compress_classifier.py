@@ -65,7 +65,6 @@ import torchnet.meter as tnt
 import distiller
 import distiller.apputils as apputils
 import distiller.quantization as quantization
-import examples.automated_deep_compression as adc
 from distiller.models import create_model
 #from utils_cnn_classifier import *
 import distiller.apputils.image_classifier as classifier
@@ -80,7 +79,7 @@ msglogger = logging.getLogger()
 def main():
     # Parse arguments
     args = parser.get_parser(classifier.init_classifier_compression_arg_parser()).parse_args()
-    app = ClassifierCompressorSampleApp(args, script_dir = os.path.dirname(__file__))
+    app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
     init_knowledge_distillation(app.args)
@@ -95,9 +94,6 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         return test_loader
 
     do_exit = False
-    if args.AMC:
-        automated_deep_compression(model, criterion, optimizer, pylogger, args)
-        do_exit = True
     elif args.greedy:
         greedy(model, criterion, optimizer, pylogger, args)
         do_exit = True
@@ -196,26 +192,6 @@ def sensitivity_analysis(model, criterion, data_loader, loggers, args, sparsitie
                                                          group=args.sensitivity)
     distiller.sensitivities_to_png(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.png'))
     distiller.sensitivities_to_csv(sensitivity, os.path.join(msglogger.logdir, 'sensitivity.csv'))
-
-
-def automated_deep_compression(model, criterion, optimizer, loggers, args):
-    using_fm_reconstruction = args.amc_prune_method == 'fm-reconstruction' 
-    fixed_subset, sequential = (using_fm_reconstruction, using_fm_reconstruction)
-    msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
-    train_loader, val_loader, test_loader = classifier.load_data(args, fixed_subset, sequential)
-
-    args.display_confusion = True
-    validate_fn = partial(classifier.test, test_loader=val_loader, criterion=criterion,
-                          loggers=loggers, args=args, activations_collectors=None)
-    train_fn = partial(classifier.train, train_loader=train_loader, criterion=criterion,
-                       loggers=loggers, args=args)
-
-    save_checkpoint_fn = partial(apputils.save_checkpoint, arch=args.arch, dir=msglogger.logdir)
-    optimizer_data = {'lr': args.lr, 'momentum': args.momentum, 'weight_decay': args.weight_decay}
-    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
-
-    adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
 def greedy(model, criterion, optimizer, loggers, args):

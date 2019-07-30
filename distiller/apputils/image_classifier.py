@@ -52,10 +52,10 @@ class ClassifierCompressor(object):
         - Checkpoint handling
         - Classifier training, verification and testing
     """
-    def __init__(self, args):
+    def __init__(self, args, script_dir):
         self.args = args
         _override_args(args)
-        self.logdir = _init_logger(args)
+        self.logdir = _init_logger(args, script_dir)
         _config_determinism(args)
         _config_compute_device(args)
         
@@ -275,13 +275,14 @@ def init_classifier_compression_arg_parser():
                         help='Load a model without DataParallel wrapping it')
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
+
+    distiller.quantization.add_post_train_quant_args(parser)
     return parser
 
 
-def _init_logger(args):
-    script_dir = os.path.dirname(__file__)
+def _init_logger(args, script_dir):
     module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-    #global msglogger
+    global msglogger
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -607,12 +608,16 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     return top1, top5, lossses
 
 
+# Temporary patch until we refactor early-exit handling
+def _is_earlyexit(args):
+    return hasattr(args, 'earlyexit_thresholds') and args.earlyexit_thresholds
+
 def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     """Execute the validation/test loop."""
     losses = {'objective_loss': tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
-    if args.earlyexit_thresholds:
+    if _is_earlyexit(args):
         # for Early Exit, we have a list of errors and losses for each of the exits.
         args.exiterrors = []
         args.losses_exits = []
@@ -639,7 +644,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             # compute output from model
             output = model(inputs)
 
-            if not args.earlyexit_thresholds:
+            if not _is_earlyexit(args):
                 # compute loss
                 loss = criterion(output, target)
                 # measure accuracy and record loss
@@ -656,7 +661,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
             steps_completed = (validation_step+1)
             if steps_completed % args.print_freq == 0:
-                if not args.earlyexit_thresholds:
+                if not _is_earlyexit(args):
                     stats = ('',
                             OrderedDict([('Loss', losses['objective_loss'].mean),
                                          ('Top1', classerr.value(1)),
@@ -679,7 +684,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
-    if not args.earlyexit_thresholds:
+    if not _is_earlyexit(args):
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
 
