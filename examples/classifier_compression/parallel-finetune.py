@@ -18,10 +18,10 @@
 running in parallel.
 
 Format:
-    $ python multi-run.py --scan-dir=<directory containing the output of multi-run.py> 
+    $ python parallel-run.py --scan-dir=<directory containing the output of multi-run.py> 
       --ft-epochs=<number of epochs to tine-tune> --output-csv=<CSV output file> <fine-tuning command-line>
 Example:
-    $ time python multi-finetune.py --scan-dir=experiments/plain20-random-l1_rank/2019.07.21-004045/ --ft-epochs=3 --output-csv=ft_1epoch_results.csv --arch=plain20_cifar --lr=0.005 --vs=0 -p=50 --epochs=60 --compress=../automated_deep_compression/fine_tune.yaml ${CIFAR10_PATH} -j=1 --deterministic
+    $ time python parallel-finetune.py --scan-dir=experiments/plain20-random-l1_rank/2019.07.21-004045/ --ft-epochs=3 --output-csv=ft_1epoch_results.csv --arch=plain20_cifar --lr=0.005 --vs=0 -p=50 --epochs=60 --compress=../automated_deep_compression/fine_tune.yaml ${CIFAR10_PATH} -j=1 --deterministic
 """
 
 import os
