@@ -14,11 +14,11 @@
 # limitations under the License.
 #
 
-"""To execute this code:
-
-$ time python3 compress_classifier.py --arch=plain20_cifar ../../../data.cifar10e --resume=checkpoint.plain20_cifar.pth.tar --lr=0.05 --amc --amc-protocol=mac-constrained --amc-target-density=0.5 -p=50
-
 """
+$ python3 amc.py --arch=resnet20_cifar ${CIFAR10_PATH} --resume=../../ssl/checkpoints/checkpoint_trained_dense.pth.tar --amc --amc-procol=mac-constrained --amc-action-range 0.05 1.0 --amc-target-density=0.5 -p=50 --etes=0.075 --amc-ft-epochs=0 --amc-prune-pattern=channels --amc-prune-method=fm-reconstruction --amc-agent-algo=DDPG --amc-cfg=auto_compression_channels.yaml --amc-rllib=private -j=1
+"""
+
+
 import math
 import os
 import copy
@@ -39,11 +39,10 @@ import distiller
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
-from examples.automated_deep_compression.environment import DistillerWrapperEnvironment, Observation
-from examples.automated_deep_compression.utils.features_collector import collect_intermediate_featuremap_samples
+from environment import DistillerWrapperEnvironment, Observation
+from utils.features_collector import collect_intermediate_featuremap_samples
 import distiller.apputils as apputils
 import distiller.apputils.image_classifier as classifier
-#from distiller.apputils.image_classifier import init_classifier_compression_arg_parser
 from rewards import reward_factory
 
 
@@ -60,7 +59,7 @@ class AutoCompressionSampleApp(classifier.ClassifierCompressor):
         msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
         train_loader, val_loader, test_loader = classifier.load_data(self.args, fixed_subset, sequential)
 
-        self.args.display_confusion = True
+        self.args.display_confusion = False
         validate_fn = partial(classifier.test, test_loader=val_loader, criterion=self.criterion,
                               loggers=self.pylogger, args=self.args, activations_collectors=None)
         train_fn = partial(classifier.train, train_loader=train_loader, criterion=self.criterion,
@@ -75,17 +74,11 @@ class AutoCompressionSampleApp(classifier.ClassifierCompressor):
         return train_auto_compressor(self.model, self.args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
-def get_arg_parser(parser):
-    import examples.automated_deep_compression as adc
-    adc.automl_args.add_automl_args(parser)
-    return parser
-
-
 def main():
+    import amc_args
     # Parse arguments
-    args = get_arg_parser(classifier.init_classifier_compression_arg_parser()).parse_args()
-    #args = init_classifier_compression_arg_parser().parse_args()
-    #adc.automl_args.add_automl_args(args)
+    args = classifier.init_classifier_compression_arg_parser()
+    args = amc_args.add_automl_args(args).parse_args()
     app = AutoCompressionSampleApp(args, script_dir=os.path.dirname(__file__))
     return app.train_auto_compressor()
 
@@ -160,6 +153,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         return env
 
     env1 = create_environment()
+    comfig_verbose(False)
 
     if args.amc_rllib == "spinningup":
         from rl_libs.spinningup import spinningup_if
@@ -187,6 +181,24 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         return rl.solve(env1)
     else:
         raise ValueError("unsupported rl library: ", args.amc_rllib)
+
+
+def comfig_verbose(verbose):
+    if verbose:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+        logging.getLogger().setLevel(logging.WARNING)
+        #logging.getLogger("__main__").setLevel(logging.WARNING)
+        #logging.getLogger("examples.classifer_compression.compress_classifier").setLevel(logging.WARNING)
+    for module in ["examples.auto_compression.amc",
+                   "distiller.apputils.image_classifier",
+                   "distiller.data_loggers.logger",
+                   "distiller.thinning", 
+                   "distiller.pruning.ranked_structures_pruner"]:
+        #logger = logging.getLogger(module)
+        #logger. = msglogger.
+        logging.getLogger(module).setLevel(loglevel)
 
 
 if __name__ == '__main__':

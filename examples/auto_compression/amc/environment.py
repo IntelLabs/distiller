@@ -40,11 +40,11 @@ import distiller
 from collections import OrderedDict, namedtuple
 from types import SimpleNamespace
 from distiller import normalize_module_name, SummaryGraph
-from .utils.features_collector import collect_intermediate_featuremap_samples
-from .utils.ac_loggers import AMCStatsLogger, FineTuneStatsLogger
+from utils.features_collector import collect_intermediate_featuremap_samples
+from utils.ac_loggers import AMCStatsLogger, FineTuneStatsLogger
 
 
-msglogger = logging.getLogger("examples.automated_deep_compression")
+msglogger = logging.getLogger("examples.auto_compression.amc")
 Observation = namedtuple('Observation', ['t', 'n', 'c',  'h', 'w', 'stride', 'k', 'MACs',
                                          'Weights', 'reduced', 'rest', 'prev_a'])
 ObservationLen = len(Observation._fields)
@@ -316,19 +316,6 @@ class DistillerWrapperEnvironment(gym.Env):
         logdir = logging.getLogger().logdir
         self.tflogger = distiller.data_loggers.TensorBoardLogger(logdir)
         self.verbose = False
-        if self.verbose:
-            loglevel = logging.DEBUG
-        else:
-            loglevel = logging.INFO
-            logging.getLogger().setLevel(logging.WARNING)
-            #logging.getLogger("__main__").setLevel(logging.WARNING)
-            #logging.getLogger("examples.classifer_compression.compress_classifier").setLevel(logging.WARNING)
-        for module in ["examples.automated_deep_compression",
-                       "distiller.data_loggers.logger",
-                       "distiller.thinning", 
-                       "distiller.pruning.ranked_structures_pruner"]:
-            logging.getLogger(module).setLevel(loglevel)
-
         self.orig_model = copy.deepcopy(model)
         self.app_args = app_args
         self.amc_cfg = amc_cfg
@@ -755,7 +742,7 @@ def get_network_details(model, dataset, dependency_type, layers_to_prune=None):
             if layers_to_prune is None or name in layers_to_prune:
                 pruned_indices.append(layer_id)
                 # Find the data-dependent layers of this convolution
-                from .utils.data_dependencies import find_dependencies
+                from utils.data_dependencies import find_dependencies
                 conv.dependencies = list()
                 find_dependencies(dependency_type, g, all_layers, name, conv.dependencies)
                 dependent_layers.add(tuple(conv.dependencies))

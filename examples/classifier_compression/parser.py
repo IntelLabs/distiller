@@ -17,12 +17,10 @@
 import argparse
 import distiller
 import distiller.quantization
-import examples.automated_deep_compression as adc
 import distiller.models as models
-#from utils_cnn_classifier import init_classifier_compression_arg_parser
 
-def get_parser(parser):
-    #parser = init_classifier_compression_arg_parser()
+
+def add_cmdline_args(parser):
     parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
                         help='List of loss weights for early exits (e.g. --earlyexit_lossweights 0.1 0.3)')
     parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,

@@ -18,7 +18,7 @@ import logging
 import math
 
 
-msglogger = logging.getLogger()
+msglogger = logging.getLogger("examples.auto_compression.amc")
 
 
 def reward_factory(reward_name):

@@ -78,7 +78,7 @@ msglogger = logging.getLogger()
 
 def main():
     # Parse arguments
-    args = parser.get_parser(classifier.init_classifier_compression_arg_parser()).parse_args()
+    args = parser.add_cmdline_args(classifier.init_classifier_compression_arg_parser()).parse_args()
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
@@ -94,7 +94,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         return test_loader
 
     do_exit = False
-    elif args.greedy:
+    if args.greedy:
         greedy(model, criterion, optimizer, pylogger, args)
         do_exit = True
     elif args.summary:

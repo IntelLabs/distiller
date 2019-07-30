@@ -56,3 +56,4 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        help="Number of filters/channels to group")
     group.add_argument('--amc-ranking-noise', type=float, default=0.,
                        help='Strcuture ranking noise')
+    return argparser
