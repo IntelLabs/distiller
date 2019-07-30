@@ -1,6 +1,6 @@
 # Automated Compression
 
-This sample application show examples of various methods to automate the DNN compression process.
-We start with AMC.
+This direcory contains example applications of various methods to automate the DNN compression process.<br>
+We will slowly release implementations of these methods.
 
-## AMC - AutoML for Model Compression
+- ### [AMC - AutoML for Model Compression](./amc/README.md)

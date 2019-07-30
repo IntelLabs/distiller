@@ -1,6 +1,6 @@
 # AMC: AutoML for Model Compression and Acceleration on Mobile Devices
 
-## Notebool examples of AMC applied to compress CNNs:
+## Notebook examples of AMC applied to compress CNNs:
 - [Random](./jupyter/amc_random.ipynb)
 - [Plain20](./jupyter/amc_plain20.ipynb)
 - [Resnet20](./jupyter/amc_resnet20.ipynb)
