@@ -89,6 +89,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     num_ft_epochs = args.amc_ft_epochs
     action_range = args.amc_action_range
 
+    config_verbose(False)
+
     # Read the experiment configuration
     amc_cfg_fname = args.amc_cfg_file
     if not amc_cfg_fname:
@@ -153,7 +155,6 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         return env
 
     env1 = create_environment()
-    comfig_verbose(False)
 
     if args.amc_rllib == "spinningup":
         from rl_libs.spinningup import spinningup_if
@@ -167,7 +168,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         args.observation_len = len(Observation._fields)
         rl.solve(env1, args)
     elif args.amc_rllib == "coach":
-        from .rl_libs.coach import coach_if
+        from rl_libs.coach import coach_if
         rl = coach_if.RlLibInterface()
         env_cfg  = {'model': model, 
                     'app_args': app_args,
@@ -183,21 +184,17 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         raise ValueError("unsupported rl library: ", args.amc_rllib)
 
 
-def comfig_verbose(verbose):
+def config_verbose(verbose):
     if verbose:
         loglevel = logging.DEBUG
     else:
         loglevel = logging.INFO
         logging.getLogger().setLevel(logging.WARNING)
-        #logging.getLogger("__main__").setLevel(logging.WARNING)
-        #logging.getLogger("examples.classifer_compression.compress_classifier").setLevel(logging.WARNING)
     for module in ["examples.auto_compression.amc",
                    "distiller.apputils.image_classifier",
                    "distiller.data_loggers.logger",
                    "distiller.thinning", 
                    "distiller.pruning.ranked_structures_pruner"]:
-        #logger = logging.getLogger(module)
-        #logger. = msglogger.
         logging.getLogger(module).setLevel(loglevel)
 
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-from .agent import DDPG, train
+from examples.auto_compression.amc.rl_libs.private.agent import DDPG, train
 import logging
 
 
