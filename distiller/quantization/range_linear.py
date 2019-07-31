@@ -982,7 +982,6 @@ class PostTrainLinearQuantizer(Quantizer):
         self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
 
         if not self.model_activation_stats:
-            msglogger.info("No activation stats - skipping optimizations for modules followed by Relu/Tanh/Sigmoid")
             return
 
         # Update the activation stats to reflect BN folding
@@ -1005,6 +1004,10 @@ class PostTrainLinearQuantizer(Quantizer):
         # Now we look for certain "fusions" of layers and activations
         # We modify stats to make sure we quantize only the ranges relevant to the activation function
         # By doing so we reduce quantization error while still keeping all
+        if not self.model_activation_stats:
+            msglogger.info("No activation stats - skipping optimizations for modules followed by Relu/Tanh/Sigmoid")
+            return
+
         msglogger.info('Optimizing output statistics for modules followed by ReLU/Tanh/Sigmoid')
 
         named_modules = OrderedDict(self.model.named_modules())
