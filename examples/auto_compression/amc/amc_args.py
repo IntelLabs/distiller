@@ -5,7 +5,7 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
     Arguments:
         argparser (argparse.ArgumentParser): Existing parser to which to add the arguments
     """
-    argparser.add_argument('--amc', dest='AMC', action='store_true', help='AutoML Compression')
+    # argparser.add_argument('--amc', dest='AMC', action='store_true', help='AutoML Compression')
     group = argparser.add_argument_group('AutoML Compression Arguments')
     group.add_argument('--amc-cfg', dest='amc_cfg_file', type=str, action='store',
                     help='AMC configuration file')
