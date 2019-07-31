@@ -120,20 +120,20 @@ class SequenceGenerator(object):
         if self.batch_first:
             # context[0] (encoder state): (batch, seq, feature)
             _, seq, feature = context[0].shape
-            context[0].unsqueeze_(1)
+            context[0] = context[0].unsqueeze(1)
             context[0] = context[0].expand(-1, beam_size, -1, -1)
             context[0] = context[0].contiguous().view(batch_size * beam_size, seq, feature)
             # context[0]: (batch * beam, seq, feature)
         else:
             # context[0] (encoder state): (seq, batch, feature)
             seq, _, feature = context[0].shape
-            context[0].unsqueeze_(2)
+            context[0] = context[0].unsqueeze(2)
             context[0] = context[0].expand(-1, -1, beam_size, -1)
             context[0] = context[0].contiguous().view(seq, batch_size * beam_size, feature)
             # context[0]: (seq, batch * beam,  feature)
 
         #context[1] (encoder seq length): (batch)
-        context[1].unsqueeze_(1)
+        context[1] = context[1].unsqueeze(1)
         context[1] = context[1].expand(-1, beam_size)
         context[1] = context[1].contiguous().view(batch_size * beam_size)
         #context[1]: (batch * beam)
