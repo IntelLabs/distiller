@@ -468,8 +468,18 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                 # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
                 self.register_buffer('base_b_q', base_b_q)
 
-        if self.mode != LinearQuantMode.SYMMETRIC:
-            self.wrapped_module.weight.data += self.w_zero_point
+        # A flag indicating that the simulated quantized weights are pre-shifted. for faster performance.
+        # In the first forward pass - `w_zero_point` is added into the weights, to allow faster inference,
+        # and all subsequent calls are done with these shifted weights.
+        # Upon calling `self.state_dict()` - we restore the actual quantized weights.
+        self.is_simulated_quant_weight_shifted = False
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        if self.is_simulated_quant_weight_shifted:
+            # We want to return the weights to their integer representation:
+            self.wrapped_module.weight.data -= self.w_zero_point
+            self.is_simulated_quant_weight_shifted = False
+        return super(RangeLinearQuantParamLayerWrapper, self).state_dict(destination, prefix, keep_vars)
 
     def get_inputs_quantization_params(self, input):
         if not self.preset_act_stats:
@@ -504,16 +514,16 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
         # dealing solely with integer values, the results are the same either way.
 
-        # if self.mode != LinearQuantMode.SYMMETRIC:
-        #     input_q += self.in_0_zero_point
-        #     self.wrapped_module.weight.data += self.w_zero_point
+        if self.mode != LinearQuantMode.SYMMETRIC and not self.is_simulated_quant_weight_shifted:
+            # We "store" the w_zero_point inside our wrapped module's weights to
+            # improve performance on inference.
+            self.wrapped_module.weight.data += self.w_zero_point
+            self.is_simulated_quant_weight_shifted = True
 
         input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
-        # if self.mode != LinearQuantMode.SYMMETRIC:
-        #     self.wrapped_module.weight.data -= self.w_zero_point
         return accum
 
     def get_output_quantization_params(self, accumulator):
@@ -571,7 +581,7 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
                     scale_y
         y_q = ------------------- * ((i1_q + zp_i1) * (i2_q + zp_i2) + zp_y
-               scale_x * scale_w
+               scale_i1 * scale_i2
     Args:
         wrapped_module (distiller.modules.Matmul or distiller.modules.BatchMatmul): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
@@ -644,9 +654,6 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
             tmpstr += '\nout_scale={0:.4f}, out_zero_point={1:.4f}'.format(self.output_scale.item(),
                                                                            self.output_zero_point.item())
-        elif self.has_bias:
-            tmpstr += '\nbase_b_scale={0:.4f}, base_b_zero_point={1:.4f}'.format(self.b_scale.item(),
-                                                                                 self.b_zero_point.item())
         return tmpstr
 
 
@@ -854,39 +861,6 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         out_q = self.wrapped_module(input)
         out_f = linear_dequantize(out_q, self.w_scale, self.w_zero_point, inplace=True)
         return out_f
-
-
-class RangeLinearQuantSoftmaxWrapper(RangeLinearQuantWrapper):
-    """
-    Wrapper for nn.Softmax.
-    TODO - implement for integer types.
-    """
-    def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None):
-        raise NotImplementedError("Quantizing Softmax to integer representation is not supported yet.")
-        # if not isinstance(wrapped_module, nn.Softmax):
-        #     raise ValueError(self.__class__.__name__ + ' can only wrap nn.Softmax modules')
-        #
-        # if not activation_stats:
-        #     raise NoStatsError(self.__class__.__name__ +
-        #                        ' must get activation stats, dynamic quantization not supported')
-        #
-        # super(RangeLinearQuantSoftmaxWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
-        #                                                      clip_acts=clip_acts, activation_stats=activation_stats,
-        #                                                      clip_n_stds=clip_n_stds)
-        # pass
-
-    def get_inputs_quantization_params(self, *inputs):
-        pass
-
-    def quantized_forward(self, *inputs_q):
-        pass
-
-    def get_output_quantization_params(self, accumulator):
-        pass
-
-    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
-        pass
 
 
 class PostTrainLinearQuantizer(Quantizer):

@@ -16,6 +16,7 @@
 
 from .eltwise import *
 from .grouping import *
+from .matmul import *
 from .rnn import *
 from .aggregate import Norm
 
