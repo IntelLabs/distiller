@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ from ipywidgets import interactive, interact, Layout
 import matplotlib.pylab as pylab
 import matplotlib.animation as animation
 from matplotlib import animation, rc
+from scipy.stats.stats import pearsonr
 
 
 def to_percent(y, position):
@@ -54,7 +56,6 @@ def plot_action_history(df, idx, action_type='action_history', ax=None, color=No
     ax.set_title("Ep:{} - Top1:{:.1f}%\nMACs:{:.1f}%".format(record['episode'], 
                                                              record['top1'], 
                                                              record['normalized_macs']))
-
 
 
 def smooth(data, win_size):
@@ -266,3 +267,62 @@ class AnimatedScatter(object):
 
     def show(self):
         plt.show()
+
+
+def get_immediate_subdirs(a_dir):
+    return [os.path.join(a_dir, name) for name in os.listdir(a_dir)
+            if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
+
+
+def load_experiment_instances(dir_with_experiments):
+    experiment_instance_dirs = get_immediate_subdirs(dir_with_experiments)
+    return [pd.read_csv(os.path.join(dirname, "amc.csv")) for dirname in experiment_instance_dirs]
+
+
+def plot_experiment_comparison(df_list):
+    df_len = min([len(df) for df in df_list])
+    @interact(window_size=(0,50,5), top1=True, macs=True, params=False, reward=True, zoom=(0,df_len,1))
+    def _plot_experiment_comparison(window_size=10, zoom=0):
+        start = 0
+        end = zoom if zoom > 0 else 0
+        plot_performance("Compare AMC Experiment Executions (Top1)", df_list,
+                         0.15, window_size, True, False, False, False, start, end, plot_type='compare')
+
+
+def shorten_dir_name(df):
+    df_grouped = df.groupby('dir')
+    df['dir'] = df['dir'].map(lambda x: x[len("experiments/plain20-ddpg-private/"):])
+    df['exp'] = df['dir'].map(lambda x: x.split("___")[0][-1])
+
+
+def create_fig(title, xlabel, ylabel):
+    plt.figure(figsize=(15, 7))
+    plt.grid(True)
+    # plt.legend()
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+
+def plot_networks(df, edgecolors):
+    size = df.macs / max(df.macs) * 100
+    plt.scatter(df.top1, df.search_top1, s=size, c=df.index, edgecolors=edgecolors, cmap='gray')
+    print("Best network: %.2f" % max(df.top1))
+    print("Pearson: %.3f" % pearsonr(df.top1, df.search_top1)[0])
+    df_sorted = df.sort_values(by=['top1'], inplace=False, ascending=False)
+    # Five best
+    print(df_sorted[:5][['exp', 'search_top1', 'top1', 'name']])  # [('name','top1')])
+
+
+def plot_networks_by_experiment(df, edgecolors, create_figure=True):
+    # Group by experiment directory
+    df_grouped = df.groupby('exp')
+    size = df.macs / max(df.macs) * 100
+    legend = []
+    for exp_dir, df_experiment in df_grouped:
+        a = plt.scatter(df_experiment.top1, df_experiment.search_top1, s=size,
+                        edgecolors=edgecolors, alpha=0.5)
+        p = pearsonr(df_experiment.top1, df_experiment.search_top1)[0]
+        legend.append((a, "%s: Best Top1=%.2f  Pearson: %.3f" % (exp_dir, max(df_experiment.top1), p)))
+    plots, labels = zip(*legend)
+    plt.legend(plots, labels)
