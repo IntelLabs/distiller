@@ -36,10 +36,10 @@ import numpy as np
 import torch.multiprocessing as multiprocessing
 from torch.multiprocessing import Pool, Queue, Process, set_start_method
 import distiller
-from utils_cnn_classifier import *
 from distiller import apputils
+from collections import OrderedDict
 import csv
-from utils_cnn_classifier import init_classifier_compression_arg_parser
+import distiller.apputils.image_classifier as classifier
 
 
 class _CSVLogger(object):
@@ -96,7 +96,7 @@ class FinetuningProcess(Process):
         return
 
 
-def finetune_directory(ft_dir, stats_file, app_args):
+def finetune_directory(ft_dir, stats_file, app_args, cleanup_ft_dir=False):
     """Fine tune all the checkpoint files we find in the immediate-directory specified.
 
     For each checkpoint file we find, we create and queue a FinetuningTask.  
@@ -110,6 +110,7 @@ def finetune_directory(ft_dir, stats_file, app_args):
     # We create a subdirectory, where we will write all of our output
     ft_output_dir = os.path.join(ft_dir, "ft")
     os.makedirs(ft_output_dir, exist_ok=True)
+    print("Writing results to directory %s" % ft_output_dir)
     app_args.output_dir = ft_output_dir
 
     # Multi-process queues
@@ -118,10 +119,11 @@ def finetune_directory(ft_dir, stats_file, app_args):
     
     # Create and launch the fine-tuning processes
     processes = []
-    for i in range(app_args.processes):
+    n_processes = min(app_args.processes, len(checkpoints))
+    for i in range(n_processes):
         # Pre-load the data-loaders of each fine-tuning process once
-        app = ClassifierCompressor(app_args)
-        data_loader = load_data(app.args)
+        app = classifier.ClassifierCompressor(app_args, script_dir=os.path.dirname(__file__))
+        data_loader = classifier.load_data(app.args)
         # Delete log directories
         shutil.rmtree(app.logdir)
         processes.append(FinetuningProcess(tasks, results, data_loader))
@@ -135,33 +137,34 @@ def finetune_directory(ft_dir, stats_file, app_args):
         tasks.put(FinetuningTask(args=(ckpt_file, instance%n_gpus, app_args)))
 
     # Push an end-of-tasks marker
-    for i in range(app_args.processes):
+    for i in range(len(processes)):
         tasks.put(None)
 
     # Wait until all tasks finish
     tasks.join()
     
     # Start printing results
-    return_dict = OrderedDict()
+    results_dict = OrderedDict()
     while not results.empty():
         result = results.get()
-        return_dict[result[0]] = result[1]
+        results_dict[result[0]] = result[1]
 
     # Read the results of the AMC experiment (we'll want to use some of the data)
     import pandas as pd
     df = pd.read_csv(os.path.join(ft_dir, "amc.csv"))
-    assert len(return_dict) > 0
+    assert len(results_dict) > 0
     # Log some info for each checkpoint
-    for ckpt_name in sorted (return_dict.keys()):
+    for ckpt_name in sorted (results_dict.keys()):
         net_search_results = df[df["ckpt_name"] == ckpt_name[:-len("_checkpoint.pth.tar")]]
         search_top1 = net_search_results["top1"].iloc[0]
         normalized_macs = net_search_results["normalized_macs"].iloc[0]
         log_entry = (ft_output_dir, ckpt_name, normalized_macs, 
-                     search_top1, *return_dict[ckpt_name])
+                     search_top1, *results_dict[ckpt_name])
         print("%s <>  %s: %.2f %.2f %.2f %.2f %.2f" % log_entry)
         stats_file.add_record(log_entry)
-    # cleanup: remove the "ft"
-    shutil.rmtree(ft_output_dir)
+    if cleanup_ft_dir:
+        # cleanup: remove the "ft" directory
+        shutil.rmtree(ft_output_dir)
 
 
 def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
@@ -177,7 +180,7 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     app_args.gpus = str(gpu)
     app_args.name = name
     app_args.deprecated_resume = ckpt_file
-    app = ClassifierCompressor(app_args)
+    app = classifier.ClassifierCompressor(app_args, script_dir=os.path.dirname(__file__))
     app.train_loader, app.val_loader, app.test_loader = loaders
     best = [float("-inf"), float("-inf"), float("inf")]
     for epoch in range(app_args.epochs):
@@ -193,8 +196,10 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
 
 if __name__ == '__main__':
     def get_immediate_subdirs(a_dir):
-        return [os.path.join(a_dir, name) for name in os.listdir(a_dir)
-                if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
+        subdirs = [os.path.join(a_dir, name) for name in os.listdir(a_dir)
+                    if os.path.isdir(os.path.join(a_dir, name)) and name != "ft"]
+        subdirs.sort()
+        return subdirs
 
     def add_parallel_args(argparser):
         group = argparser.add_argument_group('parallel fine-tuning')
@@ -203,13 +208,14 @@ if __name__ == '__main__':
         group.add_argument('--scan-dir', metavar='DIR', required=True, help='path to checkpoints')
         group.add_argument('--output-csv', metavar='DIR', required=True, 
                            help='name of the CSV file containing the output')
+        return argparser
 
     try:
         set_start_method('forkserver')
     except RuntimeError:
         pass
     # Parse arguments
-    argparser = parser.get_parser(init_classifier_compression_arg_parser())
+    argparser = classifier.init_classifier_compression_arg_parser()
     add_parallel_args(argparser)
     app_args = argparser.parse_args()
 
