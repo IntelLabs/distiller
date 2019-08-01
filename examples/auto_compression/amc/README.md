@@ -17,6 +17,11 @@
 | Mobilenet v1 |  |
 | Mobilenet v2 |  |
 
+These notebooks will help visualize and review the results of recreating the results of AMC.
+
+AMC trains a Deep Deterministic Policy Gradient (DDPG) RL agent to compress DNNs. For the implementation of DDPG we're using [Coach](https://github.com/NervanaSystems/coach) or Prof. Han's team's [implementation](https://github.com/mit-han-lab/amc-compressed-models) . We wrap Distiller in an OpenAI [Gym environment API](https://github.com/openai/gym) so that it presents a standard RL environment to the agent. We execute Distiller's sample application [amc.py](https://github.com/NervanaSystems/distiller/blob/new_amc/examples/auto_compression/amc/amc.py) with special arguments telling it how to invoke AMC. This creates a DistillerWrapperEnvironment environment and a DDPG agent and starts the training cycle. For the exact technical details of doing this yourself, see the notebooks (better instructions will be added in the future).
+
+These notebooks only review Resource-Constrained Compression.
 
 AMC: AutoML for Model Compression and Acceleration on Mobile Devices.<br>
      Yihui He, Ji Lin, Zhijian Liu, Hanrui Wang, Li-Jia Li, Song Han.<br>
