@@ -463,6 +463,10 @@ def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_
     return loaders
 
 
+def early_exit_mode(args):
+    return hasattr(args, 'earlyexit_lossweights') and args.earlyexit_lossweights
+
+
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training-with-compression loop for one epoch.
@@ -489,7 +493,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     # For Early Exit, we define statistics for each exit
     # So exiterrors is analogous to classerr for the non-Early Exit case
-    if args.earlyexit_lossweights:
+    if early_exit_mode(args):
         args.exiterrors = []
         for exitnum in range(args.num_exits):
             args.exiterrors.append(tnt.ClassErrorMeter(accuracy=True, topk=(1, 5)))
@@ -517,7 +521,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         else:
             output = args.kd_policy.forward(inputs)
 
-        if not args.earlyexit_lossweights:
+        if not early_exit_mode(args):
             loss = criterion(output, target)
             # Measure accuracy
             classerr.add(output.data, target)
@@ -559,7 +563,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % args.print_freq == 0:
             # Log some statistics
             errs = OrderedDict()
-            if not args.earlyexit_lossweights:
+            if not early_exit_mode(args):
                 errs['Top1'] = classerr.value(1)
                 errs['Top5'] = classerr.value(5)
             else:
