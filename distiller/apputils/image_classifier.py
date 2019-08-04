@@ -829,7 +829,7 @@ def acts_histogram_collection(model, criterion, loggers, args):
                    .format(args.activation_histograms))
     model = distiller.utils.make_non_parallel_copy(model)
     args.effective_test_size = args.activation_histograms
-    train_loader, val_loader, test_loader = load_data(args, fixed_subset=True)
+    test_loader = load_data(args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
     collect_histograms(model, test_fn, save_dir=msglogger.logdir,
