@@ -817,7 +817,7 @@ def acts_quant_stats_collection(model, criterion, loggers, args):
                    .format(args.qe_calibration))
     model = distiller.utils.make_non_parallel_copy(model)
     args.effective_test_size = args.qe_calibration
-    train_loader, val_loader, test_loader, _ = load_data(args)
+    test_loader = load_data(args, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
     collect_quant_stats(model, test_fn, save_dir=msglogger.logdir,
