@@ -246,6 +246,7 @@ For more details, there are some other resources you can refer to:
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
 + [Usage](https://nervanasystems.github.io/distiller/usage.html)
++ [Preparing a model for quantization](https://nervanasystems.github.io/distiller/prepare_model_quant.html)
 + [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
 + [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
 + [Tutorial: Post-Training Quantization of a Language Model

@@ -17,6 +17,7 @@ nav:
   - Installation: install.md
   - Usage: usage.md
   - Compression Scheduling: schedule.md
+  - Preparing a Model for Quantization: prepare_model_quant.md
   - Compressing Models:
     - Pruning: pruning.md
     - Regularization: regularization.md
