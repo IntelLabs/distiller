@@ -40,14 +40,19 @@ import time
 import os                                                                       
 import sys
 import torch
+import argparse
 from multiprocessing import Pool
 
 def run_experiment(args):
     experiment_outdir, id, seed, gpu = args
     experiment_cmd = " ".join(sys.argv[2:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=1000,
+                        help='seed the PRNG for CPU, CUDA, numpy, and Python')
     #experiment_cmd += + ' > /dev/null'
-    os.system("python3 {} --name={} --gpus={} --seed={} --out-dir={}".format(experiment_cmd, id, 
-                                                                             gpu, seed, experiment_outdir))
+    multi_args, unknown = parser.parse_known_args()
+    os.system("python3 {} --name={} --gpus={} --seed={} --out-dir={}".format(experiment_cmd, id, gpu,
+                                                                             multi_args.seed+id, experiment_outdir))
 
 # Create the directory that will store the outputs of all the executions.
 timestr = time.strftime("%Y.%m.%d-%H%M%S")
