@@ -115,9 +115,9 @@ def plot_performance(title, dfs, alpha, window_size, top1, macs, params, reward,
                 for p in dfs_top1:
                     ax = p[start:end].plot(**plot_kwargs)
                 if display_mean:
-                    ax.legend(['mean'] + [str(i+1) for i in range(len(dfs_top1))])
+                    ax.legend(['mean'] + [str(i) for i in range(len(dfs_top1))])
                 else:
-                    ax.legend([str(i+1) for i in range(len(dfs_top1))])
+                    ax.legend([str(i) for i in range(len(dfs_top1))])
                 ax.set(xlabel="Episode", ylabel="(%)")            
                 ax.fill_between(range(len(top1_min)), top1_max, top1_min, color="b", alpha=0.3)
 
@@ -128,7 +128,7 @@ def plot_performance(title, dfs, alpha, window_size, top1, macs, params, reward,
                 for p in dfs_top1:
                     #ax = p[start:end].plot(**plot_kwargs)
                     ax = p[start:].plot(**plot_kwargs)
-                ax.legend([str(i+1) for i in range(len(dfs_top1))])
+                ax.legend([str(i) for i in range(len(dfs_top1))])
                 left_axs.append((ax, "Top1"))
         else:
             ax = df['top1'][start:end].plot(**plot_kwargs, color="b")
