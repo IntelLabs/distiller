@@ -85,6 +85,7 @@ class ResidualRecurrentDecoder(nn.Module):
 
         # Adding submodules for basic ops to allow quantization:
         self.eltwiseadd_residuals = nn.ModuleList([EltwiseAdd() for _ in range(1, len(self.rnn_layers))])
+        self.cat_attn = Concat(2)
 
     def init_hidden(self, hidden):
         if hidden is not None:
@@ -121,7 +122,7 @@ class ResidualRecurrentDecoder(nn.Module):
         self.append_hidden(h)
 
         x = self.dropout(x)
-        x = torch.cat((x, attn), dim=2)
+        x = self.cat_attn(x, attn)
         x, h = self.rnn_layers[0](x, hidden[1])
         self.append_hidden(h)
 
