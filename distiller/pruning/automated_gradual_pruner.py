@@ -79,12 +79,11 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
         super().set_param_mask(param, param_name, zeros_mask_dict, meta)
 
     def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
-        init_sparsity = distiller.sparsity_ch(zeros_mask_dict[param_name].mask)
         SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
         msglogger.info("AutomatedGradualPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
-                       init_sparsity,
-                       fraction_to_prune, binary_map.sum().item(), param.size(1))
+                       distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
+                       target_sparsity, zeros_mask_dict[param_name].mask.sum().item(), param.numel())
 
 
 class StructuredAGP(AutomatedGradualPrunerBase):
