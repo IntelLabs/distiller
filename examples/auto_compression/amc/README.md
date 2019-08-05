@@ -9,13 +9,13 @@
 - [Mobilenet v2]()
 
 
-| Model | Baseline Top1 | AMC paper | AMC Distiller
-| --- |  ---: |  ---: |  ---: |
-| Plain20 | 90.5 |
-| Resnet20 | 91.78 |
-| Resnet56 | 92.85 |
-| Mobilenet v1 |  |
-| Mobilenet v2 |  |
+| Model | FLOPs | Baseline Top1 | AMC paper<br>(Top1 after FT)  | Baseline Top1 | AMC Distiller
+| --- |  ---: |  ---: |  ---: |  ---: |  ---: |
+| Plain20 | 50% | 90.5 | 90.2 (-0.3) | 90.55 | 90.04 (-0.4)
+| Resnet20 | 50%| 91.78 | - | 
+| Resnet56 | 50% |92.8 | 91.9 (-0.9)
+| Mobilenet v1 | 50% | 70.6 | 70.2 (-0.4)
+| Mobilenet v2 |  50% | 71.8 | 70.8 (-1.0)
 
 These notebooks will help visualize and review the results of recreating the results of AMC.
 
