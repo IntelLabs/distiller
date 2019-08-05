@@ -168,7 +168,7 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
         threshold_type = 'L1' if magnitude_fn == l1_magnitude else 'L2'
         if zeros_mask_dict is not None:
             zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
-            msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+            msglogger.info("%sRankedStructureParameterPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                            threshold_type, param_name,
                            distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
                            fraction_to_prune, binary_map.sum().item(), param.size(1))
@@ -191,14 +191,14 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
                 return
             bottomk, _ = torch.topk(filter_mags, topk_filters, largest=False, sorted=True)
             threshold = bottomk[-1]
-            msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=(%d/%d)",
+            msglogger.info("%sRankedStructureParameterPruner - param: %s mask calculated. pruned=(%d/%d)",
                            threshold_type, param_name,
                            topk_filters, filter_mags.size(0))
         # Then we threshold
         mask, binary_map = distiller.group_threshold_mask(param, 'Filters', threshold, threshold_type, binary_map)
         if zeros_mask_dict is not None:
             zeros_mask_dict[param_name].mask = mask
-        msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f",
+        msglogger.info("%sRankedStructureParameterPruner - param: %s mask calculated. pruned=%.3f goal=%.3f",
                        threshold_type, param_name,
                        distiller.sparsity(mask),
                        fraction_to_prune)
@@ -233,7 +233,7 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
         threshold_type = 'L1' if magnitude_fn == l1_magnitude else 'L2'
         zeros_mask_dict[param_name].mask, binary_map = distiller.group_threshold_mask(param, THRESHOLD_DIM,
                                                                                       threshold, threshold_type)
-        msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+        msglogger.info("%sRankedStructureParameterPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                        threshold_type, param_name,
                        distiller.sparsity(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_rows_to_prune, rows_mags.size(0))
@@ -315,7 +315,7 @@ class LpRankedStructureParameterPruner(RankedStructureParameterPruner):
         threshold_type = 'L1' if magnitude_fn == l1_magnitude else 'L2'
         if zeros_mask_dict is not None:
             zeros_mask_dict[param_name].mask = binary_map_to_mask(binary_map, param)
-            msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+            msglogger.info("%sRankedStructureParameterPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                            threshold_type, param_name,
                            distiller.sparsity_blocks(zeros_mask_dict[param_name].mask, block_shape=block_shape),
                            fraction_to_prune, binary_map.sum().item(), num_super_blocks)
@@ -414,7 +414,7 @@ class ActivationRankedFilterPruner(RankedStructureParameterPruner):
         mask, binary_map = mask_from_filter_order(filters_ordered_by_criterion, param, num_filters, binary_map)
         zeros_mask_dict[param_name].mask = mask
 
-        msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
+        msglogger.info("ActivationL1RankedStructureParameterPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
                        distiller.sparsity_3D(zeros_mask_dict[param_name].mask),
                        fraction_to_prune, num_filters_to_prune, num_filters)
