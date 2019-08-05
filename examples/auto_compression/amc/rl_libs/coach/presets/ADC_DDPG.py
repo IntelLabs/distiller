@@ -48,7 +48,7 @@ agent_params.network_wrappers['critic'].optimizer_epsilon = 1e-8
 agent_params.network_wrappers['actor'].learning_rate = 1e-4
 agent_params.network_wrappers['critic'].learning_rate = 1e-3
 
-# !!!! Enable when using branch "distiller-AMC-induced-changes" 
+# !!!! Enable when using branch "distiller-AMC-induced-changes"
 agent_params.algorithm.override_episode_rewards_with_the_last_transition_reward = True
 
 agent_params.algorithm.rate_for_copying_weights_to_target = 0.01  # Tau pg. 11
@@ -64,6 +64,10 @@ agent_params.exploration.evaluation_noise = 0  # Neta new
 agent_params.algorithm.use_target_network_for_evaluation = True
 agent_params.algorithm.act_for_full_episodes = True
 
+# !!!! Enable when using branch "distiller-AMC-induced-changes"
+agent_params.algorithm.update_pre_network_filters_state_on_train = True
+agent_params.algorithm.update_pre_network_filters_state_on_inference = False
+
 # !!!! Enable when using branch "distiller-AMC-induced-changes" 
 agent_params.pre_network_filter = InputFilter()
 agent_params.pre_network_filter.add_reward_filter('ewma_norm', RewardEwmaNormalizationFilter(alpha=0.5))
@@ -72,8 +76,7 @@ agent_params.pre_network_filter.add_reward_filter('ewma_norm', RewardEwmaNormali
 #      Gym                   #
 ##############################
 env_params = GymVectorEnvironment()
-env_params.level = '../automated_deep_compression/ADC.py:DistillerWrapperEnvironment'
-
+env_params.level = './environment.py:DistillerWrapperEnvironment'
 
 vis_params = VisualizationParameters()
 vis_params.dump_parameters_documentation = False

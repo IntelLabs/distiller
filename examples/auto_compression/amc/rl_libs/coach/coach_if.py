@@ -34,8 +34,8 @@ class RlLibInterface(object):
         # Coach to create and use our DistillerWrapperEnvironment environment.
         # So Distiller calls Coach, which creates the environment, trains the agent, and ends.
         if amc_cfg.agent_algo == "DDPG":
-            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_DDPG import (graph_manager, 
-                                                                                            agent_params)
+            from examples.auto_compression.amc.rl_libs.coach.presets.ADC_DDPG import (graph_manager,
+                                                                                      agent_params)
             graph_manager.agent_params.exploration.noise_schedule = ExponentialSchedule(amc_cfg.ddpg_cfg.initial_training_noise, 
                                                                           0, 
                                                                           amc_cfg.ddpg_cfg.training_noise_decay)
