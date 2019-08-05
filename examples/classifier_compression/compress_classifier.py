@@ -51,24 +51,13 @@ models, or with the provided sample models:
 - MobileNet for ImageNet: https://github.com/marvis/pytorch-mobilenet
 """
 
-import os
 import traceback
 import logging
 from functools import partial
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.parallel
-import torch.optim
-import torch.utils.data
-import torchnet.meter as tnt
 import distiller
-import distiller.apputils as apputils
-import distiller.quantization as quantization
 from distiller.models import create_model
-#from utils_cnn_classifier import *
 import distiller.apputils.image_classifier as classifier
-from distiller.apputils.image_classifier import *
+import distiller.apputils as apputils
 import parser
 
 
@@ -82,7 +71,7 @@ def main():
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
-    init_knowledge_distillation(app.args)
+    init_knowledge_distillation(app.args,  app.model, app.compression_scheduler)
     app.run_training_loop()
     # Finally run results on the test set
     return app.test()
@@ -133,11 +122,12 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
                                  name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")),
                                  dir=msglogger.logdir)
-        print("Note: if your model collapsed to random inference, you may want to fine-tune")
+        msglogger.info("Note: if your model collapsed to random inference, you may want to fine-tune")
         do_exit = True
     return do_exit
 
-def init_knowledge_distillation(args):
+
+def init_knowledge_distillation(args, model, compression_scheduler):
     args.kd_policy = None
     if args.kd_teacher:
         teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
@@ -147,13 +137,13 @@ def init_knowledge_distillation(args):
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
                                          frequency=1)
-
         msglogger.info('\nStudent-Teacher knowledge distillation enabled:')
         msglogger.info('\tTeacher Model: %s', args.kd_teacher)
         msglogger.info('\tTemperature: %s', args.kd_temp)
         msglogger.info('\tLoss Weights (distillation | student | teacher): %s',
                        ' | '.join(['{:.2f}'.format(val) for val in dlw]))
         msglogger.info('\tStarting from Epoch: %s', args.kd_start_epoch)
+
 
 def early_exit_init(args):
     if not args.earlyexit_thresholds:
