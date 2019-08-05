@@ -82,7 +82,7 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
         SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
         msglogger.info("AutomatedGradualPruner - param: %s mask calculated. pruned=%.3f goal=%.3f (%d/%d)",
                        param_name,
-                       distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
+                       distiller.sparsity(zeros_mask_dict[param_name].mask),
                        target_sparsity, zeros_mask_dict[param_name].mask.sum().item(), param.numel())
 
 
