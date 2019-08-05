@@ -433,10 +433,9 @@ class DistillerWrapperEnvironment(gym.Env):
         The action represents the desired sparsity for the "current" layer.
         This function is invoked by the Agent.
         """
-        msglogger.debug("env.step - current_state_id=%d (%s)  episode=%d" % 
-                       (self.current_state_id, self.current_layer().name, self.episode))
         pruning_action = float(pruning_action[0])
-        msglogger.debug("\tAgent pruning_action={}".format(pruning_action))
+        msglogger.debug("env.step - current_state_id=%d (%s) episode=%d action=%.2f" %
+                        (self.current_state_id, self.current_layer().name, self.episode, pruning_action))
         self.agent_action_history.append(pruning_action)
 
         if is_using_continuous_action_space(self.amc_cfg.agent_algo):
@@ -618,7 +617,10 @@ class DistillerWrapperEnvironment(gym.Env):
         return self.amc_cfg.target_density >= current_density
 
     def compute_reward(self, total_macs, total_nnz, log_stats=True):
-        """Compute the reward"""
+        """Compute the reward.
+
+        We use the validation dataset (the size of the validation dataset is
+        configured when the data-loader is instantiated)"""
         distiller.log_weights_sparsity(self.model, -1, loggers=[self.pylogger])
         compression = distiller.model_numel(self.model, param_dims=[4]) / self.original_model_size
 
