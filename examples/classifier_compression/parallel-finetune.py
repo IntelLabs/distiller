@@ -29,14 +29,9 @@ import glob
 import math
 import shutil
 import torch
-import traceback
-import logging
-from functools import partial
-import numpy as np
 import torch.multiprocessing as multiprocessing
-from torch.multiprocessing import Pool, Queue, Process, set_start_method
-import distiller
-from distiller import apputils
+from torch.multiprocessing import Process, set_start_method
+import pandas as pd
 from collections import OrderedDict
 import csv
 import distiller.apputils.image_classifier as classifier
@@ -96,15 +91,16 @@ class FinetuningProcess(Process):
         return
 
 
-def finetune_directory(ft_dir, stats_file, app_args, cleanup_ft_dir=False):
+def finetune_directory(ft_dir, stats_file, app_args, cleanup_ft_dir=False, checkpoints=None):
     """Fine tune all the checkpoint files we find in the immediate-directory specified.
 
     For each checkpoint file we find, we create and queue a FinetuningTask.  
     A FinetuningProcess will pickup the FinetuningTask and process it.
     """
     print("Fine-tuning directory %s" % ft_dir)
-    # Get a list of the checkpoint files
-    checkpoints = glob.glob(os.path.join(ft_dir, "*checkpoint.pth.tar"))
+    if not checkpoints:
+        # Get a list of the checkpoint files
+        checkpoints = glob.glob(os.path.join(ft_dir, "*checkpoint.pth.tar"))
     assert checkpoints
 
     # We create a subdirectory, where we will write all of our output
@@ -172,8 +168,7 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     # When we run many fine-tuning sessions at once, we don't care to look at the validation score.
     # However, we want to perform a sort-of "early-stopping" in which we use the checkpoint of the 
     # best performing training epoch, and not the checkpoint created by the last epoch.
-    # We evaluate what is the "best" checkpoint by looking at the validation accuracy 
-    VALIDATE_ENABLE_FACTOR = 0.8
+    # We evaluate what is the "best" checkpoint by looking at the validation accuracy
     name = os.path.basename(ckpt_file)
     print("Fine-tuning checkpoint %s" % name)
  
@@ -184,13 +179,14 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     app.train_loader, app.val_loader, app.test_loader = loaders
     best = [float("-inf"), float("-inf"), float("inf")]
     for epoch in range(app_args.epochs):
-        validate = epoch >= math.floor(VALIDATE_ENABLE_FACTOR * app_args.epochs)
+        validate = epoch >= math.floor((1-app_args.validate_enable_factor) * app_args.epochs)
         top1, top5, loss = app.train_validate_with_scheduling(epoch, validate=validate, verbose=False)
-        #app.train_one_epoch(e, verbose=False)
         if validate:
             if top1 > best[0]:
                 best = [top1, top5, loss]
-    #return (name, app.test())
+    if app_args.validate_enable_factor == 0:
+        # We did not validate, so our score is the performance on the Test dataset
+        return (name, app.test())
     return (name, best)
 
 
@@ -201,14 +197,32 @@ if __name__ == '__main__':
         subdirs.sort()
         return subdirs
 
+
     def add_parallel_args(argparser):
         group = argparser.add_argument_group('parallel fine-tuning')
         group.add_argument('--processes', type=int, default=4,
                            help="Number of parallel experiment processes to run in parallel")
         group.add_argument('--scan-dir', metavar='DIR', required=True, help='path to checkpoints')
         group.add_argument('--output-csv', metavar='DIR', required=True, 
-                           help='name of the CSV file containing the output')
+                           help='Name of the CSV file containing the output')
+        group.add_argument('--top-performing-chkpts', action='store_true', default=False,
+                           help='Fine tune only the best performing discovered checkpoints (sorted by search-Top1)')
+        group.add_argument('--validate-enable-factor', type=float, default=0.2,
+                           help="What portion of the epochs to validate (0=never validate; 1=validate after every "
+                                "epoch; 0<factor<1 validate the last factor*ags.epochs epcohs."
+                                "In the latter case, the reported score for the fine-tuned model is the "
+                                "best performing validation score.")
         return argparser
+
+
+    def get_best_checkpoints(ft_dir, best_nets=5):
+        df_amc_results = pd.read_csv(os.path.join(ft_dir, "amc.csv"))
+        top1_sorted_df_amc_results = df_amc_results.sort_values(by=['top1'], ascending=False)
+        top1_sorted_df_amc_results = top1_sorted_df_amc_results[0:best_nets]
+        checkpoints = [os.path.join(ft_dir, ckpt + "_checkpoint.pth.tar")
+                        for ckpt in top1_sorted_df_amc_results.ckpt_name]
+        return checkpoints
+
 
     try:
         set_start_method('forkserver')
@@ -223,4 +237,7 @@ if __name__ == '__main__':
     stats_file = FTStatsLogger(os.path.join(app_args.scan_dir, app_args.output_csv))
     ft_dirs = get_immediate_subdirs(app_args.scan_dir)
     for ft_dir in ft_dirs:
-        finetune_directory(ft_dir, stats_file, app_args)
+        checkpoints = None
+        if app_args.top_performing_chkpts:
+            checkpoints = get_best_checkpoints(ft_dir)
+        finetune_directory(ft_dir, stats_file, app_args, checkpoints=checkpoints)
