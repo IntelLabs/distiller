@@ -67,10 +67,6 @@ class AutoCompressionSampleApp(classifier.ClassifierCompressor):
 
         save_checkpoint_fn = partial(apputils.save_checkpoint, arch=self.args.arch, dir=msglogger.logdir)
         optimizer_data = {'lr': self.args.lr, 'momentum': self.args.momentum, 'weight_decay': self.args.weight_decay}
-        msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
-
-        #adc.do_adc(model, args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
         return train_auto_compressor(self.model, self.args, optimizer_data, validate_fn, save_checkpoint_fn, train_fn)
 
 
