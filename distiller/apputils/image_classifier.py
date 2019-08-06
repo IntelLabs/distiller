@@ -34,7 +34,7 @@ import distiller.quantization as quantization
 import distiller.models as models
 from distiller.models import create_model
 import parser
-import partial
+from functools import partial
 import operator
 import argparse
 from distiller.utils import float_range_argparse_checker as float_range
