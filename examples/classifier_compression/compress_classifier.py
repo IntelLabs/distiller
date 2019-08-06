@@ -60,6 +60,7 @@ import distiller.apputils.image_classifier as classifier
 import distiller.apputils as apputils
 import parser
 import os
+import numpy as np
 
 
 # Logger handle
