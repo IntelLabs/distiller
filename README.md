@@ -132,7 +132,8 @@ Beware.
 - [Disclaimer](#disclaimer)
 
 ## Highlighted features
-
+* **Automatic Compression**
+  - [Automated Model Compression](https://github.com/NervanaSystems/distiller/blob/master/examples/auto_compression/amc) (AMC)
 * **Weight pruning**
   - Element-wise pruning using magnitude thresholding, sensitivity thresholding, target sparsity level, and activation statistics 
 * **Structured pruning**
@@ -162,7 +163,7 @@ Beware.
 * **Knowledge distillation**
   - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
-  - Sample implementation of Early Exit, with more to come
+  - Sample implementation of Early Exit
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
