@@ -5,7 +5,7 @@ These notebooks will help visualize and review the results of recreating the res
 
 <div style="text-align: center;"> <img src="imgs/amc_worksheet.png"></div>
 
-- [AMC worksheet](./jupyter/amc_worksheet.ipynb.): work through visualizations of different aspects of AMC learning
+- [AMC worksheet](./jupyter/amc_worksheet.ipynb): work through visualizations of different aspects of AMC learning
 - [Random](./jupyter/amc_random.ipynb)
 - [Plain20](./jupyter/amc_plain20.ipynb)
 - [Resnet20](./jupyter/amc_resnet20.ipynb)
