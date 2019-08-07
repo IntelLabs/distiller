@@ -1,16 +1,16 @@
+# Google's Neural Machine Translation
+In this example we quantize [MLPerf's implementation of GNMT](https://github.com/mlperf/training/tree/master/rnn_translator/pytorch)
+and show different configurations of quantization to achieve the highest accuracy on Post Train Quantization. 
+
 # 1. Problem
 
 This problem uses recurrent neural network to do language translation.
 
 ## Requirements
-* [Python 3.6](https://www.python.org)
+* [Python 3.5](https://www.python.org)
 * [CUDA 9.0](https://developer.nvidia.com/cuda-90-download-archive)
-* [PyTorch 0.4.0](https://pytorch.org)
+* [PyTorch 1.1.0](https://pytorch.org)
 * [sacrebleu](https://pypi.org/project/sacrebleu/)
-
-### Recommended setup
-* [nvidia-docker](https://github.com/NVIDIA/nvidia-docker)
-* [pytorch/pytorch:0.4_cuda9_cudnn7 container](https://hub.docker.com/r/pytorch/pytorch/tags/)
 
 # 2. Directions
 ### Steps to download and verify data
