@@ -19,6 +19,7 @@ import time
 import os
 import logging
 from collections import OrderedDict
+import copy
 import numpy as np
 import torch
 import torch.nn as nn
@@ -789,7 +790,7 @@ def earlyexit_validate_stats(args):
     return total_top1, total_top5, losses_exits_stats
 
 
-def evaluate_model(model, criterion, test_loader, loggers, activations_collectors, args, scheduler=None):
+def evaluate_model(test_loader, model, criterion, loggers, activations_collectors=None, args=None, scheduler=None):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
     # You can optionally quantize the model to 8-bit integer before evaluation.
@@ -799,30 +800,50 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     if not isinstance(loggers, list):
         loggers = [loggers]
 
-    if args.quantize_eval:
-        model.cpu()
-        quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
+    if not args.quantize_eval:
+        return test(test_loader, model, criterion, loggers, activations_collectors, args=args)
+    else:
+        return quantize_and_test_model(test_loader, model, criterion, loggers, activations_collectors,
+                                       args=args, scheduler=scheduler, save_flag=True)
+
+
+def quantize_and_test_model(test_loader, model, criterion, loggers=None, activations_collectors=None, args=None,
+                            scheduler=None, save_flag=False):
+    if args is None:
+        raise NotImplementedError('args cannot be set to None')
+
+    if not args.qe_stats_file:
+        args_copy = copy.deepcopy(args)
+        args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
+        args_copy.effective_test_size = args_copy.qe_calibration
+        args.qe_stats_file = acts_quant_stats_collection(load_data(args_copy)[2], model, criterion, loggers, args_copy)
+
+    with distiller.get_nonparallel_clone_model(model) as qe_model:
+        qe_model.cpu()
+        quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args)
         quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
-        model.to(args.device)
+        qe_model.to(args.device)
 
-    top1, _, _ = test(test_loader, model, criterion, loggers, activations_collectors, args=args)
+        test_res = test(test_loader, qe_model, criterion, loggers, activations_collectors, args=args)
 
-    if args.quantize_eval:
-        checkpoint_name = 'quantized'
-        apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=scheduler,
-                                 name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
-                                 dir=msglogger.logdir, extras={'quantized_top1': top1})
+        if save_flag:
+            checkpoint_name = 'quantized'
+            apputils.save_checkpoint(0, args.arch, qe_model, scheduler=scheduler,
+                                     name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
+                                     dir=msglogger.logdir, extras={'quantized_top1': test_res[0]})
 
-def acts_quant_stats_collection(model, criterion, loggers, args):
+    return test_res
+
+
+def acts_quant_stats_collection(test_loader, model, criterion, loggers, args, save_to_file=False):
     msglogger.info('Collecting quantization calibration stats based on {:.1%} of test dataset'
                    .format(args.qe_calibration))
-    model = distiller.utils.make_non_parallel_copy(model)
-    args.effective_test_size = args.qe_calibration
-    test_loader = load_data(args, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
-    collect_quant_stats(model, test_fn, save_dir=msglogger.logdir,
-                        classes=None, inplace_runtime_check=True, disable_inplace_attrs=True)
+    with distiller.get_nonparallel_clone_model(model) as cmodel:
+        return collect_quant_stats(cmodel, test_fn, classes=None,
+                                   inplace_runtime_check=True, disable_inplace_attrs=True,
+                                   save_dir=msglogger.logdir if save_to_file else None)
 
 
 def acts_histogram_collection(model, criterion, loggers, args):

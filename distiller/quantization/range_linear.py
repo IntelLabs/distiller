@@ -170,14 +170,13 @@ def add_post_train_quant_args(argparser):
 
     group = argparser.add_argument_group('Arguments controlling quantization at evaluation time '
                                          '("post-training quantization")')
-    exc_group = group.add_mutually_exclusive_group()
-    exc_group.add_argument('--quantize-eval', '--qe', action='store_true',
+    group.add_argument('--quantize-eval', '--qe', action='store_true',
                        help='Apply linear quantization to model before evaluation. Applicable only if '
                             '--evaluate is also set')
-    exc_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
-                           metavar='PORTION_OF_TEST_SET',
-                           help='Run the model in evaluation mode on the specified portion of the test dataset and '
-                                'collect statistics. Ignores all other \'qe--*\' arguments')
+    group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                       metavar='PORTION_OF_TEST_SET', default=None,
+                       help='Run the model in evaluation mode on the specified portion of the test dataset and '
+                            'collect statistics. Ignores all other \'qe--*\' arguments')
     group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
                        help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
     group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
