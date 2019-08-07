@@ -91,16 +91,16 @@ pruners:
   fc_pruner:
     class: AutomatedGradualPruner
     initial_sparsity : 0.05
-    final_sparsity: 0.80
+    final_sparsity: 0.90
     weights: [
       module.roi_heads.box_head.fc6.weight,
       module.roi_heads.box_head.fc7.weight
     ]
 
-  block_pruner_50:
+  block_pruner_60:
     class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.05
-    final_sparsity: 0.50
+    final_sparsity: 0.60
     group_type: Blocks
     kwargs:
       block_shape: [4,1,1,1]  # [block_repetition, block_depth, block_height, block_width]
@@ -119,7 +119,7 @@ pruners:
       module.backbone.body.layer2.0.conv2.weight,
       module.backbone.body.layer2.0.conv3.weight,]
 
-  block_pruner_60:
+  block_pruner_70:
     class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.05
     final_sparsity: 0.60
@@ -173,7 +173,7 @@ pruners:
       module.roi_heads.mask_predictor.conv5_mask.weight,
     ]
 
-  block_pruner_80:
+  block_pruner_90:
     class: L1RankedStructureParameterPruner_AGP
     initial_sparsity : 0.05
     final_sparsity: 0.80
@@ -195,13 +195,13 @@ pruners:
 
 policies:
   - pruner:
-     instance_name : block_pruner_50
+     instance_name : block_pruner_60
     starting_epoch: 0
     ending_epoch: 30
     frequency: 1
 
   - pruner:
-     instance_name : block_pruner_60
+     instance_name : block_pruner_70
     starting_epoch: 0
     ending_epoch: 30
     frequency: 1
@@ -213,7 +213,7 @@ policies:
     frequency: 3
 
   - pruner:
-      instance_name : block_pruner_80
+      instance_name : block_pruner_90
     starting_epoch: 0
     ending_epoch: 30
     frequency: 1

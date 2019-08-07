@@ -152,6 +152,8 @@ def main(args):
         model_without_ddp.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        if compression_scheduler and 'compression_scheduler' in checkpoint:
+            compression_scheduler.load_state_dict(checkpoint['compression_scheduler'])
 
     if args.test_only:
         evaluate(model, data_loader_test, device=device)
@@ -184,11 +186,14 @@ def main(args):
 
         lr_scheduler.step()
         if args.output_dir:
-            utils.save_on_master({
+            save_dict = {
                 'model': model_without_ddp.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'lr_scheduler': lr_scheduler.state_dict(),
-                'args': args},
+                'args': args}
+            if compression_scheduler:
+                save_dict['compression_scheduler'] = compression_scheduler.state_dict()
+            utils.save_on_master(save_dict,
                 os.path.join(args.output_dir, 'model_{}.pth'.format(epoch)))
 
         # evaluate after every epoch
