@@ -125,7 +125,7 @@ test_configs = [
                DS_CIFAR, accuracy_checker, [44.370, 89.640]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96158)])
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)])
 ]
 
 

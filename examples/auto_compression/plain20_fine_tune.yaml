@@ -1,0 +1,23 @@
+lr_schedulers:
+  training_lr:
+      class: StepLR # ReduceLROnPlateau
+      step_size: 20
+      #gamma: 0.3 #0.4
+      
+      #class: ReduceLROnPlateau
+      #min_lr: 0.00001
+      #patience: 2
+      #factor: 0.7
+
+      #class: CosineAnnealingWarmRestarts
+      #T_0: 30
+
+      #class: CosineAnnealingLR
+      #T_max: 120
+
+policies:
+    - lr_scheduler:
+        instance_name: training_lr
+      starting_epoch: 0
+      ending_epoch: 100
+      frequency: 1

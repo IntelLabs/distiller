@@ -337,9 +337,11 @@ class SummaryGraph(object):
                         group = op['attrs']['group']
                     else:
                         kernel_size, group = 1, 1
-                    n_ifm = self.param_shape(conv_in)[1] / group
+                    n_ifm = self.param_shape(conv_in)[1]
                     n_ofm = self.param_shape(conv_out)[1] 
-                    weights_vol = kernel_size * n_ifm * n_ofm
+                    weights_vol = kernel_size * n_ifm * n_ofm / group
+                    op['attrs']['n_ifm'] = n_ifm
+                    op['attrs']['n_ofm'] = n_ofm
                     op['attrs']['footprint'] = ofm_vol + ifm_vol + weights_vol
                     op['attrs']['fm_vol'] = ofm_vol + ifm_vol
                     op['attrs']['weights_vol'] = weights_vol
@@ -706,6 +708,24 @@ class _DistillerModuleList(object):
         return main_str
 
 
+def _named_children_with_duplicates(module):
+    """Version of torch.nn.Module.named_children() that includes duplicate modules"""
+    for name, module in module._modules.items():
+        if module is not None:
+            yield name, module
+
+
+def _named_modules_with_duplicates(module, prefix=):
+    """Version of torch.nn.Module.named_modules() that includes duplicate modules"""
+    yield prefix, module
+    for name, submodule in module._modules.items():
+        if submodule is None:
+            continue
+        submodule_prefix = prefix + ('.' if prefix else ) + name
+        for m in _named_modules_with_duplicates(submodule, submodule_prefix):
+            yield m
+
+
 def _to_distiller_modulelist(model):
     """Replaces all instances of torch.nn.ModuleList in a model with DistillerModuleList instances
 
@@ -713,9 +733,11 @@ def _to_distiller_modulelist(model):
         model (torch.nn.Module): Model to convert
     """
     def convert_container(container):
-        named_children = OrderedDict(container.named_children())
         # To maintain a similar order of registered modules compared to the original container, we unregister
         # all modules and then register them again
+        # We take care to include duplicated modules, which are not returned by the original named_moduels/children
+        # implementation in torch.nn.Module
+        named_children = OrderedDict(_named_children_with_duplicates(container))
         for n, _ in named_children.items():
             delattr(container, n)
         for name, child in named_children.items():
@@ -732,9 +754,10 @@ def _to_distiller_modulelist(model):
                     convert_container(m)
         return container
 
-    named_modules_orig = OrderedDict([(n, m) for n, m in model.named_modules() if not isinstance(m, nn.ModuleList)])
+    named_modules_orig = OrderedDict([(n, m) for n, m in _named_modules_with_duplicates(model)
+                                      if not isinstance(m, nn.ModuleList)])
     model = convert_container(model)
-    named_modules_dmlist = OrderedDict(model.named_modules())
+    named_modules_dmlist = OrderedDict(_named_modules_with_duplicates(model))
     converted_module_names_map = OrderedDict(zip(named_modules_dmlist.keys(), named_modules_orig.keys()))
 
     return model, converted_module_names_map
