@@ -108,6 +108,9 @@ class CompressionScheduler(object):
         Args:
             epochs (list): A list, or range, of epochs in which to apply the policy
         """
+        if self.quantization_policy is not None \
+                and isinstance(policy, distiller.QuantizationPolicy):
+            raise ValueError("Only a single quantization policy is allowed in a compression scheduler.")
 
         if epochs is None:
             epochs = list(range(starting_epoch, ending_epoch, frequency))
