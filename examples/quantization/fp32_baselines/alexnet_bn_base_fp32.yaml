@@ -1,3 +1,29 @@
+# Scheduler for training a FP32 baseline of AlexNet with Batch-Norm
+#
+# IMPORTANT NOTES:
+# ----------------
+#  1. Pay attention that this is not the original AlexNet, but AlexNet w. batch normalization layers.
+#     See model implementation in <distiller-root>/distiller/models/imagenet/alexnet_batchnorm.py
+#  2. The best results are achieved with the Adam optimizer. As is, the optimizer used in the image classification
+#     sample is SGD and this is not configurable. So we need to edit the code:
+#     * Open <distiller-root>/distiller/apputils/image_classifier.py
+#     * In the function "_init_learner(args)", find the following snippet:
+#         optimizer = torch.optim.SGD(model.parameters(),
+#             lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+#       And replace it with:
+#         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+#
+# Command line for training (running from the compress_classifier.py directory):
+# python compress_classifier.py --arch alexnet_bn <path_to_imagenet_dataset> -p=50 --epochs=110 --compress=../quantization/fp32_baselines/alexnet_bn_base_fp32.yaml -j 22 --lr 0.0002 --wd 0.0001 --vs 0
+#
+# After 110 epochs we get:
+# --- test ---------------------
+# 50000 samples (256 per mini-batch)
+# Test: [   50/  195]    Loss 1.608579    Top1 61.757812    Top5 83.789062
+# Test: [  100/  195]    Loss 1.605091    Top1 61.964844    Top5 83.988281
+# Test: [  150/  195]    Loss 1.612654    Top1 61.950521    Top5 83.864583
+# ==> Top1: 61.914    Top5: 83.838    Loss: 1.618
+
 lr_schedulers:
   training_lr:
     class: MultiStepLR
