@@ -119,18 +119,3 @@ The same attention mechanism is also implemented in default GNMT-like models fro
   * beam search with default beam size 5
   * with coverage penalty and length normalization
   * BLEU computed by [sacrebleu](https://pypi.org/project/sacrebleu/)
-
-# 5. Quality
-
-### Quality metric
-BLEU score on newstest2014 dataset.
-BLEU scores reported by [sacrebleu](https://pypi.org/project/sacrebleu/) package
-
-### Quality target
-Uncased BLEU score of 21.80.
-
-### Evaluation frequency
-Evaluation of BLEU score is done after every epoch.
-
-### Evaluation thoroughness
-Evaluation uses all of `newstest2014.en`.
