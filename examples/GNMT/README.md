@@ -2,7 +2,7 @@
 In this example we quantize [MLPerf's implementation of GNMT](https://github.com/mlperf/training/tree/master/rnn_translator/pytorch)
 and show different configurations of quantization to achieve the highest accuracy using **post-training quantization**.
 
-Note that this folder contains only code required to run evaluation. All training code was removed. A link to a pre-trained model is provided in the [preparation](#preparation) section.
+Note that this folder contains only code required to run evaluation. All training code was removed. A link to a pre-trained model is provided below.
 
 For a summary on the quantization results see [below](#post-training-quantization-details).
 
