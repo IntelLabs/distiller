@@ -423,8 +423,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                                                 clip_acts, activation_stats, clip_n_stds,
                                                                 scale_approx_mult_bits)
 
-        if not isinstance(wrapped_module, (nn.Conv2d, nn.Linear)):
-            raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D and Linear modules')
+        if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
+            raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
 
         self.num_bits_params = num_bits_params
         self.per_channel_wts = per_channel_wts
@@ -873,6 +873,7 @@ class PostTrainLinearQuantizer(Quantizer):
         self.mode = mode
 
         self.replacement_factory[nn.Conv2d] = replace_param_layer
+        self.replacement_factory[nn.Conv3d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
 
         self.replacement_factory[distiller.modules.Concat] = partial(
@@ -883,8 +884,8 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
         self.replacement_factory[nn.Embedding] = replace_embedding
 
-        if hasattr(msglogger, 'logdir'):
-            self.save_per_layer_parameters(msglogger.logdir)
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        self.save_per_layer_parameters(save_dir)
 
     @classmethod
     def from_args(cls, model, args):
@@ -956,10 +957,10 @@ class PostTrainLinearQuantizer(Quantizer):
         else:
             self._apply_bidi_distiller_lstm_stats_fusion()
 
-        if hasattr(msglogger, 'logdir'):
-            save_path = os.path.join(msglogger.logdir, 'quant_stats_after_prepare_model.yaml')
-            distiller.yaml_ordered_save(save_path, self.model_activation_stats)
-            msglogger.info('Updated stats saved to ' + save_path)
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        save_path = os.path.join(save_dir, 'quant_stats_after_prepare_model.yaml')
+        distiller.yaml_ordered_save(save_path, self.model_activation_stats)
+        msglogger.info('Updated stats saved to ' + save_path)
 
     def _clip_stats(self, entry, min_val, max_val):
         if entry['max'] < min_val:
