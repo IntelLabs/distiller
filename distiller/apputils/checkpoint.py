@@ -66,7 +66,7 @@ def save_checkpoint(model, optimizer=None, compression_sched=None,
 
     checkpoint = {'extras': extras}
     checkpoint['arch'] = arch or type(getModuleFromModel(model))
-    checkpoint['dataset'] = dataset or inferDatasetNameFromImageClassifierModel(model)
+    checkpoint['dataset'] = dataset or distiller.apputils.classification_dataset_str_from_arch(checkpoint['arch'])
     checkpoint['state_dict'] = model.state_dict()
     if optimizer is not None:
         checkpoint['optimizer_state_dict'] = optimizer.state_dict()
@@ -106,16 +106,16 @@ def get_contents_table(d):
 
     contents = [[k, type(d[k]).__name__, inspect_val(d[k])] for k in d.keys()]
     contents = sorted(contents, key=lambda entry: entry[0])
-    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
+    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="psql")
 
 
-def load_checkpoint(chkpt_path, map_location=None, model=None,
-        model_create_params=None, *, lean_checkpoint=False):
+def load_checkpoint(chkpt_path, model_device=None, model=None, model_create_params=None, *, 
+                    lean_checkpoint=False, strict=False):
     """Load a pytorch training checkpoint.
 
     Args:
         chkpt_path: path to checkpoint file
-        map_location [str]: if set, call model.to(map_location)
+        model_device [str]: if set, call model.to(model_device)
                 This should be set to either 'cpu' or 'cuda'.
         model: the pytorch model to which we will load the parameters
         model_create_params [dict] - parameters to pass to create_model()
@@ -127,8 +127,8 @@ def load_checkpoint(chkpt_path, map_location=None, model=None,
 
     msglogger.info("=> loading checkpoint %s", chkpt_path)
     checkpoint = torch.load(chkpt_path, map_location=lambda storage, loc: storage)
+    msglogger.info('=> Checkpoint contents:\n%s\n' % get_contents_table(checkpoint))
 
-    msglogger.info('=> Checkpoint contents:\n{}\n'.format(get_contents_table(checkpoint)))
     if 'extras' in checkpoint:
         msglogger.info("=> Checkpoint['extras'] contents:\n{}\n".format(get_contents_table(checkpoint['extras'])))
 
@@ -141,7 +141,7 @@ def load_checkpoint(chkpt_path, map_location=None, model=None,
             raise ValueError('Failed to recreate model from checkpoint.')
         model_arch_name = checkpoint['arch'].split('.')[-1]
         model_dataset = checkpoint.get('dataset',
-            'cifar10' if 'cifar' in model_arch_name else 'imagenet')
+            distiller.apputils.classification_dataset_str_from_arch(model_arch_name))
         model = distiller.models.create_model(False, model_dataset, model_arch_name,
                                               **(model_create_params or dict()))
 
@@ -181,9 +181,17 @@ def load_checkpoint(chkpt_path, map_location=None, model=None,
 
         if normalize_dataparallel_keys:
                 checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
-        model.load_state_dict(checkpoint['state_dict'])
-        if map_location is not None:
-            model.to(map_location)
+        anomalous_keys = model.load_state_dict(checkpoint['state_dict'], strict)
+        if anomalous_keys:
+            # This is pytorch 1.1+
+            missing_keys, unexpected_keys = anomalous_keys
+            if unexpected_keys:
+                msglogger.warning("Warning: the loaded checkpoint (%s) contains %d unexpected state keys" % (chkpt_path, len(unexpected_keys)))
+            if missing_keys:
+                raise ValueError("The loaded checkpoint (%s) is missing %d state keys" % (chkpt_path, len(missing_keys)))
+                
+        if model_device is not None:
+            model.to(model_device)
 
         if lean_checkpoint:
             msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_path)))

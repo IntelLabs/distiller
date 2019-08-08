@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import torch
 from .utils import *
 from .thresholding import GroupThresholdMixin, threshold_mask, group_threshold_mask
 from .config import file_config, dict_config, config_component_from_file_by_class
@@ -27,6 +28,8 @@ from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLos
 from .summary_graph import SummaryGraph, onnx_name_2_pytorch_name
 from . import models
 
+import logging
+logging.captureWarnings(True)
 
 del dict_config
 del thinning
@@ -97,3 +100,18 @@ def model_find_module(model, module_to_find):
         if name == module_to_find:
             return m
     return None
+
+
+def check_pytorch_version():
+    from pkg_resources import parse_version
+    if parse_version(torch.__version__) < parse_version('1.1.0'):
+        msg = "\n\nWRONG PYTORCH VERSION\n"\
+              "The Distiller \'master\' branch now requires at least PyTorch version 1.1.0 due to "\
+              "PyTorch API changes which are not backward-compatible. Version detected is {}.\n"\
+              "To make sure PyTorch and all other dependencies are installed with their correct versions, " \
+              "go to the Distiller repo root directory and run:\n\n"\
+              "pip install -e .\n".format(torch.__version__)
+        raise RuntimeError(msg)
+
+
+check_pytorch_version()

@@ -16,13 +16,14 @@
 from collections import namedtuple
 import numpy as np
 import logging
+import math
 import torch
 import distiller
 import common
 import pytest
 import inspect
 from distiller.models import create_model
-from distiller.apputils import save_checkpoint, load_checkpoint, load_lean_checkpoint
+from distiller.apputils import save_checkpoint, load_lean_checkpoint
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -120,16 +121,20 @@ def test_ranked_filter_pruning(parallel):
                                                    is_parallel=parallel)
     test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
-
+# todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
     is illegal and should raise an exception.
     """
     with pytest.raises(ValueError):
-        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0, is_parallel=parallel)
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.ceil)
+    with pytest.raises(ValueError):
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.floor)
 
 
-def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
+def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.floor):
     """Test L1 ranking and pruning of filters.
     First we rank and prune the filters of a Convolutional layer using
     a L1RankedStructureParameterPruner.  Then we physically remove the
@@ -154,7 +159,8 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
         pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner",
                                                                     group_type="Filters",
                                                                     desired_sparsity=ratio_to_prune,
-                                                                    weights=pair[0] + ".weight")
+                                                                    weights=pair[0] + ".weight",
+                                                                    rounding_fn=rounding_fn)
         pruner.set_param_mask(conv1_p, pair[0] + ".weight", zeros_mask_dict, meta=None)
 
         conv1 = common.find_module_by_name(model, pair[0])

@@ -129,7 +129,7 @@ class KnowledgeDistillationPolicy(ScheduledTrainingPolicy):
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         self.active = True
 
-    def on_epoch_end(self, model, zeros_mask_dict, meta):
+    def on_epoch_end(self, model, zeros_mask_dict, meta, **kwargs):
         self.active = False
 
     def before_backward_pass(self, model, epoch, minibatch_id, minibatches_per_epoch, loss, zeros_mask_dict,
