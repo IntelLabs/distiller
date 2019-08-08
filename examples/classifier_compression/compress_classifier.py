@@ -98,7 +98,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                                 os.path.join(msglogger.logdir, args.export_onnx),
                                                 args.dataset, add_softmax=True, verbose=False)
         do_exit = True
-    elif args.qe_calibration:
+     elif args.qe_calibration and not (args.evaluate and args.quantize_eval):
         args_copy = copy.deepcopy(args)
         args_copy.effective_test_size = args.qe_calibration
         classifier.acts_quant_stats_collection(
