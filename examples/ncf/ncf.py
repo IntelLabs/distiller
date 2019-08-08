@@ -155,23 +155,6 @@ def val_epoch(model, ratings, negs, K, use_cuda=True, output=None, epoch=None,
         _eval_one = partial(eval_one, model=model, K=K, use_cuda=use_cuda)
         with context.Pool(processes=processes) as workers:
             hits_and_ndcg = workers.starmap(_eval_one, zip(ratings, negs))
-
-        # pbar = tqdm.tqdm(total=len(ratings))
-        # hits_and_ndcg = [None] * len(ratings)
-        #
-        # def update_pbar(idx_hit_ncdg):
-        #     idx, hit, ncdg = idx_hit_ncdg
-        #     hits_and_ndcg[idx] = (hit, ncdg)
-        #     pbar.update()
-        #
-        # context = mp.get_context('spawn')
-        # pool = context.Pool(processes=processes)
-        # for idx, (rating, items) in enumerate(zip(ratings, negs)):
-        #     pool.apply_async(eval_one, args=(rating, items, model, K, use_cuda), callback=update_pbar)
-        # pool.close()
-        # pool.join()
-        # pbar.close()
-
         hits, ndcgs = zip(*hits_and_ndcg)
     else:
         hits, ndcgs = [], []
@@ -231,9 +214,9 @@ def main():
         except ValueError:
             msglogger.error('ERROR: Argument --gpus must be a comma-separated list of integers only')
             exit(1)
-        # if len(args.gpus) > 1:
-        #     msglogger.error('ERROR: Only single GPU supported for NCF')
-        #     exit(1)
+        if len(args.gpus) > 1:
+            msglogger.error('ERROR: Only single GPU supported for NCF')
+            exit(1)
         available_gpus = torch.cuda.device_count()
         for dev_id in args.gpus:
             if dev_id >= available_gpus:
@@ -247,7 +230,6 @@ def main():
     config = {k: v for k, v in args.__dict__.items()}
     config['timestamp'] = "{:.0f}".format(datetime.utcnow().timestamp())
     config['local_timestamp'] = str(datetime.now())
-    # run_dir = "./run/neumf/{}".format(config['timestamp'])
     run_dir = msglogger.logdir
     msglogger.info("Saving config and results to {}".format(run_dir))
     if not os.path.exists(run_dir) and run_dir != :
@@ -287,9 +269,6 @@ def main():
                   mlp_layer_regs=[0. for i in args.layers],
                   split_final=args.split_final)
     if use_cuda:
-        # Move model and loss to GPU
-        # if len(args.gpus) > 1:
-        #     model = torch.nn.DataParallel(model, device_ids=args.gpus)
         model = model.cuda()
     msglogger.info(model)
     msglogger.info("{} parameters".format(utils.count_parameters(model)))
