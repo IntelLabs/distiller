@@ -71,6 +71,11 @@
           
             <li class="toctree-l1">
 		
+    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
     <span class="caption-text">Compressing Models</span>
     <ul class="subnav">
                 <li class="">
@@ -159,6 +164,10 @@
                 <li class="">
                     
     <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
                 </li>
     </ul>
 	    </li>
@@ -264,7 +273,7 @@ For any of the methods below that require quantization-aware training, please se
 <ul>
 <li><strong>Scale factor scope:</strong> For weight tensors, Distiller supports per-channel quantization (per output channel).</li>
 <li>
-<p><strong>Removing Outliers:</strong> As discussed <a href="quantization.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
+<p><strong>Removing outliers (post-training only):</strong> As discussed <a href="quantization.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
    <p align="center">
        <img src="imgs/quant_clipped.png"/>
    </p>
@@ -274,7 +283,15 @@ For any of the methods below that require quantization-aware training, please se
 <li>Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.</li>
 </ul>
 </li>
+<li>
+<p><strong>Scale factor approximation (post-training only):</strong> This can be enabled optionally, to simulate an execution pipeline with no floating-point operations. Instead of multiplying with a floating-point scale factor, we multiply with an integer and then do a bit-wise shift: <script type="math/tex">Q \approx {A}/{2^n}</script>, where <script type="math/tex">Q</script> denotes the FP32 scale factor, <script type="math/tex">A</script> denotes the integer multiplier and <script type="math/tex">n</script> denotes the number of bits by which we shift after multiplication. The number of bits assigned to <script type="math/tex">A</script> is usually a parameter of the HW, and in Distiller it is configured by the user. Let us denote that with <script type="math/tex">m</script>. Given <script type="math/tex">Q</script> and <script type="math/tex">m</script>, we determine <script type="math/tex">A</script> and <script type="math/tex">n</script> as follows:</p>
+</li>
 </ul>
+<p>
+<script type="math/tex; mode=display">Q \approx \frac{A}{2^n} \Rightarrow A \approx 2^nQ \Rightarrow</script>
+<script type="math/tex; mode=display">\Rightarrow 2^nQ \le 2^m - 1 \Rightarrow</script>
+<script type="math/tex; mode=display">\Rightarrow n = \left\lfloor\log_2\frac{2^m - 1}{Q}\right\rfloor\ \ \ ;\ \ \ A = \lfloor 2^nQ \rfloor</script>
+</p>
 <h3 id="implementation-in-distiller">Implementation in Distiller</h3>
 <h4 id="post-training">Post-Training</h4>
 <p>For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py"><code>range_linear.py</code></a>.</p>

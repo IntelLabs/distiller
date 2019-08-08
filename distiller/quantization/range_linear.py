@@ -21,12 +21,15 @@ from collections import OrderedDict
 from functools import reduce, partial
 import logging
 import os
+from copy import deepcopy
+import warnings
 
 import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
 import distiller.modules
+import distiller.model_transforms as mt
 
 msglogger = logging.getLogger()
 
@@ -42,8 +45,11 @@ class LinearQuantMode(Enum):
 
 
 class ClipMode(Enum):
+    # No clipping - absolute min/max values will be used
     NONE = 0
+    # Clip value calculated by averaging over the max absolute values of samples within a batch
     AVG = 1
+    # Clip value calculated as mean of tensor + N standard deviations. N should be specified separately
     N_STD = 2
 
 
@@ -81,7 +87,8 @@ def _get_saturation_fn(quant_mode, clip_mode, num_stds):
     return fns[clip_mode]
 
 
-def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, per_channel=False, num_stds=None):
+def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, per_channel=False, num_stds=None,
+                                  scale_approx_mult_bits=None):
     if per_channel and tensor.dim() not in [2, 4]:
         raise ValueError('Per channel quantization possible only with 2D or 4D tensors (linear or conv layer weights)')
 
@@ -107,10 +114,14 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
         scale = scale.view(dims)
         zp = zp.view(dims)
 
+    if scale_approx_mult_bits is not None:
+        scale = approx_scale_as_mult_and_shift(scale, scale_approx_mult_bits)
+
     return scale, zp
 
 
-def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE, num_stds=None):
+def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE, num_stds=None,
+                                      scale_approx_mult_bits=None):
     if clip == ClipMode.N_STD:
         if num_stds is None:
             raise ValueError('Clip mode set to N_STD but \'num_stds\' parameter not provided')
@@ -125,10 +136,15 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         sat_min = torch.max(sat_min, mean - num_stds * std)
         sat_max = torch.min(sat_max, mean + num_stds * std)
     if mode == LinearQuantMode.SYMMETRIC:
-        return symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()))
+        scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()))
     else:
         signed = mode == LinearQuantMode.ASYMMETRIC_SIGNED
-        return asymmetric_linear_quantization_params(num_bits, sat_min, sat_max, signed=signed)
+        scale, zp = asymmetric_linear_quantization_params(num_bits, sat_min, sat_max, signed=signed)
+
+    if scale_approx_mult_bits is not None:
+        scale = approx_scale_as_mult_and_shift(scale, scale_approx_mult_bits)
+
+    return scale, zp
 
 
 ###############################################################################
@@ -176,9 +192,12 @@ def add_post_train_quant_args(argparser):
                        help='When qe-clip-acts is set to \'n_std\', this is the number of standard deviations to use')
     group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                        help='List of layer names for which not to clip activations. Applicable '
-                            'only if --qe-clip-acts is also set')
+                            'only if --qe-clip-acts is not \'none\'')
     group.add_argument('--qe-per-channel', '--qepc', action='store_true',
                        help='Enable per-channel quantization of weights (per output channel)')
+    group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
+                       help='Enables scale factor approximation using integer multiply + bit shift, using '
+                            'this number of bits the integer multiplier')
     group.add_argument('--qe-stats-file', type=str, metavar='PATH',
                        help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
                             'be run (Note that not all layer types are supported for dynamic quantization)')
@@ -195,14 +214,20 @@ class RangeLinearQuantWrapper(nn.Module):
         wrapped_module (torch.nn.Module): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
-        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
-        clip_acts (bool): If true, will clip activations instead of using absolute min/max. At the moment clipping is
-            done by averaging over the max absolute values of samples within a batch. More methods might be added in
-            the future.
+        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
+        clip_acts (ClipMode): Activations clipping mode to use
+        activation_stats (dict): Dict containing activation stats, used for static calculation of quantization
+            parameters. Dict should be in the format exported by distiller.data_loggers.QuantCalibrationStatsCollector.
+            If None then parameters are calculated dynamically.
+        clip_n_stds (float): When clip_acts == ClipMode.N_STD, this is the number of standard deviations to use
+        scale_approx_mult_bits (int): If not None, scale factors will be approximated using an integer multiplication
+            followed by a bit-wise shift. This eliminates floating-point scale factors, replacing them with integer
+            calculations.
+            If None, scale factors will be kept in their original FP32 values.
     """
 
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC,
-                 clip_acts=ClipMode.NONE, activation_stats=None, clip_n_stds=None):
+                 clip_acts=ClipMode.NONE, activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
         super(RangeLinearQuantWrapper, self).__init__()
 
         self.wrapped_module = wrapped_module
@@ -211,6 +236,7 @@ class RangeLinearQuantWrapper(nn.Module):
         self.mode = mode
         self.clip_acts = clip_acts
         self.clip_n_stds = clip_n_stds
+        self.scale_approx_mult_bits = scale_approx_mult_bits
 
         # Controls whether output is de-quantized at end of forward op. Meant as a debug / test flag only
         # (note that if False, the quantized output will be returned, but without any quantization parameters,
@@ -227,13 +253,14 @@ class RangeLinearQuantWrapper(nn.Module):
             self.num_inputs = 0
             for idx, stats in activation_stats['inputs'].items():
                 self.num_inputs += 1
-                scale, zp = _get_quant_params_from_stats_dict(stats, num_bits_acts, mode, clip_acts, clip_n_stds)
+                scale, zp = _get_quant_params_from_stats_dict(stats, num_bits_acts, mode, clip_acts, clip_n_stds,
+                                                              scale_approx_mult_bits)
                 prefix = 'in_{0}_'.format(idx)
                 self.register_buffer(prefix + 'scale', scale)
                 self.register_buffer(prefix + 'zero_point', zp)
 
             scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode, clip_acts,
-                                                          clip_n_stds)
+                                                          clip_n_stds, scale_approx_mult_bits)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
         else:
@@ -259,6 +286,9 @@ class RangeLinearQuantWrapper(nn.Module):
     def forward(self, *inputs):
         if self.training:
             raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
+        device = inputs[0].device
+        for buffer_name, buffer in self._buffers.items():
+            setattr(self, buffer_name, buffer.to(device))
 
         in_scales, in_zero_points = self.get_inputs_quantization_params(*inputs)
 
@@ -338,6 +368,7 @@ class RangeLinearQuantWrapper(nn.Module):
         tmpstr += 'clip_acts={0}, '.format(_enum_to_str(self.clip_acts))
         if self.clip_acts == ClipMode.N_STD:
             tmpstr += 'num_stds={} '.format(self.clip_n_stds)
+        tmpstr += 'scale_approx_mult_bits={}'.format(self.scale_approx_mult_bits)
         tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
         if self.preset_act_stats:
             for idx, (in_scale, in_zp) in enumerate(zip(self.inputs_scales(), self.inputs_zero_points())):
@@ -379,16 +410,22 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         num_bits_params (int): Number of bits used for parameters (weights and bias) quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
         mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
-        clip_acts (bool): See RangeLinearQuantWrapper
+        clip_acts (ClipNode): See RangeLinearQuantWrapper
+        per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
+            output channel
+        activation_stats (dict): See RangeLinearQuantWrapper
+        clip_n_stds (float): See RangeLinearQuantWrapper
+        scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
-                 clip_n_stds=ClipMode.NONE):
+                 clip_n_stds=None, scale_approx_mult_bits=None):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
-                                                                clip_acts, activation_stats, clip_n_stds)
+                                                                clip_acts, activation_stats, clip_n_stds,
+                                                                scale_approx_mult_bits)
 
-        if not isinstance(wrapped_module, (nn.Conv2d, nn.Linear)):
-            raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D and Linear modules')
+        if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
+            raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
 
         self.num_bits_params = num_bits_params
         self.per_channel_wts = per_channel_wts
@@ -409,7 +446,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         device = self.w_scale.device
 
         if self.preset_act_stats:
-            self.register_buffer('accum_scale', self.in_0_scale.to(device) * self.w_scale)
+            self.in_0_scale = self.in_0_scale.to(device)
+            self.register_buffer('accum_scale', self.in_0_scale * self.w_scale)
             if self.per_channel_wts:
                 self.accum_scale = self.accum_scale.squeeze(dim=-1)
         else:
@@ -432,9 +470,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
 
     def get_inputs_quantization_params(self, input):
         if not self.preset_act_stats:
-            self.in_0_scale, self.in_0_zero_point = _get_quant_params_from_tensor(input, self.num_bits_acts,
-                                                                                  self.mode, clip=self.clip_acts,
-                                                                                  num_stds=self.clip_n_stds)
+            self.in_0_scale, self.in_0_zero_point = _get_quant_params_from_tensor(
+                input, self.num_bits_acts, self.mode, clip=self.clip_acts,
+                num_stds=self.clip_n_stds, scale_approx_mult_bits=self.scale_approx_mult_bits)
         return [self.in_0_scale], [self.in_0_zero_point]
 
     def quantized_forward(self, input_q):
@@ -447,8 +485,11 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
 
             if self.has_bias:
                 # Re-quantize bias to match x * w scale: b_q' = (in_scale * w_scale / b_scale) * (b_q + b_zero_point)
+                bias_requant_scale = self.accum_scale.squeeze() / self.b_scale
+                if self.scale_approx_mult_bits is not None:
+                    bias_requant_scale = approx_scale_as_mult_and_shift(bias_requant_scale, self.scale_approx_mult_bits)
                 self.wrapped_module.bias.data = linear_quantize_clamp(self.base_b_q + self.b_zero_point,
-                                                                      self.accum_scale.squeeze() / self.b_scale, 0,
+                                                                      bias_requant_scale, 0,
                                                                       self.accum_min_q_val, self.accum_max_q_val)
 
         # Note the main terms within the summation is:
@@ -477,10 +518,14 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
 
         y_f = accumulator / self.accum_scale
         return _get_quant_params_from_tensor(y_f, self.num_bits_acts, self.mode, clip=self.clip_acts,
-                                             num_stds=self.clip_n_stds)
+                                             num_stds=self.clip_n_stds,
+                                             scale_approx_mult_bits=self.scale_approx_mult_bits)
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
-        return output_scale / self.accum_scale, output_zero_point
+        requant_scale = output_scale / self.accum_scale
+        if self.scale_approx_mult_bits is not None:
+            requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
+        return requant_scale, output_zero_point
 
     def extra_repr(self):
         tmpstr = 'mode={0}, '.format(str(self.mode).split('.')[1])
@@ -490,7 +535,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         tmpstr += 'clip_acts={0}, '.format(_enum_to_str(self.clip_acts))
         if self.clip_acts == ClipMode.N_STD:
             tmpstr += 'num_stds={} '.format(self.clip_n_stds)
-        tmpstr += 'per_channel_wts={}'.format(self.per_channel_wts)
+        tmpstr += 'per_channel_wts={}, scale_approx_mult_bits={}'.format(self.per_channel_wts,
+                                                                         self.scale_approx_mult_bits)
         tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
         if self.per_channel_wts:
             tmpstr += '\nw_scale=PerCh, w_zero_point=PerCh'
@@ -507,25 +553,33 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         return tmpstr
 
 
+class NoStatsError(NotImplementedError):
+    pass
+
+
 class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
         if not isinstance(wrapped_module, distiller.modules.Concat):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.Concat modules')
 
         if not activation_stats:
-            raise ValueError(self.__class__.__name__ +
-                             ' must get activation stats, dynamic quantization not supported')
+            raise NoStatsError(self.__class__.__name__ +
+                               ' must get activation stats, dynamic quantization not supported')
 
         super(RangeLinearQuantConcatWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                             clip_acts=clip_acts, activation_stats=activation_stats,
-                                                            clip_n_stds=clip_n_stds)
+                                                            clip_n_stds=clip_n_stds,
+                                                            scale_approx_mult_bits=scale_approx_mult_bits)
 
         if self.preset_act_stats:
             # For concatenation to make sense, we need to match all the inputs' scales, so we
             # set a re-scale factor based on the preset output scale
             for idx, in_scale in enumerate(self.inputs_scales()):
-                self.register_buffer('in_{0}_requant_scale'.format(idx), self.output_scale / in_scale)
+                requant_scale = self.output_scale / in_scale
+                if self.scale_approx_mult_bits is not None:
+                    requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
+                self.register_buffer('in_{0}_requant_scale'.format(idx), requant_scale)
 
     def inputs_requant_scales(self):
         if not self.preset_act_stats:
@@ -555,23 +609,28 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
 
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
         if not isinstance(wrapped_module, distiller.modules.EltwiseAdd):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseAdd modules')
 
         if not activation_stats:
-            raise ValueError(self.__class__.__name__ +
-                             ' must get activation stats, dynamic quantization not supported')
+            raise NoStatsError(self.__class__.__name__ +
+                               ' must get activation stats, dynamic quantization not supported')
 
         super(RangeLinearQuantEltwiseAddWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                                 clip_acts=clip_acts, activation_stats=activation_stats,
-                                                                clip_n_stds=clip_n_stds)
+                                                                clip_n_stds=clip_n_stds,
+                                                                scale_approx_mult_bits=scale_approx_mult_bits)
 
         if self.preset_act_stats:
             # For addition to make sense, all input scales must match. So we set a re-scale factor according
             # to the preset output scale
-            for idx, in_scale in enumerate(self.inputs_scales()):
-                self.register_buffer('in_{0}_requant_scale'.format(idx), self.output_scale / in_scale)
+            requant_scales = [self.output_scale / in_scale for in_scale in self.inputs_scales()]
+            if scale_approx_mult_bits is not None:
+                requant_scales = [approx_scale_as_mult_and_shift(requant_scale, scale_approx_mult_bits)
+                                  for requant_scale in requant_scales]
+            for idx, requant_scale in enumerate(requant_scales):
+                self.register_buffer('in_{0}_requant_scale'.format(idx), requant_scale)
 
     def inputs_requant_scales(self):
         if not self.preset_act_stats:
@@ -603,17 +662,18 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 
 class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
         if not isinstance(wrapped_module, distiller.modules.EltwiseMult):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseMult modules')
 
         if not activation_stats:
-            raise ValueError(self.__class__.__name__ +
-                             ' must get activation stats, dynamic quantization not supported')
+            raise NoStatsError(self.__class__.__name__ +
+                               ' must get activation stats, dynamic quantization not supported')
 
         super(RangeLinearQuantEltwiseMultWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                                  clip_acts=clip_acts, activation_stats=activation_stats,
-                                                                 clip_n_stds=clip_n_stds)
+                                                                 clip_n_stds=clip_n_stds,
+                                                                 scale_approx_mult_bits=scale_approx_mult_bits)
 
         if self.preset_act_stats:
             self.register_buffer('accum_scale', reduce(lambda x, y: x * y, self.inputs_scales()))
@@ -635,7 +695,10 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
         return self.output_scale, self.output_zero_point
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
-        return output_scale / self.accum_scale, output_zero_point
+        requant_scale = output_scale / self.accum_scale
+        if self.scale_approx_mult_bits is not None:
+            requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
+        return requant_scale, output_zero_point
 
 
 class FP16Wrapper(nn.Module):
@@ -706,21 +769,28 @@ class PostTrainLinearQuantizer(Quantizer):
         model (torch.nn.Module): Model to be quantized
         bits_activations/parameters/accum (int): Number of bits to be used when quantizing each tensor type
         overrides (:obj:`OrderedDict`, optional): Overrides the layers quantization settings.
-        clip_acts (bool): See RangeLinearQuantWrapper
-        no_clip_layers (list): List of fully-qualified layer names for which activations clipping should not be done.
-            A common practice is to not clip the activations of the last layer before softmax.
-            Applicable only if clip_acts is True.
-        per_channel_wts (bool): Set to True to enable per-channel quantization of weights (per output channel)
+        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
+        clip_acts (ClipMode): Activations clipping mode to use
+        per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
+            output channel
         model_activation_stats (str / dict / OrderedDict): Either a path to activation stats YAML file, or a dictionary
-            containing the stats. If None then stats will be calculated dynamically.
+            containing the stats. The stats are used for static calculation of quantization parameters.
+            The dict should be in the format exported by distiller.data_loggers.QuantCalibrationStatsCollector.
+            If None then parameters are calculated dynamically.
         fp16 (bool): Set to True to convert modules to half precision.
+        clip_n_stds (float): When clip_acts == ClipMode.N_STD, this is the number of standard deviations to use
+        scale_approx_mult_bits (int): If not None, scale factors will be approximated using an integer multiplication
+            followed by a bit-wise shift. This eliminates floating-point scale factors, replacing them with integer
+            calculations.
+            If None, scale factors will be kept in their original FP32 values.
     Note:
-        If fp16 is set to True, all the layers (except those overriden in `overrides`) will be converted
+        If fp16 is set to True, all the layers (except those overridden in `overrides`) will be converted
         to half precision, regardless of bits_activations/parameters/accum.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
-                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, no_clip_layers=None,
-                 per_channel_wts=False, model_activation_stats=None, fp16=False, clip_n_stds=None):
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
+                 per_channel_wts=False, model_activation_stats=None, fp16=False, clip_n_stds=None,
+                 scale_approx_mult_bits=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
                                                        overrides=overrides, train_with_fp_copy=False)
@@ -739,7 +809,16 @@ class PostTrainLinearQuantizer(Quantizer):
                     model_activation_stats = distiller.utils.yaml_ordered_load(stream)
             elif not isinstance(model_activation_stats, (dict, OrderedDict)):
                 raise TypeError('model_activation_stats must either be a string, a dict / OrderedDict or None')
-        
+        else:
+            msglogger.warning("\nWARNING:\nNo stats file passed - Dynamic quantization will be used\n"
+                              "At the moment, this mode isn't as fully featured as stats-based quantization, and "
+                              "the accuracy results obtained are likely not as representative of real-world results."
+                              "\nSpecifically:\n"
+                              "  * Not all modules types are supported in this mode. Unsupported modules will remain "
+                              "in FP32.\n"
+                              "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
+                              "supported when statistics are used.\nEND WARNING\n")
+
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_parameters': bits_parameters,
@@ -747,31 +826,39 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'mode': str(mode).split('.')[1],
                                                     'clip_acts': _enum_to_str(clip_acts),
                                                     'clip_n_stds': clip_n_stds,
-                                                    'no_clip_layers': no_clip_layers,
-                                                    'per_channel_wts': per_channel_wts}}
+                                                    'per_channel_wts': per_channel_wts,
+                                                    'fp16': fp16,
+                                                    'scale_approx_mult_bits': scale_approx_mult_bits}}
 
-        def replace_param_layer(module, name, qbits_map,
-                                per_channel_wts=per_channel_wts,
-                                mode=mode,
-                                fp16=fp16):
+        def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
+                                mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
+                                clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
+            clip_acts = verify_clip_mode(clip_acts)
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
-                                                     num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip,
+                                                     num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip_acts,
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None),
-                                                     clip_n_stds=clip_n_stds)
+                                                     clip_n_stds=clip_n_stds,
+                                                     scale_approx_mult_bits=scale_approx_mult_bits)
 
-        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16):
+        def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
+                                    scale_approx_mult_bits=scale_approx_mult_bits,
+                                    clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
-            clip = self.clip_acts if norm_name not in self.no_clip_layers else ClipMode.NONE
-            return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip,
-                                activation_stats=self.model_activation_stats.get(norm_name, None),
-                                clip_n_stds=clip_n_stds)
+            clip_acts = verify_clip_mode(clip_acts)
+            try:
+                return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
+                                    activation_stats=self.model_activation_stats.get(norm_name, None),
+                                    clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits)
+            except NoStatsError:
+                msglogger.warning('WARNING: {0} - quantization of {1} without stats not supported. '
+                                  'Keeping the original FP32 module'.format(name, module.__class__.__name__))
+                return module
 
         def replace_embedding(module, name, qbits_map, fp16=fp16):
             if fp16:
@@ -781,13 +868,13 @@ class PostTrainLinearQuantizer(Quantizer):
                                                stats=self.model_activation_stats.get(norm_name, None))
 
         self.clip_acts = clip_acts
-        self.no_clip_layers = no_clip_layers or []
         self.clip_n_stds = clip_n_stds
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
         self.mode = mode
 
         self.replacement_factory[nn.Conv2d] = replace_param_layer
+        self.replacement_factory[nn.Conv3d] = replace_param_layer
         self.replacement_factory[nn.Linear] = replace_param_layer
 
         self.replacement_factory[distiller.modules.Concat] = partial(
@@ -797,6 +884,9 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[distiller.modules.EltwiseMult] = partial(
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
         self.replacement_factory[nn.Embedding] = replace_embedding
+
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        self.save_per_layer_parameters(save_dir)
 
     @classmethod
     def from_args(cls, model, args):
@@ -808,16 +898,172 @@ class PostTrainLinearQuantizer(Quantizer):
             return distiller.config_component_from_file_by_class(model, args.qe_config_file,
                                                                  'PostTrainLinearQuantizer')
         else:
+            overrides = OrderedDict(
+                [(layer, OrderedDict([('clip_acts', 'NONE')]))
+                 for layer in args.qe_no_clip_layers]
+            )
             return cls(model,
                        bits_activations=args.qe_bits_acts,
                        bits_parameters=args.qe_bits_wts,
                        bits_accum=args.qe_bits_accum,
                        mode=args.qe_mode,
                        clip_acts=args.qe_clip_acts,
-                       no_clip_layers=args.qe_no_clip_layers,
                        per_channel_wts=args.qe_per_channel,
                        model_activation_stats=args.qe_stats_file,
-                       clip_n_stds=args.qe_clip_n_stds)
+                       clip_n_stds=args.qe_clip_n_stds,
+                       scale_approx_mult_bits=args.qe_scale_approx_bits,
+                       overrides=overrides)
+
+    def save_per_layer_parameters(self, save_dir=''):
+        defaults = OrderedDict(self.model.quantizer_metadata['params'])
+        defaults.pop('bits_activations')
+        defaults.pop('bits_parameters')
+        defaults.pop('bits_accum')
+        out = OrderedDict()
+        for n, m in self.model.named_modules():
+            if distiller.has_children(m):
+                continue
+            qbits = self.module_qbits_map[n]
+            d = OrderedDict()
+            d['bits_activations'] = qbits.acts
+            d['bits_weights'] = qbits.wts
+            d['bits_bias'] = qbits.bias
+            for k, v in defaults.items():
+                actual_v = self.module_overrides_map[n].get(k, v)
+                d[k] = actual_v
+            out[n] = d
+        save_path = os.path.join(save_dir, 'layer_quant_params.yaml')
+        distiller.yaml_ordered_save(save_path, out)
+        msglogger.info('Per-layer quantization parameters saved to ' + save_path)
+
+    def prepare_model(self, dummy_input=None):
+        self.has_bidi_distiller_lstm = any(isinstance(m, distiller.modules.DistillerLSTM) and m.bidirectional for
+                                           _, m in self.model.named_modules())
+        if self.has_bidi_distiller_lstm:
+            warnings.warn('Model contains a bidirectional DistillerLSTM module. '
+                          'Automatic BN folding and statistics optimization based on tracing is not yet '
+                          'supported for models containing such modules.\n'
+                          'Will perform specific optimization for the DistillerLSTM modules, but any other potential '
+                          'opportunities for optimization in the model will be ignored.', UserWarning)
+            # Setting dummy_input to None to make sure SummaryGraph won't be called
+            dummy_input = None
+        elif dummy_input is None:
+            raise ValueError('PostTrainLinearQuantizer requires dummy input in order to perform certain optimizations')
+        super(PostTrainLinearQuantizer, self).prepare_model(dummy_input)
+
+    def _pre_prepare_model(self, dummy_input):
+        if not self.has_bidi_distiller_lstm:
+            self._apply_bn_folding(dummy_input)
+            self._apply_activation_stats_fusions()
+        else:
+            self._apply_bidi_distiller_lstm_stats_fusion()
+
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        save_path = os.path.join(save_dir, 'quant_stats_after_prepare_model.yaml')
+        distiller.yaml_ordered_save(save_path, self.model_activation_stats)
+        msglogger.info('Updated stats saved to ' + save_path)
+
+    def _clip_stats(self, entry, min_val, max_val):
+        if entry['max'] < min_val:
+            entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = min_val
+        elif entry['min'] > max_val:
+            entry['min'] = entry['avg_min'] = entry['max'] = entry['avg_max'] = max_val
+        else:
+            entry['min'] = max(min_val, entry['min'])
+            entry['avg_min'] = max(min_val, entry['avg_min'])
+            entry['max'] = min(max_val, entry['max'])
+            entry['avg_max'] = min(max_val, entry['avg_max'])
+
+    def _apply_bn_folding(self, dummy_input):
+        msglogger.info('Applying batch-norm folding ahead of post-training quantization')
+        mt.fold_batch_norms_inference(self.model, adjacency_map=self.adjacency_map)
+
+        # After BN folding model need to re-generate the adjacency map
+        summary_graph = distiller.SummaryGraph(self.model, dummy_input)
+        self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+
+        if not self.model_activation_stats:
+            return
+
+        # Update the activation stats to reflect BN folding
+        msglogger.info('Propagating output statistics from BN modules to folded modules')
+        named_modules = OrderedDict(self.model.named_modules())
+        model_stats = self.model_activation_stats
+        for n, m in named_modules.items():
+            try:
+                # Look for the mark left by distiller.model_transforms.fold_batch_norms
+                folded_bn_module = distiller.normalize_module_name(m.fused_modules[0])
+                # Propagate the output stats of the folded BN module to this module
+                # If stats were collected after folding was applied, then stats for the BN module won't exist,
+                # in which case we just move on
+                model_stats[distiller.normalize_module_name(n)]['output'] = model_stats.pop(folded_bn_module)['output']
+                msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
+            except (AttributeError, KeyError):
+                continue
+
+    def _apply_activation_stats_fusions(self):
+        # Now we look for certain "fusions" of layers and activations
+        # We modify stats to make sure we quantize only the ranges relevant to the activation function
+        # By doing so we reduce quantization error while still keeping all
+        if not self.model_activation_stats:
+            msglogger.info("No activation stats - skipping optimizations for modules followed by Relu/Tanh/Sigmoid")
+            return
+
+        msglogger.info('Optimizing output statistics for modules followed by ReLU/Tanh/Sigmoid')
+
+        named_modules = OrderedDict(self.model.named_modules())
+        model_stats = self.model_activation_stats
+        for n, m in named_modules.items():
+            if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+                continue
+            successor = self.adjacency_map[n].successors[0]
+            n = distiller.normalize_module_name(n)
+            m_stats = model_stats[n]
+
+            succ_type = successor.type
+            succ_stats = model_stats.get(distiller.normalize_module_name(successor.name), None)
+            if succ_type == 'Split':
+                # Handling case where layer output is split, with each chunk going into an activation function
+                # This pattern occurs in LSTM, for example. If all the activations are "similar", we can still
+                # optimize the quantization ranges of the output of the layer prior to the split
+                post_split_ops = self.adjacency_map[successor.name].successors
+                if all(op.type == 'Relu' for op in post_split_ops):
+                    succ_type = 'Relu'
+                elif all(op.type == 'Tanh' for op in post_split_ops):
+                    # Tanh non-saturated input range is smaller than sigmoid, so we try this first
+                    succ_type = 'Tanh'
+                elif all(op.type in ('Sigmoid', 'Tanh') for op in post_split_ops):
+                    # If we have both sigmoid and tanh (as in LSTM), we can go with sigmoid
+                    succ_type = 'Sigmoid'
+                succ_stats = None
+
+            if succ_type == 'Relu':
+                # ReLU zeros out all negative values, so there's no need to quantize them
+                msglogger.debug('  Module {} followed by Relu, updating stats'.format(n))
+                if succ_stats is not None:
+                    m_stats['output'] = deepcopy(succ_stats['output'])
+                    succ_stats['inputs'][0] = deepcopy(succ_stats['output'])
+                else:
+                    msglogger.debug("    Relu op not a module or post-split, can't update mean and std".format(n))
+                    self._clip_stats(m_stats['output'], 0., m_stats['output']['max'])
+            elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
+                # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
+                # of these ranges
+                msglogger.debug('  Module {} followed by {}, updating stats'.format(n, succ_type))
+                sat_val = 4. if succ_type == 'Tanh' else 6.
+                self._clip_stats(m_stats['output'], -sat_val, sat_val)
+                if succ_stats is not None:
+                    succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+
+    def _apply_bidi_distiller_lstm_stats_fusion(self):
+        distiller_lstm_cells = [n for n, m in self.model.named_modules() if
+                                isinstance(m, distiller.modules.DistillerLSTMCell)]
+
+        for name in distiller_lstm_cells:
+            name += '.eltwiseadd_gate'
+            msglogger.debug('  Module {} followed by Sigmoid, updating stats'.format(name))
+            sat_val = 6.
+            self._clip_stats(self.model_activation_stats[name]['output'], -sat_val, sat_val)
 
 
 ###############################################################################
@@ -927,10 +1173,6 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                                                   overrides=overrides,
                                                                   train_with_fp_copy=True)
 
-        if isinstance(model, nn.DataParallel) and len(model.device_ids) > 1:
-            raise RuntimeError('QuantAwareTrainRangeLinearQuantizer currently does not support running with '
-                               'multiple GPUs')
-
         mode = verify_quant_mode(mode)
 
         self.model.quantizer_metadata['params']['mode'] = str(mode).split('.')[1]
@@ -973,9 +1215,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         self.activation_replace_fn = activation_replace_fn
         self.replacement_factory[nn.ReLU] = self.activation_replace_fn
 
-    def _prepare_model_impl(self):
-        super(QuantAwareTrainRangeLinearQuantizer, self)._prepare_model_impl()
-
+    def _post_prepare_model(self):
         if self.quantize_inputs:
             if isinstance(self.model, nn.DataParallel):
                 m = self.model.module

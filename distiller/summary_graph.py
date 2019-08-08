@@ -19,46 +19,24 @@ import re
 import numpy as np
 import collections
 import torch
+import torch.nn as nn
 import torch.jit as jit
 import logging
+from collections import OrderedDict, defaultdict
+from collections.abc import MutableSequence, Iterable
 msglogger = logging.getLogger()
 
 
-def onnx_name_2_pytorch_name(name, op_type):
+def onnx_name_2_pytorch_name(name):
     # Convert a layer's name from an ONNX name, to a PyTorch name
     # For example:
-    #   ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu].1 ==> layer3.0.relu.1
+    #   ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu] ==> layer3.0.relu
 
-    # First see if there's an instance identifier
-    instance = ''
-    if name.find('.') >= 0:
-        instance = name[name.find('.')+1:]
-
-    # Next, split by square brackets
+    # Split by square brackets
     name_parts = re.findall('\[.*?\]', name)
     name_parts = [part[1:-1] for part in name_parts]
 
-    # If name doesn't have the pattern above, it probably means the op was called via
-    # some functional API and not via a module. Couple of examples:
-    #   x = x.view(...)
-    #   x = F.relu(x)
-    # In this case, to have a meaningful name, we use the op type
-    new_name = ('.'.join(name_parts) if len(name_parts) > 0 else op_type) + instance
-
-    msglogger.debug("new sgraph node {} {} {}".format(name, op_type, new_name))
-    return new_name
-
-
-def increment_instance(node_name):
-    """Increment the instance number of a given node"""
-    try:
-        # There is an assumption here that the last character in node_name is the node instance (an integer),
-        # and that it is between 0-9 (i.e. a digit)
-        base_name = node_name[:-1]
-        suffix = str(int(node_name[-1]) + 1)
-        return base_name + suffix
-    except ValueError:
-        return node_name + ".0"
+    return '.'.join(name_parts)
 
 
 class SummaryGraph(object):
@@ -92,24 +70,62 @@ class SummaryGraph(object):
     """
     Edge = collections.namedtuple('Edge', 'src dst')
 
-    def __init__(self, model, dummy_input):
+    def __init__(self, model, dummy_input, apply_scope_name_workarounds=True):
         self._src_model = model
         model_clone = distiller.make_non_parallel_copy(model)
+
+        # Switch all instances of torch.nn.ModuleList in the model to our DistillerModuleList
+        # See documentation of _DistillerModuleList class for details on why this is done
+        model_clone, converted_module_names_map = _to_distiller_modulelist(model_clone)
+
         with torch.onnx.set_training(model_clone, False):
             
-            device = next(model_clone.parameters()).device
+            device = distiller.model_device(model_clone)
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
-            trace, _ = jit.get_trace_graph(model_clone, dummy_input)
+            trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
+
+            # As of PyTorch 1.1.0, ONNX trace optimization has two issues that result in incorrect scope names
+            # of nodes in the trace graph.
+            # These can make it impossible, in some cases, to derive the connectivity of the model using the original
+            # module names. So we try to detect these cases and apply workarounds
+
+            # Issue #1:
+            #   Gemm ops (aka "Linear" / "addmm" / "FC") get the scope name of the last non-Gemm node
+            #   that came before them.
+            #   Note that if the node prior to the Gemm node isn't the result of a dedicated module call,
+            #   then this issue doesn't occur. For simplicity we just track all Gemms.
+            # TODO: This should be fixed in PyTorch 1.2.0, revisit when it's released
+            aten_addmm_nodes_scope_names = []
+            onnx_gemm_count = 0
+
+            # Issue #2:
+            #   Dropout ops are removed by ONNX trace optimization. However, the op BEFORE the original dropout op
+            #   gets the scope name of the dropout op
+            pre_dropout_nodes_scope_names = OrderedDict()
+
+            prev_non_dropout_op = None
+            for node in trace.graph().nodes():
+                kind = node.kind()
+                if 'aten' not in kind:
+                    continue
+                if kind == 'aten::dropout':
+                    if prev_non_dropout_op:
+                        pre_dropout_nodes_scope_names[node.scopeName()] = prev_non_dropout_op.scopeName()
+                else:
+                    prev_non_dropout_op = node
+                    if kind == 'aten::addmm':
+                        aten_addmm_nodes_scope_names.append(node.scopeName())
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
             torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
 
             graph = trace.graph()
-            self.ops = {}
-            self.params = {}
+            self.ops = OrderedDict()
+            self.module_ops_map = defaultdict(list)
+            self.params = OrderedDict()
             self.edges = []
-            self.temp = {}
+            self.temp = OrderedDict()
 
             in_out = list(graph.inputs()) + list(graph.outputs())
             for param in in_out:
@@ -118,26 +134,63 @@ class SummaryGraph(object):
             for node in graph.nodes():
                 new_op = self.__create_op(node)
 
-                # Operators with the same name create very confusing graphs (Resnet, for example),
+                if apply_scope_name_workarounds:
+                    # Here we apply the workaround to the Gemm nodes scope name issue mentioned above
+                    if new_op['type'] == 'Gemm':
+                        new_op['orig-name'] = aten_addmm_nodes_scope_names[onnx_gemm_count]
+                        new_op['name'] = new_op['orig-name']
+                        onnx_gemm_count += 1
+
+                    # Here we apply the workaround to the issue of dropout op scope name overriding previous op's
+                    # scope name
+                    if new_op['name'] in pre_dropout_nodes_scope_names:
+                        new_op['orig-name'] = pre_dropout_nodes_scope_names[new_op['name']]
+                        new_op['name'] = new_op['orig-name']
+
+                # Convert the graph node's scope name to a PyTorch module name
+                module_name = onnx_name_2_pytorch_name(new_op['orig-name'])
+
+                # Get name from before conversion to DistillerModuleList
+                module_name = converted_module_names_map[module_name]
+
+                if len(module_name) == 0:
+                    # Special case where the module name is an empty string - this happens
+                    # when the op is called from the "top-level" of the model
+                    new_op['name'] = 'top_level_op'
+                else:
+                    new_op['name'] = module_name
+
+                # Save the calling module name in the op dict. Denormalize it so it can
+                # be directly matched with the actual model
+                module_name = distiller.denormalize_module_name(self._src_model, module_name)
+                new_op['module-name'] = module_name
+
+                # The node's scope name in the graph corresponds to the module from which the op was called.
+                # This means that when ops are invoked from the same module via functional calls or direct
+                # operations on tensors, these ops will have the SAME MODEL NAME associated with them.
+                # For example:
+                #   t = t1 + t2
+                #   t = F.relu(t)
+                # In this case the add operation and the ReLU operation will have the same name, which is
+                # derived from the module they're contained in.
+                #
+                # Another case where different ops will have the same module name is when a module is reused:
+                #   out = self.conv1(x)
+                #   out = self.relu(out)    <=== First use of self.relu
+                #   out = self.conv2(out)
+                #   out = self.relu(out)    <=== Second use of self.relu
+                # In this case the graph will have 2 distinct ReLU nodes, with the same scope name.
+                #
+                # Operators with the same name create very confusing graphs (in ResNet, for example),
                 # so we "unroll" them.
-                # Sometimes operations of different types have the same name, so we differentiate
-                # using both name and type
-                # (this happens, for example, when an operator is called via some functional API and
-                # not via a module)
-                same = [op for op in self.ops.values() if
-                        op['orig-name'] + op['type'] == new_op['orig-name'] + new_op['type']]
-                if len(same) > 0:
-                    new_op['name'] += "." + str(len(same))
+                same_module_cnt = len(self.module_ops_map[module_name])
+                if same_module_cnt:
+                    new_op['name'] += "__" + str(same_module_cnt)
+                self.module_ops_map[module_name].append(new_op['name'])
 
-                new_op['name'] = onnx_name_2_pytorch_name(new_op['name'], new_op['type'])
-                assert len(new_op['name']) > 0
-
-                if new_op['name'] in self.ops:
-                    # This is a patch.
-                    # ONNX names integrate the node type, while we don't (design bug).
-                    # This means that while parsing the ONNX graph we might find two nodes with the "same" name.
-                    # This patch increments the instance name, but this may break in the future.
-                    new_op['name'] = increment_instance(new_op['name'])
+                # Finally we register the new op in the ops collection
+                msglogger.debug("new sgraph node - Scope name: {} ; Type: {} ; Display name {}".format(
+                    new_op['orig-name'], new_op['type'], new_op['name']))
                 self.ops[new_op['name']] = new_op
 
                 for input_ in node.inputs():
@@ -148,15 +201,48 @@ class SummaryGraph(object):
                     self.__add_output(new_op, output)
                     self.edges.append(SummaryGraph.Edge(new_op['name'], output.uniqueName()))
 
-                new_op['attrs'] = {attr_name: node[attr_name] for attr_name in node.attributeNames()}
+                new_op['attrs'] = OrderedDict([(attr_name, node[attr_name]) for attr_name in node.attributeNames()])
 
+        self.__merge_pad_avgpool()
         self.add_macs_attr()
         self.add_footprint_attr()
         self.add_arithmetic_intensity_attr()
         del model_clone
 
+    def __merge_pad_avgpool(self):
+        """ The ONNX trace optimization converts average pool ops to a sequence of 2 operations: pad + pool.
+        This "quirk" makes makes it unnecessarily difficult to detect the connectivity between an average pool
+        op and its predecessor, and it doesn't serve any purpose in the context of SummaryGraph usages.
+        So we get rid of the pad op here.
+        """
+        pad_op_name = None
+        for curr_op_name, curr_op in list(self.ops.items()):
+            curr_op_type = curr_op['type']
+            if curr_op_type == 'Pad':
+                pad_op_name = curr_op_name
+            else:
+                if pad_op_name and curr_op_type == 'AveragePool':
+                    pad_op = self.ops[pad_op_name]
+                    if pad_op['module-name'] != curr_op['module-name']:
+                        continue
+                    merged_op = OrderedDict(curr_op)
+                    merged_op['name'] = pad_op_name
+                    merged_op['inputs'] = pad_op['inputs']
+                    self.ops[pad_op_name] = merged_op
+                    self.ops.pop(curr_op_name)
+                    self.module_ops_map[merged_op['module-name']].remove(curr_op_name)
+
+                    sequence_input_idx = pad_op['inputs'][0]
+                    first_edge = SummaryGraph.Edge(sequence_input_idx, pad_op_name)
+                    idx = self.edges.index(first_edge)
+                    del self.edges[idx:idx + 4]
+                    self.edges.insert(idx, SummaryGraph.Edge(sequence_input_idx, pad_op_name))
+                    self.edges.insert(idx + 1, SummaryGraph.Edge(pad_op_name, merged_op['outputs'][0]))
+
+                pad_op_name = None
+
     def __create_op(self, onnx_node):
-        op = {}
+        op = OrderedDict()
         op['name'] = onnx_node.scopeName()
         op['orig-name'] = onnx_node.scopeName()
         op['type'] = onnx_node.kind().lstrip('::onnx')
@@ -188,7 +274,7 @@ class SummaryGraph(object):
         return param
 
     def __tensor_desc(self, n):
-        tensor = {}
+        tensor = OrderedDict()
         tensor['id'] = n.uniqueName()
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
@@ -221,7 +307,8 @@ class SummaryGraph(object):
                 ofm_vol = self.param_volume(conv_out)
                 try:
                     # MACs = volume(OFM) * (#IFM * K^2) / #Groups
-                    op['attrs']['MACs'] = int(ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1] / groups)
+                    op['attrs']['MACs'] = int(
+                        ofm_vol * SummaryGraph.volume(conv_w) * self.params[conv_in]['shape'][1] / groups)
                 except IndexError:
                     # Todo: change the method for calculating MACs
                     msglogger.error("An input to a Convolutional layer is missing shape information "
@@ -245,8 +332,16 @@ class SummaryGraph(object):
                 ofm_vol = self.param_volume(conv_out)
                 ifm_vol = self.param_volume(conv_in)
                 if op['type'] == 'Conv' or op['type'] == 'Gemm':
-                    conv_w = op['inputs'][1]
-                    weights_vol = self.param_volume(conv_w)
+                    if op['type'] == 'Conv':
+                        kernel_size =  self.volume(op['attrs']['kernel_shape'])
+                        group = op['attrs']['group']
+                    else:
+                        kernel_size, group = 1, 1
+                    n_ifm = self.param_shape(conv_in)[1]
+                    n_ofm = self.param_shape(conv_out)[1] 
+                    weights_vol = kernel_size * n_ifm * n_ofm / group
+                    op['attrs']['n_ifm'] = n_ifm
+                    op['attrs']['n_ofm'] = n_ofm
                     op['attrs']['footprint'] = ofm_vol + ifm_vol + weights_vol
                     op['attrs']['fm_vol'] = ofm_vol + ifm_vol
                     op['attrs']['weights_vol'] = weights_vol
@@ -273,30 +368,28 @@ class SummaryGraph(object):
     def find_param(self, data_name):
         return self.params.get(data_name, None)
 
-    def predecessors(self, op, depth, done_list=None):
+    def predecessors(self, node, depth, done_list=None, denorm_names=True):
         """Returns a list of <op>'s predecessors"""
         if done_list is None:
             done_list = []
 
-        if isinstance(op, dict):
-            preds = [edge.src for edge in self.edges if (edge.dst == op['name'] and
-                                                         edge.src not in done_list)]
-            done_list += preds
-        else:
-            preds = [edge.src for edge in self.edges if (edge.dst == op and
-                                                         edge.src not in done_list)]
-            done_list += preds
+        node_name = node['name'] if isinstance(node, dict) else node
+        preds = [edge.src for edge in self.edges if (edge.dst == node_name and
+                                                     edge.src not in done_list)]
+        done_list += preds
 
         if depth == 1:
             ret = preds
         else:
             ret = []
             for predecessor in preds:
-                ret += self.predecessors(predecessor, depth-1, done_list)
+                ret += self.predecessors(predecessor, depth - 1, done_list, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        if denorm_names:
+            ret = [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        return ret
 
-    def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None):
+    def predecessors_f(self, node_name, predecessors_types, done_list=None, logging=None, denorm_names=True):
         """Returns a list of <op>'s predecessors, if they match the <predecessors_types> criteria.
         """
         node_name = distiller.normalize_module_name(node_name)
@@ -321,7 +414,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in predecessors_types and len(done_list) > 1:
-                return [distiller.denormalize_module_name(self._src_model, node_name)]
+                return [distiller.denormalize_module_name(self._src_model, node_name) if denorm_names else node_name]
 
             # This is an operation node
             preds = [edge.src for edge in self.edges if (edge.dst == node_name and
@@ -332,36 +425,32 @@ class SummaryGraph(object):
                                                          edge.src not in done_list)]
         ret = []
         for predecessor in preds:
-            ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging)
+            ret += self.predecessors_f(predecessor, predecessors_types, done_list, logging, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
+        return ret
 
-    def successors(self, node, depth, done_list=None):
+    def successors(self, node, depth, done_list=None, denorm_names=True):
         """Returns a list of <op>'s successors"""
         if done_list is None:
             done_list = []
 
-        if isinstance(node, dict):
-            # This is an operation node
-            succs = [edge.dst for edge in self.edges if (edge.src == node['name'] and
-                                                         edge.dst not in done_list)]
-            done_list += succs
-        else:
-            # This is a data node
-            succs = [edge.dst for edge in self.edges if (edge.src == node and
-                                                         edge.dst not in done_list)]
-            done_list += succs
+        node_name = node['name'] if isinstance(node, dict) else node
+        succs = [edge.dst for edge in self.edges if (edge.src == node_name and
+                                                     edge.dst not in done_list)]
+        done_list += succs
 
         if depth == 1:
             ret = succs
         else:
             ret = []
             for successor in succs:
-                ret += self.successors(successor, depth-1, done_list)
+                ret += self.successors(successor, depth - 1, done_list, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        if denorm_names:
+            ret = [distiller.denormalize_module_name(self._src_model, x) for x in ret]
+        return ret
 
-    def successors_f(self, node_name, successors_types, done_list=None, logging=None):
+    def successors_f(self, node_name, successors_types, done_list=None, logging=None, denorm_names=True):
         """Returns a list of <op>'s successors, if they match the <successors_types> criteria.
 
         Traverse the graph, starting at node <node_name>, and search for successor
@@ -377,7 +466,7 @@ class SummaryGraph(object):
             node_is_an_op = False
             node = self.find_param(node_name)
             if node is None:
-                #raise ValueError("something went wrong")
+                msglogger.warning("successors_f: Could not find node {}".format(node_name))
                 return []
 
         if done_list is None:
@@ -392,7 +481,7 @@ class SummaryGraph(object):
             # We check if we found the type of node we're looking for,
             # and that this is not the first node in our search.
             if node['type'] in successors_types and len(done_list) > 1:
-                return [distiller.denormalize_module_name(self._src_model, node_name)]
+                return [distiller.denormalize_module_name(self._src_model, node_name) if denorm_names else node_name]
 
             # This is an operation node
             succs = [edge.dst for edge in self.edges if (edge.src == node_name and
@@ -403,9 +492,9 @@ class SummaryGraph(object):
                                                          edge.dst not in done_list)]
         ret = []
         for successor in succs:
-            ret += self.successors_f(successor, successors_types, done_list, logging)
+            ret += self.successors_f(successor, successors_types, done_list, logging, denorm_names)
 
-        return [distiller.denormalize_module_name(self._src_model, node) for node in ret]
+        return ret
 
     def named_params_layers(self):
         for param_name, param in self._src_model.named_parameters():
@@ -416,3 +505,259 @@ class SummaryGraph(object):
             sgraph_layer_name = distiller.denormalize_module_name(
                 self._src_model, normalized_layer_name)
             yield sgraph_layer_name, param_name, param
+
+    def adjacency_map(self, dedicated_modules_only=False):
+        """Returns a mapping from each op in the graph to its immediate predecessors and successors.
+
+        The keys in the generated mapping are op names, and the values are instances of AdjacentsEntry.
+
+        The op names are "de-normalized", meaning they can be used directly with the underlying model's
+        named_modules(), for example.
+
+        Args:
+            dedicated_modules_only (bool): If set, the generated mapping will not include any ops that can't be
+              associated with a dedicated module within the underlying model. Examples of this will be
+              functional calls, such as "F.relu()", and tensor operations, such as "t3 = t1 + t2".
+        """
+        adj_map = OrderedDict()
+        named_modules = OrderedDict(self._src_model.named_modules())
+
+        for op_name, op in self.ops.items():
+            def dedicated_module_check(n):
+                if not dedicated_modules_only:
+                    return True
+                module_name = self.ops[n]['module-name']
+                module = named_modules[module_name]
+                return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
+
+            def op_meta(n):
+                return OpSimpleMetadata(distiller.denormalize_module_name(self._src_model, n), self.ops[n]['type'])
+
+            if not dedicated_module_check(op_name):
+                continue
+
+            entry = AdjacentsEntry(op_meta(op_name))
+            # Find the immediate preceding and succeeding modules. Depth of 1 gets us the
+            # input and output tensors, depth of 2 gets the actual modules
+            entry.predecessors = [op_meta(n) for n in self.predecessors(op, 2, denorm_names=False)
+                                  if dedicated_module_check(n)]
+            entry.successors = [op_meta(n) for n in self.successors(op, 2, denorm_names=False)
+                                if dedicated_module_check(n)]
+
+            adj_map[entry.op_meta.name] = entry
+
+        return adj_map
+
+
+class OpSimpleMetadata(object):
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
+
+    def __repr__(self):
+        return "Op('{}' | {})".format(self.name, self.type)
+
+    def __eq__(self, other):
+        return self.name == other.name and self.type == other.type
+
+
+class AdjacentsEntry(object):
+    def __init__(self, op_meta):
+        self.op_meta = op_meta
+        self.predecessors = []
+        self.successors = []
+
+    def __repr__(self):
+        return 'OP: {0} ; PREDECESSORS: {1} ; SUCCESSORS: {2}'.format(self.op_meta, self.predecessors, self.successors)
+
+    def __eq__(self, other):
+        return self.op_meta == other.op_meta and \
+               self.predecessors == other.predecessors and \
+               self.successors == other.successors
+
+
+class _DistillerModuleList(object):
+    r"""A almost-drop-in replacement for torch.nn.ModuleList that results in full and unique scope-names when traced
+
+    So why do we need this?
+      Some flows in Distiller, such as modules fusion and "net-aware" quantization in PostTrainLinearQuantizer, rely
+      on the ability to infer the connectivity within the model, at the Python API level. This is done using
+      SummaryGraph, which internally uses PyTorch's trace capabilities. When tracing, each operation
+      executed creates a node in the trace, which has a "scope-name". Distiller then uses the "scope-name" to do a
+      reverse mapping - map from the trace node back to the actual nn.Module defined in the model code.
+
+      These "scope-names" are generated by tracking the ".forward()" calls of modules. However, The torch.nn.ModuleList
+      class itself doesn't have its own forward method. That makes perfect sense - it is only intended to be used as a
+      container of modules which the user accesses explicitly.
+      Unfortunately, this means that if an operation is part of a ModuleList, the name of the ModuleList instance
+      does not appear in the "scope-name". This makes it impossible for us to do the reverse mapping mentioned
+      above.
+
+    From here on, we refer to the module which contains the DistillerModuleList instance as the "parent module".
+
+    Similarities to torch.nn.ModuleList:
+      * A DistillerModuleList can be indexed like a regular Python list, but the modules it contains are properly
+        registered and will be visible to all torch.nn.Module methods.
+      * The DistllerModuleList instance is registered as an attribute of the "parent module"
+      * This means that in terms of accessing the modules and invoking them, DistillerModuleList behaves exactly the
+        same as torch.nn.ModuleList. See the example below.
+
+    Differences vs. torch.nn.ModuleList:
+      * DistillerModuleList is NOT a sub-class of torch.nn.Module
+      * This means that the modules in the list are NOT sub-modules of the list itself. They are registered as
+        sub-modules of the "parent module". That is - the contents of a DistillerModuleList are "flattened" within the
+        "parent module".
+      * In addition, we can't use the '.' character to denote the "nesting" of a module within the list. We use '_'.
+      * All of this means that calls to functions like state_dict() / named_modules() / named_children() / etc. on the
+        "parent_module" return different results when this class is used compared to torch.nn.ModuleList.
+
+    At the moment we don't see a usage for this class "in the wild", outside of SummaryGraph generation.
+    In the context of SummaryGraph, we're going to take a pre-created model and replace any torch.nn.ModuleList
+    instances with DistillerModuleLists. Once that is done, during model execution we expect that lists are being
+    used as read-only (no modules are added to/removed from the list). We're not supporting loading state_dict "across"
+    converted models.
+    This means that:
+      * We implement only a subset of the standard API of a Python sequence (see collections.abc.MutableSequence):
+        'append()', 'extend()', '__len__()' and '__getitem()_'
+        These are the only ones required to perform the conversion for an already created model.
+      * We're not implementing:
+        'insert()', '__setitem__()' and '__delitem__()'.
+
+    If we see in the future that our assumptions break, we'll add the necessary APIs.
+
+    For all the reasons mentioned above, and to avoid unnecessary confusion for users, we're keeping this class
+    internal to summary_graph for now.
+
+    Args:
+        name (string): The base name to be used when registering modules added to the list
+        parent_module (torch.nn.Module): The module to which the modules added to the list will be registered.
+          NOTE: This is expected to be the module containing the list, but we can't enforce this.
+        modules (iterable, optional): An iterable of modules to initialize the list with
+    """
+    def __init__(self, name, parent_module, modules=None):
+        self.name = name
+        if not isinstance(parent_module, nn.Module):
+            raise TypeError('parent_module must be an instance of torch.nn.Module')
+        self.parent_module = parent_module
+        self._modules = []
+        if modules is not None:
+            self.extend(modules)
+
+    def _name_for_idx(self, idx):
+        return self.name + '_' + str(idx)
+
+    def _verify_on_insertion(self, module, idx):
+        if isinstance(module, nn.ModuleList):
+            module = _DistillerModuleList(self._name_for_idx(idx), self.parent_module, module)
+        if isinstance(module, _DistillerModuleList):
+            if module.parent_module != self.parent_module:
+                raise ValueError("When nesting one DistillerModuleList within another, both must have the same "
+                                 "'parent_module'")
+        return module
+
+    def __getitem__(self, idx):
+        return self._modules[idx]
+
+    def __len__(self):
+        return len(self._modules)
+
+    def append(self, module):
+        module = self._verify_on_insertion(module, len(self))
+        if not isinstance(module, _DistillerModuleList):
+            self.parent_module.add_module(self._name_for_idx(len(self)), module)
+        self._modules.append(module)
+
+    def extend(self, modules):
+        if not isinstance(modules, Iterable):
+            raise TypeError('DistillerModuleList.extend must be called with an iterable, but got ' +
+                            modules.__class__.__name__)
+        for module in modules:
+            self.append(module)
+
+    def named_modules(self, memo=None, prefix=''):
+        if memo is None:
+            memo = set()
+        if self not in memo:
+            memo.add(self)
+            # yield prefix, self
+            for idx, module in enumerate(self._modules):
+                if module is None:
+                    continue
+                submodule_prefix = prefix + ('.' if prefix else '') + str(idx)
+                for m in module.named_modules(memo, submodule_prefix):
+                    yield m
+
+    def modules(self):
+        for _, module in self.named_modules():
+            yield module
+
+    def __repr__(self):
+        # A simplified version of torch.nn.Module.__repr__
+        from torch.nn.modules.module import _addindent
+
+        child_lines = []
+        for idx, module in enumerate(self._modules):
+            mod_str = repr(module)
+            mod_str = _addindent(mod_str, 2)
+            child_lines.append('(' + str(idx) + '): ' + mod_str)
+
+        main_str = self.__class__.__name__ + '('
+        if child_lines:
+            main_str += '\n  ' + '\n  '.join(child_lines) + '\n'
+        main_str += ')'
+        return main_str
+
+
+def _named_children_with_duplicates(module):
+    """Version of torch.nn.Module.named_children() that includes duplicate modules"""
+    for name, module in module._modules.items():
+        if module is not None:
+            yield name, module
+
+
+def _named_modules_with_duplicates(module, prefix=''):
+    """Version of torch.nn.Module.named_modules() that includes duplicate modules"""
+    yield prefix, module
+    for name, submodule in module._modules.items():
+        if submodule is None:
+            continue
+        submodule_prefix = prefix + ('.' if prefix else '') + name
+        for m in _named_modules_with_duplicates(submodule, submodule_prefix):
+            yield m
+
+
+def _to_distiller_modulelist(model):
+    """Replaces all instances of torch.nn.ModuleList in a model with DistillerModuleList instances
+
+    Args:
+        model (torch.nn.Module): Model to convert
+    """
+    def convert_container(container):
+        # To maintain a similar order of registered modules compared to the original container, we unregister
+        # all modules and then register them again
+        # We take care to include duplicated modules, which are not returned by the original named_moduels/children
+        # implementation in torch.nn.Module
+        named_children = OrderedDict(_named_children_with_duplicates(container))
+        for n, _ in named_children.items():
+            delattr(container, n)
+        for name, child in named_children.items():
+            if isinstance(child, nn.ModuleList):
+                child = _DistillerModuleList(name, container, child)
+                to_check = child.modules()
+            else:
+                to_check = [child]
+            setattr(container, name, child)
+            for m in to_check:
+                if isinstance(m, _DistillerModuleList):
+                    continue
+                if distiller.has_children(m):
+                    convert_container(m)
+        return container
+
+    named_modules_orig = OrderedDict([(n, m) for n, m in _named_modules_with_duplicates(model)
+                                      if not isinstance(m, nn.ModuleList)])
+    model = convert_container(model)
+    named_modules_dmlist = OrderedDict(_named_modules_with_duplicates(model))
+    converted_module_names_map = OrderedDict(zip(named_modules_dmlist.keys(), named_modules_orig.keys()))
+
+    return model, converted_module_names_map

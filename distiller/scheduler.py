@@ -178,13 +178,13 @@ class CompressionScheduler(object):
                 policy.on_minibatch_end(self.model, epoch, minibatch_id, minibatches_per_epoch,
                                         self.zeros_mask_dict, optimizer)
 
-    def on_epoch_end(self, epoch, optimizer=None):
-        if epoch in self.policies:
-            for policy in self.policies[epoch]:
-                meta = self.sched_metadata[policy]
-                meta['current_epoch'] = epoch
-                meta['optimizer'] = optimizer
-                policy.on_epoch_end(self.model, self.zeros_mask_dict, meta)
+    def on_epoch_end(self, epoch, optimizer=None, **kwargs):
+        for policy in self.policies.get(epoch, list()):
+            meta = self.sched_metadata[policy]
+            meta['current_epoch'] = epoch
+            meta['optimizer'] = optimizer
+            policy.on_epoch_end(self.model, self.zeros_mask_dict, meta,
+                                **kwargs)
 
     def mask_all_weights(self, is_forward=True):
         for name, param in self.model.named_parameters():

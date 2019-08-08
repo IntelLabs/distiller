@@ -16,11 +16,16 @@
 
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
+import copy
+
 import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
+from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
+
+from distiller.utils import set_model_input_shape_attr
 
 import logging
 msglogger = logging.getLogger()
@@ -29,9 +34,12 @@ msglogger = logging.getLogger()
 # TorchVision's version.
 RESNET_SYMS = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
-IMAGENET_MODEL_NAMES = sorted(name for name in torch_models.__dict__
-                              if name.islower() and not name.startswith("__")
-                              and callable(torch_models.__dict__[name]))
+TORCHVISION_MODEL_NAMES = sorted(
+                            name for name in torch_models.__dict__
+                            if name.islower() and not name.startswith("__")
+                            and callable(torch_models.__dict__[name]))
+
+IMAGENET_MODEL_NAMES = copy.deepcopy(TORCHVISION_MODEL_NAMES)
 IMAGENET_MODEL_NAMES.extend(sorted(name for name in imagenet_extra_models.__dict__
                                    if name.islower() and not name.startswith("__")
                                    and callable(imagenet_extra_models.__dict__[name])))
@@ -41,8 +49,25 @@ CIFAR10_MODEL_NAMES = sorted(name for name in cifar10_models.__dict__
                              if name.islower() and not name.startswith("__")
                              and callable(cifar10_models.__dict__[name]))
 
+MNIST_MODEL_NAMES = sorted(name for name in mnist_models.__dict__
+                           if name.islower() and not name.startswith("__")
+                           and callable(mnist_models.__dict__[name]))
+
 ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
-                            set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES)))
+                            set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
+
+
+# A temporary monkey-patch to get past this Torchvision bug:
+# https://github.com/pytorch/pytorch/issues/20516
+from functools import partial
+def patch_torchvision_mobilenet_v2_bug(model):
+    def patched_forward(self, x):
+        x = self.features(x)
+        #x = x.mean([2, 3])
+        x = x.mean(3).mean(2)
+        x = self.classifier(x)
+        return x
+    model.__class__.forward = patched_forward
 
 
 def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
@@ -61,18 +86,28 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     """
     model = None
     dataset = dataset.lower()
+    cadene = False
     if dataset == 'imagenet':
         if arch in RESNET_SYMS:
             model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
-        elif arch in torch_models.__dict__:
-            model = torch_models.__dict__[arch](pretrained=pretrained)
-        elif (arch in imagenet_extra_models.__dict__) and not pretrained:
+        elif arch in TORCHVISION_MODEL_NAMES:
+            try:
+                model = getattr(torch_models, arch)(pretrained=pretrained)
+                if arch == "mobilenet_v2":
+                    patch_torchvision_mobilenet_v2_bug(model)
+            except NotImplementedError:
+                # In torchvision 0.3, trying to download a model that has no
+                # pretrained image available will raise NotImplementedError
+                if not pretrained:
+                    raise
+        if model is None and (arch in imagenet_extra_models.__dict__) and not pretrained:
             model = imagenet_extra_models.__dict__[arch]()
-        elif arch in pretrainedmodels.model_names:
+        if model is None and (arch in pretrainedmodels.model_names):
+            cadene = True
             model = pretrainedmodels.__dict__[arch](
                         num_classes=1000,
                         pretrained=(dataset if pretrained else None))
-        else:
+        if model is None:
             error_message = ''
             if arch not in IMAGENET_MODEL_NAMES:
                 error_message = "Model {} is not supported for dataset ImageNet".format(arch)
@@ -80,8 +115,6 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
                 error_message = "Model {} (ImageNet) does not have a pretrained model".format(arch)
             raise ValueError(error_message or 'Failed to find model {}'.format(arch))
 
-        msglogger.info("=> using {p}{a} model for ImageNet".format(a=arch,
-            p=('pretrained ' if pretrained else '')))
     elif dataset == 'cifar10':
         if pretrained:
             raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
@@ -89,10 +122,19 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = cifar10_models.__dict__[arch]()
         except KeyError:
             raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
-        msglogger.info("=> creating %s model for CIFAR10" % arch)
+
+    elif dataset == 'mnist':
+        if pretrained:
+            raise ValueError("Model {} (MNIST) does not have a pretrained model".format(arch))
+        try:
+            model = mnist_models.__dict__[arch]()
+        except KeyError:
+            raise ValueError("Model {} is not supported for dataset MNIST".format(arch))
     else:
         raise ValueError('Could not recognize dataset {}'.format(dataset))
 
+    msglogger.info("=> creating a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '', 
+                                                                     arch, dataset))
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
         if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
@@ -101,5 +143,16 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = torch.nn.DataParallel(model, device_ids=device_ids)
     else:
         device = 'cpu'
+
+    if cadene and pretrained:
+        # When using pre-trained weights, Cadene models already have an input size attribute
+        # We add the batch dimension to it
+        input_size = model.module.input_size if isinstance(model, torch.nn.DataParallel) else model.input_size
+        shape = tuple([1] + input_size)
+        set_model_input_shape_attr(model, input_shape=shape)
+    elif arch == 'inception_v3':
+        set_model_input_shape_attr(model, input_shape=(1, 3, 299, 299))
+    else:
+        set_model_input_shape_attr(model, dataset=dataset)
 
     return model.to(device)

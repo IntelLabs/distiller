@@ -98,10 +98,11 @@ def get_contents_table(d):
 
     contents = [[k, type(d[k]).__name__, inspect_val(d[k])] for k in d.keys()]
     contents = sorted(contents, key=lambda entry: entry[0])
-    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="fancy_grid")
+    return tabulate(contents, headers=["Key", "Type", "Value"], tablefmt="psql")
 
 
-def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lean_checkpoint=False):
+def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, 
+                    lean_checkpoint=False, strict=False):
     """Load a pytorch training checkpoint.
 
     Args:
@@ -118,8 +119,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
 
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
-
-    msglogger.info('=> Checkpoint contents:\n{}\n'.format(get_contents_table(checkpoint)))
+    msglogger.info('=> Checkpoint contents:\n%s\n' % get_contents_table(checkpoint))
     if 'extras' in checkpoint:
         msglogger.info("=> Checkpoint['extras'] contents:\n{}\n".format(get_contents_table(checkpoint['extras'])))
 
@@ -161,11 +161,19 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         msglogger.info('Loaded quantizer metadata from the checkpoint')
         qmd = checkpoint['quantizer_metadata']
         quantizer = qmd['type'](model, **qmd['params'])
-        quantizer.prepare_model()
+        quantizer.prepare_model(qmd['dummy_input'])
 
     if normalize_dataparallel_keys:
             checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
-    model.load_state_dict(checkpoint['state_dict'])
+    anomalous_keys = model.load_state_dict(checkpoint['state_dict'], strict)
+    if anomalous_keys:
+        # This is pytorch 1.1+
+        missing_keys, unexpected_keys = anomalous_keys
+        if unexpected_keys:
+            msglogger.warning("Warning: the loaded checkpoint (%s) contains %d unexpected state keys" % (chkpt_file, len(unexpected_keys)))
+        if missing_keys:
+            raise ValueError("The loaded checkpoint (%s) is missing %d state keys" % (chkpt_file, len(missing_keys)))
+            
     if model_device is not None:
         model.to(model_device)
 
@@ -185,10 +193,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *, lea
         optimizer = _load_optimizer(checkpoint['optimizer_type'],
             checkpoint['optimizer_state_dict'], model)
     except KeyError:
-        if 'optimizer' not in checkpoint:
-            raise
-        # older checkpoints didn't support this feature
-        # they had the 'optimizer' field instead
+        # Older checkpoints do support optimizer loading: They either had an 'optimizer' field 
+        # (different name) which was not used during the load, or they didn't even checkpoint
+        # the optimizer. 
         optimizer = None
 
     if optimizer is not None:

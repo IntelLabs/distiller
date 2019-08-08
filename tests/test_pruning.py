@@ -16,10 +16,12 @@
 from collections import namedtuple
 import numpy as np
 import logging
+import math
 import torch
 import distiller
 import common
 import pytest
+import inspect
 from distiller.models import create_model
 from distiller.apputils import save_checkpoint, load_checkpoint, load_lean_checkpoint
 
@@ -31,6 +33,10 @@ logger.addHandler(fh)
 
 NetConfig = namedtuple("test_config", "arch dataset bn_name module_pairs")
 
+# Fixture to control model data-parallelism setting
+@pytest.fixture(params=[True, False])
+def parallel(request):
+    return request.param
 
 #
 # Model configurations
@@ -79,6 +85,19 @@ def vgg19_imagenet(is_parallel):
                          bn_name=None)
 
 
+def mobilenet_imagenet(is_parallel):
+    if is_parallel:
+        return NetConfig(arch="mobilenet", dataset="imagenet",
+                         #module_pairs=[("module.model.0.0", "module.model.1.0")],
+                         module_pairs=[("module.model.1.0", "module.model.1.3")],
+                         bn_name=None)
+    else:
+        return NetConfig(arch="mobilenet", dataset="imagenet",
+                         #module_pairs=[("model.0.0", "model.1.0")],
+                         module_pairs=[("model.1.0", "model.1.3")],
+                         bn_name=None)
+
+
 def vgg16_cifar(is_parallel):
     if is_parallel:
         return NetConfig(arch="vgg16_cifar", dataset="cifar10",
@@ -90,11 +109,9 @@ def vgg16_cifar(is_parallel):
                          bn_name=None)
 
 
-@pytest.fixture(params=[True, False])
-def parallel(request):
-    return request.param
-
 def test_ranked_filter_pruning(parallel):
+    logger.info("executing: %s (invoked by %s)" % (inspect.currentframe().f_code.co_name,
+                                                   inspect.currentframe().f_back.f_code.co_name))
     ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=0.1, is_parallel=parallel)
     ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=0.5, is_parallel=parallel)
     ranked_filter_pruning(simplenet(parallel),      ratio_to_prune=0.5, is_parallel=parallel)
@@ -102,23 +119,31 @@ def test_ranked_filter_pruning(parallel):
     model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(parallel),
                                                    ratio_to_prune=0.1,
                                                    is_parallel=parallel)
-    test_conv_fc_interface(parallel, model, zeros_mask_dict)
+    test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
-
+# todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
     is illegal and should raise an exception.
     """
     with pytest.raises(ValueError):
-        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0, is_parallel=parallel)
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.ceil)
+    with pytest.raises(ValueError):
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.floor)
 
 
-def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
+def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.floor):
     """Test L1 ranking and pruning of filters.
     First we rank and prune the filters of a Convolutional layer using
     a L1RankedStructureParameterPruner.  Then we physically remove the
     filters from the model (via "thining" process).
     """
+    logger.info("executing: %s (invoked by %s)" % (inspect.currentframe().f_code.co_name,
+                                                   inspect.currentframe().f_back.f_code.co_name))
+
+
     model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
     for pair in config.module_pairs:
@@ -134,7 +159,8 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
         pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner",
                                                                     group_type="Filters",
                                                                     desired_sparsity=ratio_to_prune,
-                                                                    weights=pair[0] + ".weight")
+                                                                    weights=pair[0] + ".weight",
+                                                                    rounding_fn=rounding_fn)
         pruner.set_param_mask(conv1_p, pair[0] + ".weight", zeros_mask_dict, meta=None)
 
         conv1 = common.find_module_by_name(model, pair[0])
@@ -162,6 +188,12 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
     distiller.remove_filters(model, zeros_mask_dict, config.arch, config.dataset, optimizer=None)
     assert conv1.out_channels == num_filters - expected_cnt_removed_filters
     assert conv2.in_channels == num_filters - expected_cnt_removed_filters
+
+    # Test the thinned model
+    dummy_input = distiller.get_dummy_input(config.dataset, distiller.model_device(model))
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
+    run_forward_backward(model, optimizer, dummy_input)
+    
     return model, zeros_mask_dict
 
 
@@ -277,7 +309,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
         assert bn1.bias.size(0) == cnt_nnz_channels
         assert bn1.weight.size(0) == cnt_nnz_channels
 
-    dummy_input = common.get_dummy_input(config.dataset)
+    dummy_input = distiller.get_dummy_input(config.dataset, distiller.model_device(model))
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.1)
     run_forward_backward(model, optimizer, dummy_input)
 
@@ -313,18 +345,16 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     logger.info("test_arbitrary_channel_pruning - Done 2")
 
 
-def test_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=None):
+def conv_fc_interface_test(arch, dataset, conv_names, fc_names, is_parallel=parallel, model=None, zeros_mask_dict=None):
     """A special case of convolution filter-pruning occurs when the next layer is
     fully-connected (linear).  This test is for this case and uses VGG16.
     """
-    arch = "vgg19"
-    dataset = "imagenet"
     ratio_to_prune = 0.1
-    if is_parallel:
-        conv_name = "features.module.34"
-    else:
-        conv_name = "features.34"
-    fc_name = "classifier.0"
+    # Choose the layer names according to the data-parallelism setting
+    names_idx = 0 if not is_parallel else 1
+    conv_name = conv_names[names_idx]
+    fc_name = fc_names[names_idx]
+
     dummy_input = torch.randn(1, 3, 224, 224).cuda()
 
     if model is None or zeros_mask_dict is None:
@@ -369,6 +399,18 @@ def test_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=Non
     # Run again, to make sure the optimizer and gradients shapes were updated correctly
     run_forward_backward(model, optimizer, dummy_input)
     run_forward_backward(model, optimizer, dummy_input)
+
+
+def test_vgg19_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=None):
+    conv_fc_interface_test("vgg19", "imagenet", conv_names=["features.34", "features.module.34"],
+                           fc_names=["classifier.0", "classifier.0"], is_parallel=is_parallel, model=model,
+                           zeros_mask_dict=zeros_mask_dict)
+
+
+def test_mobilenet_conv_fc_interface(is_parallel=parallel, model=None, zeros_mask_dict=None):
+    conv_fc_interface_test("mobilenet", "imagenet", conv_names=["model.13.3", "module.model.13.3"],
+                           fc_names=["fc", "module.fc"], is_parallel=is_parallel, model=model,
+                           zeros_mask_dict=zeros_mask_dict)
 
 
 def test_threshold_mask():
@@ -424,8 +466,15 @@ if __name__ == '__main__':
         model, zeros_mask_dict = ranked_filter_pruning(vgg19_imagenet(is_parallel),
                                                        ratio_to_prune=0.1,
                                                        is_parallel=is_parallel)
-        test_conv_fc_interface(is_parallel, model, zeros_mask_dict)
-
-        arbitrary_channel_pruning(vgg19_imagenet(parallel),
+        test_vgg19_conv_fc_interface(is_parallel)
+        arbitrary_channel_pruning(vgg19_imagenet(is_parallel),
                                   channels_to_remove=[0, 2],
-                                  is_parallel=parallel)
+                                  is_parallel=is_parallel)
+        model, zeros_mask_dict = ranked_filter_pruning(mobilenet_imagenet(False),
+                                                       ratio_to_prune=0.1,
+                                                       is_parallel=False)
+        test_mobilenet_conv_fc_interface(is_parallel)
+        test_vgg19_conv_fc_interface(is_parallel)
+        arbitrary_channel_pruning(mobilenet_imagenet(is_parallel),
+                                  channels_to_remove=[0, 2],
+                                  is_parallel=is_parallel)
