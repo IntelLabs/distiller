@@ -885,8 +885,8 @@ class PostTrainLinearQuantizer(Quantizer):
             replace_non_param_layer, RangeLinearQuantEltwiseMultWrapper)
         self.replacement_factory[nn.Embedding] = replace_embedding
 
-        if hasattr(msglogger, 'logdir'):
-            self.save_per_layer_parameters(msglogger.logdir)
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        self.save_per_layer_parameters(save_dir)
 
     @classmethod
     def from_args(cls, model, args):
@@ -958,10 +958,10 @@ class PostTrainLinearQuantizer(Quantizer):
         else:
             self._apply_bidi_distiller_lstm_stats_fusion()
 
-        if hasattr(msglogger, 'logdir'):
-            save_path = os.path.join(msglogger.logdir, 'quant_stats_after_prepare_model.yaml')
-            distiller.yaml_ordered_save(save_path, self.model_activation_stats)
-            msglogger.info('Updated stats saved to ' + save_path)
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        save_path = os.path.join(save_dir, 'quant_stats_after_prepare_model.yaml')
+        distiller.yaml_ordered_save(save_path, self.model_activation_stats)
+        msglogger.info('Updated stats saved to ' + save_path)
 
     def _clip_stats(self, entry, min_val, max_val):
         if entry['max'] < min_val:
