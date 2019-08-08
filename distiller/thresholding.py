@@ -19,6 +19,7 @@
 The code below supports fine-grained tensor thresholding and group-wise thresholding.
 """
 import torch
+import numpy as np
 
 
 def threshold_mask(weights, threshold):
@@ -153,7 +154,7 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria, binar
     elif group_type == '3D' or group_type == 'Filters':
         if binary_map is None:
             binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
-        a = binary_map.expand(torch.tensor(param.shape)[1:].prod(), param.size(0)).t()
+        a = binary_map.expand(np.prod(param.shape[1:]), param.size(0)).t()
         return a.view(*param.shape), binary_map
 
     elif group_type == '4D':
