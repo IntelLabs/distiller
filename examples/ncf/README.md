@@ -15,7 +15,8 @@ We've made several modifications to the code:
 * In `dataset.py`:
   * Speed up data loading - On first data will is loaded from CSVs and then pickled. On subsequent runs the pickle is loaded. This is much faster than the original implementation, but still very slow.
   * Added progress indication during data load process
-* Removed some irrelevant content from this README
+
+The sample command lines provided [below](#running-the-sample) focus on **post-training quantization**. We did integrate the capability to run quantization-aware training into `ncf.py`. We'll add examples for this at a later time.
 
 ## Problem
 
