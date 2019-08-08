@@ -102,10 +102,13 @@ def collateral_checker(log, run_dir, *collateral_list):
         0: file name
         1: expected file size
     """
+    def relaxed_size_equal(a, b, relaxation):
+        return True if abs(a-b) <= relaxation else False
+
     for collateral in collateral_list:
         file_path = os.path.join(run_dir, collateral[0])
         statinfo = os.stat(file_path)
-        if statinfo.st_size != collateral[1]:
+        if not relaxed_size_equal(statinfo.st_size, collateral[1], 2):
             return False
     return True
 
@@ -125,7 +128,7 @@ test_configs = [
                DS_CIFAR, accuracy_checker, [44.370, 89.640]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96158)])
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)])
 ]
 
 

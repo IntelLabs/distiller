@@ -181,7 +181,7 @@ class Quantizer(object):
         self.modules_processed = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
-        if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
+        if module_type not in [nn.Conv2d, nn.Conv3d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
             # support quantization of batch norm scale parameters)
             qbits = QBits(acts=qbits.acts, wts=None, bias=None)
@@ -213,6 +213,7 @@ class Quantizer(object):
         """
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
 
+        self.model.quantizer_metadata["dummy_input"] = dummy_input
         if dummy_input is not None:
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
@@ -280,28 +281,28 @@ class Quantizer(object):
                 # We indicate this module wasn't replaced by a wrapper
                 replace_msg(full_name)
                 self.modules_processed[module] = full_name, None
-                continue
+            else:
+                # We use a type hint comment to let IDEs know replace_fn is a function
+                replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
+                # If the replacement function wasn't specified - continue without replacing this module.
+                if replace_fn is not None:
+                    valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name],
+                                                                           replace_fn)
+                    if invalid_kwargs:
+                        raise TypeError("""Quantizer of type %s doesn't accept \"%s\" 
+                                            as override arguments for %s. Allowed kwargs: %s"""
+                                        % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
+                    new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
+                    replace_msg(full_name, (module, new_module))
+                    # Add to history of prepared submodules
+                    self.modules_processed[module] = full_name, new_module
+                    setattr(container, name, new_module)
 
-            # We use a type hint comment to let IDEs know replace_fn is a function
-            replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
-            # If the replacement function wasn't specified - continue without replacing this module.
-            if replace_fn is not None:
-                valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name], replace_fn)
-                if invalid_kwargs:
-                    raise TypeError("""Quantizer of type %s doesn't accept \"%s\" 
-                                        as override arguments for %s. Allowed kwargs: %s"""
-                                    % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
-                new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
-                replace_msg(full_name, (module, new_module))
-                # Add to history of prepared submodules
-                self.modules_processed[module] = full_name, new_module
-                setattr(container, name, new_module)
-
-                # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
-                if not distiller.has_children(module) and distiller.has_children(new_module):
-                    for sub_module_name, sub_module in new_module.named_modules():
-                        self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
-                    self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                    # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
+                    if not distiller.has_children(module) and distiller.has_children(new_module):
+                        for sub_module_name, sub_module in new_module.named_modules():
+                            self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
+                        self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
 
             if distiller.has_children(module):
                 # For container we call recursively

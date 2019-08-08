@@ -1,0 +1,100 @@
+# rl_lib:
+#     # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
+#     name: private # one of: coach, spinningup, private
+
+network:
+  mobilenet:
+      # Only conv 1x1   
+      ["module.model.1.3",  "module.model.2.3",
+      "module.model.3.3",  "module.model.4.3", "module.model.5.3",
+      "module.model.6.3",  "module.model.7.3", "module.model.8.3",
+      "module.model.9.3",  "module.model.10.3", "module.model.11.3",
+      "module.model.12.3", "module.model.13.3"]
+
+  mobilenet_v2:
+      # Only conv 1x1, without shortcut connection dependencies
+      [
+      "module.features.1.conv.1",
+      "module.features.2.conv.0.0",  "module.features.2.conv.2", 
+      # "module.features.3.conv.0.0",   
+      "module.features.3.conv.2", 
+      # "module.features.4.conv.0.0",   
+      "module.features.4.conv.2", 
+      # "module.features.5.conv.0.0",   
+      "module.features.5.conv.2", 
+      # "module.features.6.conv.0.0",   
+      "module.features.6.conv.2", 
+      # "module.features.7.conv.0.0",  
+       "module.features.7.conv.2", 
+      # "module.features.8.conv.0.0",   
+      "module.features.8.conv.2", 
+      # "module.features.9.conv.0.0",   
+      "module.features.9.conv.2",
+      # "module.features.10.conv.0.0",  
+      "module.features.10.conv.2", 
+      # "module.features.11.conv.0.0",  
+      "module.features.11.conv.2", 
+      # "module.features.12.conv.0.0",  
+      "module.features.12.conv.2", 
+      # "module.features.13.conv.0.0",  
+      "module.features.13.conv.2", 
+      # "module.features.14.conv.0.0",  
+      "module.features.14.conv.2", 
+      # "module.features.15.conv.0.0",  
+      "module.features.15.conv.2", 
+      # "module.features.16.conv.0.0",  
+      "module.features.16.conv.2", 
+      #"module.features.17.conv.0.0",  
+      "module.features.17.conv.2", 
+      "module.features.18.0"
+      ]
+
+  resnet50:
+     ["module.layer1.0.conv3", "module.layer1.0.conv2",
+      "module.layer1.1.conv3", "module.layer1.1.conv2",
+      "module.layer1.2.conv3", "module.layer1.2.conv2",
+      "module.layer2.0.conv3", "module.layer2.0.conv2",
+      "module.layer2.1.conv3", "module.layer2.1.conv2",
+      "module.layer2.2.conv3", "module.layer2.2.conv2",
+      "module.layer2.3.conv3", "module.layer2.3.conv2",
+      "module.layer3.0.conv3", "module.layer3.0.conv2",
+      "module.layer3.1.conv3", "module.layer3.1.conv2",
+      "module.layer3.2.conv3", "module.layer3.2.conv2",
+      "module.layer3.3.conv3", "module.layer3.3.conv2",
+      "module.layer3.4.conv3", "module.layer3.4.conv2",
+      "module.layer3.5.conv3", "module.layer3.5.conv2",
+      "module.layer4.0.conv3", "module.layer4.0.conv2",
+      "module.layer4.1.conv3", "module.layer4.1.conv2",
+      "module.layer4.2.conv3", "module.layer4.2.conv2"]
+
+  resnet20_cifar:
+      ["module.layer1.0.conv2", "module.layer1.1.conv2", "module.layer1.2.conv2",
+       "module.layer2.0.conv2", "module.layer2.1.conv2", "module.layer2.2.conv2",
+       "module.layer3.0.conv2", "module.layer3.1.conv2", "module.layer3.2.conv2"]
+
+  resnet56_cifar:
+      ["module.layer1.0.conv2", "module.layer1.1.conv2", "module.layer1.2.conv2",
+      "module.layer1.3.conv2", "module.layer1.4.conv2", "module.layer1.5.conv2",
+      "module.layer1.6.conv2", "module.layer1.7.conv2", "module.layer1.8.conv2",
+
+      "module.layer2.0.conv2", "module.layer2.1.conv2", "module.layer2.2.conv2",
+      "module.layer2.3.conv2", "module.layer2.4.conv2", "module.layer2.5.conv2",
+      "module.layer2.6.conv2", "module.layer2.7.conv2", "module.layer2.8.conv2",
+
+      "module.layer3.0.conv2", "module.layer3.1.conv2", "module.layer3.2.conv2",
+      "module.layer3.3.conv2", "module.layer3.4.conv2", "module.layer3.5.conv2",
+      "module.layer3.6.conv2", "module.layer3.7.conv2", "module.layer3.8.conv2"]
+
+  plain20_cifar:
+      ["module.layer1.0.conv1", "module.layer1.0.conv2",
+      "module.layer1.1.conv1", "module.layer1.1.conv2",
+      "module.layer1.2.conv1", "module.layer1.2.conv2",
+      "module.layer2.0.conv1", "module.layer2.0.conv2",
+      "module.layer2.1.conv1", "module.layer2.1.conv2",
+      "module.layer2.2.conv1", "module.layer2.2.conv2",
+      "module.layer3.0.conv1", "module.layer3.0.conv2",
+      "module.layer3.1.conv1", "module.layer3.1.conv2",
+      "module.layer3.2.conv1", "module.layer3.2.conv2"]
+
+  simplenet_mnist:
+    ["module.conv2"]
