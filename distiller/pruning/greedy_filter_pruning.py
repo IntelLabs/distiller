@@ -107,9 +107,8 @@ def prune_finetune_test(iteration, model_cpy, pruning_step, test_fn, train_fn,
                  optimizer=optimizer, epoch=iteration, loggers=[pylogger])
 
     # Physically remove filters
-    dataset = app_args.dataset
-    arch = app_args.arch
-    distiller.remove_filters(model_cpy, zeros_mask_dict, arch, dataset, optimizer=None)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape(app_args.dataset))
+    distiller.remove_filters(model_cpy, zeros_mask_dict, input_shape, optimizer=None)
 
     # Test and record the performance of the pruned model
     prec1, prec5, loss = test_fn(model=model_cpy, loggers=None)
