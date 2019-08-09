@@ -179,7 +179,8 @@ def test_load_gpu_model_on_cpu_with_thinning():
 
     # Use the mask to prune
     zeros_mask_dict[conv_pname].apply_mask(conv_p)
-    distiller.remove_filters(gpu_model, zeros_mask_dict, 'resnet20_cifar', 'cifar10', optimizer=None)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape('cifar10'))
+    distiller.remove_filters(gpu_model, zeros_mask_dict, input_shape, optimizer=None)
     assert hasattr(gpu_model, 'thinning_recipes')
     scheduler = distiller.CompressionScheduler(gpu_model)
     save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model, scheduler=scheduler, optimizer=None,

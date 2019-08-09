@@ -87,7 +87,6 @@ extensions:
   net_thinner:
       class: 'ChannelRemover'
       thinning_func_str: remove_channels
-      arch: 'resnet20_cifar'
       dataset: 'cifar10'
 
 policies:

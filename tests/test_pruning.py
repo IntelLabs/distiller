@@ -185,7 +185,8 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.
         assert conv2.in_channels == num_filters
 
     # Test thinning
-    distiller.remove_filters(model, zeros_mask_dict, config.arch, config.dataset, optimizer=None)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape(config.dataset))
+    distiller.remove_filters(model, zeros_mask_dict, input_shape, optimizer=None)
     assert conv1.out_channels == num_filters - expected_cnt_removed_filters
     assert conv2.in_channels == num_filters - expected_cnt_removed_filters
 
@@ -294,7 +295,8 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     logger.info("Channels removed {}".format(channels_removed))
 
     # Now, let's do the actual network thinning
-    distiller.remove_channels(model, zeros_mask_dict, config.arch, config.dataset, optimizer=None)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape(config.dataset))
+    distiller.remove_channels(model, zeros_mask_dict, input_shape, optimizer=None)
     conv1 = common.find_module_by_name(model, pair[0])
     assert conv1
     assert conv1.out_channels == cnt_nnz_channels
@@ -392,7 +394,8 @@ def conv_fc_interface_test(arch, dataset, conv_names, fc_names, is_parallel=para
     # Test thinning
     fm_size = fc.in_features // conv.out_channels
     num_nnz_filters = num_filters - expected_cnt_removed_filters
-    distiller.remove_filters(model, zeros_mask_dict, arch, dataset, optimizer)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape(dataset))
+    distiller.remove_filters(model, zeros_mask_dict, input_shape, optimizer)
     assert conv.out_channels == num_nnz_filters
     assert fc.in_features == fm_size * num_nnz_filters
 
