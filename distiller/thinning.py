@@ -390,20 +390,25 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
 class StructureRemover(ScheduledTrainingPolicy):
     """A policy which applies a network thinning function.
 
-    This is a wrapper class that allows us to schedule Thinning operations directly 
+    This is a wrapper class that allows us to schedule Thinning operations directly
     from a CompressionSchedule.
     """
-    def __init__(self, thinning_func_str, arch, dataset):
+    def __init__(self, thinning_func_str, arch=None, dataset=None, input_shape=None):
         self.thinning_func = globals()[thinning_func_str]
         self.arch = arch
         self.dataset = dataset
+        self.input_shape = input_shape
         self.done = False
         self.active_cb = "on_minibatch_begin"
+        if self.input_shape is None and self.input_shape is None:
+            raise ValueError("StructureRemover requires input_shape tuple or dataset name")
+        if self.input_shape is not None:
+            self.input_shape = tuple(input_shape)
 
     def __apply(self, model, zeros_mask_dict, optimizer):
         if not self.done:
             # We want to execute the thinning function only once, not every invocation of on_minibatch_begin
-            self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset, optimizer=optimizer)
+            self.thinning_func(model, zeros_mask_dict, self.arch, self.dataset, optimizer, self.input_shape)
             self.done = True
 
     def on_minibatch_begin(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, meta, optimizer):
