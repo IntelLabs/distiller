@@ -6,6 +6,7 @@ To run in a multi-gpu environment, use the distributed launcher::
         train.py ... --world-size $NGPU
 
 """
+# TODO Copyright
 import datetime
 import os
 import time
