@@ -279,7 +279,7 @@ def get_immediate_subdirs(a_dir):
 def load_experiment_instances(dir_with_experiments):
     experiment_instance_dirs = get_immediate_subdirs(dir_with_experiments)
     return [pd.read_csv(os.path.join(dirname, "amc.csv"))
-                        for dirname in experiment_instance_dirs.sort()]
+                        for dirname in experiment_instance_dirs]
 
 
 def plot_experiment_comparison(df_list):
