@@ -84,7 +84,7 @@ def directives_equal(d1, d2):
         return d1[0] == d2[0] and torch.equal(d1[1], d2[1])
     if len(d1) == 4:
         e = all(d1[i] == d2[i] for i in (0, 2, 3)) and torch.equal(d1[1], d2[1])
-        msglogger.info("{}: \n{}\n{}".format(e, d1, d2))
+        msglogger.debug("{}: \n{}\n{}".format(e, d1, d2))
         return e
     assert ValueError("Unsupported directive length")
 
@@ -168,8 +168,8 @@ def find_nonzero_channels(param, param_name):
     nonzero_channels = torch.nonzero(k_sums_mat.abs().sum(dim=1))
 
     if num_channels > nonzero_channels.nelement():
-        msglogger.info("In tensor %s found %d/%d zero channels", param_name,
-                       num_channels - nonzero_channels.nelement(), num_channels)
+        msglogger.debug("In tensor %s found %d/%d zero channels", param_name,
+                        num_channels - nonzero_channels.nelement(), num_channels)
     return nonzero_channels
 
 # Todo: consider removing this function
@@ -264,7 +264,7 @@ def create_thinning_recipe_channels(sgraph, model, zeros_mask_dict):
             append_bn_thinning_directive(thinning_recipe, layers, bn_layer,
                                          len_thin_features=num_nnz_channels, thin_features=indices)
 
-    msglogger.info("Invoking create_thinning_recipe_channels")
+    msglogger.debug("Invoking create_thinning_recipe_channels")
     thinning_recipe = ThinningRecipe(modules={}, parameters={})
     layers = {mod_name: m for mod_name, m in model.named_modules()}
 
@@ -363,7 +363,7 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             append_bn_thinning_directive(thinning_recipe, layers, bn_layers[0],
                                          len_thin_features=num_nnz_filters, thin_features=indices)
 
-    msglogger.info("Invoking create_thinning_recipe_filters")
+    msglogger.debug("Invoking create_thinning_recipe_filters")
 
     thinning_recipe = ThinningRecipe(modules={}, parameters={})
     layers = {mod_name: m for mod_name, m in model.named_modules()}
@@ -384,8 +384,8 @@ def create_thinning_recipe_filters(sgraph, model, zeros_mask_dict):
             msglogger.debug("Skipping {} shape={}".format(param_name, param.shape))
             continue
 
-        msglogger.info("In tensor %s found %d/%d zero filters", param_name,
-                       num_filters - num_nnz_filters, num_filters)
+        msglogger.debug("In tensor %s found %d/%d zero filters", param_name,
+                        num_filters - num_nnz_filters, num_filters)
         handle_layer(layer_name, param_name, num_nnz_filters)
     return thinning_recipe
 
@@ -441,7 +441,7 @@ def execute_thinning_recipes_list(model, zeros_mask_dict, recipe_list):
     for i, recipe in enumerate(recipe_list):
         msglogger.debug("Executing recipe %d:" % i)
         execute_thinning_recipe(model, zeros_mask_dict, recipe, optimizer=None, loaded_from_file=True)
-    msglogger.info("Executed %d recipes" % len(recipe_list))
+    msglogger.debug("Executed %d recipes" % len(recipe_list))
 
 
 def optimizer_thinning(optimizer, param, dim, indices, new_shape=None):

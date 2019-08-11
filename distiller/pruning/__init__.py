@@ -38,7 +38,8 @@ from .ranked_structures_pruner import L1RankedStructureParameterPruner, \
                                       GradientRankedFilterPruner,       \
                                       RandomRankedFilterPruner,         \
                                       RandomLevelStructureParameterPruner, \
-                                      BernoulliFilterPruner
+                                      BernoulliFilterPruner,            \
+                                      FMReconstructionChannelPruner
 from .baidu_rnn_pruner import BaiduRNNPruner
 from .greedy_filter_pruning import greedy_pruner
 
