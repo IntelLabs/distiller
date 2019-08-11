@@ -329,6 +329,7 @@ class DistillerWrapperEnvironment(gym.Env):
             distiller.assign_layer_fq_names(model)
             modules_list = [mod.distiller_name for mod in model.modules() if type(mod)==torch.nn.Conv2d]
             msglogger.warning("Using the following layers: %s" % ", ".join(modules_list))
+            raise ValueError("The config file does not specify the modules to compress for %s" % app_args.arch)
 
         self.net_wrapper = NetworkWrapper(model, app_args, services, modules_list, amc_cfg.pruning_pattern)
         self.original_model_macs, self.original_model_size = self.net_wrapper.get_resources_requirements()
