@@ -181,7 +181,7 @@ class Quantizer(object):
         self.modules_processed = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
-        if module_type not in [nn.Conv2d, nn.Linear, nn.Embedding]:
+        if module_type not in [nn.Conv2d, nn.Conv3d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
             # support quantization of batch norm scale parameters)
             qbits = QBits(acts=qbits.acts, wts=None, bias=None)
