@@ -10,6 +10,11 @@ __pycache__/
 .cache
 pytest_collaterals/
 
+# GNMT sample
+examples/GNMT/data
+examples/GNMT/model_best.pth
+examples/GNMT/output_file*
+
 # Virtual env
 env/
 .env/
