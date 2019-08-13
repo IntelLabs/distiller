@@ -56,7 +56,6 @@ MNIST_MODEL_NAMES = sorted(name for name in mnist_models.__dict__
 ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
-
 # A temporary monkey-patch to get past this Torchvision bug:
 # https://github.com/pytorch/pytorch/issues/20516
 from functools import partial
@@ -148,7 +147,7 @@ def _create_imagenet_model(arch, pretrained):
         elif pretrained:
             error_message = "Model {} (ImageNet) does not have a pretrained model".format(arch)
         raise ValueError(error_message or 'Failed to find model {}'.format(arch))
-    return cadene
+    return model, cadene
 
 
 def _create_cifar10_model(arch, pretrained):
