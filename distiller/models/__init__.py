@@ -70,6 +70,9 @@ def patch_torchvision_mobilenet_v2_bug(model):
     model.__class__.forward = patched_forward
 
 
+_model_extensions = {}
+
+
 def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     """Create a pytorch model based on the model architecture and dataset
 
@@ -87,53 +90,20 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     model = None
     dataset = dataset.lower()
     cadene = False
-    if dataset == 'imagenet':
-        if arch in RESNET_SYMS:
-            model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
-        elif arch in TORCHVISION_MODEL_NAMES:
-            try:
-                model = getattr(torch_models, arch)(pretrained=pretrained)
-                if arch == "mobilenet_v2":
-                    patch_torchvision_mobilenet_v2_bug(model)
-            except NotImplementedError:
-                # In torchvision 0.3, trying to download a model that has no
-                # pretrained image available will raise NotImplementedError
-                if not pretrained:
-                    raise
-        if model is None and (arch in imagenet_extra_models.__dict__) and not pretrained:
-            model = imagenet_extra_models.__dict__[arch]()
-        if model is None and (arch in pretrainedmodels.model_names):
-            cadene = True
-            model = pretrainedmodels.__dict__[arch](
-                        num_classes=1000,
-                        pretrained=(dataset if pretrained else None))
-        if model is None:
-            error_message = ''
-            if arch not in IMAGENET_MODEL_NAMES:
-                error_message = "Model {} is not supported for dataset ImageNet".format(arch)
-            elif pretrained:
-                error_message = "Model {} (ImageNet) does not have a pretrained model".format(arch)
-            raise ValueError(error_message or 'Failed to find model {}'.format(arch))
+    try:
+        if dataset == 'imagenet':
+            model, cadene = _create_imagenet_model(arch, pretrained)
+        elif dataset == 'cifar10':
+            model = _create_cifar10_model(arch, pretrained)
+        elif dataset == 'mnist':
+            model = _create_mnist_model(arch, pretrained)
+    except ValueError:
+        if _is_registered_extension(arch, dataset, pretrained):
+            model = _get_extension_model(arch, dataset)
+        else:
+            raise ValueError('Could not recognize dataset {} and model {} pair'.format(dataset, arch))
 
-    elif dataset == 'cifar10':
-        if pretrained:
-            raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
-        try:
-            model = cifar10_models.__dict__[arch]()
-        except KeyError:
-            raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
-
-    elif dataset == 'mnist':
-        if pretrained:
-            raise ValueError("Model {} (MNIST) does not have a pretrained model".format(arch))
-        try:
-            model = mnist_models.__dict__[arch]()
-        except KeyError:
-            raise ValueError("Model {} is not supported for dataset MNIST".format(arch))
-    else:
-        raise ValueError('Could not recognize dataset {}'.format(dataset))
-
-    msglogger.info("=> creating a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '', 
+    msglogger.info("=> created a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '',
                                                                      arch, dataset))
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
@@ -144,6 +114,64 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     else:
         device = 'cpu'
 
+    _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene)
+    return model.to(device)
+
+
+def _create_imagenet_model(arch, pretrained):
+    dataset = "imagenet"
+    cadene = False
+    model = None
+    if arch in RESNET_SYMS:
+        model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
+    elif arch in TORCHVISION_MODEL_NAMES:
+        try:
+            model = getattr(torch_models, arch)(pretrained=pretrained)
+            if arch == "mobilenet_v2":
+                patch_torchvision_mobilenet_v2_bug(model)
+        except NotImplementedError:
+            # In torchvision 0.3, trying to download a model that has no
+            # pretrained image available will raise NotImplementedError
+            if not pretrained:
+                raise
+    if model is None and (arch in imagenet_extra_models.__dict__) and not pretrained:
+        model = imagenet_extra_models.__dict__[arch]()
+    if model is None and (arch in pretrainedmodels.model_names):
+        cadene = True
+        model = pretrainedmodels.__dict__[arch](
+            num_classes=1000,
+            pretrained=(dataset if pretrained else None))
+    if model is None:
+        error_message = ''
+        if arch not in IMAGENET_MODEL_NAMES:
+            error_message = "Model {} is not supported for dataset ImageNet".format(arch)
+        elif pretrained:
+            error_message = "Model {} (ImageNet) does not have a pretrained model".format(arch)
+        raise ValueError(error_message or 'Failed to find model {}'.format(arch))
+    return cadene
+
+
+def _create_cifar10_model(arch, pretrained):
+    if pretrained:
+        raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
+    try:
+        model = cifar10_models.__dict__[arch]()
+    except KeyError:
+        raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
+    return model
+
+
+def _create_mnist_model(arch, pretrained):
+    if pretrained:
+        raise ValueError("Model {} (MNIST) does not have a pretrained model".format(arch))
+    try:
+        model = mnist_models.__dict__[arch]()
+    except KeyError:
+        raise ValueError("Model {} is not supported for dataset MNIST".format(arch))
+    return model
+
+
+def _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene):
     if cadene and pretrained:
         # When using pre-trained weights, Cadene models already have an input size attribute
         # We add the batch dimension to it
@@ -155,4 +183,18 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     else:
         set_model_input_shape_attr(model, dataset=dataset)
 
-    return model.to(device)
+
+def register_user_model(arch, dataset, model):
+    """A simple mechanism to support models that are not part of distiller.models"""
+    _model_extensions[(arch, dataset)] = model
+
+
+def _is_registered_extension(arch, dataset, pretrained):
+    try:
+        return _model_extensions[(arch, dataset)]
+    except KeyError:
+        return None
+
+
+def _get_extension_model(arch, dataset):
+    return _model_extensions[(arch, dataset)]
