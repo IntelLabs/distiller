@@ -6,10 +6,12 @@ to allow easy compression scheduling with yaml configuration.
 
 ## Setup
 Install the dependencies 
-(most of which are already installed from distiller dependies, the rest are `cython` and `pycocotools`).
-The dataset can be downloaded at the [COCO dataset website](http://cocodataset.org/#download).
+(most of which are already installed from distiller dependies, the rest are `cython` and `pycocotools`):
 
-In this example we'll use the 2017 training+validation sets, you can download using the command line:
+    pip3 install -r requirements.txt 
+
+The dataset can be downloaded at the [COCO dataset website](http://cocodataset.org/#download).
+In this example we'll use the 2017 training+validation sets, which you can download using the command line:
 
     cd data
     bash download_dataset.sh
@@ -37,3 +39,7 @@ During backward pass, the gradients from each node are averaged and then passed 
   
 Since the dataset is large and FasterRCNN models are compute heavy, we strongly recommend
 running the script on a Multi GPU environment.
+
+The default model is `torchvision.models.detection.maskrcnn_resnet50_fpn`, you can specify 
+any model that is part of `torchvision.models.detection` using
+ the `--model` argument, e.g. `--model maskrcnn_resnet50_fpn`.
