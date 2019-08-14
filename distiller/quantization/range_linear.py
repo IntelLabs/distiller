@@ -138,9 +138,9 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
     prefix = 'avg_' if clip == ClipMode.AVG else ''
     sat_min = torch.tensor(float(stats[prefix + 'min']))
     sat_max = torch.tensor(float(stats[prefix + 'max']))
-    mean = torch.tensor(float(stats['mean']))
-    std = torch.tensor(float(stats['std']))
     if clip == ClipMode.N_STD:
+        mean = torch.tensor(float(stats['mean']))
+        std = torch.tensor(float(stats['std']))
         sat_min = torch.max(sat_min, mean - num_stds * std)
         sat_max = torch.min(sat_max, mean + num_stds * std)
     elif clip in (ClipMode.LAPLACE, ClipMode.GAUSS):
