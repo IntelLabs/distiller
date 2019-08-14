@@ -241,3 +241,7 @@ def test_get_tensor_mean_n_stds_min_max():
     t_min, t_max = qu.get_tensor_mean_n_stds_min_max(test_tensor, n_stds=2)
     torch.testing.assert_allclose(t_min, torch.tensor(-95.))
     torch.testing.assert_allclose(t_max, torch.tensor(87.))
+
+
+def test_aciq_clipping():
+    pass

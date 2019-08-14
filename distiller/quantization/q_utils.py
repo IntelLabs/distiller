@@ -177,26 +177,24 @@ def approx_scale_as_mult_and_shift(fp32_scale, mult_bits, limit=False):
 
 
 class AciqClipper:
+    alpha_laplace = {0: 1.05, 1: 1.86, 2: 2.83, 3: 3.89, 4: 5.03, 5: 6.2, 6: 7.41, 7: 8.64, 8: 9.89}
+    alpha_laplace_positive = {0: 1.86, 1: 2.83, 2: 3.89, 3: 5.02, 4: 6.2, 5: 7.41, 6: 8.64, 7: 9.89, 8: 11.16}
+    alpha_gauss = {1: 1.24, 2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
+    alpha_gauss_positive = {1: 1.71, 2: 2.15, 3: 2.55, 4: 2.93, 5: 3.28, 6: 3.61, 7: 3.92, 8: 4.2}
+
     class AciqClippingType(Enum):
         Laplace = 1
         Gauss = 2
 
     def get_alpha_laplace(self, t, across_dim=None, num_bits=8, half_range=False):
-        alpha_laplace = {2: 2.83, 3: 3.89, 4: 5.03, 5: 6.2, 6: 7.41, 7: 8.64, 8: 9.89}
-        alpha_laplace_positive = {2: 3.89, 3: 5.02, 4: 6.2, 5: 7.41, 6: 8.64, 7: 9.89, 8: 11.16}
-
-        # Mean of means across dims is equavalent to gloabal mean
+        # Mean of means across dims is equivalent to global mean
         b = torch.mean(torch.abs(t - t.mean()))
-        return b * (alpha_laplace_positive[num_bits] if half_range else alpha_laplace[num_bits])
+        return b * (AciqClipper.alpha_laplace_positive[num_bits] if half_range else AciqClipper.alpha_laplace[num_bits])
 
     def get_alpha_gauss(self, t, across_dim=None, num_bits=8, half_range=False):
-        alpha_gaus = {2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
-        alpha_gaus_positive = {2: 2.15, 3: 2.55, 4: 2.93, 5: 3.28, 6: 3.61, 7: 3.92,
-                               8: -1}  # TODO: add 8 bit multiplier
-
-        # Mean of means across dims is equavalent to gloabal mean
+        # Mean of means across dims is equivalent to global mean
         std = torch.std(t)
-        return std * (alpha_gaus_positive[num_bits] if half_range else alpha_gaus[num_bits])
+        return std * (AciqClipper.alpha_gauss_positive[num_bits] if half_range else AciqClipper.alpha_gauss[num_bits])
 
 
 class AciqSymmetricClipper(AciqClipper):
@@ -211,6 +209,16 @@ class AciqSymmetricClipper(AciqClipper):
             alpha = super(AciqSymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
         mean = t.mean()
         return torch.abs(mean) + alpha
+
+    def from_stats(self, stats):
+        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
+            raise NotImplementedError("The 'b' (laplace distribution parameter) is not supported yet in model "
+                                      "stats activation collectors.")
+        mean, std = stats['mean'], stats['std']
+        alpha = std * (AciqClipper.alpha_gauss_positive[self.num_bits] if self.half_range
+                       else AciqClipper.alpha_gauss[self.num_bits])
+
+        return abs(mean) + alpha
 
 
 class AciqAsymmetricClipper(AciqClipper):
@@ -229,6 +237,16 @@ class AciqAsymmetricClipper(AciqClipper):
         min_val = get_tensor_min_max(t, across_dim)[0].mean()
         min_val = torch.max(min_val, mean - alpha)
 
+        return min_val, min_val + 2 * alpha
+
+    def from_stats(self, stats):
+        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
+            raise NotImplementedError("The 'b' (laplace distribution parameter) is not supported yet in model "
+                                      "stats activation collectors.")
+        min_val, mean, std = stats['min'], stats['mean'], stats['std']
+        alpha = std * (AciqClipper.alpha_gauss_positive[self.num_bits] if self.half_range
+                       else AciqClipper.alpha_gauss[self.num_bits])
+        min_val = max(min_val, mean-alpha)
         return min_val, min_val + 2 * alpha
 
 
