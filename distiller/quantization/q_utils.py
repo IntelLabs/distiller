@@ -187,14 +187,28 @@ class AciqClipper:
         Gauss = 2
 
     def get_alpha_laplace(self, t, across_dim=None, num_bits=8, half_range=False):
-        # Mean of means across dims is equivalent to global mean
-        b = torch.mean(torch.abs(t - t.mean()))
-        return b * (AciqClipper.alpha_laplace_positive[num_bits] if half_range else AciqClipper.alpha_laplace[num_bits])
+        if isinstance(t, torch.Tensor):
+            # Mean of means across dims is equivalent to global mean
+            b = torch.mean(torch.abs(t - t.mean()))
+        elif isinstance(t, dict):
+            # t is Quant Calibration activation stats dict.
+            b = t['b']
+        else:
+            raise TypeError("Only torch.Tensors or quantization calibration activation stats dicts are acceptable.")
+        return b * (AciqClipper.alpha_laplace_positive[num_bits] if half_range
+                    else AciqClipper.alpha_laplace[num_bits])
 
     def get_alpha_gauss(self, t, across_dim=None, num_bits=8, half_range=False):
-        # Mean of means across dims is equivalent to global mean
-        std = torch.std(t)
-        return std * (AciqClipper.alpha_gauss_positive[num_bits] if half_range else AciqClipper.alpha_gauss[num_bits])
+        if isinstance(t, torch.Tensor):
+            # Mean of means across dims is equivalent to global mean
+            std = torch.std(t)
+        elif isinstance(t, dict):
+            # t is Quant Calibration activation stats dict.
+            std = t['std']
+        else:
+            raise TypeError("Only torch.Tensors or quantization calibration activation stats dicts are acceptable.")
+        return std * (AciqClipper.alpha_gauss_positive[num_bits] if half_range
+                      else AciqClipper.alpha_gauss[num_bits])
 
 
 class AciqSymmetricClipper(AciqClipper):
@@ -207,18 +221,11 @@ class AciqSymmetricClipper(AciqClipper):
             alpha = super(AciqSymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
         else:
             alpha = super(AciqSymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
-        mean = t.mean()
+        if isinstance(t, dict):
+            mean = torch.tensor(t['mean'])
+        else:
+            mean = t.mean()
         return torch.abs(mean) + alpha
-
-    def from_stats(self, stats):
-        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            raise NotImplementedError("The 'b' (laplace distribution parameter) is not supported yet in model "
-                                      "stats activation collectors.")
-        mean, std = stats['mean'], stats['std']
-        alpha = std * (AciqClipper.alpha_gauss_positive[self.num_bits] if self.half_range
-                       else AciqClipper.alpha_gauss[self.num_bits])
-
-        return abs(mean) + alpha
 
 
 class AciqAsymmetricClipper(AciqClipper):
@@ -232,21 +239,13 @@ class AciqAsymmetricClipper(AciqClipper):
             alpha = super(AciqAsymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits, half_range=self.half_range)
         else:
             alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
-
-        mean = t.mean()
-        min_val = get_tensor_min_max(t, across_dim)[0].mean()
+        if isinstance(t, dict):
+            mean, min_val = torch.tensor(t['mean']), torch.tensor(t['min_val'])
+        else:
+            mean = t.mean()
+            min_val = get_tensor_min_max(t, across_dim)[0].mean()
         min_val = torch.max(min_val, mean - alpha)
 
-        return min_val, min_val + 2 * alpha
-
-    def from_stats(self, stats):
-        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            raise NotImplementedError("The 'b' (laplace distribution parameter) is not supported yet in model "
-                                      "stats activation collectors.")
-        min_val, mean, std = stats['min'], stats['mean'], stats['std']
-        alpha = std * (AciqClipper.alpha_gauss_positive[self.num_bits] if self.half_range
-                       else AciqClipper.alpha_gauss[self.num_bits])
-        min_val = max(min_val, mean-alpha)
         return min_val, min_val + 2 * alpha
 
 
