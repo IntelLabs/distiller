@@ -22,6 +22,7 @@ import torch.distributed as dist
 import distiller
 from distiller.data_loggers import *
 import distiller.apputils as apputils
+from distiller.apputils.image_classifier import save_collectors_data
 import distiller.pruning
 import distiller.quantization
 
@@ -200,6 +201,10 @@ def main(args):
         with collectors_context(activations_collectors["valid"]) as collectors:
             # evaluate after every epoch
             evaluate(model, data_loader_test, device=device)
+            if utils.is_main_process():
+                distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger],
+                                                    collector=collectors["sparsity"])
+                save_collectors_data(collectors, msglogger.logdir)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
