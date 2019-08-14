@@ -199,21 +199,21 @@ class AciqClipper:
         return std * (alpha_gaus_positive[num_bits] if half_range else alpha_gaus[num_bits])
 
 
-class AciqSymetricClipper(AciqClipper):
+class AciqSymmetricClipper(AciqClipper):
     def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace):
         self.num_bits = num_bits
         self.clip_type = clip_type
 
     def __call__(self, t, across_dim=None):
         if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqSymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
+            alpha = super(AciqSymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
         else:
-            alpha = super(AciqSymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
+            alpha = super(AciqSymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
         mean = t.mean()
         return torch.abs(mean) + alpha
 
 
-class AciqAsymetricClipper(AciqClipper):
+class AciqAsymmetricClipper(AciqClipper):
     def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace, half_range=False):
         self.num_bits = num_bits
         self.clip_type = clip_type
@@ -221,12 +221,12 @@ class AciqAsymetricClipper(AciqClipper):
 
     def __call__(self, t, across_dim=None):
         if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqAsymetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits, half_range=self.half_range)
+            alpha = super(AciqAsymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits, half_range=self.half_range)
         else:
-            alpha = super(AciqAsymetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
+            alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
 
         mean = t.mean()
-        min_val = get_tensor_min(t, across_dim).mean()
+        min_val = get_tensor_min_max(t, across_dim)[0].mean()
         min_val = torch.max(min_val, mean - alpha)
 
         return min_val, min_val + 2 * alpha
