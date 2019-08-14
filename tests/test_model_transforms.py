@@ -28,6 +28,14 @@ from distiller.modules import EltwiseAdd, Split
 from common import WrappedSequential
 
 
+ATOL = 5e-5
+RTOL = 1e-3
+BATCH_SIZE = 32
+LR = 1e-3
+BATCHES = 10
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
 ###############################################################################
 # Test base fusion mechanism
 ###############################################################################
@@ -225,7 +233,7 @@ def test_fuse_modules_with_pre_exist_adj_map():
 )
 def test_fold_batch_norms_inference_no_fold(model, input_shape):
     orig_model = deepcopy(model)
-    folded_model = mt.fold_batch_norms_inference(model, dummy_input=torch.randn(input_shape))
+    folded_model = mt.fold_batch_norms(model, dummy_input=torch.randn(input_shape))
     for (n_orig, m_orig), (n_folded, m_folded) in zip(orig_model.named_modules(), folded_model.named_modules()):
         assert n_folded == n_orig
         assert type(m_folded) == type(m_orig)
@@ -238,27 +246,95 @@ def test_fold_batch_norms_inference_no_fold(model, input_shape):
 @pytest.mark.parametrize(
     'model, input_shape',
     [
-        (WrappedSequential(nn.Conv1d(10, 20, 3), nn.BatchNorm1d(20)), (10, 10, 50)),
-        (WrappedSequential(nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20)), (10, 10, 50, 50)),
-        (WrappedSequential(nn.Conv3d(10, 20, 3), nn.BatchNorm3d(20)), (10, 10, 20, 20, 20)),
-        (WrappedSequential(nn.Linear(10, 20), nn.BatchNorm1d(20)), (10, 10))
+        (WrappedSequential(nn.Conv1d(10, 10, 1), nn.Conv1d(10, 20, 3), nn.BatchNorm1d(20)), (10, 10, 50)),
+        (WrappedSequential(nn.Conv2d(10, 10, 1), nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20)), (10, 10, 50, 50)),
+        (WrappedSequential(nn.Conv3d(10, 10, 1), nn.Conv3d(10, 20, 3), nn.BatchNorm3d(20)), (10, 10, 20, 20, 20)),
+        (WrappedSequential(nn.Linear(10, 10), nn.Linear(10, 20), nn.BatchNorm1d(20)), (10, 10))
     ],
-    ids=['conv1d->bn1d', 'conv2d->bn2d', 'conv3d->bn3d', 'lienar->bn1d']
+    ids=['conv1d->bn1d', 'conv2d->bn2d', 'conv3d->bn3d', 'linear->bn1d']
 )
 def test_fold_batch_norms_inference(model, input_shape):
     # Make sure we have non-trivial values to work with
-    nn.init.uniform_(model.seq[1].weight)
-    nn.init.uniform_(model.seq[1].bias)
-    nn.init.uniform_(model.seq[1].running_mean)
-    nn.init.uniform_(model.seq[1].running_var)
+    nn.init.uniform_(model.seq[2].weight)
+    nn.init.uniform_(model.seq[2].bias)
+    nn.init.uniform_(model.seq[2].running_mean)
+    nn.init.uniform_(model.seq[2].running_var)
 
     model.eval()
     orig_model = deepcopy(model)
     dummy_input = torch.randn(input_shape)
-    folded_model = mt.fold_batch_norms_inference(model, dummy_input=dummy_input)
-    assert type(folded_model.seq[0]) == type(orig_model.seq[0])
-    assert type(folded_model.seq[1]) == nn.Identity
+    folded_model = mt.fold_batch_norms(model, dummy_input=dummy_input, inference=True)
+    assert type(folded_model.seq[1].param_module) == type(orig_model.seq[1])
+    assert type(folded_model.seq[2]) == nn.Identity
 
     y_orig = orig_model(dummy_input)
     y_folded = folded_model(dummy_input)
     torch.testing.assert_allclose(y_folded, y_orig)
+
+
+def train_loop_assert(orig_model, folded_model, input_shape,
+                      optimizer_orig, optimizer_folded, criterion):
+    for _ in range(BATCHES):
+        orig_model.train()
+        folded_model.train()
+        x = torch.rand(*input_shape, device=DEVICE)
+        y_orig = orig_model(x)
+        y_folded = folded_model(x)
+        # test inference
+        torch.testing.assert_allclose(y_folded, y_orig)
+        # test training
+        y_true = torch.rand_like(y_orig)
+        # calc loss
+        optimizer_orig.zero_grad()
+        optimizer_folded.zero_grad()
+        loss_orig = criterion(y_orig, y_true)
+        loss_folded = criterion(y_folded, y_true)
+        torch.testing.assert_allclose(loss_folded, loss_orig)
+        # calc gradients
+        loss_orig.backward()
+        loss_folded.backward()
+        for name, orig_param in orig_model.seq[0].named_parameters():
+            folded_param = getattr(folded_model.seq[0], name)
+            torch.testing.assert_allclose(folded_param, orig_param)
+            torch.testing.assert_allclose(folded_param.grad,
+                                          orig_param.grad)
+        # optimizer step
+        optimizer_orig.step()
+        optimizer_folded.step()
+        # final check:
+        for name, orig_param in orig_model.seq[0].named_parameters():
+            folded_param = getattr(folded_model.seq[0], name)
+            torch.testing.assert_allclose(folded_param, orig_param)
+
+
+@pytest.mark.parametrize(
+    'model, input_shape',
+    [
+        (WrappedSequential(nn.Conv1d(10, 10, 1), nn.Conv1d(10, 20, 3), nn.BatchNorm1d(20)), (10, 10, 50)),
+        (WrappedSequential(nn.Conv2d(10, 10, 1), nn.Conv2d(10, 20, 3), nn.BatchNorm2d(20)), (10, 10, 50, 50)),
+        (WrappedSequential(nn.Conv3d(10, 10, 1), nn.Conv3d(10, 20, 3), nn.BatchNorm3d(20)), (10, 10, 20, 20, 20)),
+        (WrappedSequential(nn.Linear(10, 10), nn.Linear(10, 20), nn.BatchNorm1d(20)), (10, 10))
+    ],
+    ids=['conv1d->bn1d', 'conv2d->bn2d', 'conv3d->bn3d', 'linear->bn1d']
+)
+def test_fold_batch_norms(model, input_shape):
+    # Make sure we have non-trivial values to work with
+    nn.init.uniform_(model.seq[2].weight)
+    nn.init.uniform_(model.seq[2].bias)
+    nn.init.uniform_(model.seq[2].running_mean)
+    nn.init.uniform_(model.seq[2].running_var)
+
+    orig_model = deepcopy(model)
+    dummy_input = torch.randn(input_shape)
+    folded_model = mt.fold_batch_norms(model, dummy_input=dummy_input)
+    assert type(folded_model.seq[1].param_module) == type(orig_model.seq[1])
+    assert type(folded_model.seq[2]) == nn.Identity
+
+    optimizer_folded = torch.optim.SGD(folded_model.parameters(), LR)
+    optimizer_orig = torch.optim.SGD(orig_model.parameters(), LR)
+    criterion = nn.MSELoss().to(DEVICE)
+    orig_model.to(DEVICE)
+    folded_model.to(DEVICE)
+
+    train_loop_assert(orig_model, folded_model, input_shape,
+                      optimizer_orig, optimizer_folded, criterion)

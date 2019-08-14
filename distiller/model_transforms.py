@@ -110,7 +110,7 @@ def fuse_modules(model, types_sequence, fuse_fn, dummy_input=None, adjacency_map
     return model
 
 
-def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
+def fold_batch_norms(model, dummy_input=None, adjacency_map=None, inference=False):
     """Scans the model for convolution / linear modules followed by batch-normalization. For each such valid pair,
     folds the parameters of the batch normalization module into the parameters of the parameter module, and replaces
     the batch normalization module with an identity operation.
@@ -124,6 +124,8 @@ def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
         adjacency_map (OrderedDict): Pre-computed adjacency map, via SummaryGraph.adjacency_map(). Must be based
           on the passed model, otherwise results are unexpected. If None, then the adjacency map will be created
           internally using the passed dummy_input.
+        inference (bool): flag to indicate whether the model is used for inference to freeze
+          the BatchNorm stats.
     """
     def fold_bn(sequence):
         # Re-use this functionality from simulated BN folding implementation
@@ -133,8 +135,9 @@ def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
         except ValueError:
             msglogger.debug("Can't fold, {} does not track running stats".format(bn_module.distiller_name))
             return None
-        folded_module.freeze()
-        return folded_module.param_module
+        if inference:
+            folded_module.freeze()
+        return folded_module
 
     foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
     batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
