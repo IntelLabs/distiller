@@ -111,7 +111,7 @@ def perform_sensitivity_analysis(model, net_params, sparsities, test_func, group
 
             # Compute the pruning mask per the pruner and apply the mask on the weights
             scheduler.on_epoch_begin(0)
-            scheduler.apply_mask()
+            scheduler.mask_all_weights()
 
             # Test and record the performance of the pruned model
             prec1, prec5, loss = test_func(model=model_cpy)

@@ -19,6 +19,9 @@ Writes logs to a file using a Google's TensorBoard protobuf format.
 See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
 """
 import os
+# Disable FutureWarning from TensorFlow
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import tensorflow as tf
 import numpy as np
 

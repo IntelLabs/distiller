@@ -4,8 +4,8 @@ The Distiller repository contains a sample application, ```distiller/examples/cl
 
 You might also want to refer to the following resources:
 
-* An [explanation](https://nervanasystems.github.io/distiller/schedule/index.html) of the scheduler file format.
-* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo/index.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
+* An [explanation](https://nervanasystems.github.io/distiller/schedule.html) of the scheduler file format.
+* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
 
 The sample application supports various features for compression of image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.
 
@@ -153,7 +153,7 @@ See [here](schedule.md#post-training-quantization) for more details on how to in
 
 A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.
 
-For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_training_quant).
+For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
 
 ## Summaries
 You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).

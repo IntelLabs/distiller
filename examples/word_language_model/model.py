@@ -1,10 +1,18 @@
+import torch
 import torch.nn as nn
+from distiller.modules import *
+
 
 class RNNModel(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False):
         super(RNNModel, self).__init__()
+        self.ntoken = ntoken
+        self.ninp = ninp
+        self.nhid = nhid
+        self.nlayers = nlayers
+        self.tie_weights = tie_weights
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
         if rnn_type in ['LSTM', 'GRU']:
@@ -36,7 +44,6 @@ class RNNModel(nn.Module):
         self.nhid = nhid
         self.nlayers = nlayers
 
-
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
@@ -58,3 +65,35 @@ class RNNModel(nn.Module):
                     weight.new_zeros(self.nlayers, bsz, self.nhid))
         else:
             return weight.new_zeros(self.nlayers, bsz, self.nhid)
+
+
+class DistillerRNNModel(nn.Module):
+    """This is the distiller version of RNNModel, which uses DistillerLSTM instead of nn.LSTM."""
+    def __init__(self, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False):
+        super(DistillerRNNModel, self).__init__()
+        self.ntoken = ntoken
+        self.ninp = ninp
+        self.nhid = nhid
+        self.nlayers = nlayers
+        self.encoder = nn.Embedding(ntoken, ninp)
+        self.rnn = DistillerLSTM(ninp, nhid, nlayers, dropout=dropout)
+        self.decoder = nn.Linear(nhid, ntoken)
+        self.init_weights()
+        if tie_weights:
+            if nhid != ninp:
+                raise ValueError('When using the tied flag, nhid must be equal to emsize')
+            self.decoder.weight = self.encoder.weight
+
+    def forward(self, x, h):
+        emb = self.encoder(x)
+        y, h = self.rnn(emb, h)
+        decoded = self.decoder(y)
+        return decoded, h
+
+    def init_weights(self):
+        initrange = 0.1
+        self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.decoder.weight.data.uniform_(-initrange, initrange)
+
+    def init_hidden(self, batch_size):
+        return self.rnn.init_hidden(batch_size)

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Design - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Design";
+    var mkdocs_page_input_path = "design.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1 current">
+		
+    <a class="current" href="design.html">Design</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#distiller-design">Distiller design</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#sparsification-and-fine-tuning">Sparsification and fine-tuning</a></li>
+        
+            <li><a class="toctree-l3" href="#quantization">Quantization</a></li>
+        
+        </ul>
+    
+
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Design</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="distiller-design">Distiller design</h1>
+<p>Distiller is designed to be easily integrated into your own PyTorch research applications.<br>
+It is easiest to understand this integration by examining the code of the sample application for compressing image classification models (<code>compress_classifier.py</code>).<br></p>
+<p>The application borrows its main flow code from torchvision's ImageNet classification training sample application (https://github.com/pytorch/examples/tree/master/imagenet). We tried to keep it similar, in order to make it familiar and easy to understand.</p>
+<p>Integrating compression is very simple: simply add invocations of the appropriate compression_scheduler callbacks, for each stage in the training.  The training skeleton looks like the pseudo code below.  The boiler-plate Pytorch classification training is speckled with invocations of CompressionScheduler.</p>
+<pre><code>For each epoch:
+    compression_scheduler.on_epoch_begin(epoch)
+    train()
+    validate()
+    save_checkpoint()
+    compression_scheduler.on_epoch_end(epoch)
+
+train():
+    For each training step:
+        compression_scheduler.on_minibatch_begin(epoch)
+        output = model(input_var)
+        loss = criterion(output, target_var)
+        compression_scheduler.before_backward_pass(epoch)
+        loss.backward()
+        optimizer.step()
+        compression_scheduler.on_minibatch_end(epoch)
+</code></pre>
+
+<p>These callbacks can be seen in the diagram below, as the arrow pointing from the Training Loop and into Distiller's <em>Scheduler</em>, which invokes the correct algorithm.  The application also uses Distiller services to collect statistics in <em>Summaries</em> and logs files, which can be queried at a later time, from Jupyter notebooks or TensorBoard.</p>
+<p><center><img alt="Distiller design" src="imgs/distiller-design.png" /></center><br></p>
+<h2 id="sparsification-and-fine-tuning">Sparsification and fine-tuning</h2>
+<ul>
+<li>The application sets up a model as normally done in PyTorch.</li>
+<li>And then instantiates a Scheduler and configures it:<ul>
+<li>Scheduler configuration is defined in a YAML file</li>
+<li>The configuration specifies Policies. Each Policy is tied to a specific algorithm which controls some aspect of the training.<ul>
+<li>Some types of algorithms control the actual sparsification of the model. Such types are "pruner" and "regularizer".</li>
+<li>Some algorithms control some parameter of the training process, such as the learning-rate decay scheduler (<em>lr_scheduler</em>).</li>
+<li>The parameters of each algorithm are also specified in the configuration.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>In addition to specifying the algorithm, each Policy specifies scheduling parameters which control when the algorithm is executed: start epoch, end epoch and frequency.</li>
+<li>The Scheduler exposes callbacks for relevant training stages: epoch start/end, mini-batch start/end and pre-backward pass. Each scheduler callback activates the policies that were defined according the schedule that was defined.</li>
+<li>These callbacks are placed the training loop.</li>
+</ul>
+<h2 id="quantization">Quantization</h2>
+<p>A quantized model is obtained by replacing existing operations with quantized versions. The quantized versions can be either complete replacements, or wrappers. A wrapper will use the existing modules internally and add quantization and de-quantization operations before/after as necessary.</p>
+<p>In Distiller we will provide a set of quantized versions of common operations which will enable implementation of different quantization methods. The user can write a quantized model from scratch, using the quantized operations provided.</p>
+<p>We also provide a mechanism which takes an existing model and automatically replaces required operations with quantized versions. This mechanism is exposed by the <code>Quantizer</code> class. <code>Quantizer</code> should be sub-classed for each quantization method.</p>
+<h3 id="model-transformation">Model Transformation</h3>
+<p>The high-level flow is as follows:</p>
+<ul>
+<li>Define a <strong>mapping</strong> between the module types to be replaced (e.g. Conv2D, Linear, etc.) to a function which generates the replacement module. The mapping is defined in the <code>replacement_factory</code> attribute of the <code>Quantizer</code> class.</li>
+<li>Iterate over the modules defined in the model. For each module, if its type is in the mapping, call the replacement generation function. We pass the existing module to this function to allow wrapping of it.</li>
+<li>Replace the existing module with the module returned by the function. It is important to note that the <strong>name</strong> of the module <strong>does not</strong> change, as that could break the <code>forward</code> function of the parent module.</li>
+</ul>
+<p>Different quantization methods may, obviously, use different quantized operations. In addition, different methods may employ different "strategies" of replacing / wrapping existing modules. For instance, some methods replace ReLU with another activation function, while others keep it. Hence, for each quantization method, a different <strong>mapping</strong> will likely be defined.<br />
+Each sub-class of <code>Quantizer</code> should populate the <code>replacement_factory</code> dictionary attribute with the appropriate mapping.<br />
+To execute the model transformation, call the <code>prepare_model</code> function of the <code>Quantizer</code> instance.</p>
+<h3 id="flexible-bit-widths">Flexible Bit-Widths</h3>
+<ul>
+<li>Each instance of <code>Quantizer</code> is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the <code>bits_activations</code>, <code>bits_weights</code> and <code>bits_bias</code> parameters in <code>Quantizer</code>'s constructor. Sub-classes may define bit-widths for other tensor types as needed.</li>
+<li>We also want to be able to override the default number of bits mentioned in the bullet above for certain layers. These could be very specific layers. However, many models are comprised of building blocks ("container" modules, such as Sequential) which contain several modules, and it is likely we'll want to override settings for entire blocks, or for a certain module across different blocks. When such building blocks are used, the names of the internal modules usually follow some pattern.</li>
+<li>So, for this purpose, Quantizer also accepts a mapping of regular expressions to number of bits. This allows the user to override specific layers using they're exact name, or a group of layers via a regular expression. This mapping is passed via the <code>overrides</code> parameter in the constructor.</li>
+<li>The <code>overrides</code> mapping is required to be an instance of <a href="https://docs.python.org/3.5/library/collections.html#collections.OrderedDict"><code>collections.OrderedDict</code></a> (as opposed to just a simple Python <a href="https://docs.python.org/3.5/library/stdtypes.html#dict"><code>dict</code></a>). This is done in order to enable handling of overlapping name patterns.<br />
+     So, for example, one could define certain override parameters for a group of layers, e.g. 'conv*', but also define different parameters for specific layers in that group, e.g. 'conv1'.<br />
+     The patterns are evaluated eagerly - the first match wins. Therefore, the more specific patterns must come before the broad patterns.</li>
+</ul>
+<h3 id="weights-quantization">Weights Quantization</h3>
+<p>The <code>Quantizer</code> class also provides an API to quantize the weights of all layers at once. To use it, the <code>param_quantization_fn</code> attribute needs to point to a function that accepts a tensor and the number of bits. During model transformation, the <code>Quantizer</code> class will build a list of all model parameters that need to be quantized along with their bit-width. Then, the <code>quantize_params</code> function can be called, which will iterate over all parameters and quantize them using <code>params_quantization_fn</code>.</p>
+<h3 id="quantization-aware-training">Quantization-Aware Training</h3>
+<p>The <code>Quantizer</code> class supports quantization-aware training, that is - training with quantization in the loop. This requires handling of a couple of flows / scenarios:</p>
+<ol>
+<li>
+<p>Maintaining a full precision copy of the weights, as described <a href="quantization.html#quantization-aware-training">here</a>. This is enabled by setting <code>train_with_fp_copy=True</code> in the <code>Quantizer</code> constructor. At model transformation, in each module that has parameters that should be quantized, a new <code>torch.nn.Parameter</code> is added, which will maintain the required full precision copy of the parameters. Note that this is done in-place - a new module <strong>is not</strong> created. We preferred not to sub-class the existing PyTorch modules for this purpose. In order to this in-place, and also guarantee proper back-propagation through the weights quantization function, we employ the following "hack": </p>
+<ol>
+<li>The existing <code>torch.nn.Parameter</code>, e.g. <code>weights</code>, is replaced by a <code>torch.nn.Parameter</code> named <code>float_weight</code>.</li>
+<li>To maintain the existing functionality of the module, we then register a <code>buffer</code> in the module with the original name - <code>weights</code>.</li>
+<li>During training, <code>float_weight</code> will be passed to <code>param_quantization_fn</code> and the result will be stored in <code>weight</code>.</li>
+</ol>
+</li>
+<li>
+<p>In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the <a href="algo_quantization.html#pact">PACT</a> method, acitvations are clipped to a value <script type="math/tex">\alpha</script>, which is a learned parameter per-layer</p>
+</li>
+</ol>
+<p>To support these two cases, the <code>Quantizer</code> class also accepts an instance of a <code>torch.optim.Optimizer</code> (normally this would be one an instance of its sub-classes). The quantizer will take care of modifying the optimizer according to the changes made to the parameters.   </p>
+<div class="admonition note">
+<p class="admonition-title">Optimizing New Parameters</p>
+<p>In cases where new parameters are required by the scheme, it is likely that they'll need to be optimized separately from the main model parameters. In that case, the sub-class for the speicifc method should override <code>Quantizer._get_updated_optimizer_params_groups()</code>, and return the proper groups plus any desired hyper-parameter overrides.</p>
+</div>
+<h3 id="examples">Examples</h3>
+<p>The base <code>Quantizer</code> class is implemented in <code>distiller/quantization/quantizer.py</code>.<br />
+For a simple sub-class implementing symmetric linear quantization, see <code>SymmetricLinearQuantizer</code> in <code>distiller/quantization/range_linear.py</code>.<br />
+In <code>distiller/quantization/clipped_linear.py</code> there are examples of lower-precision methods which use training with quantization. Specifically, see <code>PACTQuantizer</code> for an example of overriding <code>Quantizer._get_updated_optimizer_params_groups()</code>.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="tutorial-struct_pruning.html" class="btn btn-neutral float-right" title="Pruning Filters and Channels">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="jupyter.html" class="btn btn-neutral" title="Jupyter Notebooks"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="jupyter.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="tutorial-struct_pruning.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>

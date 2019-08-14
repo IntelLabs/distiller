@@ -13,15 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import torch.nn as nn
+import pytest
 import os
-import sys
-import torch
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
+import errno
 import distiller
-from models import create_model
+from distiller.models import create_model
+
+
+PYTEST_COLLATERALS_DIR = os.path.join(os.path.dirname(__file__), 'pytest_collaterals')
+try:
+    os.makedirs(PYTEST_COLLATERALS_DIR)
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
 
 
 def setup_test(arch, dataset, parallel):
@@ -43,13 +48,21 @@ def find_module_by_name(model, module_to_find):
     return None
 
 
-def get_dummy_input(dataset):
-    if dataset == "imagenet":
-        return torch.randn(1, 3, 224, 224).cuda()
-    elif dataset == "cifar10":
-        return torch.randn(1, 3, 32, 32).cuda()
-    raise ValueError("Trying to use an unknown dataset " + dataset)
-
-
 def almost_equal(a , b, max_diff=0.000001):
     return abs(a - b) <= max_diff
+
+
+def pytest_raises_wrapper(exc_type, msg, func, *args, **kwargs):
+    with pytest.raises(exc_type):
+        func(*args, **kwargs)
+        if msg:
+            pytest.fail(msg)
+
+
+class WrappedSequential(nn.Module):
+    def __init__(self, *args):
+        super(WrappedSequential, self).__init__()
+        self.seq = nn.Sequential(*args)
+
+    def forward(self, x):
+        return self.seq(x)

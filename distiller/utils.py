@@ -19,24 +19,36 @@
 This module contains various tensor sparsity/density measurement functions, together
 with some random helper functions.
 """
+import argparse
+from collections import OrderedDict
+from copy import deepcopy
+import logging
+import operator
+import random
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import random
-from copy import deepcopy
 import yaml
-from collections import OrderedDict
-import argparse
-import operator
+import inspect
+import distiller
+
+msglogger = logging.getLogger()
 
 
 def model_device(model):
     """Determine the device the model is allocated on."""
     # Source: https://discuss.pytorch.org/t/how-to-check-if-model-is-on-cuda/180
-    if next(model.parameters()).is_cuda:
-        return 'cuda'
+    try:
+        return str(next(model.parameters()).device)
+    except StopIteration:
+        # Model has no parameters
+        pass
     return 'cpu'
+
+
+def optimizer_device_name(opt):
+    return str(list(list(opt.state)[0])[0].device)
 
 
 def to_np(var):
@@ -50,12 +62,14 @@ def size2str(torch_size):
         return size_to_str(torch_size.size())
     if isinstance(torch_size, torch.autograd.Variable):
         return size_to_str(torch_size.data.size())
+    if isinstance(torch_size, tuple) or isinstance(torch_size, list):
+        return size_to_str(torch_size)
     raise TypeError
 
 
 def size_to_str(torch_size):
     """Convert a pytorch Size object to a string"""
-    assert isinstance(torch_size, torch.Size)
+    assert isinstance(torch_size, torch.Size) or isinstance(torch_size, tuple) or isinstance(torch_size, list)
     return '('+(', ').join(['%d' % v for v in torch_size])+')'
 
 
@@ -82,7 +96,7 @@ def assign_layer_fq_names(container, name=None):
     """Assign human-readable names to the modules (layers).
 
     Sometimes we need to access modules by their names, and we'd like to use
-    fully-qualified names for convinience.
+    fully-qualified names for convenience.
     """
     for name, module in container.named_modules():
         module.distiller_name = name
@@ -116,9 +130,13 @@ def normalize_module_name(layer_name):
     module and want to use the same module name whether the module is parallel or not.
     We call this module name normalization, and this is implemented here.
     """
-    if layer_name.find("module.") >= 0:
-        return layer_name.replace("module.", "")
-    return layer_name.replace(".module", "")
+    modules = layer_name.split('.')
+    try:
+        idx = modules.index('module')
+    except ValueError:
+        return layer_name
+    del modules[idx]
+    return '.'.join(modules)
 
 
 def denormalize_module_name(parallel_model, normalized_name):
@@ -289,9 +307,6 @@ def sparsity_blocks(tensor, block_shape):
 
     # Next, compute the sums of each column (block)
     block_sums = view1.abs().sum(dim=1)
-
-    # Next, compute the sums of each column (block)
-    block_sums = view1.abs().sum(dim=1)
     nonzero_blocks = len(torch.nonzero(block_sums))
     return 1 - nonzero_blocks/num_super_blocks
 
@@ -341,15 +356,35 @@ def density_rows(tensor, transposed=True):
 
 
 def model_sparsity(model, param_dims=[2, 4]):
-    params_size = 0
-    sparse_params_size = 0
+    """Returns the model sparsity as a fraction in [0..1]"""
+    sparsity, _, _ = model_params_stats(model, param_dims)
+    return sparsity
+
+
+def model_params_size(model, param_dims=[2, 4]):
+    """Returns the model sparsity as a fraction in [0..1]"""
+    _, _, sparse_params_cnt = model_params_stats(model, param_dims)
+    return sparse_params_cnt
+
+
+def model_params_stats(model, param_dims=[2, 4]):
+    """Returns the model sparsity, weights count, and the count of weights in the sparse model.
+
+    Returns:
+        model_sparsity - the model weights sparsity (in percent)
+        params_cnt - the number of weights in the entire model (incl. zeros)
+        params_nnz_cnt - the number of weights in the entire model, excluding zeros.
+                         nnz stands for non-zeros.
+    """
+    params_cnt = 0
+    params_nnz_cnt = 0
     for name, param in model.state_dict().items():
         if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
             _density = density(param)
-            params_size += torch.numel(param)
-            sparse_params_size += param.numel() * _density
-    total_sparsity = (1 - sparse_params_size/params_size)*100
-    return total_sparsity
+            params_cnt += torch.numel(param)
+            params_nnz_cnt += param.numel() * _density
+    model_sparsity = (1 - params_nnz_cnt/params_cnt)*100
+    return model_sparsity, params_cnt, params_nnz_cnt
 
 
 def norm_filters(weights, p=1):
@@ -411,7 +446,7 @@ def activation_channels_means(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its L1 magnitudes (i.e. over all of the
     activations in the mini-batch, compute the mean of the L1 magnitude of each channel).
@@ -437,7 +472,7 @@ def activation_channels_apoz(activation):
     The activation usually has the shape: (batch_size, num_channels, h, w).
 
     "We first use global average pooling to convert the output of layer i, which is a
-    c x h x w tensor, into a 1 x c vector."
+    c x h x w tensor, into a 1 x c vector."
 
     Returns - for each channel: the batch-mean of its sparsity.
     """
@@ -495,6 +530,32 @@ def log_weights_sparsity(model, epoch, loggers):
         logger.log_weights_sparsity(model, epoch)
 
 
+def log_model_buffers(model, buffer_names, tag_prefix, epoch, steps_completed, total_steps, log_freq, loggers=()):
+    """
+    Log values of model buffers. 'buffer_names' is a list of buffers to be logged (which not necessarily exist
+    in all layers in the model).
+
+    USE WITH CARE:
+        * This logger logs each value within the buffers. As such, while any buffer can be passed
+          it is not really intended for big buffers such as model weights.
+        * Special attention is needed when using this using this functionality in TensorBoardLogger, as it could
+          significantly slow down the load time of TensorBard. Please see the documentation of 'log_model_buffers'
+          in that class.
+
+    Args:
+        model: Model containing buffers to be logged
+        buffer_names: Names of buffers to be logged. Expected to be
+        tag_prefix: Prefix to be used before buffer name by logger
+        epoch: The current epoch
+        steps_completed: The current step in the epoch
+        total_steps: The total number of training steps taken so far
+        log_freq: The number of steps between logging records
+        loggers: An iterable of loggers to send the log info to
+    """
+    for logger in loggers:
+        logger.log_model_buffers(model, buffer_names, tag_prefix, epoch, steps_completed, total_steps, log_freq)
+
+
 def has_children(module):
     try:
         next(module.children())
@@ -503,14 +564,67 @@ def has_children(module):
         return False
 
 
-def get_dummy_input(dataset):
-    if dataset == 'imagenet':
-        dummy_input = torch.randn(1, 3, 224, 224)
-    elif dataset == 'cifar10':
-        dummy_input = torch.randn(1, 3, 32, 32)
+def _validate_input_shape(dataset, input_shape):
+    if dataset:
+        try:
+            return tuple(distiller.apputils.classification_get_input_shape(dataset))
+        except ValueError:
+            raise ValueError("Can't infer input shape for dataset {}, please pass shape directly".format(dataset))
     else:
-        raise ValueError("dataset %s is not supported" % dataset)
-    return dummy_input
+        if input_shape is None:
+            raise ValueError('Must provide either dataset name or input shape')
+        if not isinstance(input_shape, tuple):
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        def val_recurse(in_shape):
+            if all(isinstance(x, int) for x in in_shape):
+                if any(x < 0 for x in in_shape):
+                    raise ValueError("Shape can't contain negative dimensions: {}".format(in_shape))
+                return in_shape
+            if all(isinstance(x, tuple) for x in in_shape):
+                return tuple(val_recurse(x) for x in in_shape)
+            raise TypeError('Shape should be a tuple of integers, or a tuple of tuples of integers')
+
+        return val_recurse(input_shape)
+
+
+def get_dummy_input(dataset=None, device=None, input_shape=None):
+    """Generate a representative dummy (random) input.
+
+    If a device is specified, then the dummy_input is moved to that device.
+
+    Args:
+        dataset (str): Name of dataset from which to infer the shape
+        device (str or torch.device): Device on which to create the input
+        input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+          arbitrarily complex collections of tensors. Used only if 'dataset' is None
+    """
+    def create_single(shape):
+        t = torch.randn(shape)
+        if device:
+            t = t.to(device)
+        return t
+
+    def create_recurse(shape):
+        if all(isinstance(x, int) for x in shape):
+            return create_single(shape)
+        return tuple(create_recurse(s) for s in shape)
+
+    input_shape = _validate_input_shape(dataset, input_shape)
+    return create_recurse(input_shape)
+
+
+def set_model_input_shape_attr(model, dataset=None, input_shape=None):
+    """Sets an attribute named 'input_shape' within the model instance, specifying the expected input shape
+
+    Args:
+          model (nn.Module): Model instance
+          dataset (str): Name of dataset from which to infer input shape
+          input_shape (tuple): Tuple of integers representing the input shape. Can also be a tuple of tuples, allowing
+            arbitrarily complex collections of tensors. Used only if 'dataset' is None
+    """
+    if not hasattr(model, 'input_shape'):
+        model.input_shape = _validate_input_shape(dataset, input_shape)
 
 
 def make_non_parallel_copy(model):
@@ -534,16 +648,31 @@ def make_non_parallel_copy(model):
     return new_model
 
 
-def set_deterministic():
-    torch.manual_seed(0)
-    random.seed(0)
-    np.random.seed(0)
+def set_seed(seed):
+    """Seed the PRNG for the CPU, Cuda, numpy and Python"""
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+def set_deterministic(seed=0):
+    '''Try to configure the system for reproducible results.
+
+    Experiment reproducibility is sometimes important.  Pete Warden expounded about this
+    in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
+    For Pytorch specifics see: https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
+    '''
+    msglogger.debug('set_deterministic was invoked')
+    if seed is None:
+        seed = 0
+    set_seed(seed)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
-    """
-    Function to load YAML file using an OrderedDict
+    """Function to load YAML file using an OrderedDict
+
     See: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
     """
     class OrderedLoader(Loader):
@@ -560,6 +689,16 @@ def yaml_ordered_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict)
     return yaml.load(stream, OrderedLoader)
 
 
+def yaml_ordered_save(fname, ordered_dict):
+    def ordered_dict_representer(self, value):
+        return self.represent_mapping('tag:yaml.org,2002:map', value.items())
+
+    yaml.add_representer(OrderedDict, ordered_dict_representer)
+
+    with open(fname, 'w') as f:
+        yaml.dump(ordered_dict, f, default_flow_style=False)
+
+
 def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=False):
     def checker(val_str):
         val = float(val_str)
@@ -572,3 +711,35 @@ def float_range_argparse_checker(min_val=0., max_val=1., exc_min=False, exc_max=
     if min_val >= max_val:
         raise ValueError('min_val must be less than max_val')
     return checker
+
+
+def filter_kwargs(dict_to_filter, function_to_call):
+    """Utility to check which arguments in the passed dictionary exist in a function's signature
+
+    The function returns two dicts, one with just the valid args from the input and one with the invalid args.
+    The caller can then decide to ignore the existence of invalid args, depending on context.
+    """
+
+    sig = inspect.signature(function_to_call)
+    filter_keys = [param.name for param in sig.parameters.values() if (param.kind == param.POSITIONAL_OR_KEYWORD)]
+    valid_args = {}
+    invalid_args = {}
+
+    for key in dict_to_filter:
+        if key in filter_keys:
+            valid_args[key] = dict_to_filter[key]
+        else:
+            invalid_args[key] = dict_to_filter[key]
+    return valid_args, invalid_args
+
+
+def convert_tensors_recursively_to(val, *args, **kwargs):
+    """ Applies `.to(*args, **kwargs)` to each tensor inside val tree. Other values remain the same."""
+    if isinstance(val, torch.Tensor):
+        return val.to(*args, **kwargs)
+
+    if isinstance(val, (tuple, list)):
+        return type(val)(convert_tensors_recursively_to(item, *args, **kwargs) for item in val)
+
+    return val
+

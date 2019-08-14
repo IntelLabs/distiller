@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Quantization - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Quantization";
+    var mkdocs_page_input_path = "quantization.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization.html">Regularization</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="quantization.html">Quantization</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#quantization">Quantization</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#motivation-overall-efficiency">Motivation: Overall Efficiency</a></li>
+        
+            <li><a class="toctree-l4" href="#integer-vs-fp32">Integer vs. FP32</a></li>
+        
+            <li><a class="toctree-l4" href="#conservative-quantization-int8">"Conservative" Quantization: INT8</a></li>
+        
+            <li><a class="toctree-l4" href="#aggressive-quantization-int4-and-lower">"Aggressive" Quantization: INT4 and Lower</a></li>
+        
+            <li><a class="toctree-l4" href="#quantization-aware-training">Quantization-Aware Training</a></li>
+        
+            <li><a class="toctree-l4" href="#references">References</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Compressing Models &raquo;</li>
+        
+      
+    
+    <li>Quantization</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="quantization">Quantization</h1>
+<p>Quantization refers to the process of reducing the number of bits that represent a number. In the context of deep learning, the predominant numerical format used for research and for deployment has so far been 32-bit floating point, or FP32. However, the desire for reduced bandwidth and compute requirements of deep learning models has driven research into using lower-precision numerical formats. It has been extensively demonstrated that weights and activations can be represented using 8-bit integers (or INT8) without incurring significant loss in accuracy. The use of even lower bit-widths, such as 4/2/1-bits, is an active field of research that has also shown great progress.</p>
+<p>Note that this discussion is on quantization only in the context of more efficient inference. Using lower-precision numerics for more efficient training is currently out of scope.</p>
+<h2 id="motivation-overall-efficiency">Motivation: Overall Efficiency</h2>
+<p>The more obvious benefit from quantization is <strong>significantly reduced bandwidth and storage</strong>. For instance, using INT8 for weights and activations consumes 4x less overall bandwidth compared to FP32.<br />
+Additionally integer compute is <strong>faster</strong> than floating point compute. It is also much more <strong>area and energy efficient</strong>: </p>
+<table>
+<thead>
+<tr>
+<th>INT8 Operation</th>
+<th>Energy Saving vs FP32</th>
+<th>Area Saving vs FP32</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add</td>
+<td>30x</td>
+<td>116x</td>
+</tr>
+<tr>
+<td>Multiply</td>
+<td>18.5x</td>
+<td>27x</td>
+</tr>
+</tbody>
+</table>
+<p>(<a href="#dally-2015">Dally, 2015</a>)</p>
+<p>Note that very aggressive quantization can yield even more efficiency. If weights are binary (-1, 1) or ternary (-1, 0, 1 using 2-bits), then convolution and fully-connected layers can be computed with additions and subtractions only, removing multiplications completely. If activations are binary as well, then additions can also be removed, in favor of bitwise operations (<a href="#rastegari-et-al-2016">Rastegari et al., 2016</a>).</p>
+<h2 id="integer-vs-fp32">Integer vs. FP32</h2>
+<p>There are two main attributes when discussing a numerical format. The first is <strong>dynamic range</strong>, which refers to the range of representable numbers. The second one is how many values can be represented within the dynamic range, which in turn determines the <strong>precision / resolution</strong> of the format (the distance between two numbers).<br />
+For all integer formats, the dynamic range is <script type="math/tex">[-2^{n-1} .. 2^{n-1}-1]</script>, where <script type="math/tex">n</script> is the number of bits. So for INT8 the range is <script type="math/tex">[-128 .. 127]</script>, and for INT4 it is <script type="math/tex">[-8 .. 7]</script> (we're limiting ourselves to signed integers for now). The number of representable values is <script type="math/tex">2^n</script>.
+Contrast that with FP32, where the dynamic range is <script type="math/tex">\pm 3.4\ x\ 10^{38}</script>, and approximately <script type="math/tex">4.2\ x\ 10^9</script> values can be represented.<br />
+We can immediately see that FP32 is much more <strong>versatile</strong>, in that it is able to represent a wide range of distributions accurately. This is a nice property for deep learning models, where the distributions of weights and activations are usually very different (at least in dynamic range). In addition the dynamic range can differ between layers in the model.<br />
+In order to be able to represent these different distributions with an integer format, a <strong>scale factor</strong> is used to map the dynamic range of the tensor to the integer format range. But still we remain with the issue of having a significantly lower number of representable values, that is - much lower resolution.<br />
+Note that this scale factor is, in most cases, a floating-point number. Hence, even when using integer numerics, some floating-point computations remain. <a href="#courbariaux-et-al-2014">Courbariaux et al., 2014</a> scale using only shifts, eliminating the floating point operation. In <a href="https://github.com/google/gemmlowp/blob/master/doc/quantization.md">GEMMLWOP</a>, the FP32 scale factor is approximated using an integer or fixed-point multiplication followed by a shift operation. In many cases the effect of this approximation on accuracy is negligible.</p>
+<h3 id="avoiding-overflows">Avoiding Overflows</h3>
+<p>Convolution and fully connected layers involve the storing of intermediate results in accumulators. Due to the limited dynamic range of integer formats, if we would use the same bit-width for the weights and activation, <em>and</em> for the accumulators, we would likely overflow very quickly. Therefore, accumulators are usually implemented with higher bit-widths.<br />
+The result of multiplying two <script type="math/tex">n</script>-bit integers is, at most, a <script type="math/tex">2n</script>-bit number. In convolution layers, such multiplications are accumulated <script type="math/tex">c\cdot k^2</script> times, where <script type="math/tex">c</script> is the number of input channels and <script type="math/tex">k</script> is the kernel width (assuming a square kernel). Hence, to avoid overflowing, the accumulator should be <script type="math/tex">2n + M</script>-bits wide, where M is at least <script type="math/tex">log_2(c\cdot k^2)</script>. In many cases 32-bit accumulators are used, however for INT4 and lower it might be possible to use less than 32 -bits, depending on the expected use cases and layer widths.</p>
+<h2 id="conservative-quantization-int8">"Conservative" Quantization: INT8</h2>
+<p>In many cases, taking a model trained for FP32 and directly quantizing it to INT8, without any re-training, can result in a relatively low loss of accuracy (which may or may not be acceptable, depending on the use case). Some fine-tuning can further improve the accuracy (<a href="#gysel-et-al-2018">Gysel at al., 2018</a>).<br />
+As mentioned above, a scale factor is used to adapt the dynamic range of the tensor at hand to that of the integer format. This scale factor needs to be calculated per-layer per-tensor. The simplest way is to map the min/max values of the float tensor to the min/max of the integer format. For weights and biases this is easy, as they are set once training is complete. For activations, the min/max float values can be obtained "online" during inference, or "offline".</p>
+<ul>
+<li><strong>Offline</strong> means gathering activations statistics before deploying the model, either during training or by running a few "calibration" batches on the trained FP32 model. Based on these gathered statistics, the scaled factors are calculated and are fixed once the model is deployed. This method has the risk of encountering values outside the previously observed ranges at runtime. These values will be clipped, which might lead to accuracy degradation.</li>
+<li><strong>Online</strong> means calculating the min/max values for each tensor dynamically during runtime. In this method clipping cannot occur, however the added computation resources required to calculate the min/max values at runtime might be prohibitive.</li>
+</ul>
+<div id="outliers-removal"></div>
+
+<p>It is important to note, however, that the full float range of an activations tensor usually includes elements which are statistically outliers. These values can be discarded by using a narrower min/max range, effectively allowing some clipping to occur in favor of increasing the resolution provided to the part of the distribution containing most of the information. A simple method which can yield nice results is to simply use an average of the observed min/max values instead of the actual values. Alternatively, statistical measures can be used to intelligently select where to clip the original range in order to preserve as much information as possible (<a href="#migacz-2017">Migacz, 2017</a>). Going further, <a href="#banner-et-al-2018">Banner et al., 2018</a> have proposed a method for analytically computing the clipping value under certain conditions.</p>
+<p>Another possible optimization point is <strong>scale-factor scope</strong>. The most common way is use a single scale-factor per-layer, but it is also possible to calculate a scale-factor per-channel. This can be beneficial if the weight distributions vary greatly between channels.</p>
+<p>When used to directly quantize a model without re-training, as described so far, this method is commonly referred to as <strong>post-training quantization</strong>. However, recent publications have shown that there are cases where post-training quantization to INT8 doesn't preserve accuracy (<a href="#benoit-et-al-2018">Benoit et al., 2018</a>, <a href="#krishnamoorthi-2018">Krishnamoorthi, 2018</a>). Namely, smaller models such as MobileNet seem to not respond as well to post-training quantization, presumabley due to their smaller representational capacity. In such cases, <a href="#quantization-aware-training">quantization-aware training</a> is used.</p>
+<h2 id="aggressive-quantization-int4-and-lower">"Aggressive" Quantization: INT4 and Lower</h2>
+<p>Naively quantizing a FP32 model to INT4 and lower usually incurs significant accuracy degradation. Many works have tried to mitigate this effect. They usually employ one or more of the following concepts in order to improve model accuracy:</p>
+<ul>
+<li><strong>Training / Re-Training</strong>: For INT4 and lower, training is required in order to obtain reasonable accuracy. The training loop is modified to take quantization into account. See details in the <a href="#quantization-aware-training">next section</a>.<br />
+<a href="#zhou-et-al-2016">Zhou S et al., 2016</a> have shown that bootstrapping the quantized model with trained FP32 weights leads to higher accuracy, as opposed to training from scratch. Other methods <em>require</em> a trained FP32 model, either as a starting point (<a href="#zhou-et-al-2017">Zhou A et al., 2017</a>), or as a teacher network in a knowledge distillation training setup (see <a href="knowledge_distillation.html#combining">here</a>).</li>
+<li><strong>Replacing the activation function</strong>: The most common activation function in vision models is ReLU, which is unbounded. That is - its dynamic range is not limited for positive inputs. This is very problematic for INT4 and below due to the very limited range and resolution. Therefore, most methods replace ReLU with another function which is bounded. In some cases a clipping function with hard coded values is used (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>, <a href="#mishra-et-al-2018">Mishra et al., 2018</a>). Another method learns the clipping value per layer, with better results (<a href="#choi-et-al-2018">Choi et al., 2018</a>). Once the clipping value is set, the scale factor used for quantization is also set, and no further calibration steps are required (as opposed to INT8 methods described above).</li>
+<li><strong>Modifying network structure</strong>: <a href="#mishra-et-al-2018">Mishra et al., 2018</a> try to compensate for the loss of information due to quantization by using wider layers (more channels). <a href="#lin-et-al-2017">Lin et al., 2017</a> proposed a binary quantization method in which a single FP32 convolution is replaced with multiple binary convolutions, each scaled to represent a different "base", covering a larger dynamic range overall.</li>
+<li><strong>First and last layer</strong>: Many methods do not quantize the first and last layer of the model. It has been observed by <a href="#han-et-al-2015">Han et al., 2015</a> that the first convolutional layer is more sensitive to weights pruning, and some quantization works cite the same reason and show it empirically (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>, <a href="#choi-et-al-2018">Choi et al., 2018</a>). Some works also note that these layers usually constitute a very small portion of the overall computation within the model, further reducing the motivation to quantize them (<a href="#rastegari-et-al-2016">Rastegari et al., 2016</a>). Most methods keep the first and last layers at FP32. However, <a href="#choi-et-al-2018">Choi et al., 2018</a> showed that "conservative" quantization of these layers, e.g. to INT8, does not reduce accuracy.</li>
+<li><strong>Iterative quantization</strong>: Most methods quantize the entire model at once. <a href="#zhou-et-al-2017">Zhou A et al., 2017</a> employ an iterative method, which starts with a trained FP32 baseline, and quantizes only a portion of the model at the time followed by several epochs of re-training to recover the accuracy loss from quantization.</li>
+<li><strong>Mixed Weights and Activations Precision</strong>: It has been observed that activations are more sensitive to quantization than weights (<a href="#zhou-et-al-2016">Zhou S et al., 2016</a>). Hence it is not uncommon to see experiments with activations quantized to a higher precision compared to weights. Some works have focused solely on quantizing weights, keeping the activations at FP32 (<a href="#li-et-al-2016">Li et al., 2016</a>, <a href="#zhu-et-al-2016">Zhu et al., 2016</a>).</li>
+</ul>
+<h2 id="quantization-aware-training">Quantization-Aware Training</h2>
+<p>As mentioned above, in order to minimize the loss of accuracy from "aggressive" quantization, many methods that target INT4 and lower (and in some cases for INT8 as well) involve training the model in a way that considers the quantization. This means training with quantization of weights and activations "baked" into the training procedure. The training graph usually looks like this:</p>
+<p><img alt="Quantization-Aware Training" src="imgs/training_quant_flow.png" /></p>
+<p>A full precision copy of the weights is maintained throughout the training process ("weights_fp" in the diagram). Its purpose is to accumulate the small changes from the gradients without loss of precision (Note that the quantization of the weights is an integral part of the training graph, meaning that we back-propagate through it as well). Once the model is trained, only the quantized weights are used for inference.<br />
+In the diagram we show "layer N" as the conv + batch-norm + activation combination, but the same applies to fully-connected layers, element-wise operations, etc. During training, the operations within "layer N" can still run in full precision, with the "quantize" operations in the boundaries ensuring discrete-valued weights and activations. This is sometimes called "simulated quantization".  </p>
+<h3 id="straight-through-estimator">Straight-Through Estimator</h3>
+<p>An important question in this context is how to back-propagate through the quantization functions. These functions are discrete-valued, hence their derivative is 0 almost everywhere. So, using their gradients as-is would severely hinder the learning process. An approximation commonly used to overcome this issue is the "straight-through estimator" (STE) (<a href="#hinton-et-al-2012">Hinton et al., 2012</a>, <a href="#bengio-et-al-2013">Bengio, 2013</a>), which simply passes the gradient through these functions as-is.  </p>
+<h2 id="references">References</h2>
+<p><div id="dally-2015"></div>
+<strong>William Dally</strong>. High-Performance Hardware for Machine Learning. <a href="https://media.nips.cc/Conferences/2015/tutorialslides/Dally-NIPS-Tutorial-2015.pdf">Tutorial, NIPS, 2015</a></p>
+<div id="rastegari-et-al-2016"></div>
+
+<p><strong>Mohammad Rastegari, Vicente Ordone, Joseph Redmon and Ali Farhadi</strong>. XNOR-Net: ImageNet Classification Using Binary Convolutional Neural Networks. <a href="https://link.springer.com/chapter/10.1007%2F978-3-319-46493-0_32">ECCV, 2016</a></p>
+<div id="courbariaux-et-al-2014"></div>
+
+<p><strong>Matthieu Courbariaux, Yoshua Bengio and Jean-Pierre David</strong>. Training deep neural networks with low precision multiplications. <a href="https://arxiv.org/abs/1412.7024">arxiv:1412.7024</a></p>
+<div id="gysel-et-al-2018"></div>
+
+<p><strong>Philipp Gysel, Jon Pimentel, Mohammad Motamedi and Soheil Ghiasi</strong>. Ristretto: A Framework for Empirical Study of Resource-Efficient Inference in Convolutional Neural Networks. <a href="http://ieeexplore.ieee.org/document/8318896/">IEEE Transactions on Neural Networks and Learning Systems, 2018</a></p>
+<div id="migacz-2017"></div>
+
+<p><strong>Szymon Migacz</strong>. 8-bit Inference with TensorRT. <a href="http://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf">GTC San Jose, 2017</a></p>
+<div id="zhou-et-al-2016"></div>
+
+<p><strong>Shuchang Zhou, Zekun Ni, Xinyu Zhou, He Wen, Yuxin Wu and Yuheng Zou</strong>. DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients. <a href="https://arxiv.org/abs/1606.06160">arxiv:1606.06160</a></p>
+<div id="zhou-et-al-2017"></div>
+
+<p><strong>Aojun Zhou, Anbang Yao, Yiwen Guo, Lin Xu and Yurong Chen</strong>. Incremental Network Quantization: Towards Lossless CNNs with Low-precision Weights. <a href="https://arxiv.org/abs/1702.03044">ICLR, 2017</a></p>
+<div id="mishra-et-al-2018"></div>
+
+<p><strong>Asit Mishra, Eriko Nurvitadhi, Jeffrey J Cook and Debbie Marr</strong>. WRPN: Wide Reduced-Precision Networks. <a href="https://openreview.net/forum?id=B1ZvaaeAZ">ICLR, 2018</a></p>
+<div id="choi-et-al-2018"></div>
+
+<p><strong>Jungwook Choi, Zhuo Wang, Swagath Venkataramani, Pierce I-Jen Chuang, Vijayalakshmi Srinivasan and Kailash Gopalakrishnan</strong>. PACT: Parameterized Clipping Activation for Quantized Neural Networks. <a href="https://arxiv.org/abs/1805.06085">arxiv:1805.06085</a></p>
+<div id="lin-et-al-2017"></div>
+
+<p><strong>Xiaofan Lin, Cong Zhao and Wei Pan</strong>. Towards Accurate Binary Convolutional Neural Network. <a href="http://papers.nips.cc/paper/6638-towards-accurate-binary-convolutional-neural-network">NIPS, 2017</a></p>
+<div id="han-et-al-2015"></div>
+
+<p><strong>Song Han, Jeff Pool, John Tran and William Dally</strong>. Learning both Weights and Connections for Efficient Neural Network. <a href="http://papers.nips.cc/paper/5784-learning-both-weights-and-connections-for-efficient-neural-network">NIPS, 2015</a></p>
+<div id="li-et-al-2016"></div>
+
+<p><strong>Fengfu Li, Bo Zhang and Bin Liu</strong>. Ternary Weight Networks. <a href="https://arxiv.org/abs/1605.04711">arxiv:1605.04711</a></p>
+<div id="zhu-et-al-2016"></div>
+
+<p><strong>Chenzhuo Zhu, Song Han, Huizi Mao and William J. Dally</strong>. Trained Ternary Quantization. <a href="https://arxiv.org/abs/1612.01064">arxiv:1612.01064</a></p>
+<div id="bengio-et-al-2013"></div>
+
+<p><strong>Yoshua Bengio, Nicholas Leonard and Aaron Courville</strong>. Estimating or Propagating Gradients Through Stochastic Neurons for Conditional Computation. <a href="https://arxiv.org/abs/1308.3432">arxiv:1308.3432</a></p>
+<div id="hinton-et-al-2012"></div>
+
+<p><strong>Geoffrey Hinton, Nitish Srivastava, Kevin Swersky, Tijmen Tieleman and Abdelrahman Mohamed</strong>. Neural Networks for Machine Learning. <a href="https://www.coursera.org/learn/neural-networks">Coursera, video lectures, 2012</a></p>
+<div id="benoit-et-al-2018"></div>
+
+<p><strong>Benoit Jacob, Skirmantas Kligys, Bo Chen, Menglong Zhu, Matthew Tang, Andrew Howard, Hartwig Adam and Dmitry Kalenichenko</strong>. Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference. <a href="http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html">ECCV, 2018</a></p>
+<div id="krishnamoorthi-2018"></div>
+
+<p><strong>Raghuraman Krishnamoorthi</strong>. Quantizing deep convolutional networks for efficient inference: A whitepaper <a href="https://arxiv.org/abs/1806.08342">arxiv:1806.08342</a></p>
+<div id="banner-et-al-2018"></div>
+
+<p><strong>Ron Banner, Yury Nahshan, Elad Hoffer and Daniel Soudry</strong>. ACIQ: Analytical Clipping for Integer Quantization of neural networks <a href="https://arxiv.org/abs/1810.05723">arxiv:1810.05723</a></p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="knowledge_distillation.html" class="btn btn-neutral float-right" title="Knowledge Distillation">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="regularization.html" class="btn btn-neutral" title="Regularization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="regularization.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="knowledge_distillation.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>

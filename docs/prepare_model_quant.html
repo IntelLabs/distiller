@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Preparing a Model for Quantization - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Preparing a Model for Quantization";
+    var mkdocs_page_input_path = "prepare_model_quant.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1 current">
+		
+    <a class="current" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#preparing-a-model-for-quantization">Preparing a Model for Quantization</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#background">Background</a></li>
+        
+            <li><a class="toctree-l3" href="#model-preparation-to-do-list">Model Preparation To-Do List</a></li>
+        
+            <li><a class="toctree-l3" href="#model-preparation-example">Model Preparation Example</a></li>
+        
+            <li><a class="toctree-l3" href="#special-case-lstm-a-compound-module">Special Case: LSTM (a "compound" module)</a></li>
+        
+        </ul>
+    
+
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Preparing a Model for Quantization</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="preparing-a-model-for-quantization">Preparing a Model for Quantization</h1>
+<h2 id="background">Background</h2>
+<p><em>Note: If you just want a run-down of the required modifications to make sure a model is properly quantized in Distiller, you can skip this part and head right to the next section.</em></p>
+<p>Distiller provides an automatic mechanism to convert a "vanilla" FP32 PyTorch model to a quantized counterpart (for <a href="https://nervanasystems.github.io/distiller/schedule.html#quantization-aware-training">quantization-aware training</a> and <a href="https://nervanasystems.github.io/distiller/schedule.html#post-training-quantization">post-training quantization</a>). This mechanism works at the PyTorch "Module" level. By "Module" we refer to any sub-class of the <code>torch.nn.Module</code> <a href="https://pytorch.org/docs/stable/nn.html#module">class</a>. The Distiller <a href="https://nervanasystems.github.io/distiller/design.html#quantization">Quantizer</a> can detect modules, and replace them with other modules.</p>
+<p>However, it is not a requirement in PyTorch that all operations be defined as modules. Operations are often executed via direct overloaded tensor operator (<code>+</code>, <code>-</code>, etc.) and functions under the <code>torch</code> namespace (e.g. <code>torch.cat()</code>). There is also the <code>torch.nn.functional</code> namespace, which provides functional equivalents to modules provided in <code>torch.nn</code>. When an operation does not maintain any state, even if it has a dedicated <code>nn.Module</code>, it'll often be invoked via its functional counterpart. For example - calling <code>nn.functional.relu()</code> instead of creating an instance of <code>nn.ReLU</code> and invoking that. Such non-module operations are called directly from the module's <code>forward</code> function. There are ways to <strong>discover</strong> these operations up-front, which are <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/summary_graph.py">used in Distiller</a> for different purposes. Even so, we cannot <strong>replace</strong> these operations without resorting to rather "dirty" Python tricks, which we would rather not do for numerous reasons.</p>
+<p>In addition, there might be cases where the same module instance is re-used multiple times in the <code>forward</code> function. This is also a problem for Distiller. There are several flows that will not work as expected if each call to an operation is not "tied" to a dedicated module instance. For example:</p>
+<ul>
+<li>When collecting statistics, each invocation of a re-used it will overwrite the statistics collected for the previous invocation. We end up with statistics missing for all invocations except the last one.</li>
+<li><a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md#net-aware-quantization">"Net-aware" quantization</a> relies on a 1:1 mapping from each operation executed in the model to a module which invoked it. With re-used modules, this mapping is not 1:1 anymore.</li>
+</ul>
+<p>Hence, to make sure all supported operations in a model are properly quantized by Distiller, it might be necessary to modify the model code before passing it to the quantizer. Note that the exact set of supported operations might vary between the different <a href="https://nervanasystems.github.io/distiller/algo_quantization.html">available quantizers</a>.</p>
+<h2 id="model-preparation-to-do-list">Model Preparation To-Do List</h2>
+<p>The steps required to prepare a model for quantization can be summarized as follows:</p>
+<ol>
+<li>Replace direct tensor operations with modules</li>
+<li>Replace re-used modules with dedicated instances</li>
+<li>Replace <code>torch.nn.functional</code> calls with equivalent modules</li>
+<li>Special cases - replace modules that aren't quantize-able with quantize-able variants</li>
+</ol>
+<p>In the next section we'll see an example of the items 1-3 in this list.</p>
+<p>As for "special cases", at the moment the only such case is LSTM. See the section after the example for details.</p>
+<h2 id="model-preparation-example">Model Preparation Example</h2>
+<p>We'll using the following simple module as an example. This module is loosely based on the ResNet implementation in <a href="https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py">torchvision</a>, with some changes that don't make much sense and are meant to demonstrate the different modifications that might be required.</p>
+<pre><code class="python">import torch.nn as nn
+import torch.nn.functional as F
+
+class BasicModule(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel_size):
+        super(BasicModule, self).__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, kernel_size)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(out_ch, out_ch, kernel_size)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        # (1) Overloaded tensor addition operation
+        # Alternatively, could be called via a tensor function: skip_1.add_(identity)
+        out += identity
+        # (2) Relu module re-used
+        out = self.relu(out)
+
+        # (3) Using operation from 'torch' namespace
+        out = torch.cat([identity, out], dim=1)
+        # (4) Using function from torch.nn.functional
+        out = F.sigmoid(out)
+
+        return out
+</code></pre>
+
+<h3 id="replace-direct-tensor-operations-with-modules">Replace direct tensor operations with modules</h3>
+<p>The addition (1) and concatenation (3) operations in the <code>forward</code> function are examples of direct tensor operations. These operations do not have equivalent modules defined in <code>torch.nn.Module</code>. Hence, if we want to quantize these operations, we must implement modules that will call them. In Distiller we've implemented a few simple wrapper modules for common operations. These are defined in the <code>distiller.modules</code> namespace. Specifically, the addition operation should be replaced with the <code>EltWiseAdd</code> module, and the concatenation operation with the <code>Concat</code> module. Check out the code <a href="https://github.com/NervanaSystems/distiller/tree/master/distiller/modules">here</a> to see the available modules.</p>
+<h3 id="replace-re-used-modules-with-dedicated-instances">Replace re-used modules with dedicated instances</h3>
+<p>The relu operation above is called via a module, but the same instance is used for both calls (2). We need to create a second instance of <code>nn.ReLU</code> in <code>__init__</code> and use that for the second call during <code>forward</code>.</p>
+<h3 id="replace-torchnnfunctional-calls-with-equivalent-modules">Replace <code>torch.nn.functional</code> calls with equivalent modules</h3>
+<p>The sigmoid (4) operation is invoked using the functional interface. Luckily, operations in <code>torch.nn.functional</code> have equivalent modules, so se can just use those. In this case we need to create an instance of <code>torch.nn.Sigmoid</code>.</p>
+<h3 id="putting-it-all-together">Putting it all together</h3>
+<p>After making all of the changes detailed above, we end up with:</p>
+<pre><code class="python">import torch.nn as nn
+import torch.nn.functional as F
+import distiller.modules
+
+class BasicModule(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel_size):
+        super(BasicModule, self).__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, kernel_size)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(out_ch, out_ch, kernel_size)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+
+        # Fixes start here
+        # (1) Replace '+=' with an inplace module
+        self.add = distiller.modules.EltWiseAdd(inplace=True)
+        # (2) Separate instance for each relu call
+        self.relu2 = nn.ReLU()
+        # (3) Dedicated module instead of tensor op
+        self.concat = distiller.modules.Concat(dim=1)
+        # (4) Dedicated module instead of functional call
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu1(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        out = self.add(out, identity)
+        out = self.relu(out)
+        out = self.concat(identity, out)
+        out = self.sigmoid(out)
+
+        return out
+</code></pre>
+
+<h2 id="special-case-lstm-a-compound-module">Special Case: LSTM (a "compound" module)</h2>
+<h3 id="background_1">Background</h3>
+<p>LSTMs present a special case. An LSTM block is comprised of building blocks, such as fully-connected layers and sigmoid/tanh non-linearities, all of which have dedicated modules in <code>torch.nn</code>. However, the LSTM implementation provided in PyTorch does not use these building blocks. For optimization purposes, all of the internal operations are implemented at the C++ level. The only part of the model exposed at the Python level are the parameters of the fully-connected layers. Hence, all we can do with the PyTorch LSTM module is to quantize the inputs/outputs of the entire block, and to quantize the FC layers parameters. We cannot quantize the internal stages of the block at all. In addition to just quantizing the internal stages, we'd also like the option to control the quantization parameters of each of the internal stage separately.</p>
+<h3 id="what-to-do">What to do</h3>
+<p>Distiller provides a "modular" implementation of LSTM, comprised entirely of operations defined at the Python level. We provide an implementation of <code>DistillerLSTM</code> and <code>DistillerLSTMCell</code>, paralleling <code>LSTM</code> and <code>LSTMCell</code> provided by PyTorch. See the implementation <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/modules/rnn.py">here</a>.</p>
+<p>A function to convert all LSTM instances in the model to the Distiller variant is also provided:</p>
+<pre><code class="python">model = distiller.modules.convert_model_to_distiller_lstm(model)
+</code></pre>
+
+<p>To see an example of this conversion, and of mixed-precision quantization within an LSTM block, check out our tutorial on word-language model quantization <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/word_language_model/quantize_lstm.ipynb">here</a>.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="pruning.html" class="btn btn-neutral float-right" title="Pruning">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="schedule.html" class="btn btn-neutral" title="Compression Scheduling"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="schedule.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="pruning.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>

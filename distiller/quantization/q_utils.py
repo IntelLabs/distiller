@@ -20,7 +20,7 @@ import torch
 
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
-    out = torch.tensor(sat_val)
+    out = torch.tensor(sat_val) if is_scalar else sat_val.clone().detach()
     if not out.is_floating_point():
         out = out.to(torch.float32)
     if out.dim() == 0:
@@ -111,30 +111,10 @@ def linear_dequantize(input, scale, zero_point, inplace=False):
     return (input + zero_point) / scale
 
 
-def get_tensor_min(t, per_dim=None):
-    if per_dim is None:
-        return t.min()
-    if per_dim > t.dim():
-        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
-    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
-    tv = t.view(*view_dims)
-    return tv.min(dim=-1)[0]
-
-
-def get_tensor_max(t, per_dim=None):
-    if per_dim is None:
-        return t.max()
-    if per_dim > t.dim():
-        raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
-    view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
-    tv = t.view(*view_dims)
-    return tv.max(dim=-1)[0]
-
-
 def get_tensor_min_max(t, per_dim=None):
     if per_dim is None:
         return t.min(), t.max()
-    if per_dim > t.dim():
+    if per_dim >= t.dim():
         raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
     view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
     tv = t.view(*view_dims)
@@ -154,6 +134,46 @@ def get_tensor_max_abs(t, per_dim=None):
 def get_tensor_avg_max_abs(t, across_dim=None):
     avg_min, avg_max = get_tensor_avg_min_max(t, across_dim=across_dim)
     return torch.max(avg_min.abs_(), avg_max.abs_())
+
+
+def get_tensor_mean_n_stds_min_max(t, dim=None, n_stds=1):
+    if dim is not None:
+        raise NotImplementedError('Setting dim != None not supported yet')
+    if n_stds <= 0:
+        raise ValueError('n_stds must be > 0, got {}'.format(n_stds))
+    mean = t.mean()
+    std = t.std()
+    min_val, max_val = get_tensor_min_max(t)
+    min_val = torch.max(min_val, mean - n_stds * std)
+    max_val = torch.min(max_val, mean + n_stds * std)
+    return min_val, max_val
+
+
+def get_tensor_mean_n_stds_max_abs(t, dim=None, n_stds=1):
+    min_val, max_val = get_tensor_mean_n_stds_min_max(t, dim, n_stds)
+    return torch.max(min_val.abs_(), max_val.abs_())
+
+
+def get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=False):
+    shift_bits = torch.log2((2 ** mult_bits - 1) / fp32_scale).floor()
+    if limit:
+        shift_bits = min(mult_bits, shift_bits)
+    return shift_bits
+
+
+def get_scale_approximation_mult(fp32_scale, shift_bits):
+    return (fp32_scale * (2 ** shift_bits)).floor()
+
+
+def get_scale_approximation_params(fp32_scale, mult_bits, limit=False):
+    shift_bits = get_scale_approximation_shift_bits(fp32_scale, mult_bits, limit=limit)
+    multiplier = get_scale_approximation_mult(fp32_scale, shift_bits)
+    return multiplier, shift_bits
+
+
+def approx_scale_as_mult_and_shift(fp32_scale, mult_bits, limit=False):
+    multiplier, shift_bits = get_scale_approximation_params(fp32_scale, mult_bits, limit=limit)
+    return multiplier / (2 ** shift_bits)
 
 
 class AciqClipper:

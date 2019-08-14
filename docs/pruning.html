@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Pruning - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Pruning";
+    var mkdocs_page_input_path = "pruning.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class=" current">
+                    
+    <a class="current" href="pruning.html">Pruning</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#pruning">Pruning</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#lets-define-sparsity">Let's define sparsity</a></li>
+        
+            <li><a class="toctree-l4" href="#what-is-weights-pruning">What is weights pruning?</a></li>
+        
+            <li><a class="toctree-l4" href="#pruning-schedule">Pruning schedule</a></li>
+        
+            <li><a class="toctree-l4" href="#pruning-granularity">Pruning granularity</a></li>
+        
+            <li><a class="toctree-l4" href="#sensitivity-analysis">Sensitivity analysis</a></li>
+        
+            <li><a class="toctree-l4" href="#references">References</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Compressing Models &raquo;</li>
+        
+      
+    
+    <li>Pruning</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="pruning">Pruning</h1>
+<p>A common methodology for inducing sparsity in weights and activations is called <em>pruning</em>.  Pruning is the application of a binary criteria to decide which weights to prune: weights which match the pruning criteria are assigned a value of zero.  Pruned elements are "trimmed" from the model: we zero their values and also make sure they don't take part in the back-propagation process.</p>
+<p>We can prune weights, biases, and activations.  Biases are few and their contribution to a layer's output is relatively large, so there is little incentive to prune them.  We usually see sparse activations following a ReLU layer, because ReLU quenches negative activations to exact zero (\(ReLU(x): max(0,x)\)).   Sparsity in weights is less common, as weights tend to be very small, but are often not exact zeros.
+<br></p>
+<h2 id="lets-define-sparsity">Let's define sparsity</h2>
+<p>Sparsity is a a measure of how many elements in a tensor are exact zeros, relative to the tensor size.  A tensor is considered sparse if "most" of its elements are zero.  How much is "most", is not strictly defined, but when you see a sparse tensor you know it ;-)<br>
+The <a href="https://en.wikipedia.org/wiki/Lp_space#When_p_=_0">\(l_0\)-"norm" function</a> measures how many zero-elements are in a tensor <em>x</em>:
+\[\lVert x \rVert_0\;=\;|x_1|^0 + |x_2|^0 + ... + |x_n|^0 \]
+In other words, an element contributes either a value of 1 or 0 to \(l_0\).  Anything but an exact zero contributes a value of 1 - that's pretty cool.<br />
+Sometimes it helps to think about density, the number of non-zero elements (NNZ) and sparsity's complement:
+\[
+density = 1 - sparsity
+\]
+You can use <code>distiller.sparsity</code> and <code>distiller.density</code> to query a PyTorch tensor's sparsity and density.</p>
+<h2 id="what-is-weights-pruning">What is weights pruning?</h2>
+<p>Weights pruning, or model pruning, is a set of methods to increase the sparsity (amount of zero-valued elements in a tensor) of a network's weights.  In general, the term 'parameters' refers to both weights and bias tensors of a model.  Biases are rarely, if ever, pruned because there are very few bias elements compared to weights elements, and it is just not worth the trouble.
+<br><br>
+Pruning requires a criteria for choosing which elements to prune - this is called the <em>pruning criteria</em>.  The most common pruning criteria is the absolute value of each element: the element's absolute value is compared to some threshold value, and if it is below the threshold the element is set to zero (i.e. pruned) .  This is implemented by the <code>distiller.MagnitudeParameterPruner</code> class.  The idea behind this method, is that weights with small \(l_1\)-norms (absolute value) contribute little to the final result (low saliency), so they are less important and can be removed.
+<br>
+A related idea motivating pruning, is that models are over-parametrized and contain redundant logic and features.  Therefore, some of these redundancies can be removed by setting their weights to zero.
+<br>
+And yet another way to think of pruning is to phrase it as a search for a set of weights with as many zeros as possible, which still produces acceptable inference accuracies compared to the dense-model (non-pruned model).  Another way to look at it, is to imagine that because of the very high-dimensionality of the parameter space, the immediate space around the dense-model's solution likely contains some sparse solutions, and we want to use find these sparse solutions. <br />
+<br></p>
+<h2 id="pruning-schedule">Pruning schedule</h2>
+<p>The most straight-forward to prune is to take a trained model and prune it once; also called <em>one-shot pruning</em>.  In <a href="#han-et-al-2015">Learning both Weights and Connections for Efficient Neural Networks</a> Song Han et. al show that this is surprisingly effective, but also leaves a lot of potential sparsity untapped.  The surprise is what they call the "free lunch" effect: <em>"reducing 2x the connections without losing accuracy even without retraining."</em><br>
+However, they also note that when employing a pruning-followed-by-retraining regimen, they can achieve much better results (higher sparsity at no accuracy loss).  This is called <em>iterative pruning</em>, and the retraining that follows pruning is often referred to as <em>fine-tuning</em>. How the pruning criteria changes between iterations, how many iterations we perform and how often, and which tensors are pruned - this is collectively called the <em>pruning schedule</em>.
+<br>
+We can think of iterative pruning as repeatedly learning which weights are important, removing the least important ones based on some importance criteria, and then retraining the model to let it "recover" from the pruning by adjusting the remaining weights.  At each iteration, we prune more weights.<br>
+The decision of when to stop pruning is also expressed in the schedule, and it depends on the pruning algorithm.  For example, if we are trying to achieve a specific sparsity level, then we stop when the pruning achieves that level.  And if we are pruning weights structures in order to reduce the required compute budget, then we stop the pruning when this compute reduction is achieved.
+<br><br>
+Distiller supports expressing the pruning schedule as a YAML file (which is then executed by an instance of a PruningScheduler).</p>
+<h2 id="pruning-granularity">Pruning granularity</h2>
+<p>Pruning individual weight elements is called <em>element-wise pruning</em>, and it is also sometimes referred to as <em>fine-grained</em> pruning.<br>
+<em>Coarse-grained pruning</em> - also referred to as <em>structured pruning</em>, <em>group pruning</em>, or <em>block pruning</em> - is pruning entire groups of elements which have some significance.  Groups come in various shapes and sizes, but an easy to visualize group-pruning is filter-pruning, in which entire filters are removed.</p>
+<h2 id="sensitivity-analysis">Sensitivity analysis</h2>
+<p>The hard part about inducing sparsity via pruning is determining what threshold, or sparsity level, to use for each layer's tensors.  Sensitivity analysis is a method that tries to help us rank the tensors by their sensitivity to pruning.  <br><br>
+The idea is to set the pruning level (percentage) of a specific layer, and then to prune once, run an evaluation on the test dataset and record the accuracy score.  We do this for all of the parameterized layers, and for each layer we examine several sparsity levels.  This should teach us about the "sensitivity" of each of the layers to pruning.
+<br>
+The evaluated model should be trained to maximum accuracy before running the analysis, because we aim to understand the behavior of the trained model's performance in relation to pruning of a specific weights tensor.
+<br>
+Much as we can prune structures, we can also perform sensitivity analysis on structures.  Distiller implements element-wise pruning sensitivity analysis using the \(l_1\)-norm of individual elements; and filter-wise pruning sensitivity analysis using the mean \(l_1\)-norm of filters.
+<br></p>
+<p>The authors of <a href="#hao-et-al-2017">Pruning Filters for Efficient ConvNets</a> describe how they do sensitivity analysis:</p>
+<blockquote>
+<p>"To understand the sensitivity of each layer, we prune each layer independently and evaluate the resulting pruned network’s accuracy on the validation set. Figure 2(b) shows that layers that maintain their accuracy as filters are pruned away correspond to layers with larger slopes in Figure 2(a). On the contrary, layers with relatively flat slopes are more sensitive to pruning. We empirically determine the number of filters to prune for each layer based on their sensitivity to pruning. For deep networks such as VGG-16 or ResNets, we observe that layers in the same stage (with the same feature map size) have a similar sensitivity to pruning. To avoid introducing layer-wise meta-parameters, we use the same pruning ratio for all layers in the same stage. For layers that are sensitive to pruning, we prune a smaller percentage of these layers or completely skip pruning them."</p>
+</blockquote>
+<p>The diagram below shows the results of running an element-wise sensitivity analysis on Alexnet, using Distillers's <code>perform_sensitivity_analysis</code> utility function.
+<br>
+As reported by Song Han, and exhibited in the diagram, in Alexnet the feature detecting layers (convolution layers) are more sensitive to pruning, and their sensitivity drops, the deeper they are.  The fully-connected layers are much less sensitive, which is great, because that's where most of the parameters are.</p>
+<p><center><img alt="Alexnet sensitivity graph" src="imgs/alexnet_top5_sensitivity.png" /></center><br></p>
+<h2 id="references">References</h2>
+<p><div id="han-et-al-2015"></div> <strong>Song Han, Jeff Pool, John Tran, William J. Dally</strong>.
+    <a href="https://arxiv.org/abs/1506.02626"><em>Learning both Weights and Connections for Efficient Neural Networks</em></a>,
+     arXiv:1607.04381v2,
+    2015.</p>
+<div id="hao-et-al-2017"></div>
+
+<p><strong>Hao Li, Asim Kadav, Igor Durdanovic, Hanan Samet, Hans Peter Graf</strong>.
+    <a href="https://arxiv.org/abs/1608.08710"><em>Pruning Filters for Efficient ConvNets</em></a>,
+     arXiv:1608.08710v3,
+    2017.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="regularization.html" class="btn btn-neutral float-right" title="Regularization">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="prepare_model_quant.html" class="btn btn-neutral" title="Preparing a Model for Quantization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="prepare_model_quant.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="regularization.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>

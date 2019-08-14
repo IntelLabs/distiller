@@ -15,16 +15,8 @@ import torch.onnx
 from collections import OrderedDict
 import data
 import model
-
-# Distiller imports
-import os
-import sys
-script_dir = os.path.dirname(__file__)
-module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 import distiller
-import apputils
+import distiller.apputils as apputils
 from distiller.data_loggers import TensorBoardLogger, PythonLogger
 
 
@@ -76,7 +68,7 @@ parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='
 parser.add_argument('--momentum', default=0., type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=0., type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+                    metavar='W', help='weight decay (default: 0)')
 
 args = parser.parse_args()
 
@@ -105,8 +97,8 @@ def draw_lang_model_to_file(model, png_fname, dataset):
         else:
             msglogger.info("Unsupported dataset (%s) - aborting draw operation" % dataset)
             return
-        g = apputils.SummaryGraph(model, dummy_input)
-        apputils.draw_model_to_file(g, png_fname)
+        g = distiller.SummaryGraph(model, dummy_input)
+        distiller.draw_model_to_file(g, png_fname)
         msglogger.info("Network PNG image generation completed")
 
     except FileNotFoundError as e:
@@ -265,7 +257,7 @@ def train(epoch, optimizer, compression_scheduler=None):
                 elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
-            stats = ('Peformance/Training/',
+            stats = ('Performance/Training/',
                 OrderedDict([
                     ('Loss', cur_loss),
                     ('Perplexity', math.exp(cur_loss)),
@@ -279,7 +271,7 @@ def train(epoch, optimizer, compression_scheduler=None):
 
 def export_onnx(path, batch_size, seq_len):
     msglogger.info('The model is also exported in ONNX format at {}'.
-          format(os.path.realpath(args.onnx_export)))
+                   format(os.path.realpath(args.onnx_export)))
     model.eval()
     dummy_input = torch.LongTensor(seq_len * batch_size).zero_().view(-1, batch_size).to(device)
     hidden = model.init_hidden(batch_size)
@@ -305,7 +297,7 @@ if args.summary:
             bottomk, _ = torch.topk(param.abs().view(-1), int(percentile * param.numel()),
                                     largest=False, sorted=True)
             threshold = bottomk.data[-1]
-            msglogger.info("parameter %s: q = %.2f" %(name, threshold))
+            msglogger.info("parameter %s: q = %.2f" % (name, threshold))
     else:
         distiller.model_summary(model, which_summary, 'wikitext2')
     exit(0)
@@ -343,7 +335,7 @@ try:
 
         distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
 
-        stats = ('Peformance/Validation/',
+        stats = ('Performance/Validation/',
             OrderedDict([
                 ('Loss', val_loss),
                 ('Perplexity', math.exp(val_loss))]))

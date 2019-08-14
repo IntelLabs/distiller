@@ -25,16 +25,15 @@ Note that not all loggers implement all logging methods.
 """
 
 import torch
-import numpy as np
 import tabulate
 import distiller
 from distiller.utils import density, sparsity, sparsity_2D, size_to_str, to_np, norm_filters
 # TensorBoard logger
 from .tbbackend import TBBackend
-# Visdom logger
-from torchnet.logger import VisdomPlotLogger, VisdomLogger
 import csv
 import logging
+from contextlib import ExitStack
+import os
 msglogger = logging.getLogger()
 
 __all__ = ['PythonLogger', 'TensorBoardLogger', 'CsvLogger']
@@ -50,16 +49,19 @@ class DataLogger(object):
     def __init__(self):
         pass
 
-    def log_training_progress(self, model, epoch, i, set_size, batch_time, data_time, classerr, losses, print_freq, collectors):
-        raise NotImplementedError
+    def log_training_progress(self, stats_dict, epoch, completed, total, freq):
+        pass
 
     def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
-        raise NotImplementedError
+        pass
 
     def log_weights_sparsity(self, model, epoch):
-        raise NotImplementedError
+        pass
 
     def log_weights_distribution(self, named_params, steps_completed):
+        pass
+
+    def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
         pass
 
 
@@ -92,6 +94,32 @@ class PythonLogger(DataLogger):
         t, total = distiller.weights_sparsity_tbl_summary(model, return_total_sparsity=True)
         msglogger.info("\nParameters:\n" + str(t))
         msglogger.info('Total sparsity: {:0.2f}\n'.format(total))
+
+    def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
+        """Logs values of model buffers.
+
+        Notes:
+            1. Each buffer provided in 'buffer_names' is displayed in a separate table.
+            2. Within each table, each value is displayed in a separate column.
+        """
+        datas = {name: [] for name in buffer_names}
+        maxlens = {name: 0 for name in buffer_names}
+        for n, m in model.named_modules():
+            for buffer_name in buffer_names:
+                try:
+                    p = getattr(m, buffer_name)
+                except AttributeError:
+                    continue
+                data = datas[buffer_name]
+                values = p if isinstance(p, (list, torch.nn.ParameterList)) else p.view(-1).tolist()
+                data.append([distiller.normalize_module_name(n) + '.' + buffer_name, *values])
+                maxlens[buffer_name] = max(maxlens[buffer_name], len(values))
+
+        for name in buffer_names:
+            if datas[name]:
+                headers = ['Layer'] + ['Val_' + str(i) for i in range(maxlens[name])]
+                t = tabulate.tabulate(datas[name], headers=headers, tablefmt='psql', floatfmt='.4f')
+                msglogger.info('\n' + name.upper() + ': (Epoch {0}, Step {1})\n'.format(epoch, completed) + t)
 
 
 class TensorBoardLogger(DataLogger):
@@ -161,14 +189,55 @@ class TensorBoardLogger(DataLogger):
                 self.tblogger.histogram_summary(tag+'/grad', to_np(value.grad), steps_completed)
         self.tblogger.sync_to_file()
 
+    def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
+        """Logs values of model buffers.
+
+        Notes:
+            1. Buffers are logged separately per-layer (i.e. module) within model
+            2. All values in a single buffer are logged such that they will be displayed on the same graph in
+               TensorBoard
+            3. Similarly, if multiple buffers are provided in buffer_names, all are presented on the same graph.
+               If this is un-desirable, call the function separately for each buffer
+            4. USE WITH CAUTION: While sometimes desirable, displaying multiple distinct values in a single
+               graph isn't well supported in TensorBoard. It is achieved using a work-around, which slows
+               down TensorBoard loading time considerably as the number of distinct values increases.
+               Therefore, while not limited, this function is only meant for use with a very limited number of
+               buffers and/or values, e.g. 2-5.
+
+        """
+        for module_name, module in model.named_modules():
+            if distiller.has_children(module):
+                continue
+
+            sd = module.state_dict()
+            values = []
+            for buf_name in buffer_names:
+                try:
+                    values += sd[buf_name].view(-1).tolist()
+                except KeyError:
+                    continue
+
+            if values:
+                tag = '/'.join([tag_prefix, module_name])
+                self.tblogger.list_summary(tag, values, total * epoch + completed, len(values) > 1)
+        self.tblogger.sync_to_file()
+
 
 class CsvLogger(DataLogger):
-    def __init__(self, fname):
+    def __init__(self, fname_prefix='', logdir=''):
         super(CsvLogger, self).__init__()
-        self.fname = fname
+        self.logdir = logdir
+        self.fname_prefix = fname_prefix
+
+    def get_fname(self, postfix):
+        fname = postfix + '.csv'
+        if self.fname_prefix:
+            fname = self.fname_prefix + '_' + fname
+        return os.path.join(self.logdir, fname)
 
     def log_weights_sparsity(self, model, epoch):
-        with open(self.fname, 'w') as csv_file:
+        fname = self.get_fname('weights_sparsity')
+        with open(fname, 'w') as csv_file:
             params_size = 0
             sparse_params_size = 0
 
@@ -185,3 +254,39 @@ class CsvLogger(DataLogger):
                                      torch.numel(param),
                                      int(_density * param.numel()),
                                      (1-_density)*100])
+
+    def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
+        """Logs values of model buffers.
+
+        Notes:
+            1. Each buffer provided is logged in a separate CSV file
+            2. Each CSV file is continuously updated during the run.
+            3. In each call, a line is appended for each layer (i.e. module) containing the named buffers.
+        """
+        with ExitStack() as stack:
+            files = {}
+            writers = {}
+            for buf_name in buffer_names:
+                fname = self.get_fname(buf_name)
+                new = not os.path.isfile(fname)
+                files[buf_name] = stack.enter_context(open(fname, 'a'))
+                writer = csv.writer(files[buf_name])
+                if new:
+                    writer.writerow(['Layer', 'Epoch', 'Step', 'Total', 'Values'])
+                writers[buf_name] = writer
+
+            for n, m in model.named_modules():
+                for buffer_name in buffer_names:
+                    try:
+                        p = getattr(m, buffer_name)
+                    except AttributeError:
+                        continue
+                    writer = writers[buffer_name]
+                    if isinstance(p, (list, torch.nn.ParameterList)):
+                        values = []
+                        for v in p:
+                            values += v.view(-1).tolist()
+                    else:
+                        values = p.view(-1).tolist()
+                    writer.writerow([distiller.normalize_module_name(n) + '.' + buffer_name,
+                                     epoch, completed, int(total)] + values)

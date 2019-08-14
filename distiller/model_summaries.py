@@ -20,35 +20,41 @@
     - optimizer state
     - model details
 """
+import os
+import pydot
 from functools import partial
 import pandas as pd
 from tabulate import tabulate
 import logging
 import torch
-from torch.autograd import Variable
 import torch.optim
 import distiller
+from .summary_graph import SummaryGraph
 from .data_loggers import PythonLogger, CsvLogger
 
 msglogger = logging.getLogger()
 
 __all__ = ['model_summary',
            'weights_sparsity_summary', 'weights_sparsity_tbl_summary',
-           'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary']
+           'model_performance_summary', 'model_performance_tbl_summary', 'masks_sparsity_tbl_summary',
+           'attributes_summary', 'attributes_summary_tbl', 'connectivity_summary',
+           'connectivity_summary_verbose', 'connectivity_tbl_summary', 'create_png', 'create_pydot_graph',
+           'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
-def model_summary(model, what, dataset=None):
-    if what == 'sparsity':
+def model_summary(model, what, dataset=None, logdir=''):
+    if what.startswith('png'):
+        png_fname = os.path.join(logdir, 'model.png')
+        draw_img_classifier_to_file(model, png_fname, dataset, what == 'png_w_params')
+    elif what == 'sparsity':
         pylogger = PythonLogger(msglogger)
-        csvlogger = CsvLogger('weights.csv')
+        csvlogger = CsvLogger(logdir=logdir)
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
-        if dataset == 'imagenet':
-            dummy_input = Variable(torch.randn(1, 3, 224, 224))
-        elif dataset == 'cifar10':
-            dummy_input = Variable(torch.randn(1, 3, 32, 32))
-        else:
-            print("Unsupported dataset (%s) - aborting compute operation" % dataset)
+        try:
+            dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+        except ValueError as e:
+            print(e)
             return
         df = model_performance_summary(model, dummy_input, 1)
         t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
@@ -160,8 +166,7 @@ def conv_visitor(self, input, output, df, model, memo):
     assert isinstance(self, torch.nn.Conv2d)
     if self in memo:
         return
-
-    weights_vol = self.out_channels * self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+    weights_vol = distiller.volume(self.weight)
 
     # Multiply-accumulate operations: MACs = volume(OFM) * (#IFM * K^2) / #Groups
     # Bias is ignored
@@ -178,7 +183,7 @@ def fc_visitor(self, input, output, df, model, memo):
 
     # Multiply-accumulate operations: MACs = #IFM * #OFM
     # Bias is ignored
-    weights_vol = macs = self.in_features * self.out_features
+    weights_vol = macs = distiller.volume(self.weight)
     module_visitor(self, input, output, df, model, weights_vol, macs)
 
 
@@ -226,3 +231,258 @@ def model_performance_tbl_summary(model, dummy_input, batch_size):
     df = model_performance_summary(model, dummy_input, batch_size)
     t = tabulate(df, headers='keys', tablefmt='psql', floatfmt=".5f")
     return t
+
+
+def attributes_summary(sgraph, ignore_attrs):
+    """Generate a summary of a graph's attributes.
+
+    Args:
+        sgraph: a SummaryGraph instance
+        ignore_attrs: a list of attributes to ignore in the output datafraem
+
+    Output:
+        A Pandas dataframe
+    """
+    def pretty_val(val):
+        if type(val) == int:
+            return format(val, ",d")
+        return str(val)
+
+    def pretty_attrs(attrs, ignore_attrs):
+        ret = ''
+        for key, val in attrs.items():
+            if key in ignore_attrs:
+                continue
+            ret += key + ': ' + pretty_val(val) + '\n'
+        return ret
+
+    df = pd.DataFrame(columns=['Name', 'Type', 'Attributes'])
+    pd.set_option('precision', 5)
+    for i, op in enumerate(sgraph.ops.values()):
+        df.loc[i] = [op['name'], op['type'], pretty_attrs(op['attrs'], ignore_attrs)]
+    return df
+
+
+def attributes_summary_tbl(sgraph, ignore_attrs):
+    df = attributes_summary(sgraph, ignore_attrs)
+    return tabulate(df, headers='keys', tablefmt='psql')
+
+
+def connectivity_summary(sgraph):
+    """Generate a summary of each node's connectivity.
+
+    Args:
+        sgraph: a SummaryGraph instance
+    """
+    df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
+    pd.set_option('precision', 5)
+    for i, op in enumerate(sgraph.ops.values()):
+        df.loc[i] = [op['name'], op['type'], op['inputs'], op['outputs']]
+    return df
+
+
+def connectivity_summary_verbose(sgraph):
+    """Generate a summary of each node's connectivity, with details
+    about the parameters.
+
+    Args:
+        sgraph: a SummaryGraph instance
+    """
+    def format_list(l):
+        ret = ''
+        for i in l: ret += str(i) + '\n'
+        return ret[:-1]
+
+    df = pd.DataFrame(columns=['Name', 'Type', 'Inputs', 'Outputs'])
+    pd.set_option('precision', 5)
+    for i, op in enumerate(sgraph.ops.values()):
+        outputs = []
+        for blob in op['outputs']:
+            if blob in sgraph.params:
+                outputs.append(blob + ": " + str(sgraph.params[blob]['shape']))
+        inputs = []
+        for blob in op['inputs']:
+            if blob in sgraph.params:
+                inputs.append(blob + ": " + str(sgraph.params[blob]['shape']))
+        inputs = format_list(inputs)
+        outputs = format_list(outputs)
+        df.loc[i] = [op['name'], op['type'], inputs, outputs]
+
+    return df
+
+
+def connectivity_tbl_summary(sgraph, verbose=False):
+    if verbose:
+        df = connectivity_summary_verbose(sgraph)
+    else:
+        df = connectivity_summary(sgraph)
+    return tabulate(df, headers='keys', tablefmt='psql')
+
+
+def create_pydot_graph(op_nodes_desc, data_nodes, param_nodes, edges, rankdir='TB', styles=None):
+    """Low-level API to create a PyDot graph (dot formatted).
+    """
+    pydot_graph = pydot.Dot('Net', graph_type='digraph', rankdir=rankdir)
+
+    op_node_style = {'shape': 'record',
+                     'fillcolor': '#6495ED',
+                     'style': 'rounded, filled'}
+
+    for op_node in op_nodes_desc:
+        style = op_node_style
+        # Check if we should override the style of this node.
+        if styles is not None and op_node[0] in styles:
+            style = styles[op_node[0]]
+        pydot_graph.add_node(pydot.Node(op_node[0], **style, label="\n".join(op_node)))
+
+    for data_node in data_nodes:
+        pydot_graph.add_node(pydot.Node(data_node[0], label="\n".join(data_node[1:])))
+
+    node_style = {'shape': 'oval',
+                  'fillcolor': 'gray',
+                  'style': 'rounded, filled'}
+
+    if param_nodes is not None:
+        for param_node in param_nodes:
+            pydot_graph.add_node(pydot.Node(param_node[0], **node_style, label="\n".join(param_node[1:])))
+
+    for edge in edges:
+        pydot_graph.add_edge(pydot.Edge(edge[0], edge[1]))
+
+    return pydot_graph
+
+
+def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
+    """Create a PNG object containing a graphiz-dot graph of the network,
+    as represented by SummaryGraph 'sgraph'.
+
+    Args:
+        sgraph (SummaryGraph): the SummaryGraph instance to draw.
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
+    """
+
+    def annotate_op_node(op):
+        if op['type'] == 'Conv':
+            return ["sh={}".format(distiller.size2str(op['attrs']['kernel_shape'])),
+                    "g={}".format(str(op['attrs']['group']))]
+        return ''   
+
+    op_nodes = [op['name'] for op in sgraph.ops.values()]
+    data_nodes = []
+    param_nodes = []
+    for id, param in sgraph.params.items():
+        n_data = (id, str(distiller.volume(param['shape'])), str(param['shape']))
+        if data_node_has_parent(sgraph, id):
+            data_nodes.append(n_data)
+        else:
+            param_nodes.append(n_data)
+    edges = sgraph.edges
+
+    if not display_param_nodes:
+        # Use only the edges that don't have a parameter source
+        non_param_ids = op_nodes + [dn[0] for dn in data_nodes]
+        edges = [edge for edge in sgraph.edges if edge.src in non_param_ids]
+        param_nodes = None
+
+    op_nodes_desc = [(op['name'], op['type'], *annotate_op_node(op)) for op in sgraph.ops.values()]
+    pydot_graph = create_pydot_graph(op_nodes_desc, data_nodes, param_nodes, edges, rankdir, styles)
+    png = pydot_graph.create_png()
+    return png
+
+
+def draw_model_to_file(sgraph, png_fname, display_param_nodes=False, rankdir='TB', styles=None):
+    """Create a PNG file, containing a graphiz-dot graph of the netowrk represented
+    by SummaryGraph 'sgraph'
+
+    Args:
+        sgraph (SummaryGraph): the SummaryGraph instance to draw.
+        png_fname (string): PNG file name
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
+        """
+    png = create_png(sgraph, display_param_nodes=display_param_nodes)
+    with open(png_fname, 'wb') as fid:
+        fid.write(png)
+
+
+def draw_img_classifier_to_file(model, png_fname, dataset=None, display_param_nodes=False,
+                                rankdir='TB', styles=None, input_shape=None):
+    """Draw a PyTorch image classifier to a PNG file.  This a helper function that
+    simplifies the interface of draw_model_to_file().
+
+    Args:
+        model: PyTorch model instance
+        png_fname (string): PNG file name
+        dataset (string): one of 'imagenet' or 'cifar10'.  This is required in order to
+                          create a dummy input of the correct shape.
+        display_param_nodes (boolean): if True, draw the parameter nodes
+        rankdir: diagram direction.  'TB'/'BT' is Top-to-Bottom/Bottom-to-Top
+                 'LR'/'R/L' is Left-to-Rt/Rt-to-Left
+        styles: a dictionary of styles.  Key is module name.  Value is
+                a legal pydot style dictionary.  For example:
+                styles['conv1'] = {'shape': 'oval',
+                                   'fillcolor': 'gray',
+                                   'style': 'rounded, filled'}
+        input_shape (tuple): List of integers representing the input shape.
+                             Used only if 'dataset' is None
+    """
+    dummy_input = distiller.get_dummy_input(dataset=dataset,
+                                            device=distiller.model_device(model),
+                                            input_shape=input_shape)
+    try:
+        non_para_model = distiller.make_non_parallel_copy(model)
+        g = SummaryGraph(non_para_model, dummy_input)
+
+        draw_model_to_file(g, png_fname, display_param_nodes, rankdir, styles)
+        print("Network PNG image generation completed")
+    except FileNotFoundError:
+        print("An error has occured while generating the network PNG image.")
+        print("Please check that you have graphviz installed.")
+        print("\t$ sudo apt-get install graphviz")
+    finally:
+        del non_para_model
+
+
+def export_img_classifier_to_onnx(model, onnx_fname, dataset, add_softmax=True, **kwargs):
+    """Export a PyTorch image classifier to ONNX.
+
+    Args:
+        add_softmax: when True, adds softmax layer to the output model.
+        kwargs: arguments to be passed to torch.onnx.export
+    """
+    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+    # Pytorch doesn't support exporting modules wrapped in DataParallel
+    non_para_model = distiller.make_non_parallel_copy(model)
+
+    try:
+        if add_softmax:
+            # Explicitly add a softmax layer, because it is needed for the ONNX inference phase.
+            # TorchVision models use nn.CrossEntropyLoss for computing the loss,
+            # instead of adding a softmax layer
+            non_para_model.original_forward = non_para_model.forward
+            softmax = torch.nn.Softmax(dim=-1)
+            non_para_model.forward = lambda input: softmax(non_para_model.original_forward(input))
+        torch.onnx.export(non_para_model, dummy_input, onnx_fname, **kwargs)
+        msglogger.info('Exported the model to ONNX format at %s' % os.path.realpath(onnx_fname))
+    finally:
+        del non_para_model
+
+
+def data_node_has_parent(g, id):
+    for edge in g.edges:
+        if edge.dst == id:
+            return True
+    return False

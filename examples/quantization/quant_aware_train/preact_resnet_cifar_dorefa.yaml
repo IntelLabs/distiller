@@ -34,20 +34,20 @@ quantizers:
     class: DorefaQuantizer
     bits_activations: 8
     bits_weights: 3
-    bits_overrides:
+    overrides:
     # Don't quantize first and last layer
       conv1:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       layer1.0.pre_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       final_relu:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
       fc:
-        wts: null
-        acts: null
+        bits_weights: null
+        bits_activations: null
 
 lr_schedulers:
   training_lr:

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="img/favicon.ico">
+  <title>Quantization - Neural Network Distiller</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  <link href="extra.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Quantization";
+    var mkdocs_page_input_path = "algo_quantization.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="js/jquery-2.1.1.min.js" defer></script>
+  <script src="js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="index.html">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="install.html">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="usage.html">Usage</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="schedule.html">Compression Scheduling</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Compressing Models</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="pruning.html">Pruning</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="regularization.html">Regularization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="quantization.html">Quantization</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="conditional_computation.html">Conditional Computation</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Algorithms</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="algo_pruning.html">Pruning</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="algo_quantization.html">Quantization</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#quantization-algorithms">Quantization Algorithms</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#range-based-linear-quantization">Range-Based Linear Quantization</a></li>
+        
+            <li><a class="toctree-l4" href="#dorefa">DoReFa</a></li>
+        
+            <li><a class="toctree-l4" href="#pact">PACT</a></li>
+        
+            <li><a class="toctree-l4" href="#wrpn">WRPN</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="algo_earlyexit.html">Early Exit</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="model_zoo.html">Model Zoo</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="jupyter.html">Jupyter Notebooks</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="design.html">Design</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">Tutorials</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Neural Network Distiller</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>Algorithms &raquo;</li>
+        
+      
+    
+    <li>Quantization</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="quantization-algorithms">Quantization Algorithms</h1>
+<p><strong>Note:</strong><br />
+For any of the methods below that require quantization-aware training, please see <a href="schedule.html#quantization">here</a> for details on how to invoke it using Distiller's scheduling mechanism.</p>
+<h2 id="range-based-linear-quantization">Range-Based Linear Quantization</h2>
+<p>Let's break down the terminology we use here:</p>
+<ul>
+<li><strong>Linear:</strong> Means a float value is quantized by multiplying with a numeric constant (the <strong>scale factor</strong>).</li>
+<li><strong>Range-Based:</strong> Means that in order to calculate the scale factor, we look at the actual range of the tensor's values. In the most naive implementation, we use the actual min/max values of the tensor. Alternatively, we use some derivation based on the tensor's range / distribution to come up with a narrower min/max range, in order to remove possible outliers. This is in contrast to the other methods described here, which we could call <strong>clipping-based</strong>, as they impose an explicit clipping function on the tensors (using either a hard-coded value or a learned value).</li>
+</ul>
+<h3 id="asymmetric-vs-symmetric">Asymmetric vs. Symmetric</h3>
+<p>In this method we can use two modes - <strong>asymmetric</strong> and <strong>symmetric</strong>.</p>
+<h4 id="asymmetric-mode">Asymmetric Mode</h4>
+<p align="center">
+    <img src="imgs/quant_asym.png"/>
+</p>
+
+<p>In <strong>asymmetric</strong> mode, we map the min/max in the float range to the min/max of the integer range. This is done by using a <strong>zero-point</strong> (also called <em>quantization bias</em>, or <em>offset</em>) in addition to the scale factor.</p>
+<p>Let us denote the original floating-point tensor by <script type="math/tex">x_f</script>, the quantized tensor by <script type="math/tex">x_q</script>, the scale factor by <script type="math/tex">q_x</script>, the zero-point by <script type="math/tex">zp_x</script> and the number of bits used for quantization by <script type="math/tex">n</script>. Then, we get:</p>
+<p>
+<script type="math/tex; mode=display">x_q = round\left ((x_f - min_{x_f})\underbrace{\frac{2^n - 1}{max_{x_f} - min_{x_f}}}_{q_x} \right) = round(q_x x_f - \underbrace{min_{x_f}q_x)}_{zp_x} = round(q_x x_f - zp_x)</script>
+</p>
+<p>In practice, we actually use <script type="math/tex">zp_x = round(min_{x_f}q_x)</script>. This means that zero is exactly representable by an integer in the quantized range. This is important, for example, for layers that have zero-padding. By rounding the zero-point, we effectively "nudge" the min/max values in the float range a little bit, in order to gain this exact quantization of zero.</p>
+<p>Note that in the derivation above we use unsigned integer to represent the quantized range. That is, <script type="math/tex">x_q \in [0, 2^n-1]</script>. One could use signed integer if necessary (perhaps due to HW considerations). This can be achieved by subtracting <script type="math/tex">2^{n-1}</script>.</p>
+<p>Let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized in asymmetric mode: (we denote input, output, weights and bias with  <script type="math/tex">x, y, w</script> and <script type="math/tex">b</script> respectively)</p>
+<p>
+<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q + zp_x}{q_x} \frac{w_q + zp_w}{q_w}} + \frac{b_q + zp_b}{q_b} =</script>
+<script type="math/tex; mode=display"> = \frac{1}{q_x q_w} \left( \sum { (x_q + zp_x) (w_q + zp_w) + \frac{q_x q_w}{q_b}(b_q + zp_b) } \right)</script>
+</p>
+<p>Therefore:</p>
+<p>
+<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { (x_q+zp_x) (w_q+zp_w) + \frac{q_x q_w}{q_b}(b_q+zp_b) } \right) \right) </script>
+</p>
+<p>Notes:</p>
+<ul>
+<li>We can see that the bias has to be re-scaled to match the scale of the summation.</li>
+<li>In a proper integer-only HW pipeline, we would like our main accumulation term to simply be <script type="math/tex">\sum{x_q w_q}</script>. In order to achieve this, one needs to further develop the expression we derived above. For further details please refer to the <a href="https://github.com/google/gemmlowp/blob/master/doc/quantization.md#implementation-of-quantized-matrix-multiplication">gemmlowp documentation</a></li>
+</ul>
+<h4 id="symmetric-mode">Symmetric Mode</h4>
+<p align="center">
+    <img src="imgs/quant_sym.png"/>
+</p>
+
+<p>In <strong>symmetric</strong> mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.</p>
+<p>Using the same notations as above, we get:</p>
+<p>
+<script type="math/tex; mode=display">x_q = round\left (x_f \underbrace{\frac{2^{n-1} - 1}{\max|x_f|}}_{q_x} \right) = round(q_x x_f)</script>
+</p>
+<p>Again, let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized, this time in symmetric mode:</p>
+<p>
+<script type="math/tex; mode=display">y_f = \sum{x_f w_f} + b_f = \sum{\frac{x_q}{q_x} \frac{w_q}{q_w}} + \frac{b_q}{q_b} = \frac{1}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right)</script>
+</p>
+<p>Therefore:</p>
+<p>
+<script type="math/tex; mode=display">y_q = round(q_y y_f) = round\left(\frac{q_y}{q_x q_w} \left( \sum { x_q w_q + \frac{q_x q_w}{q_b}b_q } \right) \right) </script>
+</p>
+<h4 id="comparing-the-two-modes">Comparing the Two Modes</h4>
+<p>The main trade-off between these two modes is simplicity vs. utilization of the quantized range.</p>
+<ul>
+<li>When using asymmetric quantization, the quantized range is fully utilized. That is because we exactly map the min/max values from the float range to the min/max of the quantized range. Using symmetric mode, if the float range is biased towards one side, could result in a quantized range where significant dynamic range is dedicated to values that we'll never see. The most extreme example of this is after ReLU, where the entire tensor is positive. Quantizing it in symmetric mode means we're effectively losing 1 bit.</li>
+<li>On the other hand, if we look at the derviations for convolution / FC layers above, we can see that the actual implementation of symmetric mode is much simpler. In asymmetric mode, the zero-points require additional logic in HW. The cost of this extra logic in terms of latency and/or power and/or area will of course depend on the exact implementation.</li>
+</ul>
+<h3 id="other-features">Other Features</h3>
+<ul>
+<li><strong>Scale factor scope:</strong> For weight tensors, Distiller supports per-channel quantization (per output channel).</li>
+<li>
+<p><strong>Removing outliers (post-training only):</strong> As discussed <a href="quantization.html#outliers-removal">here</a>, in some cases the float range of activations contains outliers. Spending dynamic range on these outliers hurts our ability to represent the values we actually care about accurately.
+   <p align="center">
+       <img src="imgs/quant_clipped.png"/>
+   </p>
+  Currently, Distiller supports clipping of activations during post-training quantization using the following methods:</p>
+<ul>
+<li>Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.</li>
+<li>Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.</li>
+</ul>
+</li>
+<li>
+<p><strong>Scale factor approximation (post-training only):</strong> This can be enabled optionally, to simulate an execution pipeline with no floating-point operations. Instead of multiplying with a floating-point scale factor, we multiply with an integer and then do a bit-wise shift: <script type="math/tex">Q \approx {A}/{2^n}</script>, where <script type="math/tex">Q</script> denotes the FP32 scale factor, <script type="math/tex">A</script> denotes the integer multiplier and <script type="math/tex">n</script> denotes the number of bits by which we shift after multiplication. The number of bits assigned to <script type="math/tex">A</script> is usually a parameter of the HW, and in Distiller it is configured by the user. Let us denote that with <script type="math/tex">m</script>. Given <script type="math/tex">Q</script> and <script type="math/tex">m</script>, we determine <script type="math/tex">A</script> and <script type="math/tex">n</script> as follows:</p>
+</li>
+</ul>
+<p>
+<script type="math/tex; mode=display">Q \approx \frac{A}{2^n} \Rightarrow A \approx 2^nQ \Rightarrow</script>
+<script type="math/tex; mode=display">\Rightarrow 2^nQ \le 2^m - 1 \Rightarrow</script>
+<script type="math/tex; mode=display">\Rightarrow n = \left\lfloor\log_2\frac{2^m - 1}{Q}\right\rfloor\ \ \ ;\ \ \ A = \lfloor 2^nQ \rfloor</script>
+</p>
+<h3 id="implementation-in-distiller">Implementation in Distiller</h3>
+<h4 id="post-training">Post-Training</h4>
+<p>For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py"><code>range_linear.py</code></a>.</p>
+<ul>
+<li>The operations currently supported are:<ul>
+<li>Convolution</li>
+<li>Fully connected</li>
+<li>Element-wise addition</li>
+<li>Element-wise multiplication</li>
+<li>Concatenation</li>
+<li>Embedding</li>
+</ul>
+</li>
+<li>All other layers are unaffected and are executed using their original FP32 implementation.</li>
+<li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For details on ways to invoke the quantizer see <a href="schedule.html#post-training-quantization">here</a>.</li>
+<li>The transform performed by the Quantizer only works on sub-classes of <code>torch.nn.Module</code>. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the <code>torch</code> namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/modules">here</a>. It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/models/imagenet/resnet.py">ResNet implementation</a>.</li>
+<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that <a href="schedule.html#collecting-statistics-for-quantization">here</a>.</li>
+<li>The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.</li>
+</ul>
+<h4 id="quantization-aware-training">Quantization-Aware Training</h4>
+<p>To apply range-based linear quantization in training, use the <code>QuantAwareTrainRangeLinearQuantizer</code> class. As it is now, it will apply weights quantization to convolution, FC and embedding modules. For activations quantization, it will insert instances <code>FakeLinearQuantization</code> module after ReLUs. This module follows the methodology described in <a href="http://openaccess.thecvf.com/content_cvpr_2018/html/Jacob_Quantization_and_Training_CVPR_2018_paper.html">Benoit et al., 2018</a> and uses exponential moving averages to track activation ranges.<br />
+Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantizer</code> supports training with <strong>single GPU only</strong>.</p>
+<p>Similarly to post-training, the calculated quantization parameters (scale factors, zero-points, tracked activation ranges) are stored as buffers within their respective modules, so they're saved when a checkpoint is created.</p>
+<p>Note that converting from a quantization-aware training model to a post-training quantization model is not yet supported. Such a conversion will use the activation ranges tracked during training, so additional offline or online calculation of quantization parameters will not be required.</p>
+<h2 id="dorefa">DoReFa</h2>
+<p>(As proposed in <a href="https://arxiv.org/abs/1606.06160">DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients</a>)  </p>
+<p>In this method, we first define the quantization function <script type="math/tex">quantize_k</script>, which takes a real value <script type="math/tex">a_f \in [0, 1]</script> and outputs a discrete-valued <script type="math/tex">a_q \in \left\{ \frac{0}{2^k-1}, \frac{1}{2^k-1}, ... , \frac{2^k-1}{2^k-1} \right\}</script>, where <script type="math/tex">k</script> is the number of bits used for quantization.</p>
+<p>
+<script type="math/tex; mode=display">a_q = quantize_k(a_f) = \frac{1}{2^k-1} round \left( \left(2^k - 1 \right) a_f \right)</script>
+</p>
+<p>Activations are clipped to the <script type="math/tex">[0, 1]</script> range and then quantized as follows:</p>
+<p>
+<script type="math/tex; mode=display">x_q = quantize_k(x_f)</script>
+</p>
+<p>For weights, we define the following function <script type="math/tex">f</script>, which takes an unbounded real valued input and outputs a real value in <script type="math/tex">[0, 1]</script>:</p>
+<p>
+<script type="math/tex; mode=display">f(w) = \frac{tanh(w)}{2 max(|tanh(w)|)} + \frac{1}{2} </script>
+</p>
+<p>Now we can use <script type="math/tex">quantize_k</script> to get quantized weight values, as follows:</p>
+<p>
+<script type="math/tex; mode=display">w_q = 2 quantize_k \left( f(w_f) \right) - 1</script>
+</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
+<h3 id="notes">Notes:</h3>
+<ul>
+<li>Gradients quantization as proposed in the paper is not supported yet.</li>
+<li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>
+</ul>
+<h2 id="pact">PACT</h2>
+<p>(As proposed in <a href="https://arxiv.org/abs/1805.06085">PACT: Parameterized Clipping Activation for Quantized Neural Networks</a>)</p>
+<p>This method is similar to DoReFa, but the upper clipping values, <script type="math/tex">\alpha</script>, of the activation functions are learned parameters instead of hard coded to 1. Note that per the paper's recommendation, <script type="math/tex">\alpha</script> is shared per layer.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>PACTQuantizer</code> class to transform an existing model to a model suitable for training with quantization using PACT.</p>
+<h2 id="wrpn">WRPN</h2>
+<p>(As proposed in <a href="https://arxiv.org/abs/1709.01134">WRPN: Wide Reduced-Precision Networks</a>)  </p>
+<p>In this method, activations are clipped to <script type="math/tex">[0, 1]</script> and quantized as follows (<script type="math/tex">k</script> is the number of bits used for quantization):</p>
+<p>
+<script type="math/tex; mode=display">x_q = \frac{1}{2^k-1} round \left( \left(2^k - 1 \right) x_f \right)</script>
+</p>
+<p>Weights are clipped to <script type="math/tex">[-1, 1]</script> and quantized as follows:</p>
+<p>
+<script type="math/tex; mode=display">w_q = \frac{1}{2^{k-1}-1} round \left( \left(2^{k-1} - 1 \right)w_f \right)</script>
+</p>
+<p>Note that <script type="math/tex">k-1</script> bits are used to quantize weights, leaving one bit for sign.</p>
+<p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
+<h3 id="notes_1">Notes:</h3>
+<ul>
+<li>The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of <code>WRPNQuantizer</code> at the moment. To experiment with this, modify your model implementation to have wider layers.</li>
+<li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>
+</ul>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="algo_earlyexit.html" class="btn btn-neutral float-right" title="Early Exit">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="algo_pruning.html" class="btn btn-neutral" title="Pruning"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="algo_pruning.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="algo_earlyexit.html" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script>var base_url = '.';</script>
+    <script src="js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="search/main.js" defer></script>
+
+</body>
+</html>

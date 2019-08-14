@@ -103,11 +103,12 @@ class WRPNQuantizer(Quantizer):
         1. This class does not take care of layer widening as described in the paper
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=None,
-                 quantize_bias=False):
+    def __init__(self, model, optimizer,
+                 bits_activations=32, bits_weights=32, bits_bias=None,
+                 overrides=None):
         super(WRPNQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
-                                            bits_weights=bits_weights, bits_overrides=bits_overrides,
-                                            train_with_fp_copy=True, quantize_bias=quantize_bias)
+                                            bits_weights=bits_weights, bits_bias=bits_bias,
+                                            train_with_fp_copy=True, overrides=overrides)
 
         def wrpn_quantize_param(param_fp, param_meta):
             scale, zero_point = symmetric_linear_quantization_params(param_meta.num_bits, 1)
@@ -142,7 +143,7 @@ class DorefaParamsBinarizationSTE(torch.autograd.Function):
         if inplace:
             ctx.mark_dirty(input)
         E = input.abs().mean()
-        output = input.sign() * E
+        output = torch.where(input == 0, torch.ones_like(input), torch.sign(input)) * E
         return output
     
     @staticmethod
@@ -157,13 +158,13 @@ class DorefaQuantizer(Quantizer):
 
     Notes:
         1. Gradients quantization not supported yet
-        2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=None,
-                 quantize_bias=False):
+    def __init__(self, model, optimizer,
+                 bits_activations=32, bits_weights=32, bits_bias=None,
+                 overrides=None):
         super(DorefaQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
-                                              bits_weights=bits_weights, bits_overrides=bits_overrides,
-                                              train_with_fp_copy=True, quantize_bias=quantize_bias)
+                                              bits_weights=bits_weights, bits_bias=bits_bias,
+                                              train_with_fp_copy=True, overrides=overrides)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts
@@ -188,11 +189,12 @@ class PACTQuantizer(Quantizer):
         act_clip_decay (float): L2 penalty applied to the clipping values, referred to as "lambda_alpha" in the paper.
             If None then the optimizer's default weight decay value is used (default: None)
     """
-    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_overrides=None,
-                 quantize_bias=False, act_clip_init_val=8.0, act_clip_decay=None):
+    def __init__(self, model, optimizer,
+                 bits_activations=32, bits_weights=32, bits_bias=None,
+                 overrides=None, act_clip_init_val=8.0, act_clip_decay=None):
         super(PACTQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
-                                            bits_weights=bits_weights, bits_overrides=bits_overrides,
-                                            train_with_fp_copy=True, quantize_bias=quantize_bias)
+                                            bits_weights=bits_weights, bits_bias=bits_bias,
+                                            overrides=overrides, train_with_fp_copy=True)
 
         def relu_replace_fn(module, name, qbits_map):
             bits_acts = qbits_map[name].acts

@@ -63,10 +63,10 @@ To execute the model transformation, call the `prepare_model` function of the `Q
 
 ### Flexible Bit-Widths
 
-- Each instance of `Quantizer` is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the `bits_activations` and `bits_weights` parameters in `Quantizer`'s constructor. Sub-classes may define bit-widths for other tensor types as needed.
+- Each instance of `Quantizer` is parameterized by the number of bits to be used for quantization of different tensor types. The default ones are activations and weights. These are the `bits_activations`, `bits_weights` and `bits_bias` parameters in `Quantizer`'s constructor. Sub-classes may define bit-widths for other tensor types as needed.
 - We also want to be able to override the default number of bits mentioned in the bullet above for certain layers. These could be very specific layers. However, many models are comprised of building blocks ("container" modules, such as Sequential) which contain several modules, and it is likely we'll want to override settings for entire blocks, or for a certain module across different blocks. When such building blocks are used, the names of the internal modules usually follow some pattern.
-   - So, for this purpose, Quantizer also accepts a mapping of regular expressions to number of bits. This allows the user to override specific layers using they're exact name, or a group of layers via a regular expression. This mapping is passed via the `bits_overrides` parameter in the constructor.
-   - The `bits_overrides` mapping is required to be an instance of [`collections.OrderedDict`](https://docs.python.org/3.5/library/collections.html#collections.OrderedDict) (as opposed to just a simple Python [`dict`](https://docs.python.org/3.5/library/stdtypes.html#dict)). This is done in order to enable handling of overlapping name patterns.  
+   - So, for this purpose, Quantizer also accepts a mapping of regular expressions to number of bits. This allows the user to override specific layers using they're exact name, or a group of layers via a regular expression. This mapping is passed via the `overrides` parameter in the constructor.
+   - The `overrides` mapping is required to be an instance of [`collections.OrderedDict`](https://docs.python.org/3.5/library/collections.html#collections.OrderedDict) (as opposed to just a simple Python [`dict`](https://docs.python.org/3.5/library/stdtypes.html#dict)). This is done in order to enable handling of overlapping name patterns.  
      So, for example, one could define certain override parameters for a group of layers, e.g. 'conv*', but also define different parameters for specific layers in that group, e.g. 'conv1'.  
      The patterns are evaluated eagerly - the first match wins. Therefore, the more specific patterns must come before the broad patterns.
 
@@ -84,7 +84,7 @@ The `Quantizer` class supports quantization-aware training, that is - training w
     2. To maintain the existing functionality of the module, we then register a `buffer` in the module with the original name - `weights`.
     3. During training, `float_weight` will be passed to `param_quantization_fn` and the result will be stored in `weight`.
 
-2. In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the [PACT](algo_quantization.md#PACT) method, acitvations are clipped to a value \(\alpha\), which is a learned parameter per-layer
+2. In addition, some quantization methods may introduce additional learned parameters to the model. For example, in the [PACT](algo_quantization.md#pact) method, acitvations are clipped to a value \(\alpha\), which is a learned parameter per-layer
 
 To support these two cases, the `Quantizer` class also accepts an instance of a `torch.optim.Optimizer` (normally this would be one an instance of its sub-classes). The quantizer will take care of modifying the optimizer according to the changes made to the parameters.   
 
