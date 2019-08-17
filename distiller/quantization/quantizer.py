@@ -113,7 +113,7 @@ class Quantizer(object):
             raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.adjacency_map = None  # To be populated during prepare_model()
-
+        bits_activations = None if type(bits_activations) == str and bits_activations.lower() == 'none' else bits_activations
         self.default_qbits = QBits(acts=bits_activations, wts=bits_weights, bias=bits_bias)
         self.overrides = overrides
 
@@ -132,7 +132,8 @@ class Quantizer(object):
                 raise ValueError("Using 'acts' / 'wts' / 'bias' to specify bit-width overrides is deprecated.\n"
                                  "Please use the full parameter names: "
                                  "'bits_activations' / 'bits_weights' / 'bits_bias'")
-            qbits = QBits(acts=v.pop('bits_activations', self.default_qbits.acts),
+            acts = v.pop('bits_activations', self.default_qbits.acts)
+            qbits = QBits(acts=None if type(acts) == str and acts.lower() == 'none' else acts,
                           wts=v.pop('bits_weights', self.default_qbits.wts),
                           bias=v.pop('bits_bias', self.default_qbits.bias))
             v['bits'] = qbits

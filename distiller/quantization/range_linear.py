@@ -941,6 +941,9 @@ class PostTrainLinearQuantizer(Quantizer):
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
+            if qbits_map[name].acts is None and qbits_map[name].wts:
+                quantize_params_only(module, qbits_map[name].wts, per_channel_wts, mode)
+                return module
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip_acts,
                                                      per_channel_wts=per_channel_wts,
@@ -970,6 +973,21 @@ class PostTrainLinearQuantizer(Quantizer):
             norm_name = distiller.utils.normalize_module_name(name)
             return RangeLinearEmbeddingWrapper(module, qbits_map[name].wts, mode=mode,
                                                stats=self.model_activation_stats.get(norm_name, None))
+        
+        def quantize_params_only(module, num_bits_params, per_channel_wts, mode):
+            params_min_q_val, params_max_q_val = get_quantized_range(num_bits_params,
+                                                                     signed=mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+            w_scale, w_zero_point = _get_quant_params_from_tensor(module.weight, num_bits_params, self.mode,
+                                                                  per_channel=per_channel_wts)
+            linear_quantize_clamp(module.weight.data, w_scale, w_zero_point, params_min_q_val, params_max_q_val,
+                                  inplace=True)
+            linear_dequantize(module.weight.data, w_scale, w_zero_point, inplace=True)
+            has_bias = hasattr(module, 'bias') and module.bias is not None
+            if has_bias:
+                b_scale, b_zero_point = _get_quant_params_from_tensor(module.bias, num_bits_params, mode)
+                linear_quantize_clamp(module.bias.data, b_scale, b_zero_point,
+                                      params_min_q_val, params_max_q_val, inplace=True)
+                linear_dequantize(module.bias.data, b_scale, b_zero_point, inplace=True)
 
         self.clip_acts = clip_acts
         self.clip_n_stds = clip_n_stds
