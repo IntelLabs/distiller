@@ -20,8 +20,8 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
         return
 
     # Leave a 'mark' in the fused module, indicating which modules were fused. This can come in handy
-    # post-fusing, since the identity nodes don't show up in SummrayGraph (they're optimized away).
-    setattr(sequence[0], 'fused_modules', names[1:])
+    # post-fusing, since the identity nodes don't show up in SummaryGraph (they're optimized away).
+    setattr(sequence[0], 'fused_sequence', names[1:])
 
     # Replace the first module in the sequence with the fused module
     def split_name(name):
@@ -32,6 +32,10 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
     container_name, root_module = split_name(names[0])
     container = named_modules[container_name]
     setattr(container, root_module, fused_module)
+    # Save the pointer to the fused model:
+    fused_module_name = '{0}{1}'.format(container_name + '.' if container_name else '',
+                                        root_module)
+    setattr(sequence[0], 'fused_module_name', fused_module_name)
 
     # Replace the rest of the models in the sequence with identity ops
     for container_name, sub_module_name in map(lambda name: split_name(name), names[1:]):
@@ -130,6 +134,7 @@ def fold_batch_norms(model, dummy_input=None, adjacency_map=None, inference=Fals
     def fold_bn(sequence):
         # Re-use this functionality from simulated BN folding implementation
         param_module, bn_module = sequence[0], sequence[1]
+        param_module.is_fused = bn_module.is_fused = True
         try:
             folded_module = SimulatedFoldedBatchNorm(param_module, bn_module)
         except ValueError:
