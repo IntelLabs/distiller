@@ -52,6 +52,10 @@ class ClipMode(Enum):
     # Clip value calculated as mean of tensor + N standard deviations. N should be specified separately
     N_STD = 2
 
+    # ACIQ Clipping Modes -
+    GAUSS = 3
+    LAPLACE = 4
+
 
 def _verify_enum_value(val, enum_cls):
     cls_name = enum_cls.__name__
@@ -75,15 +79,19 @@ def verify_clip_mode(mode):
     return _verify_enum_value(mode, ClipMode)
 
 
-def _get_saturation_fn(quant_mode, clip_mode, num_stds):
+def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None):
     if quant_mode == LinearQuantMode.SYMMETRIC:
         fns = {ClipMode.NONE: get_tensor_max_abs,
                ClipMode.AVG: get_tensor_avg_max_abs,
-               ClipMode.N_STD: partial(get_tensor_mean_n_stds_max_abs, n_stds=num_stds)}
+               ClipMode.N_STD: partial(get_tensor_mean_n_stds_max_abs, n_stds=num_stds),
+               ClipMode.GAUSS: AciqSymmetricClipper(num_bits, AciqClipper.AciqClippingType.Gauss),
+               ClipMode.LAPLACE: AciqSymmetricClipper(num_bits, AciqClipper.AciqClippingType.Laplace)}
     else:  # Asymmetric mode
         fns = {ClipMode.NONE: get_tensor_min_max,
                ClipMode.AVG: get_tensor_avg_min_max,
-               ClipMode.N_STD: partial(get_tensor_mean_n_stds_min_max, n_stds=num_stds)}
+               ClipMode.N_STD: partial(get_tensor_mean_n_stds_min_max, n_stds=num_stds),
+               ClipMode.GAUSS: AciqAsymmetricClipper(num_bits, AciqClipper.AciqClippingType.Gauss),
+               ClipMode.LAPLACE: AciqAsymmetricClipper(num_bits, AciqClipper.AciqClippingType.Laplace)}
     return fns[clip_mode]
 
 
@@ -99,7 +107,7 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
             raise ValueError('Clip mode set top N_STD but \'num_stds\' parameter not provided')
 
     dim = 0 if clip == ClipMode.AVG or per_channel else None
-    sat_fn = _get_saturation_fn(mode, clip, num_stds)
+    sat_fn = _get_saturation_fn(mode, clip, num_stds, num_bits)
     if mode == LinearQuantMode.SYMMETRIC:
         sat_val = sat_fn(tensor, dim)
         scale, zp = symmetric_linear_quantization_params(num_bits, sat_val)
@@ -135,6 +143,14 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         std = torch.tensor(float(stats['std']))
         sat_min = torch.max(sat_min, mean - num_stds * std)
         sat_max = torch.min(sat_max, mean + num_stds * std)
+    elif clip in (ClipMode.LAPLACE, ClipMode.GAUSS):
+        clip = AciqClipper.AciqClippingType.Laplace if clip == ClipMode.LAPLACE else AciqClipper.AciqClippingType.Gauss
+        if mode == LinearQuantMode.SYMMETRIC:
+            sat_min, sat_max = AciqSymmetricClipper(num_bits, clip).from_stats(stats)
+        else:
+            sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip).from_stats(stats)
+        sat_min, sat_min = torch.tensor(sat_min), torch.tensor(sat_max)
+
     if mode == LinearQuantMode.SYMMETRIC:
         scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()))
     else:
