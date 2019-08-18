@@ -28,6 +28,7 @@ import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
+from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
 import distiller.model_transforms as mt
 
@@ -1136,7 +1137,8 @@ class PostTrainLinearQuantizer(Quantizer):
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
         for n, m in named_modules.items():
-            if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+            if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm) )\
+                    or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
                 continue
             successor = self.adjacency_map[n].successors[0]
             n = distiller.normalize_module_name(n)
