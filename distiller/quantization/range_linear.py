@@ -28,6 +28,7 @@ import distiller
 import distiller.utils
 from .quantizer import Quantizer
 from .q_utils import *
+from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
 import distiller.model_transforms as mt
 
@@ -1109,7 +1110,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def _apply_bn_folding(self, dummy_input):
         msglogger.info('Applying batch-norm folding ahead of post-training quantization')
-        mt.fold_batch_norms_inference(self.model, adjacency_map=self.adjacency_map)
+        mt.fold_batch_norms(self.model, adjacency_map=self.adjacency_map, inference=True)
 
         # After BN folding model need to re-generate the adjacency map
         summary_graph = distiller.SummaryGraph(self.model, dummy_input)
@@ -1125,11 +1126,16 @@ class PostTrainLinearQuantizer(Quantizer):
         for n, m in named_modules.items():
             try:
                 # Look for the mark left by distiller.model_transforms.fold_batch_norms
-                folded_bn_module = distiller.normalize_module_name(m.fused_modules[0])
+                folded_bn_module = distiller.normalize_module_name(m.fused_sequence[0])
+
                 # Propagate the output stats of the folded BN module to this module
                 # If stats were collected after folding was applied, then stats for the BN module won't exist,
                 # in which case we just move on
-                model_stats[distiller.normalize_module_name(n)]['output'] = model_stats.pop(folded_bn_module)['output']
+                model_stats[m.fused_module_name]['output'] = model_stats.pop(folded_bn_module)['output']
+                # Here we indicate that the fused batch-norms don't need to be processed again
+                # in self._pre_process_container
+                fused_module = named_modules[m.fused_module_name]
+                self.modules_processed[fused_module] = m.fused_module_name, None
                 msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
             except (AttributeError, KeyError):
                 continue
@@ -1147,7 +1153,8 @@ class PostTrainLinearQuantizer(Quantizer):
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
         for n, m in named_modules.items():
-            if distiller.has_children(m) or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+            if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm) )\
+                    or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
                 continue
             successor = self.adjacency_map[n].successors[0]
             n = distiller.normalize_module_name(n)

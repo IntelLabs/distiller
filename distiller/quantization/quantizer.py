@@ -222,6 +222,9 @@ class Quantizer(object):
 
         self._pre_process_container(self.model)
         for module_name, module in self.model.named_modules():
+            if getattr(module, 'is_fused', False):
+                # we quantize only the fuse wrapper
+                continue
             qbits = self.module_qbits_map[module_name]
             curr_parameters = dict(module.named_parameters())
             for param_name, param in curr_parameters.items():

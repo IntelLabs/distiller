@@ -20,8 +20,8 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
         return
 
     # Leave a 'mark' in the fused module, indicating which modules were fused. This can come in handy
-    # post-fusing, since the identity nodes don't show up in SummrayGraph (they're optimized away).
-    setattr(sequence[0], 'fused_modules', names[1:])
+    # post-fusing, since the identity nodes don't show up in SummaryGraph (they're optimized away).
+    setattr(sequence[0], 'fused_sequence', names[1:])
 
     # Replace the first module in the sequence with the fused module
     def split_name(name):
@@ -32,6 +32,10 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
     container_name, root_module = split_name(names[0])
     container = named_modules[container_name]
     setattr(container, root_module, fused_module)
+    # Save the pointer to the fused model:
+    fused_module_name = '{0}{1}'.format(container_name + '.' if container_name else '',
+                                        root_module)
+    setattr(sequence[0], 'fused_module_name', fused_module_name)
 
     # Replace the rest of the models in the sequence with identity ops
     for container_name, sub_module_name in map(lambda name: split_name(name), names[1:]):
@@ -110,7 +114,7 @@ def fuse_modules(model, types_sequence, fuse_fn, dummy_input=None, adjacency_map
     return model
 
 
-def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
+def fold_batch_norms(model, dummy_input=None, adjacency_map=None, inference=False):
     """Scans the model for convolution / linear modules followed by batch-normalization. For each such valid pair,
     folds the parameters of the batch normalization module into the parameters of the parameter module, and replaces
     the batch normalization module with an identity operation.
@@ -124,17 +128,21 @@ def fold_batch_norms_inference(model, dummy_input=None, adjacency_map=None):
         adjacency_map (OrderedDict): Pre-computed adjacency map, via SummaryGraph.adjacency_map(). Must be based
           on the passed model, otherwise results are unexpected. If None, then the adjacency map will be created
           internally using the passed dummy_input.
+        inference (bool): flag to indicate whether the model is used for inference to freeze
+          the BatchNorm stats.
     """
     def fold_bn(sequence):
         # Re-use this functionality from simulated BN folding implementation
         param_module, bn_module = sequence[0], sequence[1]
+        param_module.is_fused = bn_module.is_fused = True
         try:
             folded_module = SimulatedFoldedBatchNorm(param_module, bn_module)
         except ValueError:
             msglogger.debug("Can't fold, {} does not track running stats".format(bn_module.distiller_name))
             return None
-        folded_module.freeze()
-        return folded_module.param_module
+        if inference:
+            folded_module.freeze()
+        return folded_module
 
     foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
     batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
