@@ -52,7 +52,6 @@ class ClipMode(Enum):
     AVG = 1
     # Clip value calculated as mean of tensor + N standard deviations. N should be specified separately
     N_STD = 2
-
     # ACIQ Clipping Modes -
     GAUSS = 3
     LAPLACE = 4
