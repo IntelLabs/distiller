@@ -118,6 +118,12 @@ PARAM_MODULES = (
     nn.Conv3d
 )
 
+CLIP_MODES = [ClipMode.NONE,
+              ClipMode.AVG,
+              ClipMode.GAUSS,
+              # ClipMode.LAPLACE - param 'b' still unsupported
+              ]
+
 
 def module_override(**kwargs):
     override = OrderedDict()
@@ -146,7 +152,6 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
         It is assumed that `eval_fn` returns a satisfying metric of performance (e.g. accuracy)
         and the greedy search aims to maximize this metric
     """
-    clip_modes_to_search = [ClipMode.NONE, ClipMode.AVG, ClipMode.GAUSS, ClipMode.LAPLACE]
     best_overrides_dict = OrderedDict()
     overrides_dict = OrderedDict()
     modules_to_quantize = layers_quant_order(model, dummy_input, recurrent)
@@ -167,8 +172,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
     for module_name in modules_to_quantize:
         print('Searching optimal quantization in \'%s\':' % module_name)
         module = modules_dict[module_name]
+        overrides_dict = deepcopy(best_overrides_dict)
         best_performance = float("-inf")
-        for clip_mode in clip_modes_to_search:
+        for clip_mode in CLIP_MODES:
             if isinstance(module, PARAM_MODULES):
                 current_module_override = module_override(clip_acts=clip_mode,
                                                           bits_weights=8,
@@ -186,7 +192,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                 # we don't use activation stats for this module
                 # instead we use dynamic quantization:
                 temp_act_stats = deepcopy(act_stats)
-                temp_act_stats[module_name] = OrderedDict()
+                temp_act_stats[module_name] = None
             else:
                 temp_act_stats = deepcopy(act_stats)
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
