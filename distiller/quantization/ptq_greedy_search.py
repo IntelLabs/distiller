@@ -28,8 +28,9 @@ import logging
 from copy import deepcopy
 import distiller.apputils.image_classifier as classifier
 import os
+import distiller.apputils as apputils
 
-msglogger = logging.getLogger()
+msglogger = None
 
 
 class _OpRank:
@@ -102,8 +103,7 @@ CLASSES = (
     distiller.modules.EltwiseAdd,
     distiller.modules.EltwiseMult,
     distiller.modules.Matmul,
-    distiller.modules.BatchMatmul,
-    nn.Embedding
+    distiller.modules.BatchMatmul
 )
 
 FP16_LAYERS = (
@@ -111,6 +111,20 @@ FP16_LAYERS = (
     nn.Tanh,
     nn.Sigmoid
 )
+
+PARAM_MODULES = (
+    nn.Linear,
+    nn.Conv2d,
+    nn.Conv3d
+)
+
+
+def module_override(**kwargs):
+    override = OrderedDict()
+    if kwargs.get('fp16', False):
+        override['fp16'] = True
+        return override
+    return OrderedDict(kwargs)
 
 
 def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLASSES, act_stats=None):
@@ -144,22 +158,29 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
         act_stats = distiller.data_loggers.collect_quant_stats(model_temp, eval_fn)
         del model_temp
         print('Done.')
-    best_act_stats = None
     base_score = eval_fn(model)
     print("Base score: %.3f" % base_score)
+
     def fp16_replacement(module, *args):
         return FP16Wrapper(module)
-    first_printed = False
+
     for module_name in modules_to_quantize:
         print('Searching optimal quantization in \'%s\':' % module_name)
-        current_module_override = OrderedDict()
-        current_module_override['clip_acts'] = ClipMode.NONE
-        current_module_override['bits_parameters'] = 8
-        current_module_override['bits_activations'] = 8
-        current_module_override['bits_accum'] = 32
-        overrides_dict[module_name] = current_module_override
+        module = modules_dict[module_name]
         best_performance = float("-inf")
         for clip_mode in clip_modes_to_search:
+            if isinstance(module, PARAM_MODULES):
+                current_module_override = module_override(clip_acts=clip_mode,
+                                                          bits_parameters=8,
+                                                          bits_activations=8,
+                                                          bits_accum=32)
+            elif isinstance(module, classes):
+                current_module_override = module_override(clip_acts=clip_mode,
+                                                          num_bits_acts=8)
+            else:
+                current_module_override = module_override(fp16=True)
+
+            overrides_dict[module_name] = current_module_override
             if clip_mode == ClipMode.LAPLACE:
                 # Since parameter b isn't implemented yet -
                 # we don't use activation stats for this module
@@ -168,23 +189,24 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                 temp_act_stats[module_name] = OrderedDict()
             else:
                 temp_act_stats = deepcopy(act_stats)
-            current_module_override['clip_acts'] = clip_mode
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
+                                                 bits_activations=None,
+                                                 bits_parameters=None,
+                                                 bits_accum=None,
                                                  mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                                  clip_acts=ClipMode.NONE,
-                                                 overrides=overrides_dict,
+                                                 overrides=deepcopy(overrides_dict),
                                                  model_activation_stats=deepcopy(temp_act_stats))
             for fp16_layer_type in FP16_LAYERS:
                 quantizer.replacement_factory[fp16_layer_type] = fp16_replacement
             quantizer.prepare_model(dummy_input)
-            if not first_printed:
-                print(quantizer.model)
-                first_printed = True
+
             current_perf = eval_fn(quantizer.model)
-            print('\tLayer: %s\t%s\t score = %.3f' % (module_name, clip_mode, current_perf))
+            print('\tLayer overrides: %s\t%s\t score = %.3f' %
+                  (current_module_override, clip_mode, current_perf))
             if current_perf > best_performance:
                 best_overrides_dict[module_name] = current_module_override
-                best_act_stats = temp_act_stats
+                best_performance = current_perf
 
     quantizer = PostTrainLinearQuantizer(model, mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                          clip_acts=ClipMode.NONE, overrides=best_overrides_dict,
@@ -200,6 +222,7 @@ if __name__ == "__main__":
     args = classifier.init_classifier_compression_arg_parser().parse_args()
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     data_loader = classifier.load_data(args, load_train=False, load_val=False)
+    msglogger = logging.getLogger()
 
     def test_fn(model):
         top1, top5, losses = classifier.test(data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,
@@ -208,5 +231,10 @@ if __name__ == "__main__":
 
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
-    dummy_input = torch.rand(*model.input_shape, device=next(model.parameters()).device)
+    args.device = next(model.parameters()).device
+    if args.load_model_path:
+        print("Loading checkpoint from %s" % args.load_model_path)
+        model = apputils.load_lean_checkpoint(model, args.load_model_path,
+                                              model_device=args.device)
+    dummy_input = torch.rand(*model.input_shape, device=args.device)
     ptq_greedy_search(model, dummy_input, test_fn)
