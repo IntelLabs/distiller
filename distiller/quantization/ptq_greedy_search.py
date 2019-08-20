@@ -171,9 +171,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
         for clip_mode in clip_modes_to_search:
             if isinstance(module, PARAM_MODULES):
                 current_module_override = module_override(clip_acts=clip_mode,
-                                                          bits_parameters=8,
+                                                          bits_weights=8,
                                                           bits_activations=8,
-                                                          bits_accum=32)
+                                                          bits_bias=32)
             elif isinstance(module, classes):
                 current_module_override = module_override(clip_acts=clip_mode,
                                                           num_bits_acts=8)
@@ -192,7 +192,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
                                                  bits_activations=None,
                                                  bits_parameters=None,
-                                                 bits_accum=None,
+                                                 bits_accum=32,
                                                  mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                                  clip_acts=ClipMode.NONE,
                                                  overrides=deepcopy(overrides_dict),
@@ -202,8 +202,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
             quantizer.prepare_model(dummy_input)
 
             current_perf = eval_fn(quantizer.model)
-            print('\tLayer overrides: %s\t%s\t score = %.3f' %
-                  (current_module_override, clip_mode, current_perf))
+            print('\t%s\t score = %.3f\tLayer overrides: %s' %
+                  (clip_mode, current_perf, current_module_override))
             if current_perf > best_performance:
                 best_overrides_dict[module_name] = current_module_override
                 best_performance = current_perf
@@ -223,6 +223,7 @@ if __name__ == "__main__":
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     data_loader = classifier.load_data(args, load_train=False, load_val=False)
     msglogger = logging.getLogger()
+    logging.disable(logging.WARNING)
 
     def test_fn(model):
         top1, top5, losses = classifier.test(data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,

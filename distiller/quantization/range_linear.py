@@ -146,9 +146,10 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
     elif clip in (ClipMode.LAPLACE, ClipMode.GAUSS):
         clip = AciqClipper.AciqClippingType.Laplace if clip == ClipMode.LAPLACE else AciqClipper.AciqClippingType.Gauss
         if mode == LinearQuantMode.SYMMETRIC:
-            sat_min, sat_max = AciqSymmetricClipper(num_bits, clip).from_stats(stats)
+            sat_fn = AciqSymmetricClipper(num_bits, clip)
         else:
-            sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip).from_stats(stats)
+            sat_fn = AciqAsymmetricClipper(num_bits, clip)
+        sat_min, sat_max = sat_fn(stats)
         sat_min, sat_min = torch.tensor(sat_min), torch.tensor(sat_max)
 
     if mode == LinearQuantMode.SYMMETRIC:
