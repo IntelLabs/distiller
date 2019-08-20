@@ -224,7 +224,7 @@ class CompressionScheduler(object):
 
         Currently the scheduler state is comprised only of the set of pruning masks.
 
-        Arguments:
+        Args:
             state_dict (dict): scheduler state. Should be an object returned
                 from a call to :meth:`state_dict`. It is a dictionary of parameter
                 names (keys) and parameter masks (values).
@@ -250,6 +250,21 @@ class CompressionScheduler(object):
             masker.mask = loaded_masks[name]
             if masker.mask is not None:
                 masker.mask = masker.mask.to(device)
+
+    def init_from_masks_dict(self, masks_dict, normalize_dataparallel_keys=False):
+        """This is a convenience function to initialize a CompressionScheduler from a dictionary
+
+        Args:
+            masks_dict (list): A dictionary formatted as {parameter_name: 4D mask tensor}
+            normalize_dataparallel_keys (bool): indicates if we should convert the keys from
+                DataParallel format.
+        """
+        for name, mask in self.zeros_mask_dict.items():
+            if name not in masks_dict:
+                masks_dict[name] = None
+        state = {'masks_dict': masks_dict}
+
+        self.load_state_dict(state, normalize_dataparallel_keys)
 
     @staticmethod
     def verify_policy_loss(policy_loss):
