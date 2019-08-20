@@ -1,0 +1,53 @@
+#
+# A YAML file for testing various pruners and scheduling configurations
+#
+version: 1
+pruners:
+  filter_pruner:
+    class: 'L1RankedStructureParameterPruner'
+    group_type: Filters
+    desired_sparsity: 0.1
+    weights: [module.conv1.weight]
+
+  filter_pruner_agp:
+    class: 'L1RankedStructureParameterPruner_AGP'
+    group_type: Filters
+    initial_sparsity: 0.05
+    final_sparsity: 0.20
+    weights: [module.conv2.weight]
+
+  gemm_pruner_agp:
+    class: 'AutomatedGradualPruner'
+    initial_sparsity: 0.02
+    final_sparsity: 0.15
+    weights: [module.fc2.weight]
+
+
+extensions:
+  net_thinner:
+      class: 'FilterRemover'
+      thinning_func_str: remove_filters
+      arch: 'simplenet_mnist'
+      dataset: 'mnist'
+
+
+policies:
+  - pruner:
+      instance_name: filter_pruner
+    epochs: [0,1]
+
+  - pruner:
+      instance_name: filter_pruner_agp
+    starting_epoch: 0
+    ending_epoch: 2
+    frequency: 1
+
+  - pruner:
+      instance_name: gemm_pruner_agp
+    starting_epoch: 0
+    ending_epoch: 2
+    frequency: 1
+
+  - extension:
+      instance_name: net_thinner
+    epochs: [2]
