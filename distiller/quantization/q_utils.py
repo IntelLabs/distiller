@@ -240,7 +240,7 @@ class AciqAsymmetricClipper(AciqClipper):
         else:
             alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
         if isinstance(t, dict):
-            mean, min_val = torch.tensor(t['mean']), torch.tensor(t['min'])
+            mean, min_val = torch.tensor(t['mean']), torch.tensor(t['avg_min'])
         else:
             mean = t.mean()
             min_val = get_tensor_min_max(t, across_dim)[0].mean()
