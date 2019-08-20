@@ -1093,7 +1093,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def _apply_bn_folding(self, dummy_input):
         msglogger.info('Applying batch-norm folding ahead of post-training quantization')
-        mt.fold_batch_norms_inference(self.model, adjacency_map=self.adjacency_map)
+        mt.fold_batch_norms(self.model, adjacency_map=self.adjacency_map, inference=True)
 
         # After BN folding model need to re-generate the adjacency map
         summary_graph = distiller.SummaryGraph(self.model, dummy_input)
