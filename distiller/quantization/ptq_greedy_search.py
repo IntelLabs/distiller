@@ -246,4 +246,4 @@ if __name__ == "__main__":
                                               model_device=args.device)
     dummy_input = torch.rand(*model.input_shape, device=args.device)
     m, overrides = ptq_greedy_search(model, dummy_input, test_fn)
-    distiller.yaml_ordered_save('%s.ptq_overrides.yaml' % args.arch, overrides)
+    distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, overrides)
