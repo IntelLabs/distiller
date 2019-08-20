@@ -147,7 +147,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None, *,
 
     if 'thinning_recipes' in checkpoint:
         if 'compression_sched' not in checkpoint:
-            raise KeyError("Found thinning_recipes key, but missing mandatory key compression_sched")
+            msglogger.warning("Found thinning_recipes key, but missing mandatory key compression_sched")
+            compression_scheduler = distiller.CompressionScheduler(model)
         msglogger.info("Loaded a thinning recipe from the checkpoint")
         # Cache the recipes in case we need them later
         model.thinning_recipes = checkpoint['thinning_recipes']
