@@ -118,9 +118,9 @@ PARAM_MODULES = (
     nn.Conv3d
 )
 
-CLIP_MODES = [ClipMode.NONE,
-              ClipMode.AVG,
-              ClipMode.GAUSS,
+CLIP_MODES = ['NONE',
+              'AVG',
+              'GAUSS',
               # ClipMode.LAPLACE - param 'b' still unsupported
               ]
 
@@ -215,12 +215,13 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                 best_performance = current_perf
 
     quantizer = PostTrainLinearQuantizer(model, mode=LinearQuantMode.ASYMMETRIC_SIGNED,
-                                         clip_acts=ClipMode.NONE, overrides=best_overrides_dict,
+                                         clip_acts=ClipMode.NONE, overrides=deepcopy(best_overrides_dict),
                                          model_activation_stats=act_stats)
     for fp16_layer_type in FP16_LAYERS:
         quantizer.replacement_factory[fp16_layer_type] = fp16_replacement
     quantizer.prepare_model(dummy_input)
     print('best_overrides_dict: %s' % best_overrides_dict)
+    print('Best score ', eval_fn(quantizer.model))
     return model, best_overrides_dict
 
 
@@ -244,4 +245,5 @@ if __name__ == "__main__":
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
     dummy_input = torch.rand(*model.input_shape, device=args.device)
-    ptq_greedy_search(model, dummy_input, test_fn)
+    m, overrides = ptq_greedy_search(model, dummy_input, test_fn)
+    distiller.yaml_ordered_save('%s.ptq_overrides.yaml' % args.arch, overrides)
