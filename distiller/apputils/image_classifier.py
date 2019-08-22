@@ -55,7 +55,7 @@ class ClassifierCompressor(object):
     """
     def __init__(self, args, script_dir):
         self.args = args
-        _override_args(args)
+        _infer_implicit_args(args)
         self.logdir = _init_logger(args, script_dir)
         _config_determinism(args)
         _config_compute_device(args)
@@ -65,7 +65,7 @@ class ClassifierCompressor(object):
         self.tflogger = TensorBoardLogger(msglogger.logdir)
         self.pylogger = PythonLogger(msglogger)
         (self.model, self.compression_scheduler, self.optimizer, 
-         self.start_epoch, self.ending_epoch, self.accumulated_training_steps) = _init_learner(args)
+            self.start_epoch, self.ending_epoch, self.accumulated_training_steps) = _init_learner(args)
 
         # Define loss function (criterion)
         self.criterion = nn.CrossEntropyLoss().to(args.device)
@@ -74,13 +74,18 @@ class ClassifierCompressor(object):
     
     def load_datasets(self):
         """Load the datasets"""
-        self.train_loader, self.val_loader, self.test_loader = load_data(self.args)
+        if not all((self.train_loader, self.val_loader, self.test_loader)):
+            self.train_loader, self.val_loader, self.test_loader = load_data(self.args)
+        return self.data_loaders
+
+    @property
+    def data_loaders(self):
+        return self.train_loader, self.val_loader, self.test_loader
 
     def train_one_epoch(self, epoch, verbose=True):
-        if self.train_loader is None:
-            self.load_datasets()
+        """Train for one epoch"""
+        self.load_datasets()
 
-        # Train for one epoch
         with collectors_context(self.activations_collectors["train"]) as collectors:
             top1, top5, loss = train(self.train_loader, self.model, self.criterion, self.optimizer, 
                                      epoch, self.compression_scheduler, 
@@ -110,7 +115,9 @@ class ClassifierCompressor(object):
         return top1, top5, loss
 
     def validate_one_epoch(self, epoch, verbose=True):
-        # evaluate on validation set
+        """Evaluate on validation set"""
+        self.load_datasets()
+
         with collectors_context(self.activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(self.val_loader, self.model, self.criterion, 
                                          [self.pylogger], self.args, epoch)
@@ -151,9 +158,8 @@ class ClassifierCompressor(object):
             validate_one_epoch
             finalize_epoch
         """
-        if self.train_loader is None:
-            # Load the datasets lazily
-            self.load_datasets()
+        # Load the datasets lazily
+        self.load_datasets()
 
         perf_scores_history = []       
         for epoch in range(self.start_epoch, self.ending_epoch):
@@ -162,10 +168,12 @@ class ClassifierCompressor(object):
             self._finalize_epoch(epoch, perf_scores_history, top1, top5)
 
     def validate(self, epoch=-1):
+        self.load_datasets()
         return validate(self.val_loader, self.model, self.criterion,
                         [self.tflogger, self.pylogger], self.args, epoch)
 
     def test(self):
+        self.load_datasets()
         return test(self.test_loader, self.model, self.criterion,
                     self.pylogger, self.activations_collectors, args=self.args)
 
@@ -333,7 +341,6 @@ def _config_compute_device(args):
         if args.gpus is not None:
             try:
                 args.gpus = [int(s) for s in args.gpus.split(',')]
-                
             except ValueError:
                 raise ValueError('ERROR: Argument --gpus must be a comma-separated list of integers only')
             available_gpus = torch.cuda.device_count()
@@ -345,12 +352,14 @@ def _config_compute_device(args):
             torch.cuda.set_device(args.gpus[0])
 
 
-def _override_args(args):
+def _infer_implicit_args(args):
     if args.arch is None:
         args.arch = 'resnet18'
     # Infer the dataset from the model name
-    args.dataset = distiller.apputils.classification_dataset_str_from_arch(args.arch)
-    args.num_classes = distiller.apputils.classification_num_classes(args.dataset)
+    if not hasattr(args, 'dataset'):
+        args.dataset = distiller.apputils.classification_dataset_str_from_arch(args.arch)
+    if not hasattr(args, "num_classes"):
+        args.num_classes = distiller.apputils.classification_num_classes(args.dataset)
 
 
 def _init_learner(args):
@@ -396,8 +405,8 @@ def _init_learner(args):
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
     if optimizer is None:
-        optimizer = torch.optim.SGD(model.parameters(),
-            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
+                                    momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.debug('Optimizer Type: %s', type(optimizer))
         msglogger.debug('Optimizer Args: %s', optimizer.defaults)
 
@@ -637,6 +646,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
 # Temporary patch until we refactor early-exit handling
 def _is_earlyexit(args):
     return hasattr(args, 'earlyexit_thresholds') and args.earlyexit_thresholds
+
 
 def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     """Execute the validation/test loop."""
