@@ -29,7 +29,7 @@ from numbers import Number
 from tabulate import tabulate
 import torch
 import distiller
-from distiller.utils import normalize_module_name, getModuleFromModel, inferDatasetNameFromImageClassifierModel
+from distiller.utils import normalize_module_name, getModuleFromModel
 
 msglogger = logging.getLogger()
 

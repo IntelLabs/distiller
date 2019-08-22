@@ -742,3 +742,7 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
         return type(val)(convert_tensors_recursively_to(item, *args, **kwargs) for item in val)
 
     return val
+
+def getModuleFromModel(model):
+    """Return the module, which is sometimes wrapped by DataParallel object."""
+    return model if (type(model).__name__ != 'DataParallel') else model.module
