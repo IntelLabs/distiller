@@ -111,14 +111,19 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
                                                                      arch, dataset))
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
-        if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
-            model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
-        elif parallel:
-            model = torch.nn.DataParallel(model, device_ids=device_ids)
+        if parallel:
+            if arch.startswith('alexnet') or arch.startswith('vgg'):
+                model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
+            else:
+                model = torch.nn.DataParallel(model, device_ids=device_ids)
     else:
         device = 'cpu'
 
+    # Cache some attributes which describe the model
     _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene)
+    model.arch = arch
+    model.dataset = dataset
+    model.is_parallel = parallel
     return model.to(device)
 
 
