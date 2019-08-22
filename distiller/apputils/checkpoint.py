@@ -62,10 +62,15 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
     filename_best = 'best.pth.tar' if name is None else name + '_best.pth.tar'
     fullpath_best = os.path.join(dir, filename_best)
 
-    checkpoint = {}
-    checkpoint['epoch'] = epoch
-    checkpoint['arch'] = arch
-    checkpoint['state_dict'] = model.state_dict()
+    checkpoint = {'epoch': epoch, 'state_dict': model.state_dict(), 'arch': arch}
+    try:
+        checkpoint['is_parallel'] = model.is_parallel
+        checkpoint['dataset'] = model.dataset
+        if not arch:
+            checkpoint['arch'] = model.arch
+    except NameError:
+        pass
+
     if optimizer is not None:
         checkpoint['optimizer_state_dict'] = optimizer.state_dict()
         checkpoint['optimizer_type'] = type(optimizer)
@@ -105,7 +110,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
     """Load a pytorch training checkpoint.
 
     Args:
-        model: the pytorch model to which we will load the parameters
+        model: the pytorch model to which we will load the parameters.  You can
+        specify model=None if the checkpoint contains enough metadata to infer
+        the model.  The order of the arguments is misleading and clunky, and is
+        kept this way for backward compatibility.
         chkpt_file: the checkpoint file
         lean_checkpoint: if set, read into model only 'state_dict' field
         optimizer: [deprecated argument]
@@ -159,8 +167,24 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
             msglogger.warning('Optimizer could not be loaded from checkpoint.')
             return None
 
+    def _create_model_from_ckpt():
+        try:
+            return distiller.models.create_model(False, checkpoint['dataset'], checkpoint['arch'],
+                                                 checkpoint['is_parallel'], device_ids=None)
+        except KeyError:
+            return None
+
+    def _sanity_check():
+        try:
+            if model.arch != checkpoint["arch"]:
+                raise ValueError("The model architecture does not match the checkpoint architecture")
+        except (NameError, KeyError):
+            # One of the values is missing so we can't perform the comparison
+            pass
+
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
+    assert optimizer == None, "argument optimizer is deprecated and must be set to None"
 
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
@@ -171,9 +195,14 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
     if 'state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain the model parameters under the key 'state_dict'")
 
+    if not model:
+        model = _create_model_from_ckpt()
+        if not model:
+            raise ValueError("You didn't provide a model, and the checkpoint doesn't contain"
+                             "enough information to create one")
+
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
-
     compression_scheduler = None
     normalize_dataparallel_keys = False
     if 'compression_sched' in checkpoint:
@@ -217,4 +246,5 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
     optimizer = _load_optimizer()
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
                                                                    e=checkpoint_epoch))
+    _sanity_check()
     return model, compression_scheduler, optimizer, start_epoch
