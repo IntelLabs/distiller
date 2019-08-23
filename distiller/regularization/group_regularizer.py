@@ -82,14 +82,45 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
 
         return regularizer_loss
 
-    def threshold(self, param, param_name, zeros_mask_dict):
+    def threshold(self, param, param_name, zeros_mask_dict, model):
         if self.threshold_criteria is None or param_name not in self.reg_regims:
             return
 
         group_type = self.reg_regims[param_name][1]
+        # strength : threshold
         strength = self.reg_regims[param_name][0]
-        zeros_mask_dict[param_name].mask = self.group_threshold_mask(param, group_type, strength, self.threshold_criteria)
+        # set leads
+        if len(self.reg_regims[param_name]) == 4:
+            leads = self.reg_regims[param_name][3]
+            zeros_mask_dict[param_name].mask, binary_map = GroupLassoRegularizer.mask_leader(param, group_type, strength, self.threshold_criteria)
+            zeros_mask_dict[param_name].apply_mask(param)
+            try:
+                for child_param_name in leads:
+                    child_param = model.state_dict()[child_param_name]
+                    zeros_mask_dict[child_param_name].mask = GroupLassoRegularizer.mask_leader_child(child_param, binary_map)
+                    zeros_mask_dict[child_param_name].apply_mask(child_param)
+            except RuntimeError:
+                print("param_name: ", param_name)
+                print("childe_param_name: ", child_param_name)
+                print("binary_map size: ", binary_map.size())
+                print("child_param size" , child_param.size())
+                exit(-1)
+        else:
+            zeros_mask_dict[param_name].mask = \
+                self.group_threshold_mask(param, group_type, strength, self.threshold_criteria)
+            zeros_mask_dict[param_name].apply_mask(param)
         zeros_mask_dict[param_name].is_regularization_mask = True
+
+
+    @staticmethod
+    def mask_leader(param, group_type, strength, threshold_criteria):
+        from distiller.thresholding import group_threshold_mask
+        return group_threshold_mask(param, group_type, strength, threshold_criteria)
+
+    @staticmethod
+    def mask_leader_child(param, binary_map):
+        a = binary_map.expand(param.size(1) * param.size(2) * param.size(3), param.size(0)).t()
+        return a.view(*param.shape)
 
     @staticmethod
     def __grouplasso_reg(groups, strength, dim):

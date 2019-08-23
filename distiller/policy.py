@@ -227,7 +227,7 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
             keep_mask = True
 
         for param_name, param in model.named_parameters():
-            self.regularizer.threshold(param, param_name, zeros_mask_dict)
+            self.regularizer.threshold(param, param_name, zeros_mask_dict, model)
             if keep_mask:
                 zeros_mask_dict[param_name].is_regularization_mask = False
             zeros_mask_dict[param_name].apply_mask(param)
