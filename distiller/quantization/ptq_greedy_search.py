@@ -182,7 +182,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                                                           bits_bias=32)
             elif isinstance(module, classes):
                 current_module_override = module_override(clip_acts=clip_mode,
-                                                          num_bits_acts=8)
+                                                          bits_weights=8,
+                                                          bits_activations=8)
             else:
                 current_module_override = module_override(fp16=True)
 

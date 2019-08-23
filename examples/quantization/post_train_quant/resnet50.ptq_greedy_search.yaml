@@ -1,0 +1,338 @@
+# python -m distiller.quantization.ptq_greedy_search -a resnet50 \
+# --pretrained -j 1 --gpus 0 --load-serialized ../data.imagenet
+# base score 76.13
+# best score = 74.842
+conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.0.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.0.downsample.0:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.0.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer1.0.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer1.0.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.1.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer1.1.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer1.1.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.1.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.2.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer1.2.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer1.2.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer1.2.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer2.0.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer2.0.downsample.0:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer2.0.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer2.0.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.0.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.1.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.1.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer2.1.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.1.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.2.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: GAUSS
+layer2.2.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.2.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.2.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer2.3.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.3.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.3.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer2.3.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.0.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.0.downsample.0:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.0.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.0.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.0.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.1.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.1.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.1.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.1.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.2.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.2.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.2.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.2.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.3.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.3.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.3.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.3.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.4.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.4.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.4.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.4.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.5.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.5.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer3.5.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer3.5.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.0.downsample.0:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.0.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer4.0.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.0.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.0.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.1.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.1.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.1.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.1.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.2.conv1:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.2.conv2:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: AVG
+layer4.2.conv3:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+layer4.2.add:
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
+fc:
+  bits_bias: 32
+  bits_weights: 8
+  bits_activations: 8
+  clip_acts: NONE
