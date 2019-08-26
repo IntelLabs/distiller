@@ -56,7 +56,7 @@ class AutoCompressionSampleApp(classifier.ClassifierCompressor):
     def train_auto_compressor(self):
         using_fm_reconstruction = self.args.amc_prune_method == 'fm-reconstruction'
         fixed_subset, sequential = (using_fm_reconstruction, using_fm_reconstruction)
-        msglogger.info("ADC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
+        msglogger.info("AMC: fixed_subset=%s\tsequential=%s" % (fixed_subset, sequential))
         train_loader, val_loader, test_loader = classifier.load_data(self.args, fixed_subset, sequential)
 
         self.args.display_confusion = False

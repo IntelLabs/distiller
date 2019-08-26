@@ -9,6 +9,13 @@ __pycache__/
 .pytest_cache
 .cache
 pytest_collaterals/
+examples/ncf/run/
+examples/ncf/ml-20m*
+
+# GNMT sample
+examples/GNMT/data
+examples/GNMT/model_best.pth
+examples/GNMT/output_file*
 
 # Virtual env
 env/

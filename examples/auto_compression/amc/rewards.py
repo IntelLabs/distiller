@@ -78,11 +78,8 @@ def mac_constrained_clamp_action(env, pruning_action):
                                 duty/env.original_model_macs,
                                 flops/env.original_model_macs))
     if pruning_action_final != pruning_action:
-        msglogger.debug("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
-                        format(pruning_action, pruning_action_final, reduced/env.original_model_macs,
-                                rest/env.original_model_macs, 1-env.amc_cfg.target_density,
-                                duty/env.original_model_macs,
-                                flops/env.original_model_macs))
+        msglogger.debug("pruning_action={:.2f}==>pruning_action_final={:.2f}".format(pruning_action,
+                                                                                     pruning_action_final))
     return pruning_action_final
 
 

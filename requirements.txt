@@ -20,3 +20,4 @@ xlsxwriter>=1.1.1
 pretrainedmodels==0.7.4
 scikit-learn==0.21.2
 gym==0.12.5
+tqdm==4.33.0
