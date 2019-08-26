@@ -18,15 +18,15 @@
 
 There are three ways to configure an instance of CompressionScheduler:
 
-1. Direct creating and programming of the scheduling objects.  For example:
+1. Directly create and program scheduling objects.  For example:
     # Element-wise sparasity
     sparsity_levels = {net_param: sparsity_level}
     pruner = distiller.pruning.SparsityLevelParameterPruner(name='sensitivity', levels=sparsity_levels)
     policy = distiller.PruningPolicy(pruner, pruner_args=None)
     scheduler = CompressionScheduler(model)
     scheduler.add_policy(policy, epochs=[0, 2, 4])
-2. Creating a dictionary containing the configuration.
-3. Creating a YAML file containing the configuration.
+2. Create a dictionary containing the configuration.
+3. Create a YAML file containing the configuration.
 
 When a YAML file is loaded, its dictionary is extracted and passed to ```dictConfig```.<br>
 
@@ -93,7 +93,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None, resumed_epoch=None
                 policy = distiller.QuantizationPolicy(quantizer)
 
             elif 'lr_scheduler' in policy_def:
-                # LR schedulers take an optimizer in their CTOR, so postpone handling until we're certain
+                # LR schedulers take an optimizer in their constructor, so postpone handling until we're certain
                 # a quantization policy was initialized (if exists)
                 lr_policies.append(policy_def)
                 continue
@@ -109,7 +109,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None, resumed_epoch=None
 
             add_policy_to_scheduler(policy, policy_def, scheduler)
 
-        # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
+        # Any changes to the optimizer caused by a quantizer have occurred by now, so safe to create LR schedulers
         lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer,
                                   last_epoch=(resumed_epoch if resumed_epoch is not None else -1))
         for policy_def in lr_policies:
