@@ -13,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import torch
 import torch.nn as nn
 
 
 class EltwiseAdd(nn.Module):
     def __init__(self, inplace=False):
         super(EltwiseAdd, self).__init__()
+
         self.inplace = inplace
 
     def forward(self, *input):
@@ -47,3 +48,15 @@ class EltwiseMult(nn.Module):
             for t in input[1:]:
                 res = res * t
         return res
+
+
+class EltwiseDiv(nn.Module):
+    def __init__(self, inplace=False):
+        super(EltwiseDiv, self).__init__()
+        self.inplace = inplace
+
+    def forward(self, x: torch.Tensor, y):
+        if self.inplace:
+            return x.div_(y)
+        return x.div(y)
+
