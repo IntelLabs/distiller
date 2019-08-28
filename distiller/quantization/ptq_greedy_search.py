@@ -21,7 +21,7 @@ import torch.nn as nn
 from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode, FP16Wrapper
 from distiller.summary_graph import SummaryGraph
 import distiller.modules
-import distiller.data_loggers
+from distiller.data_loggers import collect_quant_stats
 from distiller.models import create_model
 from collections import OrderedDict
 import logging
@@ -118,6 +118,10 @@ PARAM_MODULES = (
     nn.Conv3d
 )
 
+UNQUANTIZED_MODULES = (
+    nn.Softmax,
+)
+
 CLIP_MODES = ['NONE',
               'AVG',
               'GAUSS',
@@ -133,7 +137,8 @@ def module_override(**kwargs):
     return OrderedDict(kwargs)
 
 
-def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLASSES, act_stats=None):
+def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
+                      recurrent=False, classes=CLASSES, act_stats=None):
     """
     Perform greedy search on Post Train Quantization configuration for the model.
     Args:
@@ -142,6 +147,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
         eval_fn (function): Test/Evaluation function for the model. It must have an argument named 'model' that
           accepts the model. All other arguments should be set in advance (can be done using functools.partial), or
           they will be left with their default values.
+        calib_eval_fn (function): An 'evaluation' function to use for forward passing
+          through the model to collection quantization calibration statistics.
+          if None provided - will use `eval_fn` as a default.
         recurrent (bool): a flag to indicate whether the model has recurrent connections.
         classes (Tuple[type]): a list of types we allow quantization.
         act_stats (OrderedDict): quant calibration activation stats.
@@ -150,21 +158,46 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
         (quantized_model, best_overrides_dict)
     Note:
         It is assumed that `eval_fn` returns a satisfying metric of performance (e.g. accuracy)
-        and the greedy search aims to maximize this metric
+        and the greedy search aims to maximize this metric.
     """
     best_overrides_dict = OrderedDict()
     overrides_dict = OrderedDict()
+    adjacency_map = SummaryGraph(model, dummy_input).adjacency_map()
     modules_to_quantize = layers_quant_order(model, dummy_input, recurrent)
     modules_dict = dict(model.named_modules())
     modules_to_quantize = [m for m in modules_to_quantize if isinstance(modules_dict[m], classes)]
+    calib_eval_fn = calib_eval_fn or eval_fn
     if not act_stats:
         print('Collecting stats for model...')
-        model_temp = deepcopy(model)
-        act_stats = distiller.data_loggers.collect_quant_stats(model_temp, eval_fn)
+        model_temp = distiller.utils.make_non_parallel_copy(model)
+        act_stats = collect_quant_stats(model_temp, calib_eval_fn)
         del model_temp
         print('Done.')
     base_score = eval_fn(model)
     print("Base score: %.3f" % base_score)
+
+    def recalibrate_stats(module_name, act_stats):
+        """
+        Re-collects quant-calibration stats for successor modules of the current module.
+        """
+        modules_to_recalibrate = {op.name for op in adjacency_map[module_name].successors} & set(act_stats)
+        if not modules_to_recalibrate:
+            # either there aren't any successors or
+            # the successors aren't in the stats file - skip
+            return act_stats
+        q = PostTrainLinearQuantizer(distiller.utils.make_non_parallel_copy(model),
+                                     bits_activations=None,
+                                     bits_parameters=None,
+                                     bits_accum=32,
+                                     mode=LinearQuantMode.ASYMMETRIC_SIGNED,
+                                     clip_acts=ClipMode.NONE,
+                                     overrides=deepcopy(best_overrides_dict),
+                                     model_activation_stats=deepcopy(act_stats))
+        q.prepare_model(dummy_input)
+        # recalibrate on the current best quantized version of the model.
+        recalib_act_stats = collect_quant_stats(q.model, calib_eval_fn, modules_to_collect=modules_to_recalibrate)
+        act_stats.update(recalib_act_stats)
+        return act_stats
 
     def fp16_replacement(module, *args):
         return FP16Wrapper(module)
@@ -184,6 +217,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                 current_module_override = module_override(clip_acts=clip_mode,
                                                           bits_weights=8,
                                                           bits_activations=8)
+            elif isinstance(module, UNQUANTIZED_MODULES):
+                current_module_override = module_override()
             else:
                 current_module_override = module_override(fp16=True)
 
@@ -215,6 +250,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
                 best_overrides_dict[module_name] = current_module_override
                 best_performance = current_perf
 
+        # end of search - we update the calibration of the next layers:
+        recalibrate_stats(module_name, act_stats)
+
     quantizer = PostTrainLinearQuantizer(model, mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                          clip_acts=ClipMode.NONE, overrides=deepcopy(best_overrides_dict),
                                          model_activation_stats=act_stats)
@@ -227,16 +265,31 @@ def ptq_greedy_search(model, dummy_input, eval_fn, recurrent=False, classes=CLAS
 
 
 if __name__ == "__main__":
-    args = classifier.init_classifier_compression_arg_parser().parse_args()
+    parser = classifier.init_classifier_compression_arg_parser()
+    parser.add_argument('--qe-calib-portion', type=float, default=1.0,
+                        help='The portion of the dataset to use for calibration stats collection.')
+    parser.add_argument('--qe-calib-batchsize', type=int, default=256,
+                        help='The portion of the dataset to use for calibration stats collection.')
+    args = parser.parse_args()
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
-    data_loader = classifier.load_data(args, load_train=False, load_val=False)
+    eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
+
+    # quant calibration dataloader:
+    args.effective_test_size = args.qe_calib_portion
+    args.batch_size = args.qe_calib_batchsize
+    calib_data_loader = classifier.load_data(args, load_train=False, load_val=False)
+
     msglogger = logging.getLogger()
     logging.disable(logging.WARNING)
 
     def test_fn(model):
-        top1, top5, losses = classifier.test(data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,
+        top1, top5, losses = classifier.test(eval_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,
                                              args)
         return top1
+
+    def calib_eval_fn(model):
+        classifier.test(calib_data_loader, model, cc.criterion, [], None,
+                        args)
 
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
@@ -246,5 +299,5 @@ if __name__ == "__main__":
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
     dummy_input = torch.rand(*model.input_shape, device=args.device)
-    m, overrides = ptq_greedy_search(model, dummy_input, test_fn)
+    m, overrides = ptq_greedy_search(model, dummy_input, test_fn, calib_eval_fn=calib_eval_fn)
     distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, overrides)
