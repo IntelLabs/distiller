@@ -34,7 +34,7 @@ import csv
 import logging
 from contextlib import ExitStack
 import os
-msglogger = logging.getLogger()
+#msglogger = logging.getLogger()
 
 __all__ = ['PythonLogger', 'TensorBoardLogger', 'CsvLogger']
 
@@ -88,12 +88,12 @@ class PythonLogger(DataLogger):
         for layer, statistic in activation_stats.items():
             data.append([layer, statistic])
         t = tabulate.tabulate(data, headers=['Layer', stat_name], tablefmt='psql', floatfmt=".2f")
-        msglogger.info('\n' + t)
+        self.pylogger.info('\n' + t)
 
     def log_weights_sparsity(self, model, epoch):
         t, total = distiller.weights_sparsity_tbl_summary(model, return_total_sparsity=True)
-        msglogger.info("\nParameters:\n" + str(t))
-        msglogger.info('Total sparsity: {:0.2f}\n'.format(total))
+        self.pylogger.info("\nParameters:\n" + str(t))
+        self.pylogger.info('Total sparsity: {:0.2f}\n'.format(total))
 
     def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
         """Logs values of model buffers.
@@ -119,7 +119,7 @@ class PythonLogger(DataLogger):
             if datas[name]:
                 headers = ['Layer'] + ['Val_' + str(i) for i in range(maxlens[name])]
                 t = tabulate.tabulate(datas[name], headers=headers, tablefmt='psql', floatfmt='.4f')
-                msglogger.info('\n' + name.upper() + ': (Epoch {0}, Step {1})\n'.format(epoch, completed) + t)
+                self.pylogger.info('\n' + name.upper() + ': (Epoch {0}, Step {1})\n'.format(epoch, completed) + t)
 
 
 class TensorBoardLogger(DataLogger):
