@@ -314,7 +314,7 @@ class _QuantStatsRecord(object):
         records = OrderedDict()
         records['min'] = float_info.max
         records['max'] = -float_info.max
-        for stat_name in ['avg_min', 'avg_max', 'mean', 'std']:
+        for stat_name in ['avg_min', 'avg_max', 'mean', 'std', 'b']:
             records[stat_name] = 0
         records['shape'] = ''
         return records
@@ -389,6 +389,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
         self.batch_idx = 0
         self.inplace_runtime_check = inplace_runtime_check
+        self.collecting_laplace = False
 
         if disable_inplace_attrs:
             if not inplace_attr_names:
@@ -397,6 +398,14 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 for n in inplace_attr_names:
                     if hasattr(m, n):
                         setattr(m, n, False)
+
+    def start_laplace(self):
+        self.collecting_laplace = True
+        self.start()
+
+    def stop_laplace(self):
+        self.collecting_laplace = False
+        self.stop()
 
     def _activation_stats_cb(self, module, inputs, output):
         def update_mean(old_mean, new_val):
@@ -412,10 +421,20 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             M += mean_diffs.sum()
             return sqrt((M / (total_values_so_far + numel - 1)).item())
 
+        def update_b(values, old_b, mean):
+            """
+            Updates the 'b' parameter of Laplace Distribution.
+            """
+            current_b = (values - mean).abs().mean().item()
+            return old_b + (current_b - old_b) / module.batch_idx
+
         def update_record(record, tensor):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
+            if self.collecting_laplace:
+                record['b'] = update_b(act, record['b'], record['mean'])
+                return
 
             # In the general case, the average min/max that we're collecting are averages over the per-sample
             # min/max values. That is - we first calculate the min/max for each sample in the batch, then average
@@ -462,8 +481,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             update_record(module.quant_stats.output, output)
 
     def _start_counter(self, module):
-        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
-        module.quant_stats = _QuantStatsRecord()
+        if not hasattr(module, 'quant_stats'):
+            # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+            module.quant_stats = _QuantStatsRecord()
         module.batch_idx = 0
 
     def _reset_counter(self, module):
@@ -691,6 +711,11 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector):
         test_fn(model=model)
+    # Collect Laplace distribution stats:
+    quant_stats_collector.start_laplace()
+    test_fn(model=model)
+    quant_stats_collector.stop_laplace()
+
     msglogger.info('Stats collection complete')
     if save_dir is not None:
         save_path = os.path.join(save_dir, 'acts_quantization_stats.yaml')
