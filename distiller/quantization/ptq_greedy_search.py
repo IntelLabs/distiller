@@ -121,7 +121,7 @@ PARAM_MODULES = (
 CLIP_MODES = ['NONE',
               'AVG',
               'GAUSS',
-              # ClipMode.LAPLACE - param 'b' still unsupported
+              'LAPLACE'
               ]
 
 
