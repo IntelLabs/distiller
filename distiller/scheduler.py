@@ -22,7 +22,7 @@ import contextlib
 import logging
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
-from .policy import PolicyLoss, LossComponent
+from .policy import PolicyLoss, LossComponent, QuantizationPolicy
 from .utils import model_device, normalize_module_name
 
 
@@ -47,7 +47,7 @@ class CompressionScheduler(object):
         for policy in self.policies.values():
             # There can only be a single quantization policy, and we want direct access to it
             # so we can expose the said quantizer outside for operations.
-            if isinstance(policy, distiller.QuantizationPolicy):
+            if isinstance(policy, QuantizationPolicy):
                 return policy
         return None
 
@@ -58,7 +58,7 @@ class CompressionScheduler(object):
             epochs (list): A list, or range, of epochs in which to apply the policy
         """
         if self.quantization_policy is not None \
-                and isinstance(policy, distiller.QuantizationPolicy):
+                and isinstance(policy, QuantizationPolicy):
             raise ValueError("Only a single quantization policy is allowed in a compression scheduler.")
 
         if epochs is None:
