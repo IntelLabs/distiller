@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
 import logging
 import tempfile
-
 import torch
 import pytest
 import distiller
@@ -182,8 +182,8 @@ def test_load_gpu_model_on_cpu_with_thinning():
     distiller.remove_filters(gpu_model, zeros_mask_dict, 'resnet20_cifar', 'cifar10', optimizer=None)
     assert hasattr(gpu_model, 'thinning_recipes')
     scheduler = distiller.CompressionScheduler(gpu_model)
-    save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model, scheduler=scheduler, optimizer=None,
-        dir='checkpoints')
+    save_checkpoint(epoch=0, arch='resnet20_cifar', model=gpu_model,
+                    scheduler=scheduler, optimizer=None, dir='checkpoints')
 
     CPU_DEVICE_ID = -1
     cpu_model = create_model(False, 'cifar10', 'resnet20_cifar', device_ids=CPU_DEVICE_ID)
@@ -269,3 +269,30 @@ def test_get_dummy_input(device):
     check_shape_device(t[0], shape[0], expected_device)
     check_shape_device(t[1][0], shape[1][0], expected_device)
     check_shape_device(t[1][1], shape[1][1], expected_device)
+
+
+def test_load_checkpoint_without_model():
+    checkpoint_filename = 'checkpoints/resnet20_cifar10_checkpoint.pth.tar'
+    # Load a checkpoint w/o specifying the model: this should fail because the loaded
+    # checkpoint is old and does not have the required metadata to create a model.
+    with pytest.raises(ValueError):
+        load_checkpoint(model=None, chkpt_file=checkpoint_filename)
+
+    for model_device in (None, 'cuda', 'cpu'):
+        # Now we create a new model, save a checkpoint, and load it w/o specifying the model.
+        # This should succeed because the checkpoint has enough metadata to create model.
+        model = create_model(False, 'cifar10', 'resnet20_cifar', 0)
+        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model, checkpoint_filename)
+        save_checkpoint(epoch=0, arch='resnet20_cifar', model=model, name='eraseme',
+                        scheduler=compression_scheduler, optimizer=None, dir='checkpoints')
+        temp_checkpoint = os.path.join("checkpoints", "eraseme_checkpoint.pth.tar")
+        model, compression_scheduler, optimizer, start_epoch = load_checkpoint(model=None,
+                                                                               chkpt_file=temp_checkpoint,
+                                                                               model_device=model_device)
+        assert compression_scheduler is not None
+        assert optimizer is None
+        assert start_epoch == 1
+        assert model
+        assert model.arch == "resnet20_cifar"
+        assert model.dataset == "cifar10"
+        os.remove(temp_checkpoint)

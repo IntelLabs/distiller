@@ -100,6 +100,10 @@ class Quantizer(object):
                 3.1 Gradients calculated with respect to q_weights
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
+        Note:
+            The `overrides` dictionary assumes the keys are *not* the module names in the
+            `nn.DataParallel` case - i.e. without the `module.` prefix. e.g.:
+            module.conv1 -> OrderedDict([('conv1', OrderedDict(...))])
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
@@ -148,9 +152,12 @@ class Quantizer(object):
         self.module_qbits_map = {}
         self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
-            # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
-            # module with a wrapper module called 'module' :)
-            name_to_match = module_full_name.replace('module.', '', 1)
+            name_to_match = module_full_name
+            if isinstance(model, nn.DataParallel):
+                # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
+                # module with a wrapper module called 'module' :)
+                # i.e. remove only `module.` prefix from everything
+                name_to_match = re.sub('module\\..*', '', name_to_match)
             qbits = self.default_qbits
             override_entry = self.overrides.get(name_to_match, OrderedDict())
             if regex_overrides:

@@ -1378,3 +1378,21 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                                                   per_channel=perch)
             m.register_buffer(ptq.q_attr_name + '_scale', torch.ones_like(scale))
             m.register_buffer(ptq.q_attr_name + '_zero_point', torch.zeros_like(zero_point))
+
+
+class NCFQuantAwareTrainQuantizer(QuantAwareTrainRangeLinearQuantizer):
+    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False):
+        super(NCFQuantAwareTrainQuantizer, self).__init__(model, optimizer=optimizer,
+                                                          bits_activations=bits_activations,
+                                                          bits_weights=bits_weights,
+                                                          bits_bias=bits_bias,
+                                                          overrides=overrides,
+                                                          mode=mode, ema_decay=ema_decay,
+                                                          per_channel_wts=per_channel_wts,
+                                                          quantize_inputs=False)
+
+        self.replacement_factory[distiller.modules.EltwiseMult] = self.activation_replace_fn
+        self.replacement_factory[distiller.modules.Concat] = self.activation_replace_fn
+        self.replacement_factory[nn.Linear] = self.activation_replace_fn
+        # self.replacement_factory[nn.Sigmoid] = self.activation_replace_fn

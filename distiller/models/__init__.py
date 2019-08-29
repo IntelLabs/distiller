@@ -30,9 +30,11 @@ from distiller.utils import set_model_input_shape_attr
 import logging
 msglogger = logging.getLogger()
 
+SUPPORTED_DATASETS = ('imagenet', 'cifar10', 'mnist')
+
 # ResNet special treatment: we have our own version of ResNet, so we need to over-ride
 # TorchVision's version.
-RESNET_SYMS = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+RESNET_SYMS = ('ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152')
 
 TORCHVISION_MODEL_NAMES = sorted(
                             name for name in torch_models.__dict__
@@ -86,8 +88,11 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             -1 - CPU
             >=0 - GPU device IDs
     """
-    model = None
     dataset = dataset.lower()
+    if dataset not in SUPPORTED_DATASETS:
+        raise ValueError('Dataset {} is not supported'.format(dataset))
+
+    model = None
     cadene = False
     try:
         if dataset == 'imagenet':
@@ -106,14 +111,19 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
                                                                      arch, dataset))
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
-        if (arch.startswith('alexnet') or arch.startswith('vgg')) and parallel:
-            model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
-        elif parallel:
-            model = torch.nn.DataParallel(model, device_ids=device_ids)
+        if parallel:
+            if arch.startswith('alexnet') or arch.startswith('vgg'):
+                model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
+            else:
+                model = torch.nn.DataParallel(model, device_ids=device_ids)
     else:
         device = 'cpu'
 
+    # Cache some attributes which describe the model
     _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene)
+    model.arch = arch
+    model.dataset = dataset
+    model.is_parallel = parallel
     return model.to(device)
 
 

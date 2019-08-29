@@ -446,8 +446,7 @@ class ActivationRankedFilterPruner(_RankedStructureParameterPruner):
         if fraction_to_prune == 0:
             return
         binary_map = self.rank_and_prune_filters(fraction_to_prune, param, param_name,
-                                                 zeros_mask_dict, model, binary_map,
-                                                 self.rounding_fn)
+                                                 zeros_mask_dict, model, binary_map)
         return binary_map
 
     def rank_and_prune_filters(self, fraction_to_prune, param, param_name, zeros_mask_dict, model, binary_map=None):
