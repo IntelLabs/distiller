@@ -157,7 +157,7 @@ class Quantizer(object):
                 # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
                 # module with a wrapper module called 'module' :)
                 # i.e. remove only `module.` prefix from everything
-                name_to_match = re.sub('module\\..*', '', name_to_match)
+                name_to_match = re.sub(r'module\.', '', name_to_match)
             qbits = self.default_qbits
             override_entry = self.overrides.get(name_to_match, OrderedDict())
             if regex_overrides:
