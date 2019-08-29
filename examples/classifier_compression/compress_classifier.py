@@ -165,6 +165,12 @@ class ClassifierCompressorSampleApp(classifier.ClassifierCompressor):
     def __init__(self, args, script_dir):
         super().__init__(args, script_dir)
         early_exit_init(args)
+        # Save the randomly-initialized model before training (useful for lottery-ticket method)
+        if args.save_untrained_model:
+            ckpt_name = '_'.join((self.args.name or "", "untrained"))
+            apputils.save_checkpoint(0, self.args.arch, self.model,
+                                     name=ckpt_name, dir=msglogger.logdir)
+
 
     def handle_subapps(self):
         return handle_subapps(self.model, self.criterion, self.optimizer,
