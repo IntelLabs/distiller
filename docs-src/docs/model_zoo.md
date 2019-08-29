@@ -287,7 +287,6 @@ extensions:
   net_thinner:
       class: 'FilterRemover'
       thinning_func_str: remove_filters
-      arch: 'resnet56_cifar'
       dataset: 'cifar10'
 ```
 

@@ -282,8 +282,9 @@ class NetworkWrapper(object):
 
         # Use the mask to prune
         self.zeros_mask_dict[conv_pname].apply_mask(conv_p)
-        if apply_thinning:     
-            remove_structures_fn(self.model, self.zeros_mask_dict, self.app_args.arch, self.app_args.dataset, optimizer=None)
+        if apply_thinning:
+            input_shape = tuple(distiller.apputils.classification_get_input_shape(self.app_args.dataset))
+            remove_structures_fn(self.model, self.zeros_mask_dict, input_shape, optimizer=None)
 
         self.model_metadata.reduce_layer_macs(layer, final_action)
         macs_after = self.layer_net_macs(layer)

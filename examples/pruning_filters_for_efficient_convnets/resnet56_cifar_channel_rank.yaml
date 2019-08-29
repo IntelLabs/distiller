@@ -152,7 +152,6 @@ extensions:
   net_thinner:
       class: StructureRemover
       thinning_func_str: remove_channels
-      arch: resnet56_cifar
       dataset: cifar10
 
 lr_schedulers:

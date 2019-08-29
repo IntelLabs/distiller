@@ -87,7 +87,11 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
     logger.debug("CUDNN version: %s", torch.backends.cudnn.version())
     logger.debug("Kernel: %s", platform.release())
     if HAVE_LSB:
-        logger.debug("OS: %s", lsb_release.get_lsb_information()['DESCRIPTION'])
+        if 'get_lsb_information' in lsb_release.__dict__:
+            lsb_fun = lsb_release.get_lsb_information
+        elif 'get_distro_information' in lsb_release.__dict__:
+            lsb_fun = lsb_release.get_distro_information
+        logger.debug("OS: %s", lsb_fun()['DESCRIPTION'])
     logger.debug("Python: %s", sys.version)
     try:
         logger.debug("PYTHONPATH: %s", os.environ['PYTHONPATH'])

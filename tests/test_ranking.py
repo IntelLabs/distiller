@@ -89,6 +89,7 @@ def test_ranked_channel_pruning():
     assert conv1.in_channels == 16
 
     # Test thinning
-    distiller.remove_channels(model, zeros_mask_dict, "resnet20_cifar", "cifar10", optimizer=None)
+    input_shape = tuple(distiller.apputils.classification_get_input_shape("cifar10"))
+    distiller.remove_channels(model, zeros_mask_dict, input_shape, optimizer=None)
     assert conv0.out_channels == 15
     assert conv1.in_channels == 15

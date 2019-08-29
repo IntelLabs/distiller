@@ -1,6 +1,6 @@
 # GSS (Guided Structured Sparsity).
 # "Attention-Based Guided Structured Sparsity of Deep Neural Networks",
-# Amirsina Torfi, Rouzbeh A. Shirvani, Sobhan Soleymani, Nasser M. Nasrabadi
+# Amirsina Torfi, Rouzbeh A. Shirvani, Sobhan Soleymani, Nasser M. Nasrabadi
 # ICLR 2018
 # https://arxiv.org/abs/1802.09902
 #
@@ -50,7 +50,6 @@ extensions:
   net_thinner:
       class: 'ChannelRemover'
       thinning_func_str: remove_channels
-      arch: 'resnet20_cifar'
       dataset: 'cifar10'
 
 policies:
