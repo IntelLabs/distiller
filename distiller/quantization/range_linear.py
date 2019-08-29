@@ -197,9 +197,12 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
-    group.add_argument('--qe-stats-file', type=str, metavar='PATH',
-                       help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
-                            'be run (Note that not all layer types are supported for dynamic quantization)')
+
+    stats_group = group.add_mutually_exclusive_group()
+    stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
+                       help='Path to YAML file with pre-made calibration stats')
+    stats_group.add_argument('--qe-dynamic', action='store_true', help='Apply dynamic quantization')
+
     group.add_argument('--qe-config-file', type=str, metavar='PATH',
                        help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
                             'all other --qe* arguments are ignored)')
@@ -1025,7 +1028,7 @@ class PostTrainLinearQuantizer(Quantizer):
                        mode=args.qe_mode,
                        clip_acts=args.qe_clip_acts,
                        per_channel_wts=args.qe_per_channel,
-                       model_activation_stats=args.qe_stats_file,
+                       model_activation_stats=(None if args.qe_dynamic else args.qe_stats_file),
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides)

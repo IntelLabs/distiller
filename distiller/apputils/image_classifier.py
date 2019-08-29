@@ -822,7 +822,7 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, activat
     if args is None:
         raise NotImplementedError('args cannot be set to None')
 
-    if not args.qe_stats_file:
+    if not (args.qe_dynamic or args.qe_stats_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
         args_copy.effective_test_size = args_copy.qe_calibration
