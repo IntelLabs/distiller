@@ -29,6 +29,7 @@ from copy import deepcopy
 import distiller.apputils.image_classifier as classifier
 import os
 import distiller.apputils as apputils
+import re
 
 msglogger = None
 
@@ -138,7 +139,8 @@ def module_override(**kwargs):
 
 
 def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
-                      recurrent=False, classes=CLASSES, act_stats=None):
+                      recurrent=False, classes=CLASSES, act_stats=None,
+                      args=None):
     """
     Perform greedy search on Post Train Quantization configuration for the model.
     Args:
@@ -154,6 +156,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         classes (Tuple[type]): a list of types we allow quantization.
         act_stats (OrderedDict): quant calibration activation stats.
             if None provided - will be calculated on runtime.
+        args: command line arguments
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
@@ -165,14 +168,19 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     adjacency_map = SummaryGraph(model, dummy_input).adjacency_map()
     modules_to_quantize = layers_quant_order(model, dummy_input, recurrent)
     modules_dict = dict(model.named_modules())
-    modules_to_quantize = [m for m in modules_to_quantize if isinstance(modules_dict[m], classes)]
+    modules_to_quantize = [m for m in modules_to_quantize
+                           if isinstance(modules_dict[m], classes)
+                           and m not in args.qe_no_quant_layers]
+
     calib_eval_fn = calib_eval_fn or eval_fn
     if not act_stats:
         print('Collecting stats for model...')
         model_temp = distiller.utils.make_non_parallel_copy(model)
         act_stats = collect_quant_stats(model_temp, calib_eval_fn)
         del model_temp
-        print('Done.')
+        act_stats_path = '%s_act_stats.yaml' % args.arch
+        print('Done. Saving act stats into %s' % act_stats_path)
+        distiller.yaml_ordered_save(act_stats_path, act_stats)
     base_score = eval_fn(model)
     print("Base score: %.3f" % base_score)
 
@@ -207,6 +215,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         module = modules_dict[module_name]
         overrides_dict = deepcopy(best_overrides_dict)
         best_performance = float("-inf")
+        normalized_module_name = module_name
+        if isinstance(model, nn.DataParallel):
+            normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
         for clip_mode in CLIP_MODES:
             if isinstance(module, PARAM_MODULES):
                 current_module_override = module_override(clip_acts=clip_mode,
@@ -222,15 +233,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             else:
                 current_module_override = module_override(fp16=True)
 
-            overrides_dict[module_name] = current_module_override
-            if clip_mode == ClipMode.LAPLACE:
-                # Since parameter b isn't implemented yet -
-                # we don't use activation stats for this module
-                # instead we use dynamic quantization:
-                temp_act_stats = deepcopy(act_stats)
-                temp_act_stats[module_name] = None
-            else:
-                temp_act_stats = deepcopy(act_stats)
+            overrides_dict[normalized_module_name] = current_module_override
+            temp_act_stats = deepcopy(act_stats)
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
                                                  bits_activations=None,
                                                  bits_parameters=None,
@@ -247,7 +251,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             print('\t%s\t score = %.3f\tLayer overrides: %s' %
                   (clip_mode, current_perf, current_module_override))
             if current_perf > best_performance:
-                best_overrides_dict[module_name] = current_module_override
+                best_overrides_dict[normalized_module_name] = current_module_override
                 best_performance = current_perf
 
         # end of search - we update the calibration of the next layers:
@@ -266,6 +270,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
 
 if __name__ == "__main__":
     parser = classifier.init_classifier_compression_arg_parser()
+    parser.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
+                       help='List of layer names for which to skip quantization.')
     parser.add_argument('--qe-calib-portion', type=float, default=1.0,
                         help='The portion of the dataset to use for calibration stats collection.')
     parser.add_argument('--qe-calib-batchsize', type=int, default=256,
@@ -299,5 +305,13 @@ if __name__ == "__main__":
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
     dummy_input = torch.rand(*model.input_shape, device=args.device)
-    m, overrides = ptq_greedy_search(model, dummy_input, test_fn, calib_eval_fn=calib_eval_fn)
+    if args.qe_stats_file:
+        print("Loading stats from %s" % args.qe_stats_file)
+        with open(args.qe_stats_file, 'r') as f:
+            act_stats = distiller.yaml_ordered_load(f)
+    else:
+        act_stats = None
+    m, overrides = ptq_greedy_search(model, dummy_input, test_fn,
+                                     calib_eval_fn=calib_eval_fn, args=args,
+                                     act_stats=act_stats)
     distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, overrides)
