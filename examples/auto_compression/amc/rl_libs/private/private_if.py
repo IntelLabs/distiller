@@ -44,7 +44,6 @@ class RlLibInterface(object):
         agent_args.lr_a = env.amc_cfg.ddpg_cfg.actor_lr
         agent_args.hidden1 = 300
         agent_args.hidden2 = 300
-        agent_args.rmsize = 100
         agent_args.rmsize = env.amc_cfg.ddpg_cfg.replay_buffer_size
         agent_args.window_length = 1
         agent_args.train_episode = (env.amc_cfg.ddpg_cfg.num_heatup_episodes +
