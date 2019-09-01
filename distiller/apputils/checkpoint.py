@@ -68,7 +68,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         checkpoint['dataset'] = model.dataset
         if not arch:
             checkpoint['arch'] = model.arch
-    except NameError:
+    except AttributeError:
         pass
 
     if optimizer is not None:
