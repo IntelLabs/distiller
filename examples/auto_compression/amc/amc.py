@@ -19,28 +19,12 @@ $ python3 amc.py --arch=resnet20_cifar ${CIFAR10_PATH} --resume=../../ssl/checkp
 """
 
 
-import math
 import os
-import copy
 import logging
-import numpy as np
-import torch
-import csv
 import traceback
 from functools import partial
-try:
-    import gym
-except ImportError as e:
-    print("WARNING: to use automated compression you will need to install extra packages")
-    print("See instructions in the interface of each RL library.")
-    raise e
-from gym import spaces
 import distiller
-from collections import OrderedDict, namedtuple
-from types import SimpleNamespace
-from distiller import normalize_module_name, SummaryGraph
 from environment import DistillerWrapperEnvironment, Observation
-from utils.features_collector import collect_intermediate_featuremap_samples
 import distiller.apputils as apputils
 import distiller.apputils.image_classifier as classifier
 from rewards import reward_factory
@@ -117,7 +101,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
     ddpg_cfg = distiller.utils.MutableNamedTuple({
             'heatup_noise': 0.5,
             'initial_training_noise': 0.5,
-            'training_noise_decay': 0.99555, #0.98, #0.996,
+            'training_noise_decay': 0.95,
             'num_heatup_episodes': args.amc_heatup_episodes,
             'num_training_episodes': args.amc_training_episodes,
             'actor_lr': 1e-4,
@@ -147,7 +131,8 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
 
     def create_environment():
         env = DistillerWrapperEnvironment(model, app_args, amc_cfg, services)
-        env.amc_cfg.ddpg_cfg.replay_buffer_size = 100 * env.steps_per_episode
+        #env.amc_cfg.ddpg_cfg.replay_buffer_size = int(1.5 * amc_cfg.ddpg_cfg.num_heatup_episodes * env.steps_per_episode)
+        env.amc_cfg.ddpg_cfg.replay_buffer_size = amc_cfg.ddpg_cfg.num_heatup_episodes * env.steps_per_episode
         return env
 
     env1 = create_environment()
@@ -180,7 +165,7 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         raise ValueError("unsupported rl library: ", args.amc_rllib)
 
 
-def config_verbose(verbose):
+def config_verbose(verbose, display_summaries=False):
     if verbose:
         loglevel = logging.DEBUG
     else:
@@ -188,10 +173,13 @@ def config_verbose(verbose):
         logging.getLogger().setLevel(logging.WARNING)
     for module in ["examples.auto_compression.amc",
                    "distiller.apputils.image_classifier",
-                   "distiller.data_loggers.logger",
-                   "distiller.thinning", 
+                   "distiller.thinning",
                    "distiller.pruning.ranked_structures_pruner"]:
         logging.getLogger(module).setLevel(loglevel)
+
+    # display training progress summaries
+    summaries_lvl = logging.INFO if display_summaries else logging.WARNING
+    logging.getLogger("examples.auto_compression.amc.summaries").setLevel(summaries_lvl)
 
 
 if __name__ == '__main__':

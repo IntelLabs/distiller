@@ -246,23 +246,35 @@ def density_2D(tensor):
     return 1 - sparsity_2D(tensor)
 
 
+def non_zero_channels(tensor):
+    """Returns the indices of non-zero channels.
+
+    Non-zero channels are channels that have at least one coefficient that
+    is not zero.  Counting non-zero channels involves some tensor acrobatics.
+    """
+    if tensor.dim() != 4:
+        raise ValueError("Expecting a 4D tensor")
+
+    n_filters, n_channels, k_h, k_w = (tensor.size(i) for i in range(4))
+
+    # First, reshape the weights tensor such that each channel (kernel) in
+    # the original tensor, is now a row in a 2D tensor.
+    view_2d = tensor.view(-1, k_h * k_w)
+    # Next, compute the sums of each kernel
+    kernel_sums = view_2d.abs().sum(dim=1)
+    # Now group by channels
+    k_sums_mat = kernel_sums.view(n_filters, n_channels).t()
+    nonzero_channels = torch.nonzero(k_sums_mat.abs().sum(dim=1))
+    return nonzero_channels
+
+
 def sparsity_ch(tensor):
     """Channel-wise sparsity for 4D tensors"""
     if tensor.dim() != 4:
         return 0
-
-    num_filters = tensor.size(0)
-    num_kernels_per_filter = tensor.size(1)
-
-    # First, reshape the weights tensor such that each channel (kernel) in the original
-    # tensor, is now a row in the 2D tensor.
-    view_2d = tensor.view(-1, tensor.size(2) * tensor.size(3))
-    # Next, compute the sums of each kernel
-    kernel_sums = view_2d.abs().sum(dim=1)
-    # Now group by channels
-    k_sums_mat = kernel_sums.view(num_filters, num_kernels_per_filter).t()
-    nonzero_channels = len(torch.nonzero(k_sums_mat.abs().sum(dim=1)))
-    return 1 - nonzero_channels/num_kernels_per_filter
+    nonzero_channels = len(non_zero_channels(tensor))
+    n_channels = tensor.size(1)
+    return 1 - nonzero_channels/n_channels
 
 
 def density_ch(tensor):

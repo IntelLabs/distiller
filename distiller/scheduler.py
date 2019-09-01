@@ -34,13 +34,13 @@ class CompressionScheduler(object):
     """Responsible for scheduling pruning and masking parameters.
 
     """
-    def __init__(self, model, device=torch.device("cuda")):
+    def __init__(self, model, zeros_mask_dict=None, device=torch.device("cuda")):
         self.model = model
         self.device = device
         self.policies = {}
         self.sched_metadata = {}
         # Create the masker objects and place them in a dictionary indexed by the parameter name
-        self.zeros_mask_dict = create_model_masks_dict(model)
+        self.zeros_mask_dict = zeros_mask_dict or create_model_masks_dict(model)
 
     def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
         """Add a new policy to the schedule.
@@ -212,7 +212,6 @@ class CompressionScheduler(object):
             if name not in masks_dict:
                 masks_dict[name] = None
         state = {'masks_dict': masks_dict}
-
         self.load_state_dict(state, normalize_dataparallel_keys)
 
     @staticmethod
