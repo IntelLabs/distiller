@@ -146,9 +146,9 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
     elif clip in (ClipMode.LAPLACE, ClipMode.GAUSS):
         clip = AciqClipper.AciqClippingType.Laplace if clip == ClipMode.LAPLACE else AciqClipper.AciqClippingType.Gauss
         if mode == LinearQuantMode.SYMMETRIC:
-            sat_min, sat_max = AciqSymmetricClipper(num_bits, clip).from_stats(stats)
+            sat_min, sat_max = AciqSymmetricClipper(num_bits, clip)(stats)
         else:
-            sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip).from_stats(stats)
+            sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip)(stats)
         sat_min, sat_min = torch.tensor(sat_min), torch.tensor(sat_max)
 
     if mode == LinearQuantMode.SYMMETRIC:
@@ -173,7 +173,8 @@ def add_post_train_quant_args(argparser):
                              'asym_s': LinearQuantMode.ASYMMETRIC_SIGNED,
                              'asym_u': LinearQuantMode.ASYMMETRIC_UNSIGNED}
 
-    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD}
+    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD,
+                            'gauss': ClipMode.GAUSS, 'laplace': ClipMode.LAPLACE}
 
     def from_dict(d, val_str):
         try:

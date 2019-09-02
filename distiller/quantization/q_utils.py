@@ -176,7 +176,10 @@ def approx_scale_as_mult_and_shift(fp32_scale, mult_bits, limit=False):
     return multiplier / (2 ** shift_bits)
 
 
-class AciqClipper:
+class AciqClipper(object):
+    """
+    Implemented according to https://arxiv.org/pdf/1810.05723.pdf
+    """
     alpha_laplace = {0: 1.05, 1: 1.86, 2: 2.83, 3: 3.89, 4: 5.03, 5: 6.2, 6: 7.41, 7: 8.64, 8: 9.89}
     alpha_laplace_positive = {0: 1.86, 1: 2.83, 2: 3.89, 3: 5.02, 4: 6.2, 5: 7.41, 6: 8.64, 7: 9.89, 8: 11.16}
     alpha_gauss = {1: 1.24, 2: 1.71, 3: 2.15, 4: 2.55, 5: 2.93, 6: 3.28, 7: 3.61, 8: 3.92}
@@ -229,21 +232,23 @@ class AciqSymmetricClipper(AciqClipper):
 
 
 class AciqAsymmetricClipper(AciqClipper):
-    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace, half_range=False):
+    def __init__(self, num_bits, clip_type=AciqClipper.AciqClippingType.Laplace):
         self.num_bits = num_bits
         self.clip_type = clip_type
-        self.half_range = half_range
 
     def __call__(self, t, across_dim=None):
-        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqAsymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits, half_range=self.half_range)
-        else:
-            alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits, half_range=self.half_range)
         if isinstance(t, dict):
             mean, min_val = torch.tensor(t['mean']), torch.tensor(t['avg_min'])
         else:
             mean = t.mean()
             min_val = get_tensor_min_max(t, across_dim)[0].mean()
+        half_range = min_val.item() >= 0.
+        if self.clip_type == AciqClipper.AciqClippingType.Laplace:
+            alpha = super(AciqAsymmetricClipper, self).get_alpha_laplace(t, across_dim,
+                                                                         self.num_bits, half_range=half_range)
+        else:
+            alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim,
+                                                                       self.num_bits, half_range=half_range)
         min_val = torch.max(min_val, mean - alpha)
 
         return min_val, min_val + 2 * alpha

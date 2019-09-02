@@ -401,11 +401,10 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
     def start_laplace(self):
         self.collecting_laplace = True
-        self.start()
+        self.batch_idx = 0
 
     def stop_laplace(self):
         self.collecting_laplace = False
-        self.stop()
 
     def _activation_stats_cb(self, module, inputs, output):
         def update_mean(old_mean, new_val):
@@ -481,9 +480,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             update_record(module.quant_stats.output, output)
 
     def _start_counter(self, module):
-        if not hasattr(module, 'quant_stats'):
-            # We don't know the number of inputs at this stage so we defer records creation to the actual callback
-            module.quant_stats = _QuantStatsRecord()
+        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+        module.quant_stats = _QuantStatsRecord()
         module.batch_idx = 0
 
     def _reset_counter(self, module):
@@ -711,10 +709,10 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector):
         test_fn(model=model)
-    # Collect Laplace distribution stats:
-    quant_stats_collector.start_laplace()
-    test_fn(model=model)
-    quant_stats_collector.stop_laplace()
+        # Collect Laplace distribution stats:
+        quant_stats_collector.start_laplace()
+        test_fn(model=model)
+        quant_stats_collector.stop_laplace()
 
     msglogger.info('Stats collection complete')
     if save_dir is not None:
