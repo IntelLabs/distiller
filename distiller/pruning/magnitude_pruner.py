@@ -16,6 +16,7 @@
 
 from .pruner import _ParameterPruner
 import distiller
+import torch
 
 
 class MagnitudeParameterPruner(_ParameterPruner):
@@ -50,4 +51,15 @@ class MagnitudeParameterPruner(_ParameterPruner):
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         threshold = self.thresholds.get(param_name, self.thresholds['*'])
-        zeros_mask_dict[param_name].mask = distiller.threshold_mask(param.data, threshold)
+        zeros_mask_dict[param_name].mask = self.create_mask(param.data, threshold)
+
+    @staticmethod
+    def create_mask(param, threshold):
+        with torch.no_grad():
+            mask = distiller.threshold_mask(param.data, threshold)
+            return mask
+
+    # @staticmethod
+    # def apply_mask(param, mask):
+
+
