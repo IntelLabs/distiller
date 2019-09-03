@@ -225,7 +225,7 @@ def init_classifier_compression_arg_parser():
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--activation-histograms', '--act-hist',
-                        type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                        type=distiller.utils.float_range(exc_min=True),
                         metavar='PORTION_OF_TEST_SET',
                         help='Run the model in evaluation mode on the specified portion of the test dataset and '
                              'generate activation histograms. NOTE: This slows down evaluation significantly')
