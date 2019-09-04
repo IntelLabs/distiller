@@ -6,7 +6,6 @@ To run in a multi-gpu environment, use the distributed launcher::
         train.py ... --world-size $NGPU
 
 """
-# TODO Copyright
 import datetime
 import os
 import time
@@ -22,7 +21,6 @@ import torch.distributed as dist
 import distiller
 from distiller.data_loggers import *
 import distiller.apputils as apputils
-from distiller.apputils.image_classifier import save_collectors_data
 import distiller.pruning
 import distiller.quantization
 
@@ -169,7 +167,7 @@ def main(args):
     #     msglogger.info("Using %d GPUs on DataParallel." % torch.cuda.device_count())
     #     model = nn.DataParallel(model)
 
-    for epoch in range(args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
             dist.barrier()
@@ -198,13 +196,8 @@ def main(args):
             utils.save_on_master(save_dict,
                 os.path.join(args.output_dir, 'model_{}.pth'.format(epoch)))
 
-        with collectors_context(activations_collectors["valid"]) as collectors:
-            # evaluate after every epoch
-            evaluate(model, data_loader_test, device=device)
-            if utils.is_main_process():
-                distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger],
-                                                    collector=collectors["sparsity"])
-                save_collectors_data(collectors, msglogger.logdir)
+        # evaluate after every epoch
+        evaluate(model, data_loader_test, device=device)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -280,6 +273,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch-size', default=2, type=int)
     parser.add_argument('--epochs', default=13, type=int, metavar='N',
                         help='number of total epochs to run')
+    parser.add_argument('--start-epoch', default=0, type=int, help='starting epoch number')
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 16)')
     parser.add_argument('--lr', default=0.02, type=float, help='initial learning rate')
