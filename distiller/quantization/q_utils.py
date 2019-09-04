@@ -189,7 +189,8 @@ class AciqClipper(object):
         Laplace = 1
         Gauss = 2
 
-    def get_alpha_laplace(self, t, across_dim=None, num_bits=8, half_range=False):
+    @staticmethod
+    def get_alpha_laplace(t, across_dim=None, num_bits=8, half_range=False):
         if isinstance(t, torch.Tensor):
             # Mean of means across dims is equivalent to global mean
             b = torch.mean(torch.abs(t - t.mean()))
@@ -201,7 +202,8 @@ class AciqClipper(object):
         return b * (AciqClipper.alpha_laplace_positive[num_bits] if half_range
                     else AciqClipper.alpha_laplace[num_bits])
 
-    def get_alpha_gauss(self, t, across_dim=None, num_bits=8, half_range=False):
+    @staticmethod
+    def get_alpha_gauss(t, across_dim=None, num_bits=8, half_range=False):
         if isinstance(t, torch.Tensor):
             # Mean of means across dims is equivalent to global mean
             std = torch.std(t)
@@ -221,9 +223,9 @@ class AciqSymmetricClipper(AciqClipper):
 
     def __call__(self, t, across_dim=None):
         if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqSymmetricClipper, self).get_alpha_laplace(t, across_dim, self.num_bits)
+            alpha = AciqClipper.get_alpha_laplace(t, across_dim, self.num_bits)
         else:
-            alpha = super(AciqSymmetricClipper, self).get_alpha_gauss(t, across_dim, self.num_bits)
+            alpha = AciqClipper.get_alpha_gauss(t, across_dim, self.num_bits)
         if isinstance(t, dict):
             mean = torch.tensor(t['mean'])
         else:
@@ -236,19 +238,16 @@ class AciqAsymmetricClipper(AciqClipper):
         self.num_bits = num_bits
         self.clip_type = clip_type
 
-    def __call__(self, t, across_dim=None):
+    def __call__(self, t, across_dim=None, half_range=False):
         if isinstance(t, dict):
             mean, min_val = torch.tensor(t['mean']), torch.tensor(t['avg_min'])
         else:
             mean = t.mean()
             min_val = get_tensor_min_max(t, across_dim)[0].mean()
-        half_range = min_val.item() >= 0.
         if self.clip_type == AciqClipper.AciqClippingType.Laplace:
-            alpha = super(AciqAsymmetricClipper, self).get_alpha_laplace(t, across_dim,
-                                                                         self.num_bits, half_range=half_range)
+            alpha = AciqClipper.get_alpha_laplace(t, across_dim, self.num_bits, half_range=half_range)
         else:
-            alpha = super(AciqAsymmetricClipper, self).get_alpha_gauss(t, across_dim,
-                                                                       self.num_bits, half_range=half_range)
+            alpha = AciqClipper.get_alpha_gauss(t, across_dim, self.num_bits, half_range=half_range)
         min_val = torch.max(min_val, mean - alpha)
 
         return min_val, min_val + 2 * alpha
