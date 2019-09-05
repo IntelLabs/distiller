@@ -90,21 +90,14 @@ class GroupLassoRegularizer(distiller.GroupThresholdMixin, _Regularizer):
         # strength : threshold
         strength = self.reg_regims[param_name][0]
         # set leads
-        if len(self.reg_regims[param_name]) == 4:
-            leads = self.reg_regims[param_name][3]
+        if len(self.reg_regims[param_name]) == 3:
+            leads = self.reg_regims[param_name][2]
             zeros_mask_dict[param_name].mask, binary_map = GroupLassoRegularizer.mask_leader(param, group_type, strength, self.threshold_criteria)
             zeros_mask_dict[param_name].apply_mask(param)
-            try:
-                for child_param_name in leads:
-                    child_param = model.state_dict()[child_param_name]
-                    zeros_mask_dict[child_param_name].mask = GroupLassoRegularizer.mask_leader_child(child_param, binary_map)
-                    zeros_mask_dict[child_param_name].apply_mask(child_param)
-            except RuntimeError:
-                print("param_name: ", param_name)
-                print("childe_param_name: ", child_param_name)
-                print("binary_map size: ", binary_map.size())
-                print("child_param size" , child_param.size())
-                exit(-1)
+            for child_param_name in leads:
+                child_param = model.state_dict()[child_param_name]
+                zeros_mask_dict[child_param_name].mask = GroupLassoRegularizer.mask_leader_child(child_param, binary_map)
+                zeros_mask_dict[child_param_name].apply_mask(child_param)
         else:
             zeros_mask_dict[param_name].mask = \
                 self.group_threshold_mask(param, group_type, strength, self.threshold_criteria)
