@@ -6,11 +6,12 @@ to allow easy compression scheduling with yaml configuration.
 
 ## Setup
 Install the dependencies 
-(most of which are already installed from distiller dependies, the rest are `cython` and `pycocotools`):
+(most of which are already installed from Distiller dependies, the rest are `Cython` and `pycocotools`):
 
     pip3 install -r requirements.txt 
 
 The dataset can be downloaded at the [COCO dataset website](http://cocodataset.org/#download).
+Please keep in mind that COCO dataset takes up 18 GB of storage.  
 In this example we'll use the 2017 training+validation sets, which you can download using the command line:
 
     cd data
