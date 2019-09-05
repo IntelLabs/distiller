@@ -1,7 +1,7 @@
 #
 # Command line:
-# python -m torch.distributed.launch --nproc_per_node=$NGPU --use_env train.py --data-path $DATASET_COCO \ --pretrained
-#     --compress maskrcnn.scheduler_agp.yaml --world-size $NGPU
+# python -m torch.distributed.launch--nproc_per_node=4 --use_env train.py --data-path /path/to/data.COCO --compress maskrcnn.scheduler_agp.yaml \
+#  --pretrained --world-size 4 --batch-size 3 --epochs 80
 #
 #Parameters:
 #+----+--------------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
