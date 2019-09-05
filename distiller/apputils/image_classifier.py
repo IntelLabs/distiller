@@ -59,19 +59,19 @@ class ClassifierCompressor(object):
         self.logdir = _init_logger(args, script_dir)
         _config_determinism(args)
         _config_compute_device(args)
-        
+
         # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
         # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
         self.tflogger = TensorBoardLogger(msglogger.logdir)
         self.pylogger = PythonLogger(msglogger)
-        (self.model, self.compression_scheduler, self.optimizer, 
+        (self.model, self.compression_scheduler, self.optimizer,
              self.start_epoch, self.ending_epoch) = _init_learner(args)
 
         # Define loss function (criterion)
         self.criterion = nn.CrossEntropyLoss().to(args.device)
         self.train_loader, self.val_loader, self.test_loader = (None, None, None)
         self.activations_collectors = create_activation_stats_collectors(self.model, *args.activation_stats)
-    
+
     def load_datasets(self):
         """Load the datasets"""
         if not all((self.train_loader, self.val_loader, self.test_loader)):
@@ -87,15 +87,15 @@ class ClassifierCompressor(object):
         self.load_datasets()
 
         with collectors_context(self.activations_collectors["train"]) as collectors:
-            top1, top5, loss = train(self.train_loader, self.model, self.criterion, self.optimizer, 
-                                     epoch, self.compression_scheduler, 
+            top1, top5, loss = train(self.train_loader, self.model, self.criterion, self.optimizer,
+                                     epoch, self.compression_scheduler,
                                      loggers=[self.tflogger, self.pylogger], args=self.args)
             if verbose:
                 distiller.log_weights_sparsity(self.model, epoch, [self.tflogger, self.pylogger])
             distiller.log_activation_statsitics(epoch, "train", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             if self.args.masks_sparsity:
-                msglogger.info(distiller.masks_sparsity_tbl_summary(self.model, 
+                msglogger.info(distiller.masks_sparsity_tbl_summary(self.model,
                                                                     self.compression_scheduler))
         return top1, top5, loss
 
@@ -108,7 +108,7 @@ class ClassifierCompressor(object):
             top1, top5, loss = self.validate_one_epoch(epoch, verbose)
 
         if self.compression_scheduler:
-            self.compression_scheduler.on_epoch_end(epoch, self.optimizer, 
+            self.compression_scheduler.on_epoch_end(epoch, self.optimizer,
                                                     metrics={'min': loss, 'max': top1})
         return top1, top5, loss
 
@@ -116,7 +116,7 @@ class ClassifierCompressor(object):
         """Evaluate on validation set"""
         self.load_datasets()
         with collectors_context(self.activations_collectors["valid"]) as collectors:
-            top1, top5, vloss = validate(self.val_loader, self.model, self.criterion, 
+            top1, top5, vloss = validate(self.val_loader, self.model, self.criterion,
                                          [self.pylogger], self.args, epoch)
             distiller.log_activation_statsitics(epoch, "valid", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
@@ -133,14 +133,14 @@ class ClassifierCompressor(object):
 
     def _finalize_epoch(self, epoch, perf_scores_history, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
-        update_training_scores_history(perf_scores_history, self.model, 
+        update_training_scores_history(perf_scores_history, self.model,
                                        top1, top5, epoch, self.args.num_best_scores)
         is_best = epoch == perf_scores_history[0].epoch
         checkpoint_extras = {'current_top1': top1,
                              'best_top1': perf_scores_history[0].top1,
                              'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer, 
-                                 scheduler=self.compression_scheduler, extras=checkpoint_extras, 
+        apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer,
+                                 scheduler=self.compression_scheduler, extras=checkpoint_extras,
                                  is_best=is_best, name=self.args.name, dir=msglogger.logdir)
 
 
@@ -155,7 +155,7 @@ class ClassifierCompressor(object):
         # Load the datasets lazily
         self.load_datasets()
 
-        perf_scores_history = []       
+        perf_scores_history = []
         for epoch in range(self.start_epoch, self.ending_epoch):
             msglogger.info('\n')
             top1, top5, loss = self.train_validate_with_scheduling(epoch)
@@ -225,7 +225,7 @@ def init_classifier_compression_arg_parser():
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--activation-histograms', '--act-hist',
-                        type=distiller.utils.float_range(exc_min=True),
+                        type=float_range(exc_min=True),
                         metavar='PORTION_OF_TEST_SET',
                         help='Run the model in evaluation mode on the specified portion of the test dataset and '
                              'generate activation histograms. NOTE: This slows down evaluation significantly')
@@ -306,7 +306,7 @@ def _init_logger(args, script_dir):
 def _config_determinism(args):
     if args.evaluate:
         args.deterministic = True
-    
+
     # Configure some seed (in case we want to reproduce this experiment session)
     if args.seed is None:
         if args.deterministic:
@@ -451,7 +451,7 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
+    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
@@ -462,7 +462,7 @@ def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_
     loaders = (train_loader, val_loader, test_loader)
     flags = (load_train, load_val, load_test)
     loaders = [loaders[i] for i, flag in enumerate(flags) if flag]
-    
+
     if len(loaders) == 1:
         # Unpack the list for convinience
         loaders = loaders[0]
@@ -476,7 +476,7 @@ def early_exit_mode(args):
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training-with-compression loop for one epoch.
-    
+
     For each training step in epoch:
         compression_scheduler.on_minibatch_begin(epoch)
         output = model(input)
