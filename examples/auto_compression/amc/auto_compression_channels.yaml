@@ -1,6 +1,6 @@
 # rl_lib:
 #     # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
-#     name: private # one of: coach, spinningup, private
+#     name: hanlab # one of: coach, spinningup, hanlab
 
 network:
   mobilenet:
