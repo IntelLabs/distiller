@@ -15,7 +15,7 @@
 #
 
 """
-$ python3 amc.py --arch=resnet20_cifar ${CIFAR10_PATH} --resume=../../ssl/checkpoints/checkpoint_trained_dense.pth.tar --amc --amc-procol=mac-constrained --amc-action-range 0.05 1.0 --amc-target-density=0.5 -p=50 --etes=0.075 --amc-ft-epochs=0 --amc-prune-pattern=channels --amc-prune-method=fm-reconstruction --amc-agent-algo=DDPG --amc-cfg=auto_compression_channels.yaml --amc-rllib=private -j=1
+$ python3 amc.py --arch=resnet20_cifar ${CIFAR10_PATH} --resume=../../ssl/checkpoints/checkpoint_trained_dense.pth.tar --amc --amc-procol=mac-constrained --amc-action-range 0.05 1.0 --amc-target-density=0.5 -p=50 --etes=0.075 --amc-ft-epochs=0 --amc-prune-pattern=channels --amc-prune-method=fm-reconstruction --amc-agent-algo=DDPG --amc-cfg=auto_compression_channels.yaml --amc-rllib=hanlab -j=1
 """
 
 
@@ -143,9 +143,9 @@ def train_auto_compressor(model, args, optimizer_data, validate_fn, save_checkpo
         env2 = create_environment()
         steps_per_episode = env1.steps_per_episode
         rl.solve(env1, env2)
-    elif args.amc_rllib == "private":
-        from rl_libs.private import private_if
-        rl = private_if.RlLibInterface()
+    elif args.amc_rllib == "hanlab":
+        from rl_libs.hanlab import hanlab_if
+        rl = hanlab_if.RlLibInterface()
         args.observation_len = len(Observation._fields)
         rl.solve(env1, args)
     elif args.amc_rllib == "coach":
