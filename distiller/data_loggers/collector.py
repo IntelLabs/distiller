@@ -399,15 +399,26 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                     if hasattr(m, n):
                         setattr(m, n, False)
 
-    def _check_required_stats_collected(self):
+    def _check_required_stats(self):
         """
         Check whether the required statistics were collected to allow collecting laplace distribution stats.
         """
         for name, module in self.model.named_modules():
-
+            if not hasattr(module, 'quant_stats'):
+                raise RuntimeError('Collection of Laplace distribution statistics is '
+                                   'only allowed after collection of stats has started.')
+            for i, input_stats_record in enumerate(module.quant_stats.inputs):
+                if 'mean' not in input_stats_record:
+                    raise RuntimeError('The required stats for input[%d] in module "%s" were not collected. '
+                                       'Please collect the required statistics using `collector.start()` and evaluating'
+                                       ' the model for enough batches.' % (i, name))
+            if 'mean' not in module.quant_stats.output:
+                raise RuntimeError('The required stats for the output in module "%s" were not collected. '
+                                   'Please collect the required statistics using `collector.start()` and evaluating'
+                                   ' the model for enough batches.' % name)
 
     def start_laplace(self):
-        self._check_required_stats_collected()
+        self._check_required_stats()
         self.collecting_laplace = True
         self.batch_idx = 0
 
