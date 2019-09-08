@@ -478,8 +478,8 @@ def test_override_no_clip(overrides, e_clip_acts, e_n_stds, rnn_model, rnn_model
                                          model_activation_stats=rnn_model_stats)
     quantizer.prepare_model(torch.randn(1, 1, 20))
     assert isinstance(quantizer.model.rnn.cells[0].eltwisemult_hidden, RangeLinearQuantEltwiseMultWrapper)
-    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_acts == e_clip_acts
-    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_n_stds == e_n_stds
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.output_quant_settings.clip_mode == e_clip_acts
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.output_quant_settings.clip_n_stds == e_n_stds
 
 
 ###############################################################################
