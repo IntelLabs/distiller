@@ -276,8 +276,6 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     quantizer = PostTrainLinearQuantizer(model, mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                          clip_acts=ClipMode.NONE, overrides=deepcopy(best_overrides_dict),
                                          model_activation_stats=act_stats)
-    for fp16_layer_type in FP16_LAYERS:
-        quantizer.replacement_factory[fp16_layer_type] = fp16_replacement
     quantizer.prepare_model(dummy_input)
     print('best_overrides_dict: %s' % best_overrides_dict)
     print('Best score ', eval_fn(quantizer.model))
