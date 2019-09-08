@@ -399,7 +399,15 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                     if hasattr(m, n):
                         setattr(m, n, False)
 
+    def _check_required_stats_collected(self):
+        """
+        Check whether the required statistics were collected to allow collecting laplace distribution stats.
+        """
+        for name, module in self.model.named_modules():
+
+
     def start_laplace(self):
+        self._check_required_stats_collected()
         self.collecting_laplace = True
         self.batch_idx = 0
 
