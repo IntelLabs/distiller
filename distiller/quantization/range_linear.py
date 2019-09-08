@@ -472,13 +472,15 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # In the first forward pass - `w_zero_point` is added into the weights, to allow faster inference,
         # and all subsequent calls are done with these shifted weights.
         # Upon calling `self.state_dict()` - we restore the actual quantized weights.
-        self.register_buffer('is_simulated_quant_weight_shifted', tensor=torch.tensor(False, device=device))
+        # i.e. is_simulated_quant_weight_shifted = False
+        self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         if self.is_simulated_quant_weight_shifted:
             # We want to return the weights to their integer representation:
             self.wrapped_module.weight.data -= self.w_zero_point
-            self.is_simulated_quant_weight_shifted.bitwise_not_()
+            # i.e. is_simulated_quant_weight_shifted = False
+            self.is_simulated_quant_weight_shifted = torch.zeros_like(self.is_simulated_quant_weight_shifted)
         return super(RangeLinearQuantParamLayerWrapper, self).state_dict(destination, prefix, keep_vars)
 
     def get_inputs_quantization_params(self, input):
@@ -518,7 +520,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
-            self.is_simulated_quant_weight_shifted.bitwise_not_()
+            # i.e. is_simulated_quant_weight_shifted = False
+            self.is_simulated_quant_weight_shifted = torch.ones_like(self.is_simulated_quant_weight_shifted)
 
         input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
