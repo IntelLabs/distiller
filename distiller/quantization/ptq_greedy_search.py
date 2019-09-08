@@ -178,7 +178,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         act_stats (OrderedDict): quant calibration activation stats.
             if None provided - will be calculated on runtime.
         args: command line arguments
-        module_override_gen_fn: A generator for
+        module_override_gen_fn: A generator for module overrides.
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
