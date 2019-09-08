@@ -169,7 +169,7 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         # Unspecified layer types return None by default.
-        self.replacement_factory = defaultdict(lambda: None)
+        self.replacement_factory = defaultdict(lambda: self._get_default_replacement_fn())
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -189,6 +189,9 @@ class Quantizer(object):
 
     def _add_override_entry(self, module_name, entry):
         self.module_overrides_map[module_name] = entry
+
+    def _get_default_replacement_fn(self):
+        return None
 
     def prepare_model(self, dummy_input=None):
         """
