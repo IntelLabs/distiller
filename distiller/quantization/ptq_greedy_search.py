@@ -176,9 +176,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
           if None provided - will use `eval_fn` as a default.
         recurrent (bool): a flag to indicate whether the model has recurrent connections.
         act_stats (OrderedDict): quant calibration activation stats.
-            if None provided - will be calculated on runtime.
+          if None provided - will be calculated on runtime.
         args: command line arguments
-        module_override_gen_fn: A generator for module overrides.
+        module_override_gen_fn: A function to generate module overrides.
+          assumes signature `def module_override_gen_fn(module: nn.Module) -> Generator[OrderedDict, None, None]`.
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
