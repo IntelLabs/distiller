@@ -233,9 +233,6 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         act_stats.update(recalib_act_stats)
         return act_stats
 
-    def fp16_replacement(module, *args):
-        return FP16Wrapper(module)
-
     for module_name in modules_to_quantize:
         print('Searching optimal quantization in \'%s\':' % module_name)
         module = modules_dict[module_name]
