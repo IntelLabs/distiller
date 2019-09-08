@@ -479,8 +479,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         if self.is_simulated_quant_weight_shifted:
             # We want to return the weights to their integer representation:
             self.wrapped_module.weight.data -= self.w_zero_point
-            # i.e. is_simulated_quant_weight_shifted = False
-            self.is_simulated_quant_weight_shifted = torch.zeros_like(self.is_simulated_quant_weight_shifted)
+            self.is_simulated_quant_weight_shifted.sub_(1) # i.e. is_simulated_quant_weight_shifted = False
         return super(RangeLinearQuantParamLayerWrapper, self).state_dict(destination, prefix, keep_vars)
 
     def get_inputs_quantization_params(self, input):
@@ -520,8 +519,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
-            # i.e. is_simulated_quant_weight_shifted = False
-            self.is_simulated_quant_weight_shifted = torch.ones_like(self.is_simulated_quant_weight_shifted)
+            self.is_simulated_quant_weight_shifted.add_(1) # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
