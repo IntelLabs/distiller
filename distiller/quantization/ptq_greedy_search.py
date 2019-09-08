@@ -96,7 +96,7 @@ def layers_quant_order(model, dummy_input, recurrent=False):
     return ret
 
 
-CLASSES = (
+QUANTIZED_CLASSES = (
     nn.Linear,
     nn.Conv2d,
     nn.Conv3d,
@@ -138,9 +138,31 @@ def module_override(**kwargs):
     return OrderedDict(kwargs)
 
 
+def module_override_generator(module):
+    if isinstance(module, FP16_LAYERS):
+        yield module_override(fp16=True)
+        return
+    if isinstance(module, UNQUANTIZED_MODULES) or not isinstance(module, QUANTIZED_CLASSES):
+        yield module_override()
+        return
+
+    # Module is quantized to int8:
+    for clip_mode in CLIP_MODES:
+        if isinstance(module, PARAM_MODULES):
+            current_module_override = module_override(clip_acts=clip_mode,
+                                                      bits_weights=8,
+                                                      bits_activations=8,
+                                                      bits_bias=32)
+        else:
+            current_module_override = module_override(clip_acts=clip_mode,
+                                                      bits_weights=8,
+                                                      bits_activations=8)
+        yield current_module_override
+
+
 def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
-                      recurrent=False, classes=CLASSES, act_stats=None,
-                      args=None):
+                      recurrent=False, act_stats=None,
+                      args=None, module_override_gen_fn=None):
     """
     Perform greedy search on Post Train Quantization configuration for the model.
     Args:
@@ -153,10 +175,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
           through the model to collection quantization calibration statistics.
           if None provided - will use `eval_fn` as a default.
         recurrent (bool): a flag to indicate whether the model has recurrent connections.
-        classes (Tuple[type]): a list of types we allow quantization.
         act_stats (OrderedDict): quant calibration activation stats.
             if None provided - will be calculated on runtime.
         args: command line arguments
+        module_override_gen_fn: A generator for
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
@@ -169,8 +191,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     modules_to_quantize = layers_quant_order(model, dummy_input, recurrent)
     modules_dict = dict(model.named_modules())
     modules_to_quantize = [m for m in modules_to_quantize
-                           if isinstance(modules_dict[m], classes)
+                           if isinstance(modules_dict[m], QUANTIZED_CLASSES)
                            and m not in args.qe_no_quant_layers]
+
+    module_override_gen_fn = module_override_gen_fn or module_override_generator
 
     calib_eval_fn = calib_eval_fn or eval_fn
     if not act_stats:
@@ -178,9 +202,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         model_temp = distiller.utils.make_non_parallel_copy(model)
         act_stats = collect_quant_stats(model_temp, calib_eval_fn)
         del model_temp
-        act_stats_path = '%s_act_stats.yaml' % args.arch
-        print('Done. Saving act stats into %s' % act_stats_path)
-        distiller.yaml_ordered_save(act_stats_path, act_stats)
+        if args:
+            act_stats_path = '%s_act_stats.yaml' % args.arch
+            print('Done. Saving act stats into %s' % act_stats_path)
+            distiller.yaml_ordered_save(act_stats_path, act_stats)
     base_score = eval_fn(model)
     print("Base score: %.3f" % base_score)
 
@@ -218,21 +243,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
-        for clip_mode in CLIP_MODES:
-            if isinstance(module, PARAM_MODULES):
-                current_module_override = module_override(clip_acts=clip_mode,
-                                                          bits_weights=8,
-                                                          bits_activations=8,
-                                                          bits_bias=32)
-            elif isinstance(module, classes):
-                current_module_override = module_override(clip_acts=clip_mode,
-                                                          bits_weights=8,
-                                                          bits_activations=8)
-            elif isinstance(module, UNQUANTIZED_MODULES):
-                current_module_override = module_override()
-            else:
-                current_module_override = module_override(fp16=True)
-
+        for current_module_override in module_override_gen_fn(module):
             overrides_dict[normalized_module_name] = current_module_override
             temp_act_stats = deepcopy(act_stats)
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
@@ -243,13 +254,17 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                                  clip_acts=ClipMode.NONE,
                                                  overrides=deepcopy(overrides_dict),
                                                  model_activation_stats=deepcopy(temp_act_stats))
-            for fp16_layer_type in FP16_LAYERS:
-                quantizer.replacement_factory[fp16_layer_type] = fp16_replacement
             quantizer.prepare_model(dummy_input)
 
             current_perf = eval_fn(quantizer.model)
-            print('\t%s\t score = %.3f\tLayer overrides: %s' %
-                  (clip_mode, current_perf, current_module_override))
+            if isinstance(module, QUANTIZED_CLASSES):
+                clip_mode = current_module_override['clip_acts']
+                print('\t%s\t score = %.3f\tLayer overrides: %s' %
+                      (clip_mode, current_perf, current_module_override))
+            else:
+                print('\t Module is not quantized to int8. Not clipping activations.')
+                print('\t score = %.3f\tLayer overrides: %s' %
+                      (current_perf, current_module_override))
             if current_perf > best_performance:
                 best_overrides_dict[normalized_module_name] = current_module_override
                 best_performance = current_perf
