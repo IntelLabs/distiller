@@ -169,7 +169,8 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         # Unspecified layer types return None by default.
-        self.replacement_factory = defaultdict(lambda: self._get_default_replacement_fn())
+        self.replacement_factory = OrderedDict()
+        self.default_repalcement_fn = None
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -189,9 +190,6 @@ class Quantizer(object):
 
     def _add_override_entry(self, module_name, entry):
         self.module_overrides_map[module_name] = entry
-
-    def _get_default_replacement_fn(self):
-        return None
 
     def prepare_model(self, dummy_input=None):
         """
@@ -286,7 +284,8 @@ class Quantizer(object):
                 self.modules_processed[module] = full_name, None
             else:
                 # We use a type hint comment to let IDEs know replace_fn is a function
-                replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
+                replace_fn = self.replacement_factory.get(type(module),
+                                                          self.default_repalcement_fn)  # type: Optional[Callable]
                 # If the replacement function wasn't specified - continue without replacing this module.
                 if replace_fn is not None:
                     valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name],
@@ -296,16 +295,18 @@ class Quantizer(object):
                                             as override arguments for %s. Allowed kwargs: %s"""
                                         % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
                     new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
-                    replace_msg(full_name, (module, new_module))
-                    # Add to history of prepared submodules
-                    self.modules_processed[module] = full_name, new_module
-                    setattr(container, name, new_module)
+                    if new_module != module:
+                        replace_msg(full_name, (module, new_module))
+                        # Add to history of prepared submodules
+                        self.modules_processed[module] = full_name, new_module
+                        setattr(container, name, new_module)
 
-                    # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
-                    if not distiller.has_children(module) and distiller.has_children(new_module):
-                        for sub_module_name, sub_module in new_module.named_modules():
-                            self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
-                        self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                        # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
+                        if not distiller.has_children(module) and distiller.has_children(new_module):
+                            for sub_module_name, sub_module in new_module.named_modules():
+                                self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module),
+                                                      current_qbits)
+                            self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
 
             if distiller.has_children(module):
                 # For container we call recursively

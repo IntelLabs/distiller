@@ -311,6 +311,9 @@ class RangeLinearQuantWrapper(nn.Module):
 
             inputs_q = []
             for input in inputs:
+                qmd = input.quant_metadata
+                input.quant_metadata = TensorQuantMetadata(qmd.scale.to(device), qmd.zero_point.to(device),
+                                                                        qmd.min_q_val, qmd.max_q_val)
                 input_q = linear_quantize_clamp_with_metadata(input)
                 input_q.quant_metadata = input.quant_metadata
                 inputs_q.append(input_q)
@@ -351,7 +354,7 @@ class RangeLinearQuantWrapper(nn.Module):
                     else:
                         q_settings = self.input_quant_settings_overrides[idx]
                         scale, zp = _get_quant_params_from_tensor(input, q_settings.num_bits, q_settings.quant_mode,
-                                                                  q_settings.clip_mode, False,
+                                                                  q_settings.clip_mode, q_settings.per_channel,
                                                                   q_settings.clip_n_stds,
                                                                   self.scale_approx_mult_bits)
                         min_q_val, max_q_val = get_quantized_range(q_settings.num_bits,
@@ -452,15 +455,17 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
-        clip_n_stds (int): See RangeLinearQuantWrapper
+        clip_n_stds (float): See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
-                 clip_n_stds=None, scale_approx_mult_bits=None):
+                 clip_n_stds=None, scale_approx_mult_bits=None, input_quantization_settings=None):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds,
-                                                                scale_approx_mult_bits, requires_quantized_inputs=True)
+                                                                scale_approx_mult_bits,
+                                                                input_quantization_settings=input_quantization_settings,
+                                                                requires_quantized_inputs=True)
 
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
@@ -637,10 +642,12 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,  activation_stats=None,
-                 clip_n_stds=None, scale_approx_mult_bits=None):
+                 clip_n_stds=None, scale_approx_mult_bits=None, input_quantization_settings=None):
         super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                             clip_acts, activation_stats, clip_n_stds,
-                                                            scale_approx_mult_bits, requires_quantized_inputs=True)
+                                                            scale_approx_mult_bits,
+                                                            input_quantization_settings=input_quantization_settings,
+                                                            requires_quantized_inputs=True)
 
         if not isinstance(wrapped_module, (distiller.modules.Matmul, distiller.modules.BatchMatmul)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
@@ -690,7 +697,8 @@ class NoStatsError(NotImplementedError):
 
 class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
+                 input_quantization_settings=None):
         if not isinstance(wrapped_module, distiller.modules.Concat):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.Concat modules')
 
@@ -702,6 +710,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
                                                             clip_acts=clip_acts, activation_stats=activation_stats,
                                                             clip_n_stds=clip_n_stds,
                                                             scale_approx_mult_bits=scale_approx_mult_bits,
+                                                            input_quantization_settings=input_quantization_settings,
                                                             requires_quantized_inputs=True)
 
     def quantized_forward(self, *inputs_q):
@@ -723,7 +732,8 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
 
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
+                 input_quantization_settings=None):
         if not isinstance(wrapped_module, distiller.modules.EltwiseAdd):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseAdd modules')
 
@@ -735,6 +745,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
                                                                 clip_acts=clip_acts, activation_stats=activation_stats,
                                                                 clip_n_stds=clip_n_stds,
                                                                 scale_approx_mult_bits=scale_approx_mult_bits,
+                                                                input_quantization_settings=input_quantization_settings,
                                                                 requires_quantized_inputs=True)
 
     def quantized_forward(self, *inputs_q):
@@ -757,7 +768,8 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 
 class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
-                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None):
+                 activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
+                 input_quantization_settings=None):
         if not isinstance(wrapped_module, distiller.modules.EltwiseMult):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseMult modules')
 
@@ -769,6 +781,7 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
                                                                  clip_acts=clip_acts, activation_stats=activation_stats,
                                                                  clip_n_stds=clip_n_stds,
                                                                  scale_approx_mult_bits=scale_approx_mult_bits,
+                                                                 input_quantization_settings=input_quantization_settings,
                                                                  requires_quantized_inputs=True)
         self.accum_scale = 1
 
@@ -865,7 +878,12 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         return self.wrapped_module(*inputs_q)
 
     def get_output_quantization_params(self, accumulator):
-        return self.output_scale, self.output_zero_point
+        if self.preset_act_stats:
+            return self.output_scale, self.output_zero_point
+        else:
+            q_set = self.output_quant_settings
+            return _get_quant_params_from_tensor(accumulator, q_set.num_bits, q_set.quant_mode, q_set.clip_mode,
+                                                 q_set.per_channel, q_set.clip_n_stds, self.scale_approx_mult_bits)
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         return output_scale, output_zero_point
@@ -944,7 +962,8 @@ class PostTrainLinearQuantizer(Quantizer):
 
         def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
-                                clip_acts=clip_acts, clip_n_stds=clip_n_stds):
+                                clip_acts=clip_acts, clip_n_stds=clip_n_stds,
+                                input_quantization_settings=None):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
@@ -954,11 +973,13 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      per_channel_wts=per_channel_wts,
                                                      activation_stats=self.model_activation_stats.get(norm_name, None),
                                                      clip_n_stds=clip_n_stds,
-                                                     scale_approx_mult_bits=scale_approx_mult_bits)
+                                                     scale_approx_mult_bits=scale_approx_mult_bits,
+                                                     input_quantization_settings=input_quantization_settings)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
                                     scale_approx_mult_bits=scale_approx_mult_bits,
-                                    clip_acts=clip_acts, clip_n_stds=clip_n_stds):
+                                    clip_acts=clip_acts, clip_n_stds=clip_n_stds,
+                                    input_quantization_settings=None):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
@@ -966,7 +987,8 @@ class PostTrainLinearQuantizer(Quantizer):
             try:
                 return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
                                     activation_stats=self.model_activation_stats.get(norm_name, None),
-                                    clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits)
+                                    clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits,
+                                    input_quantization_settings=input_quantization_settings)
             except NoStatsError:
                 msglogger.warning('WARNING: {0} - quantization of {1} without stats not supported. '
                                   'Keeping the original FP32 module'.format(name, module.__class__.__name__))
@@ -978,6 +1000,16 @@ class PostTrainLinearQuantizer(Quantizer):
             norm_name = distiller.utils.normalize_module_name(name)
             return RangeLinearEmbeddingWrapper(module, qbits_map[name].wts, mode=mode,
                                                stats=self.model_activation_stats.get(norm_name, None))
+
+        def replace_fake_quant(module, name, qbits_map, clip_acts=clip_acts, clip_n_stds=clip_n_stds,
+                               scale_approx_mult_bits=scale_approx_mult_bits):
+            if distiller.has_children(module):
+                return module
+            norm_name = distiller.utils.normalize_module_name(name)
+            clip_acts = verify_clip_mode(clip_acts)
+            return RangeLinearFakeQuantWrapper(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
+                                               activation_stats=self.model_activation_stats.get(norm_name, None),
+                                               clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits)
 
         self.clip_acts = clip_acts
         self.clip_n_stds = clip_n_stds
@@ -1009,6 +1041,9 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[distiller.modules.Matmul] = factory_matmul
         self.replacement_factory[distiller.modules.BatchMatmul] = factory_matmul
         self.replacement_factory[nn.Embedding] = replace_embedding
+        self.replacement_factory[nn.Identity] = None
+
+        self.default_repalcement_fn = replace_fake_quant
 
         save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
         self.save_per_layer_parameters(save_dir)
