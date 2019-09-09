@@ -64,6 +64,9 @@ UNQUANTIZED_MODULES = (
 
 SKIP_MODULES = (
     nn.Identity,
+    nn.BatchNorm1d,
+    nn.BatchNorm2d,
+    nn.BatchNorm3d
 )
 
 CLIP_MODES = ['NONE',
@@ -180,7 +183,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     for module_name in modules_to_quantize:
         module = modules_dict[module_name]
         if isinstance(module, SKIP_MODULES):
-            msglogger.info('Skipping module \'%s\' of type %s.'.format(module_name, type(module)))
+            msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, type(module)))
             continue
 
         msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
