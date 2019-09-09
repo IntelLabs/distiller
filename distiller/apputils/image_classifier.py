@@ -156,7 +156,7 @@ class ClassifierCompressor(object):
             msglogger.error(
                 'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
                 self.start_epoch, self.ending_epoch))
-        raise ValueError('Epochs parameter is too low. Nothing to do.')
+            raise ValueError('Epochs parameter is too low. Nothing to do.')
 
         # Load the datasets lazily
         self.load_datasets()
