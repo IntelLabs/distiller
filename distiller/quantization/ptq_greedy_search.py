@@ -84,7 +84,14 @@ def module_override(**kwargs):
     return OrderedDict(kwargs)
 
 
-def module_override_generator(module):
+def module_override_generator(module, module_name, sg, **kwargs):
+    """
+    Standard generator of overrides for the greedy search algorithm.
+    Args:
+        module (nn.Module): the module
+        module_name (str): module name as it appears in the summary graph
+        sg (SummaryGraph): a summary graph of the model
+    """
     if isinstance(module, FP16_LAYERS):
         yield module_override(fp16=True)
         return
@@ -92,7 +99,7 @@ def module_override_generator(module):
         yield module_override()
         return
 
-    # Module is quantized to int8:
+    is_input_layer = len(sg.adjacency_map()[module_name].predecessors) == 0
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
             current_module_override = module_override(clip_acts=clip_mode,
@@ -103,6 +110,9 @@ def module_override_generator(module):
             current_module_override = module_override(clip_acts=clip_mode,
                                                       bits_weights=8,
                                                       bits_activations=8)
+        if is_input_layer:
+            current_module_override['input_overrides'] = OrderedDict([('from_outputs', True)])
+
         yield current_module_override
 
 
@@ -125,7 +135,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
           if None provided - will be calculated on runtime.
         args: command line arguments
         module_override_gen_fn: A function to generate module overrides.
-          assumes signature `def module_override_gen_fn(module: nn.Module) -> Generator[OrderedDict, None, None]`.
+          assumes signature
+          `def module_override_gen_fn(module: nn.Module, module_name: str, sg: distiller.SummaryGraph, **kwargs)
+            -> Generator[OrderedDict, None, None]`
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
@@ -192,7 +204,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
-        for current_module_override in module_override_gen_fn(module):
+        for current_module_override in module_override_gen_fn(module, module_name, sg):
             overrides_dict[normalized_module_name] = current_module_override
             temp_act_stats = deepcopy(act_stats)
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
