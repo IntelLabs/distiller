@@ -59,6 +59,25 @@ quantizers:
     per_channel_wts: True
     clip_acts: AVG
 
+    # If this is set, when a quantized input is required but the tensor doesn't contain quantization metadata,
+    # the input will be quantized according to the module's output settings
+    inputs_quant_auto_fallback: False
+
+    overrides:
+      conv1:
+        # The input to the first layer in the model will never have quantization metadata
+        input_overrides:
+          # Shorthand to take the quantization settings of the output (ignores any other settings)
+          from_outputs: True
+      fc:
+        # In ResNet, the FC layer has a view op before, which kills the quantization metadata. So we have to override
+        # (or enable auto_fallback).
+        input_overrides:
+          # Example of setting the actual value. Applicable only if 'from_outputs' isn't set.
+          # The following keys are supported: 'bits_activations', 'mode', 'clip_acts', 'clip_n_stds'
+          # Any key not explicitly set will default to the output setting
+          bits_activations: 6
+
     # Overrides section for run 3
 #    overrides:
 #      fc:
