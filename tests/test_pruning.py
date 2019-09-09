@@ -18,6 +18,8 @@ import numpy as np
 import logging
 import math
 import torch
+from functools import partial
+
 import distiller
 import common
 import pytest
@@ -289,7 +291,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     zeros_mask_dict[pair[1] + ".weight"].mask = mask
     zeros_mask_dict[pair[1] + ".weight"].apply_mask(conv2_p)
     all_channels = set([ch for ch in range(num_channels)])
-    nnz_channels = set(distiller.find_nonzero_channels_list(conv2_p, pair[1] + ".weight"))
+    nnz_channels = set(distiller.non_zero_channels(conv2_p))
     channels_removed = all_channels - nnz_channels
     logger.info("Channels removed {}".format(channels_removed))
 
@@ -317,7 +319,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     # We save 3 times, and load twice, to make sure to cover some corner cases:
     #   - Make sure that after loading, the model still has hold of the thinning recipes
     #   - Make sure that after a 2nd load, there no problem loading (in this case, the
-    #   - tensors are already thin, so this is a new flow)
+    #     tensors are already thin, so this is a new flow)
     # (1)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None)
     model_2 = create_model(False, config.dataset, config.arch, parallel=is_parallel)
@@ -325,14 +327,13 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     model_2(dummy_input)
     conv2 = common.find_module_by_name(model_2, pair[1])
     assert conv2 is not None
-    with pytest.raises(KeyError):
-        model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
-    compression_scheduler = distiller.CompressionScheduler(model)
-    hasattr(model, 'thinning_recipes')
+    model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
+    assert hasattr(model_2, 'thinning_recipes')
 
     run_forward_backward(model, optimizer, dummy_input)
 
     # (2)
+    compression_scheduler = distiller.CompressionScheduler(model)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None, scheduler=compression_scheduler)
     model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
     assert hasattr(model_2, 'thinning_recipes')
@@ -458,6 +459,20 @@ def test_magnitude_pruning():
     assert common.almost_equal(distiller.sparsity(b), 1/distiller.volume(a))
 
 
+def test_row_pruning():
+    param = torch.tensor([[1., 2., 3.],
+                          [4., 5., 6.],
+                          [7., 8., 9.]])
+    from distiller.pruning import L1RankedStructureParameterPruner
+
+    masker = distiller.scheduler.ParameterMasker("why name")
+    zeros_mask_dict = {"some name": masker}
+    L1RankedStructureParameterPruner.rank_and_prune_rows(0.5, param, "some name", zeros_mask_dict)
+    print(distiller.sparsity_rows(masker.mask))
+    assert math.isclose(distiller.sparsity_rows(masker.mask), 1/3)
+    pass
+
+
 if __name__ == '__main__':
     for is_parallel in [True, False]:
         test_ranked_filter_pruning(is_parallel)
@@ -478,3 +493,4 @@ if __name__ == '__main__':
         arbitrary_channel_pruning(mobilenet_imagenet(is_parallel),
                                   channels_to_remove=[0, 2],
                                   is_parallel=is_parallel)
+    test_row_pruning()

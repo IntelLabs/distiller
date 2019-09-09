@@ -138,6 +138,9 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=Fa
     log_filename = os.path.join(logdir, exp_full_name + '.log')
     if os.path.isfile(log_cfg_file):
         logging.config.fileConfig(log_cfg_file, defaults={'logfilename': log_filename})
+    else:
+        print("Could not find the logger configuration file (%s) - using default logger configuration" % log_cfg_file)
+        apply_default_logger_cfg(log_filename)
     msglogger = logging.getLogger()
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
@@ -160,3 +163,33 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=Fa
     except OSError:
         msglogger.debug("Failed to create symlinks to latest logs")
     return msglogger
+
+
+def apply_default_logger_cfg(log_filename):
+    d = {
+        'version': 1,
+        'formatters': {
+            'simple': {
+                'class': 'logging.Formatter',
+                'format': '%(asctime)s - %(message)s'
+            }
+        },
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'level': 'INFO',
+            },
+            'file': {
+                'class': 'logging.FileHandler',
+                'filename': log_filename,
+                'mode': 'w',
+                'formatter': 'simple',
+            },
+        },
+        'root': {
+            'level': 'DEBUG',
+            'handlers': ['console', 'file']
+        },
+    }
+
+    logging.config.dictConfig(d)

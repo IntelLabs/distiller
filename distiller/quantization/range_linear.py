@@ -489,13 +489,14 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # In the first forward pass - `w_zero_point` is added into the weights, to allow faster inference,
         # and all subsequent calls are done with these shifted weights.
         # Upon calling `self.state_dict()` - we restore the actual quantized weights.
-        self.is_simulated_quant_weight_shifted = False
+        # i.e. is_simulated_quant_weight_shifted = False
+        self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         if self.is_simulated_quant_weight_shifted:
             # We want to return the weights to their integer representation:
             self.wrapped_module.weight.data -= self.w_zero_point
-            self.is_simulated_quant_weight_shifted = False
+            self.is_simulated_quant_weight_shifted.sub_(1) # i.e. is_simulated_quant_weight_shifted = False
         return super(RangeLinearQuantParamLayerWrapper, self).state_dict(destination, prefix, keep_vars)
 
     def get_inputs_quantization_params(self, input):
@@ -535,7 +536,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
-            self.is_simulated_quant_weight_shifted = True
+            self.is_simulated_quant_weight_shifted.add_(1) # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
@@ -1372,3 +1373,21 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
                                                                   per_channel=perch)
             m.register_buffer(ptq.q_attr_name + '_scale', torch.ones_like(scale))
             m.register_buffer(ptq.q_attr_name + '_zero_point', torch.zeros_like(zero_point))
+
+
+class NCFQuantAwareTrainQuantizer(QuantAwareTrainRangeLinearQuantizer):
+    def __init__(self, model, optimizer=None, bits_activations=32, bits_weights=32, bits_bias=32,
+                 overrides=None, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, per_channel_wts=False):
+        super(NCFQuantAwareTrainQuantizer, self).__init__(model, optimizer=optimizer,
+                                                          bits_activations=bits_activations,
+                                                          bits_weights=bits_weights,
+                                                          bits_bias=bits_bias,
+                                                          overrides=overrides,
+                                                          mode=mode, ema_decay=ema_decay,
+                                                          per_channel_wts=per_channel_wts,
+                                                          quantize_inputs=False)
+
+        self.replacement_factory[distiller.modules.EltwiseMult] = self.activation_replace_fn
+        self.replacement_factory[distiller.modules.Concat] = self.activation_replace_fn
+        self.replacement_factory[nn.Linear] = self.activation_replace_fn
+        # self.replacement_factory[nn.Sigmoid] = self.activation_replace_fn

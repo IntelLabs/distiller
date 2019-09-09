@@ -21,6 +21,8 @@ import distiller.models as models
 
 
 def add_cmdline_args(parser):
+    parser.add_argument('--save-untrained-model',  action='store_true', default=False,
+                        help='Save the randomly-initialized model before training (useful for lottery-ticket method)')
     parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
                         help='List of loss weights for early exits (e.g. --earlyexit_lossweights 0.1 0.3)')
     parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,

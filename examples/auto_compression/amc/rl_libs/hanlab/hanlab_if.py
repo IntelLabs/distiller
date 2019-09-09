@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-from examples.auto_compression.amc.rl_libs.private.agent import DDPG, train
+from examples.auto_compression.amc.rl_libs.hanlab.agent import DDPG, train
 import logging
 
 
@@ -27,10 +27,10 @@ class ArgsContainer(object):
 
 
 class RlLibInterface(object):
-    """Interface to a private DDPG impelementation."""
+    """Interface to a hanlab DDPG impelementation."""
 
     def solve(self, env, args):
-        msglogger.info("AMC: Using private")
+        msglogger.info("AMC: Using hanlab")
         
         agent_args = ArgsContainer()
         agent_args.bsize = args.batch_size
@@ -44,7 +44,6 @@ class RlLibInterface(object):
         agent_args.lr_a = env.amc_cfg.ddpg_cfg.actor_lr
         agent_args.hidden1 = 300
         agent_args.hidden2 = 300
-        agent_args.rmsize = 100
         agent_args.rmsize = env.amc_cfg.ddpg_cfg.replay_buffer_size
         agent_args.window_length = 1
         agent_args.train_episode = (env.amc_cfg.ddpg_cfg.num_heatup_episodes +

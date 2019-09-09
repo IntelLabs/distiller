@@ -46,7 +46,7 @@ def add_automl_args(argparser):
                        default="l1-rank", help="The pruning method")
     group.add_argument('--amc-rllib', choices=["coach",
                                                "spinningup",
-                                               "private",
+                                               "hanlab",
                                                "random"],
                        default=None, help="Choose which RL library to use")
     group.add_argument('--amc-group-size', type=int, default=1,
