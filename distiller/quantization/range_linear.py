@@ -150,7 +150,6 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         else:
             sat_fn = AciqAsymmetricClipper(num_bits, clip)
         sat_min, sat_max = sat_fn(stats)
-        sat_min, sat_min = torch.tensor(sat_min), torch.tensor(sat_max)
 
     if mode == LinearQuantMode.SYMMETRIC:
         scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()))
@@ -956,6 +955,11 @@ class PostTrainLinearQuantizer(Quantizer):
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
                                 clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
+                # Hack to bypass Quantizer pre-override check -
+                # Quantizer class checks `qbit.acts` and `qbit.wts` before applying overrides
+                # but since fp16 doesn't act as an intN - we need to override these
+                # tensors to bypass the check
+                qbits_map[name].acts = 'fp16'
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
@@ -970,6 +974,11 @@ class PostTrainLinearQuantizer(Quantizer):
                                     scale_approx_mult_bits=scale_approx_mult_bits,
                                     clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
+                # Hack to bypass Quantizer pre-override check -
+                # Quantizer class checks `qbit.acts` and `qbit.wts` before applying overrides
+                # but since fp16 doesn't act as an intN - we need to override these
+                # tensors to bypass the check
+                qbits_map[name].acts = 'fp16'
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)

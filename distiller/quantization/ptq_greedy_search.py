@@ -132,23 +132,22 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     adjacency_map = sg.adjacency_map()
     modules_dict = dict(model.named_modules())
     modules_to_quantize = [m for m in modules_to_quantize
-                           if isinstance(modules_dict[m], QUANTIZED_MODULES)
-                           and m not in args.qe_no_quant_layers]
+                           if m not in args.qe_no_quant_layers]
 
     module_override_gen_fn = module_override_gen_fn or module_override_generator
 
     calib_eval_fn = calib_eval_fn or eval_fn
     if not act_stats:
-        print('Collecting stats for model...')
+        msglogger.info('Collecting stats for model...')
         model_temp = distiller.utils.make_non_parallel_copy(model)
         act_stats = collect_quant_stats(model_temp, calib_eval_fn)
         del model_temp
         if args:
             act_stats_path = '%s_act_stats.yaml' % args.arch
-            print('Done. Saving act stats into %s' % act_stats_path)
+            msglogger.info('Done. Saving act stats into %s' % act_stats_path)
             distiller.yaml_ordered_save(act_stats_path, act_stats)
     base_score = eval_fn(model)
-    print("Base score: %.3f" % base_score)
+    msglogger.info("Base score: %.3f" % base_score)
 
     def recalibrate_stats(module_name, act_stats):
         """
@@ -174,7 +173,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         return act_stats
 
     for module_name in modules_to_quantize:
-        print('Searching optimal quantization in \'%s\':' % module_name)
+        msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
         module = modules_dict[module_name]
         overrides_dict = deepcopy(best_overrides_dict)
         best_performance = float("-inf")
@@ -197,11 +196,11 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             current_perf = eval_fn(quantizer.model)
             if isinstance(module, QUANTIZED_MODULES):
                 clip_mode = current_module_override['clip_acts']
-                print('\t%s\t score = %.3f\tLayer overrides: %s' %
+                msglogger.info('\t%s\t score = %.3f\tLayer overrides: %s' %
                       (clip_mode, current_perf, current_module_override))
             else:
-                print('\t Module is not quantized to int8. Not clipping activations.')
-                print('\t score = %.3f\tLayer overrides: %s' %
+                msglogger.info('\t Module is not quantized to int8. Not clipping activations.')
+                msglogger.info('\t score = %.3f\tLayer overrides: %s' %
                       (current_perf, current_module_override))
             if current_perf > best_performance:
                 best_overrides_dict[normalized_module_name] = current_module_override
@@ -214,9 +213,19 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                          clip_acts=ClipMode.NONE, overrides=deepcopy(best_overrides_dict),
                                          model_activation_stats=act_stats)
     quantizer.prepare_model(dummy_input)
-    print('best_overrides_dict: %s' % best_overrides_dict)
-    print('Best score ', eval_fn(quantizer.model))
+    msglogger.info('best_overrides_dict: %s' % best_overrides_dict)
+    msglogger.info('Best score ', eval_fn(quantizer.model))
     return model, best_overrides_dict
+
+
+def config_verbose(verbose):
+    if verbose:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+        logging.getLogger().setLevel(logging.WARNING)
+    for module in ["distiller.apputils.image_classifier", ]:
+        logging.getLogger(module).setLevel(loglevel)
 
 
 if __name__ == "__main__":
@@ -235,9 +244,10 @@ if __name__ == "__main__":
     args.effective_test_size = args.qe_calib_portion
     args.batch_size = args.qe_calib_batchsize
     calib_data_loader = classifier.load_data(args, load_train=False, load_val=False)
-
-    msglogger = logging.getLogger()
-    logging.disable(logging.WARNING)
+    # logging
+    logging.getLogger().setLevel(logging.WARNING)
+    msglogger = logging.getLogger(__name__)
+    msglogger.setLevel(logging.INFO)
 
     def test_fn(model):
         top1, top5, losses = classifier.test(eval_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,
@@ -252,12 +262,12 @@ if __name__ == "__main__":
                          parallel=not args.load_serialized, device_ids=args.gpus)
     args.device = next(model.parameters()).device
     if args.load_model_path:
-        print("Loading checkpoint from %s" % args.load_model_path)
+        msglogger.info("Loading checkpoint from %s" % args.load_model_path)
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
                                               model_device=args.device)
     dummy_input = torch.rand(*model.input_shape, device=args.device)
     if args.qe_stats_file:
-        print("Loading stats from %s" % args.qe_stats_file)
+        msglogger.info("Loading stats from %s" % args.qe_stats_file)
         with open(args.qe_stats_file, 'r') as f:
             act_stats = distiller.yaml_ordered_load(f)
     else:
