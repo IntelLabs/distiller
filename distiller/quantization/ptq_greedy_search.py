@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode, FP16Wrapper
 from distiller.summary_graph import SummaryGraph
+from distiller.model_transforms import fold_batch_norms
 import distiller.modules
 from distiller.data_loggers import collect_quant_stats
 from distiller.models import create_model
@@ -47,7 +48,6 @@ QUANTIZED_MODULES = (
 )
 
 FP16_LAYERS = (
-    nn.ReLU,
     nn.Tanh,
     nn.Sigmoid
 )
@@ -91,6 +91,7 @@ def module_override_generator(module, module_name, sg, **kwargs):
         module (nn.Module): the module
         module_name (str): module name as it appears in the summary graph
         sg (SummaryGraph): a summary graph of the model
+        override_dict (OrderedDict):
     """
     if isinstance(module, FP16_LAYERS):
         yield module_override(fp16=True)
@@ -98,8 +99,14 @@ def module_override_generator(module, module_name, sg, **kwargs):
     if isinstance(module, UNQUANTIZED_MODULES) or not isinstance(module, QUANTIZED_MODULES):
         yield module_override()
         return
+    adj_map = sg.adjacency_map()
 
-    is_input_layer = len(sg.adjacency_map()[module_name].predecessors) == 0
+    modules_dict = dict(sg._src_model.named_modules())
+    # Quantize input explicitly:
+    quantize_input = len(adj_map[module_name].predecessors) == 0
+
+    successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
+    use_half_range = all([isinstance(modules_dict[succ], nn.ReLU) for succ in successors_names])
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
             current_module_override = module_override(clip_acts=clip_mode,
@@ -110,15 +117,16 @@ def module_override_generator(module, module_name, sg, **kwargs):
             current_module_override = module_override(clip_acts=clip_mode,
                                                       bits_weights=8,
                                                       bits_activations=8)
-        if is_input_layer:
-            current_module_override['input_overrides'] = OrderedDict([('from_outputs', True)])
+        if quantize_input:
+            current_module_override['input_overrides'] = OrderedDict([(0, module_override(bits_activations=8))])
+        current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
         yield current_module_override
 
 
 def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                       recurrent=False, act_stats=None,
-                      args=None, module_override_gen_fn=None):
+                      args=None, module_override_gen_fn=None, fold_sequences=True):
     """
     Perform greedy search on Post Train Quantization configuration for the model.
     Args:
@@ -138,12 +146,15 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
           assumes signature
           `def module_override_gen_fn(module: nn.Module, module_name: str, sg: distiller.SummaryGraph, **kwargs)
             -> Generator[OrderedDict, None, None]`
+        fold_sequences (bool): fold batch norms before quantizing
     Returns:
         (quantized_model, best_overrides_dict)
     Note:
         It is assumed that `eval_fn` returns a satisfying metric of performance (e.g. accuracy)
         and the greedy search aims to maximize this metric.
     """
+    if fold_sequences:
+        model = fold_batch_norms(model, dummy_input)
     best_overrides_dict = OrderedDict()
     overrides_dict = OrderedDict()
     sg = SummaryGraph(model, dummy_input)
