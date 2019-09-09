@@ -926,7 +926,24 @@ class PostTrainLinearQuantizer(Quantizer):
     """
     Applies range-based linear quantization to a model.
     This quantizer is expected to be executed at evaluation only, on a pre-trained model
-    Currently, the following Modules are supported: torch.nn.Conv2d, torch.nn.Linear
+
+    The following modules / operations have dedicated implementations which consider quantization:
+      * torch.nn.Conv2d/Conv3d
+      * torch.nn.Linear
+      * torch.nn.Embedding
+      * distiller.modules.Concat
+      * distiller.modules.EltwiseAdd
+      * distiller.modules.EltwiseMult
+      * distiller.modules.Matmul
+      * distiller.modules.BatchMatmul
+    An existing module will need likely need to be modified to use the 'distiller.modules.*' modules. This needs to
+    be done BEFORE creating the quantizer. See the docs for more details:
+    https://nervanasystems.github.io/distiller/prepare_model_quant.html
+
+    Any leaf module not in the list above will be "fake-quantized". That is - the original FP32 module will be
+    executed, and its output will be quantized.
+
+    TODO: Add details on propagation of activations quantization settings + input overrides
 
     Args:
         model (torch.nn.Module): Model to be quantized
@@ -946,6 +963,7 @@ class PostTrainLinearQuantizer(Quantizer):
             followed by a bit-wise shift. This eliminates floating-point scale factors, replacing them with integer
             calculations.
             If None, scale factors will be kept in their original FP32 values.
+        inputs_quant_auto_fallback (bool): TODO
     Note:
         If fp16 is set to True, all the layers (except those overridden in `overrides`) will be converted
         to half precision, regardless of bits_activations/parameters/accum.
