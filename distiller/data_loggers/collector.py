@@ -422,7 +422,11 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
     def start_laplace(self):
         self._check_required_stats()
         self.collecting_laplace = True
-        self.batch_idx = 0
+        # reset batch_idx for all leaf modules
+        for module in self.model.modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
+            module.batch_idx = 0
 
     def stop_laplace(self):
         self.collecting_laplace = False
