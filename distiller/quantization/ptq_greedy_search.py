@@ -62,6 +62,10 @@ UNQUANTIZED_MODULES = (
     nn.Softmax,
 )
 
+SKIP_MODULES = (
+    nn.Identity,
+)
+
 CLIP_MODES = ['NONE',
               'AVG',
               'GAUSS',
@@ -146,6 +150,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             act_stats_path = '%s_act_stats.yaml' % args.arch
             msglogger.info('Done. Saving act stats into %s' % act_stats_path)
             distiller.yaml_ordered_save(act_stats_path, act_stats)
+    msglogger.info('Evaluating baseline score for model...')
     base_score = eval_fn(model)
     msglogger.info("Base score: %.3f" % base_score)
 
@@ -173,8 +178,12 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         return act_stats
 
     for module_name in modules_to_quantize:
-        msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
         module = modules_dict[module_name]
+        if isinstance(module, SKIP_MODULES):
+            msglogger.info('Skipping module \'%s\' of type %s.'.format(module_name, type(module)))
+            continue
+
+        msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
         overrides_dict = deepcopy(best_overrides_dict)
         best_performance = float("-inf")
         normalized_module_name = module_name

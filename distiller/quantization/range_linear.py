@@ -26,7 +26,7 @@ import warnings
 
 import distiller
 import distiller.utils
-from .quantizer import Quantizer
+from .quantizer import Quantizer, QBits
 from .q_utils import *
 from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
@@ -173,7 +173,8 @@ def add_post_train_quant_args(argparser):
                              'asym_s': LinearQuantMode.ASYMMETRIC_SIGNED,
                              'asym_u': LinearQuantMode.ASYMMETRIC_UNSIGNED}
 
-    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD}
+    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD,
+                            'gauss': ClipMode.GAUSS, 'laplace': ClipMode.LAPLACE}
 
     def from_dict(d, val_str):
         try:
@@ -955,11 +956,6 @@ class PostTrainLinearQuantizer(Quantizer):
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
                                 clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
-                # Hack to bypass Quantizer pre-override check -
-                # Quantizer class checks `qbit.acts` and `qbit.wts` before applying overrides
-                # but since fp16 doesn't act as an intN - we need to override these
-                # tensors to bypass the check
-                qbits_map[name].acts = 'fp16'
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
@@ -974,11 +970,6 @@ class PostTrainLinearQuantizer(Quantizer):
                                     scale_approx_mult_bits=scale_approx_mult_bits,
                                     clip_acts=clip_acts, clip_n_stds=clip_n_stds):
             if fp16:
-                # Hack to bypass Quantizer pre-override check -
-                # Quantizer class checks `qbit.acts` and `qbit.wts` before applying overrides
-                # but since fp16 doesn't act as an intN - we need to override these
-                # tensors to bypass the check
-                qbits_map[name].acts = 'fp16'
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
@@ -1106,6 +1097,13 @@ class PostTrainLinearQuantizer(Quantizer):
         save_path = os.path.join(save_dir, 'quant_stats_after_prepare_model.yaml')
         distiller.yaml_ordered_save(save_path, self.model_activation_stats)
         msglogger.info('Updated stats saved to ' + save_path)
+        for module_name, override in self.module_overrides_map.items():
+            # Hack to bypass Quantizer pre-override check -
+            # Quantizer class checks `qbit.acts` and `qbit.wts` before applying overrides
+            # but since fp16 doesn't act as an intN - we need to override these
+            # tensors to bypass the check
+            if override.get('fp16', False):
+                self.module_qbits_map[module_name] = QBits('fp16', None, None)
 
     def _clip_stats(self, entry, min_val, max_val):
         if entry['max'] < min_val:
