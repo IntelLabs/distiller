@@ -404,6 +404,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         Check whether the required statistics were collected to allow collecting laplace distribution stats.
         """
         for name, module in self.model.named_modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
             if not hasattr(module, 'quant_stats'):
                 raise RuntimeError('Collection of Laplace distribution statistics is '
                                    'only allowed after collection of stats has started.')
