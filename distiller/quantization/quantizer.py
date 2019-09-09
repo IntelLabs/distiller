@@ -169,7 +169,7 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         # Unspecified layer types return None by default.
-        self.replacement_factory = OrderedDict()
+        self.replacement_factory = OrderedDict([(nn.Identity, None)])
         self.default_repalcement_fn = None
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
@@ -247,6 +247,8 @@ class Quantizer(object):
 
         self._post_prepare_model()
 
+        distiller.assign_layer_fq_names(self.model)
+
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_prepare_model(self, dummy_input):
@@ -307,6 +309,9 @@ class Quantizer(object):
                                 self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module),
                                                       current_qbits)
                             self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                    else:
+                        replace_msg(full_name)
+                        self.modules_processed[module] = full_name, None
 
             if distiller.has_children(module):
                 # For container we call recursively

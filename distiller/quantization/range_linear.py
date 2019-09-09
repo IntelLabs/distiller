@@ -34,6 +34,15 @@ import distiller.model_transforms as mt
 msglogger = logging.getLogger()
 
 
+def _quant_param_to_str(val):
+    if isinstance(val, torch.Tensor):
+        if val.numel() > 1:
+            return 'PerCh'
+        else:
+            return '{:.6f}'.format(val.item())
+    return '{:.6f}'.format(val)
+
+
 def _enum_to_str(enum_val):
     return str(enum_val).split('.')[1]
 
@@ -153,8 +162,23 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
 # Post Training
 ###############################################################################
 
-TensorQuantMetadata = namedtuple('TensorQuantMetadata', ['scale', 'zero_point', 'min_q_val', 'max_q_val'])
-QuantSettings = namedtuple('QuantSettings', ['num_bits', 'quant_mode', 'clip_mode', 'clip_n_stds', 'per_channel'])
+class TensorQuantMetadata(namedtuple('TensorQuantMetadata', ['scale', 'zero_point', 'min_q_val', 'max_q_val'])):
+    __slots__ = ()
+
+    def __str__(self):
+        return '(scale={} ; zero_point={})'.format(_quant_param_to_str(self.scale),
+                                                  _quant_param_to_str(self.zero_point))
+
+
+class QuantSettings(namedtuple('QuantSettings',
+                               ['num_bits', 'quant_mode', 'clip_mode', 'clip_n_stds', 'per_channel'])):
+    __slots__ = ()
+
+    def __str__(self):
+        return '(num_bits={} ; quant_mode={} ; clip_mode={} ; clip_n_stds={} ; per_channel={})'.format(
+            self.num_bits, _enum_to_str(self.quant_mode), _enum_to_str(self.clip_mode), self.clip_n_stds,
+            self.per_channel
+        )
 
 
 def linear_quantize_clamp_with_metadata(t, inplace=False):
@@ -242,27 +266,37 @@ class RangeLinearQuantWrapper(nn.Module):
 
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC,
                  clip_acts=ClipMode.NONE, activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
-                 input_quantization_settings=None, requires_quantized_inputs=True, legacy_inputs_quant=False):
+                 input_overrides=None, requires_quantized_inputs=True, inputs_quant_auto_fallback=False):
         super(RangeLinearQuantWrapper, self).__init__()
 
-        input_quantization_settings = input_quantization_settings or OrderedDict()
+        input_overrides = input_overrides or OrderedDict()
 
         self.wrapped_module = wrapped_module
         self.scale_approx_mult_bits = scale_approx_mult_bits
         self.requires_quantized_inputs = requires_quantized_inputs
-        self.legacy_inputs_quant = legacy_inputs_quant
+        self.inputs_quant_auto_fallback = inputs_quant_auto_fallback
 
         self.output_quant_settings = QuantSettings(num_bits_acts, mode, clip_acts, clip_n_stds, False)
-        self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC, ClipMode.NONE, None, False)
-        self.input_quant_settings_overrides = OrderedDict()
-        for k, v in input_quantization_settings.items():
-            idx = int(k)
-            quant_settings = QuantSettings(v.get('bits_activations', self.output_quant_settings.num_bits),
-                                           v.get('mode', self.output_quant_settings.quant_mode),
-                                           v.get('clip_acts', self.output_quant_settings.clip_mode),
-                                           v.get('clip_n_stds', self.output_quant_settings.clip_n_stds),
-                                           False)
-            self.input_quant_settings_overrides[idx] = quant_settings
+        self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
+                                                  ClipMode.NONE, None, False)
+        if self.requires_quantized_inputs:
+            self.inputs_quant_settings_overrides = OrderedDict()
+            for k, v in input_overrides.items():
+                idx = int(k)
+                if v.pop('from_output', None):
+                    quant_settings = self.output_quant_settings
+                else:
+                    quant_settings = QuantSettings(v.pop('bits_activations', self.output_quant_settings.num_bits),
+                                                   v.pop('mode', self.output_quant_settings.quant_mode),
+                                                   v.pop('clip_acts', self.output_quant_settings.clip_mode),
+                                                   v.pop('clip_n_stds', self.output_quant_settings.clip_n_stds),
+                                                   False)
+                    if v:
+                        # Poor man's input checking on input overrides dict
+                        raise ValueError('Input overrides dict contains unsupported keys:', list(v.keys()))
+                self.inputs_quant_settings_overrides[idx] = quant_settings
+        else:
+            self.inputs_quant_settings_overrides = None
 
         # Controls whether output is de-quantized at end of forward op. Meant as a debug / test flag only
         # (note that if False, the quantized output will be returned, but without any quantization parameters,
@@ -277,17 +311,20 @@ class RangeLinearQuantWrapper(nn.Module):
         if activation_stats:
             self.preset_act_stats = True
 
-            self.input_quant_metadata_fallback = OrderedDict()
-            for idx, stats in activation_stats['inputs'].items():
-                settings = self.input_quant_settings_overrides.get(idx, self.output_quant_settings)
-                scale, zp = _get_quant_params_from_stats_dict(
-                    stats, settings.num_bits, settings.quant_mode, settings.clip_mode,
-                    settings.clip_n_stds, self.scale_approx_mult_bits
-                )
-                min_q_val, max_q_val = get_quantized_range(settings.num_bits,
-                                                           settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
-                qmd = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
-                self.input_quant_metadata_fallback[idx] = qmd
+            if self.requires_quantized_inputs:
+                self.inputs_quant_metadata_fallback = OrderedDict()
+                for idx, stats in activation_stats['inputs'].items():
+                    settings = self.inputs_quant_settings_overrides.get(idx, self.output_quant_settings)
+                    scale, zp = _get_quant_params_from_stats_dict(
+                        stats, settings.num_bits, settings.quant_mode, settings.clip_mode,
+                        settings.clip_n_stds, self.scale_approx_mult_bits
+                    )
+                    min_q_val, max_q_val = get_quantized_range(
+                        settings.num_bits, settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+                    qmd = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
+                    self.inputs_quant_metadata_fallback[idx] = qmd
+            else:
+                self.inputs_quant_metadata_fallback = None
 
             scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode, clip_acts,
                                                           clip_n_stds, scale_approx_mult_bits)
@@ -344,28 +381,38 @@ class RangeLinearQuantWrapper(nn.Module):
     def _prepare_inputs_for_quantization(self, inputs):
         for idx, input in enumerate(inputs):
             if hasattr(input, 'quant_metadata'):
-                if idx in self.input_quant_settings_overrides:
-                    raise RuntimeError('CONFLICT - Input tensor has embedded quantization metadata AND user '
-                                       'defined input quantization settings')
+                if idx in self.inputs_quant_settings_overrides:
+                    raise RuntimeError('<{}> Input {}: CONFLICT - Tensor has embedded quantization metadata AND user '
+                                       'defined input quantization settings'.format(self.distiller_name, idx))
             else:
-                if idx in self.input_quant_settings_overrides:
-                    if self.preset_act_stats:
-                        input.quant_metadata = self.input_quant_metadata_fallback[idx]
-                    else:
-                        q_settings = self.input_quant_settings_overrides[idx]
-                        scale, zp = _get_quant_params_from_tensor(input, q_settings.num_bits, q_settings.quant_mode,
-                                                                  q_settings.clip_mode, q_settings.per_channel,
-                                                                  q_settings.clip_n_stds,
-                                                                  self.scale_approx_mult_bits)
-                        min_q_val, max_q_val = get_quantized_range(q_settings.num_bits,
-                                                                   q_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
-                        input.quant_metadata = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
+                # Input doesn't have embedded quantization data propagated from a previous layer
+                # Our options are:
+                #  If user set explicit settings for this input, use those
+                #  OR
+                #  If auto fallback is set, use the output quantization settings
+                if idx not in self.inputs_quant_settings_overrides and not self.inputs_quant_auto_fallback:
+                    raise RuntimeError('<{}> Input {}: Expected tensor with embedded quantization metadata. Either:\n'
+                                       '1. Make sure the previous operation is quantized\n'
+                                       '2. Provide explicit input quantization settings\n'
+                                       '3. Set inputs_quant_auto_fallback'.format(self.distiller_name, idx))
+                if self.preset_act_stats:
+                    input.quant_metadata = self.inputs_quant_metadata_fallback[idx]
                 else:
-                    # TODO: Enable "legacy" mode where we always fallback to output quantization settings. As is
-                    #       running from command line will not work.
-                    raise RuntimeError('Expected tensor with quantization metadata - '
-                                       'Make sure the previous operation is quantized, '
-                                       'or provide explicit input quanitzation settings')
+                    if idx in self.inputs_quant_settings_overrides:
+                        q_settings = self.inputs_quant_settings_overrides[idx]
+                    else:
+                        # If we're here then inputs_quant_auto_fallback is set
+                        # if self.num_forwards == 0:
+                        #     msglogger.info('<{}> Input {}: No embedded quantization metadata, '
+                        #                    'falling back to output settings'.format(self.distiller_name, idx))
+                        q_settings = self.output_quant_settings
+                    scale, zp = _get_quant_params_from_tensor(input, q_settings.num_bits, q_settings.quant_mode,
+                                                              q_settings.clip_mode, q_settings.per_channel,
+                                                              q_settings.clip_n_stds,
+                                                              self.scale_approx_mult_bits)
+                    signed = q_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
+                    min_q_val, max_q_val = get_quantized_range(q_settings.num_bits, signed)
+                    input.quant_metadata = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
 
     def quantized_forward(self, *inputs_q):
         """
@@ -405,18 +452,26 @@ class RangeLinearQuantWrapper(nn.Module):
         raise NotImplementedError
 
     def extra_repr(self):
-        q_settings = self.output_quant_settings
-        tmpstr = 'mode={0}, '.format(str(q_settings.quant_mode).split('.')[1])
-        tmpstr += 'num_bits_acts={0}, num_bits_accum={1}, '.format(q_settings.num_bits,
-                                                                   self.accum_quant_settings.num_bits)
-        tmpstr += 'clip_acts={0}, '.format(_enum_to_str(q_settings.clip_mode))
-        if q_settings.clip_mode == ClipMode.N_STD:
-            tmpstr += 'num_stds={} '.format(q_settings.clip_n_stds)
-        tmpstr += 'scale_approx_mult_bits={}'.format(self.scale_approx_mult_bits)
+        tmpstr = 'output_quant_settings={0}'.format(self.output_quant_settings)
+        tmpstr += '\naccum_quant_settings={0}'.format(self.accum_quant_settings)
+        tmpstr += '\nrequires_quantized_inputs={0}'.format(self.requires_quantized_inputs)
+        if self.requires_quantized_inputs:
+            overrides = self.inputs_quant_settings_overrides
+            tmpstr += '\n  inputs_quant_auto_fallback={}'.format(self.inputs_quant_auto_fallback)
+            tmpstr += ', forced_quant_settings_for_inputs={}'.format(
+                'None' if not overrides else list(overrides.keys()))
+            for idx, qset in overrides.items():
+                tmpstr += '\n    input_{}_settings={}'.format(idx, qset)
+        tmpstr += '\nscale_approx_mult_bits={}'.format(self.scale_approx_mult_bits)
         tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
         if self.preset_act_stats:
-            tmpstr += '\nout_scale={sc}, out_zero_point={zp}'.format(sc=self.output_scale.item(),
-                                                                     zp=self.output_zero_point.item())
+            tmpstr += '\n  output_scale={0}, output_zero_point={1}'.format(_quant_param_to_str(
+                self.output_scale), _quant_param_to_str(self.output_zero_point))
+            if self.requires_quantized_inputs:
+                for idx in self.inputs_quant_settings_overrides:
+                    qmd = self.inputs_quant_metadata_fallback[idx]
+                    tmpstr += '\n  input_#{0}_scale={1}, input_#{0}_zero_point={2}'.format(
+                        idx, _quant_param_to_str(qmd.scale), _quant_param_to_str(qmd.zero_point))
         return tmpstr
 
 
@@ -460,12 +515,13 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
-                 clip_n_stds=None, scale_approx_mult_bits=None, input_quantization_settings=None):
+                 clip_n_stds=None, scale_approx_mult_bits=None, input_overrides=None, inputs_quant_auto_fallback=False):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds,
                                                                 scale_approx_mult_bits,
-                                                                input_quantization_settings=input_quantization_settings,
-                                                                requires_quantized_inputs=True)
+                                                                input_overrides=input_overrides,
+                                                                requires_quantized_inputs=True,
+                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
@@ -592,26 +648,13 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         return requant_scale, output_zero_point
 
     def extra_repr(self):
-        out_q_settings = self.output_quant_settings
-        tmpstr = 'mode={0}, '.format(str(out_q_settings.quant_mode).split('.')[1])
-        tmpstr += 'num_bits_acts={0}, num_bits_params={1}, num_bits_accum={2}, '.format(
-            out_q_settings.num_bits, self.wts_quant_settings.num_bits, self.accum_quant_settings.num_bits)
-        tmpstr += 'clip_acts={0}, '.format(_enum_to_str(out_q_settings.clip_mode))
-        if out_q_settings.clip_mode == ClipMode.N_STD:
-            tmpstr += 'num_stds={} '.format(out_q_settings.clip_n_stds)
-        tmpstr += 'per_channel_wts={}, scale_approx_mult_bits={}'.format(self.wts_quant_settings.per_channel,
-                                                                         self.scale_approx_mult_bits)
-        tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
-        if self.wts_quant_settings.per_channel:
-            tmpstr += '\nw_scale=PerCh, w_zero_point=PerCh'
-        else:
-            tmpstr += '\nw_scale={0:.4f}, w_zero_point={1:.4f}'.format(self.w_scale.item(), self.w_zero_point.item())
-        if self.preset_act_stats:
-            tmpstr += '\nout_scale={0:.4f}, out_zero_point={1:.4f}'.format(self.output_scale.item(),
-                                                                           self.output_zero_point.item())
-        elif self.has_bias:
-            tmpstr += '\nbase_b_scale={0:.4f}, base_b_zero_point={1:.4f}'.format(self.b_scale.item(),
-                                                                                 self.b_zero_point.item())
+        tmpstr = 'weights_quant_settings={0}\n'.format(self.wts_quant_settings)
+        tmpstr += super(RangeLinearQuantParamLayerWrapper, self).extra_repr()
+        tmpstr += '\nweights_scale={0}, weights_zero_point={1}'.format(_quant_param_to_str(self.w_scale),
+                                                                       _quant_param_to_str(self.w_zero_point))
+        if not self.preset_act_stats and self.has_bias:
+            tmpstr += '\nbase_bias_scale={0}, base_bias_zero_point={1}'.format(_quant_param_to_str(self.b_scale),
+                                                                               _quant_param_to_str(self.b_zero_point))
         return tmpstr
 
 
@@ -641,13 +684,14 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32,
-                 mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,  activation_stats=None,
-                 clip_n_stds=None, scale_approx_mult_bits=None, input_quantization_settings=None):
+                 mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, activation_stats=None,
+                 clip_n_stds=None, scale_approx_mult_bits=None, input_overrides=None, inputs_quant_auto_fallback=False):
         super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                             clip_acts, activation_stats, clip_n_stds,
                                                             scale_approx_mult_bits,
-                                                            input_quantization_settings=input_quantization_settings,
-                                                            requires_quantized_inputs=True)
+                                                            input_overrides=input_overrides,
+                                                            requires_quantized_inputs=True,
+                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
         if not isinstance(wrapped_module, (distiller.modules.Matmul, distiller.modules.BatchMatmul)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
@@ -676,20 +720,6 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
-    def extra_repr(self):
-        tmpstr = 'mode={0}, '.format(str(self.output_quant_settings.quant_mode).split('.')[1])
-        tmpstr += 'num_bits_acts={0},  num_bits_accum={1}, '.format(self.output_quant_settings.num_bits,
-                                                                    self.accum_quant_settings.num_bits)
-        tmpstr += 'clip_acts={0}, '.format(_enum_to_str(self.output_quant_settings.clip_mode))
-        if self.output_quant_settings.clip_mode == ClipMode.N_STD:
-            tmpstr += 'num_stds={} '.format(self.output_quant_settings.clip_n_stds)
-        tmpstr += 'scale_approx_mult_bits={}'.format(self.scale_approx_mult_bits)
-        tmpstr += '\npreset_activation_stats={0}'.format(self.preset_act_stats)
-        if self.preset_act_stats:
-            tmpstr += '\nout_scale={0:.4f}, out_zero_point={1:.4f}'.format(self.output_scale.item(),
-                                                                           self.output_zero_point.item())
-        return tmpstr
-
 
 class NoStatsError(NotImplementedError):
     pass
@@ -698,7 +728,7 @@ class NoStatsError(NotImplementedError):
 class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
-                 input_quantization_settings=None):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.Concat):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.Concat modules')
 
@@ -710,8 +740,9 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
                                                             clip_acts=clip_acts, activation_stats=activation_stats,
                                                             clip_n_stds=clip_n_stds,
                                                             scale_approx_mult_bits=scale_approx_mult_bits,
-                                                            input_quantization_settings=input_quantization_settings,
-                                                            requires_quantized_inputs=True)
+                                                            input_overrides=input_overrides,
+                                                            requires_quantized_inputs=True,
+                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
     def quantized_forward(self, *inputs_q):
         # For concatenation to make sense input scales need to match, so we re-quantize all inputs
@@ -733,7 +764,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
-                 input_quantization_settings=None):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.EltwiseAdd):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseAdd modules')
 
@@ -745,8 +776,9 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
                                                                 clip_acts=clip_acts, activation_stats=activation_stats,
                                                                 clip_n_stds=clip_n_stds,
                                                                 scale_approx_mult_bits=scale_approx_mult_bits,
-                                                                input_quantization_settings=input_quantization_settings,
-                                                                requires_quantized_inputs=True)
+                                                                input_overrides=input_overrides,
+                                                                requires_quantized_inputs=True,
+                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
     def quantized_forward(self, *inputs_q):
         # Re-scale inputs to the accumulator scale
@@ -769,7 +801,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, scale_approx_mult_bits=None,
-                 input_quantization_settings=None):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.EltwiseMult):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseMult modules')
 
@@ -781,8 +813,9 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
                                                                  clip_acts=clip_acts, activation_stats=activation_stats,
                                                                  clip_n_stds=clip_n_stds,
                                                                  scale_approx_mult_bits=scale_approx_mult_bits,
-                                                                 input_quantization_settings=input_quantization_settings,
-                                                                 requires_quantized_inputs=True)
+                                                                 input_overrides=input_overrides,
+                                                                 requires_quantized_inputs=True,
+                                                                 inputs_quant_auto_fallback=inputs_quant_auto_fallback)
         self.accum_scale = 1
 
     def quantized_forward(self, *inputs_q):
@@ -920,7 +953,7 @@ class PostTrainLinearQuantizer(Quantizer):
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
                  overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  per_channel_wts=False, model_activation_stats=None, fp16=False, clip_n_stds=None,
-                 scale_approx_mult_bits=None):
+                 scale_approx_mult_bits=None, inputs_quant_auto_fallback=False):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
                                                        overrides=overrides, train_with_fp_copy=False)
@@ -958,12 +991,13 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'clip_n_stds': clip_n_stds,
                                                     'per_channel_wts': per_channel_wts,
                                                     'fp16': fp16,
-                                                    'scale_approx_mult_bits': scale_approx_mult_bits}}
+                                                    'scale_approx_mult_bits': scale_approx_mult_bits,
+                                                    'inputs_quant_auto_fallback': inputs_quant_auto_fallback}}
 
         def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
                                 clip_acts=clip_acts, clip_n_stds=clip_n_stds,
-                                input_quantization_settings=None):
+                                input_overrides=None):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
@@ -974,12 +1008,13 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      activation_stats=self.model_activation_stats.get(norm_name, None),
                                                      clip_n_stds=clip_n_stds,
                                                      scale_approx_mult_bits=scale_approx_mult_bits,
-                                                     input_quantization_settings=input_quantization_settings)
+                                                     input_overrides=input_overrides,
+                                                     inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
                                     scale_approx_mult_bits=scale_approx_mult_bits,
                                     clip_acts=clip_acts, clip_n_stds=clip_n_stds,
-                                    input_quantization_settings=None):
+                                    input_overrides=None, inputs_quant_auto_fallback=inputs_quant_auto_fallback):
             if fp16:
                 return FP16Wrapper(module)
             norm_name = distiller.utils.normalize_module_name(name)
@@ -988,7 +1023,8 @@ class PostTrainLinearQuantizer(Quantizer):
                 return wrapper_type(module, qbits_map[name].acts, mode=mode, clip_acts=clip_acts,
                                     activation_stats=self.model_activation_stats.get(norm_name, None),
                                     clip_n_stds=clip_n_stds, scale_approx_mult_bits=scale_approx_mult_bits,
-                                    input_quantization_settings=input_quantization_settings)
+                                    input_overrides=input_overrides,
+                                    inputs_quant_auto_fallback=inputs_quant_auto_fallback)
             except NoStatsError:
                 msglogger.warning('WARNING: {0} - quantization of {1} without stats not supported. '
                                   'Keeping the original FP32 module'.format(name, module.__class__.__name__))
@@ -1041,7 +1077,6 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[distiller.modules.Matmul] = factory_matmul
         self.replacement_factory[distiller.modules.BatchMatmul] = factory_matmul
         self.replacement_factory[nn.Embedding] = replace_embedding
-        self.replacement_factory[nn.Identity] = None
 
         self.default_repalcement_fn = replace_fake_quant
 
@@ -1072,7 +1107,8 @@ class PostTrainLinearQuantizer(Quantizer):
                        model_activation_stats=args.qe_stats_file,
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
-                       overrides=overrides)
+                       overrides=overrides,
+                       inputs_quant_auto_fallback=True)
 
     def save_per_layer_parameters(self, save_dir=):
         defaults = OrderedDict(self.model.quantizer_metadata['params'])

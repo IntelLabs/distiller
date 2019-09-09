@@ -50,24 +50,15 @@
 quantizers:
   post_train_quantizer:
     class: PostTrainLinearQuantizer
-    bits_activations: 8
-    bits_parameters: 8
+    bits_activations: 6
+    bits_parameters: 6
     bits_accum: 32
     mode: ASYMMETRIC_UNSIGNED
     # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
     model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True
     clip_acts: AVG
-
-    overrides:
-      conv1:
-        input_quantization_settings:
-          0:
-            bits_activations: 8
-      fc:
-        input_quantization_settings:
-          0:
-            bits_activations: 8
+    inputs_quant_auto_fallback: True
 
     # Overrides section for run 3
 #    overrides:
