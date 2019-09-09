@@ -227,7 +227,6 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         return fname
 
 
-
 class RecordsActivationStatsCollector(ActivationStatsCollector):
     """This class collects activations statistical records.
 
@@ -410,13 +409,37 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                     if hasattr(m, n):
                         setattr(m, n, False)
 
-    def start_laplace(self, modules_list=None):
+    def _check_required_stats(self):
+        """
+        Check whether the required statistics were collected to allow collecting laplace distribution stats.
+        """
+        for name, module in self.model.named_modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
+            if not hasattr(module, 'quant_stats'):
+                raise RuntimeError('Collection of Laplace distribution statistics is '
+                                   'only allowed after collection of stats has started.')
+            for i, input_stats_record in enumerate(module.quant_stats.inputs):
+                if 'mean' not in input_stats_record:
+                    raise RuntimeError('The required stats for input[%d] in module "%s" were not collected. '
+                                       'Please collect the required statistics using `collector.start()` and evaluating'
+                                       ' the model for enough batches.' % (i, name))
+            if 'mean' not in module.quant_stats.output:
+                raise RuntimeError('The required stats for the output in module "%s" were not collected. '
+                                   'Please collect the required statistics using `collector.start()` and evaluating'
+                                   ' the model for enough batches.' % name)
+
+    def start_laplace(self):
+        self._check_required_stats()
         self.collecting_laplace = True
-        self.start(modules_list)
+        # reset batch_idx for all leaf modules
+        for module in self.model.modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
+            module.batch_idx = 0
 
     def stop_laplace(self):
         self.collecting_laplace = False
-        self.stop()
 
     def _activation_stats_cb(self, module, inputs, output):
         def update_mean(old_mean, new_val):
@@ -492,9 +515,8 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             update_record(module.quant_stats.output, output)
 
     def _start_counter(self, module):
-        if not hasattr(module, 'quant_stats'):
-            # We don't know the number of inputs at this stage so we defer records creation to the actual callback
-            module.quant_stats = _QuantStatsRecord()
+        # We don't know the number of inputs at this stage so we defer records creation to the actual callback
+        module.quant_stats = _QuantStatsRecord()
         module.batch_idx = 0
 
     def _reset_counter(self, module):
@@ -725,10 +747,10 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector, modules_to_collect):
         test_fn(model=model)
-    # Collect Laplace distribution stats:
-    quant_stats_collector.start_laplace(modules_to_collect)
-    test_fn(model=model)
-    quant_stats_collector.stop_laplace()
+        # Collect Laplace distribution stats:
+        quant_stats_collector.start_laplace()
+        test_fn(model=model)
+        quant_stats_collector.stop_laplace()
 
     msglogger.info('Stats collection complete')
     if save_dir is not None:

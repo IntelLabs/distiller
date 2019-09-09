@@ -26,7 +26,7 @@ import warnings
 
 import distiller
 import distiller.utils
-from .quantizer import Quantizer, QBits
+from .quantizer import Quantizer
 from .q_utils import *
 from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
@@ -104,7 +104,6 @@ def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None):
     return fns[clip_mode]
 
 
-# TODO: Move to q_utils, add tests
 def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, per_channel=False, num_stds=None,
                                   scale_approx_mult_bits=None):
     if per_channel and tensor.dim() not in [2, 4]:
@@ -138,7 +137,6 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
     return scale, zp
 
 
-# TODO: Move to q_utils, add tests
 def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE, num_stds=None,
                                       scale_approx_mult_bits=None):
     if clip == ClipMode.N_STD:
