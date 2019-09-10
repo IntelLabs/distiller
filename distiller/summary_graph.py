@@ -72,6 +72,8 @@ class SummaryGraph(object):
 
     def __init__(self, model, dummy_input, apply_scope_name_workarounds=True):
         self._src_model = model
+        self._adj_map = None
+        self._layers_topological_order = None
         model_clone = distiller.make_non_parallel_copy(model)
 
         # Switch all instances of torch.nn.ModuleList in the model to our DistillerModuleList
@@ -519,6 +521,8 @@ class SummaryGraph(object):
               associated with a dedicated module within the underlying model. Examples of this will be
               functional calls, such as "F.relu()", and tensor operations, such as "t3 = t1 + t2".
         """
+        if self._adj_map and not dedicated_modules_only:
+            return self._adj_map
         adj_map = OrderedDict()
         named_modules = OrderedDict(self._src_model.named_modules())
 
@@ -545,7 +549,7 @@ class SummaryGraph(object):
                                 if dedicated_module_check(n)]
 
             adj_map[entry.op_meta.name] = entry
-
+        self._adj_map = adj_map
         return adj_map
 
     def layers_topological_order(self, recurrent=False):
@@ -555,6 +559,8 @@ class SummaryGraph(object):
         Args:
             recurrent (bool): indication on whether the model might have recurrent connections.
         """
+        if self._layers_topological_order:
+            return self._layers_topological_order
         adj_map = self.adjacency_map()
         ranked_ops = {k: _OpRank(v, 0) for k, v in adj_map.items()}
 
@@ -588,6 +594,7 @@ class SummaryGraph(object):
                      key=lambda k: ranked_ops[k].rank)
         # Check that only the actual roots have a rank of 0
         assert {k for k in ret if ranked_ops[k].rank == 0} <= set(roots)
+        self._layers_topological_order = ret
         return ret
 
 

@@ -84,26 +84,39 @@ def module_override(**kwargs):
     return OrderedDict(kwargs)
 
 
-def module_override_generator(module, module_name, sg, **kwargs):
+def module_override_generator(module, module_name, sg, overrides_dict):
     """
     Standard generator of overrides for the greedy search algorithm.
     Args:
         module (nn.Module): the module
         module_name (str): module name as it appears in the summary graph
         sg (SummaryGraph): a summary graph of the model
-        override_dict (OrderedDict):
+        overrides_dict (OrderedDict): the fixed overrides already applied
     """
     if isinstance(module, FP16_LAYERS):
         yield module_override(fp16=True)
         return
-    if isinstance(module, UNQUANTIZED_MODULES) or not isinstance(module, QUANTIZED_MODULES):
+    if isinstance(module, UNQUANTIZED_MODULES):
         yield module_override()
         return
     adj_map = sg.adjacency_map()
 
     modules_dict = dict(sg._src_model.named_modules())
     # Quantize input explicitly:
-    quantize_input = len(adj_map[module_name].predecessors) == 0
+    quantize_input = False
+    last_outputs_settings = [overrides_dict.get(op.name, OrderedDict()) for op in adj_map[module_name].predecessors]
+
+    def _is_output_quantized_int8(local_override: OrderedDict):
+        return local_override.get('bits_activations', None) or local_override.get('bits_weights', None)
+
+    if last_outputs_settings:
+        last_outputs_to_quantize = [i for i, setting in enumerate(last_outputs_settings)
+                                    if not _is_output_quantized_int8(setting)]
+        for input_to_quantize in last_outputs_to_quantize:
+            for clip in clip_mode:
+                yield clip
+        quantize_input = len(last_outputs_to_quantize) > 0
+
 
     successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
     use_half_range = all([isinstance(modules_dict[succ], nn.ReLU) for succ in successors_names])
@@ -121,7 +134,7 @@ def module_override_generator(module, module_name, sg, **kwargs):
             current_module_override['input_overrides'] = OrderedDict([(0, module_override(bits_activations=8))])
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
-        yield current_module_override
+        yield current_module_override, 'output'
 
 
 def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
@@ -144,8 +157,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         args: command line arguments
         module_override_gen_fn: A function to generate module overrides.
           assumes signature
-          `def module_override_gen_fn(module: nn.Module, module_name: str, sg: distiller.SummaryGraph, **kwargs)
-            -> Generator[OrderedDict, None, None]`
+          `def module_override_gen_fn(module: nn.Module, module_name: str, sg: distiller.SummaryGraph, overrides_dict)
+            -> Generator[Tuple(OrderedDict, str), None, None]`
         fold_sequences (bool): fold batch norms before quantizing
     Returns:
         (quantized_model, best_overrides_dict)
@@ -196,7 +209,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                      mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                      clip_acts=ClipMode.NONE,
                                      overrides=deepcopy(best_overrides_dict),
-                                     model_activation_stats=deepcopy(act_stats))
+                                     model_activation_stats=deepcopy(act_stats),
+                                     inputs_quant_auto_fallback=True)
         q.prepare_model(dummy_input)
         # recalibrate on the current best quantized version of the model.
         recalib_act_stats = collect_quant_stats(q.model, calib_eval_fn, modules_to_collect=modules_to_recalibrate)
@@ -215,7 +229,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
-        for current_module_override in module_override_gen_fn(module, module_name, sg):
+        for current_module_override in module_override_gen_fn(module, module_name, sg, best_overrides_dict):
             overrides_dict[normalized_module_name] = current_module_override
             temp_act_stats = deepcopy(act_stats)
             quantizer = PostTrainLinearQuantizer(deepcopy(model),
@@ -225,7 +239,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                                  mode=LinearQuantMode.ASYMMETRIC_SIGNED,
                                                  clip_acts=ClipMode.NONE,
                                                  overrides=deepcopy(overrides_dict),
-                                                 model_activation_stats=deepcopy(temp_act_stats))
+                                                 model_activation_stats=deepcopy(temp_act_stats),
+                                                 inputs_quant_auto_fallback=True)
             quantizer.prepare_model(dummy_input)
 
             current_perf = eval_fn(quantizer.model)

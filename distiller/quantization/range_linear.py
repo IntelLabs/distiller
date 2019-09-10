@@ -290,20 +290,28 @@ class RangeLinearQuantWrapper(nn.Module):
             followed by a bit-wise shift. This eliminates floating-point scale factors, replacing them with integer
             calculations.
             If None, scale factors will be kept in their original FP32 values.
+        fp_module (Union[int, str]): use the module in floating point mode and only quantize the outputs.
+            takes the values (16, 32, 64) only.
+            Note - this overrides `requires_quantized_inputs` to False.
     """
 
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC,
                  clip_acts=ClipMode.NONE, activation_stats=None, clip_n_stds=None, clip_half_range=False,
                  scale_approx_mult_bits=None,
-                 input_overrides=None, requires_quantized_inputs=True, inputs_quant_auto_fallback=False):
+                 input_overrides=None, requires_quantized_inputs=True, inputs_quant_auto_fallback=False,
+                 fp_module=None):
         super(RangeLinearQuantWrapper, self).__init__()
 
         input_overrides = input_overrides or OrderedDict()
-
-        self.wrapped_module = wrapped_module
         self.scale_approx_mult_bits = scale_approx_mult_bits
         self.requires_quantized_inputs = requires_quantized_inputs
         self.inputs_quant_auto_fallback = inputs_quant_auto_fallback
+        self.fp_module = str(fp_module)
+        self.dtype = torch.float
+        if self.fp_module:
+            self.requires_quantized_inputs = False
+            self.dtype = {'16': torch.half, '32': torch.float, '64': torch.double}[self.fp_module]
+        self.wrapped_module = wrapped_module.to(self.dtype)
 
         self.output_quant_settings = QuantSettings(num_bits_acts, mode, clip_acts, clip_n_stds, clip_half_range, False)
         self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
@@ -347,7 +355,7 @@ class RangeLinearQuantWrapper(nn.Module):
                     settings = self.inputs_quant_settings_overrides.get(idx, self.output_quant_settings)
                     scale, zp = _get_quant_params_from_stats_dict(
                         stats, settings.num_bits, settings.quant_mode, settings.clip_mode,
-                        settings.clip_n_stds, self.scale_approx_mult_bits
+                        settings.clip_n_stds, settings.clip_half_range, self.scale_approx_mult_bits
                     )
                     min_q_val, max_q_val = get_quantized_range(
                         settings.num_bits, settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
@@ -357,7 +365,7 @@ class RangeLinearQuantWrapper(nn.Module):
                 self.inputs_quant_metadata_fallback = None
 
             scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode, clip_acts,
-                                                          clip_n_stds, scale_approx_mult_bits)
+                                                          clip_n_stds, clip_half_range, scale_approx_mult_bits)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
         else:
@@ -384,11 +392,16 @@ class RangeLinearQuantWrapper(nn.Module):
                 input_q = linear_quantize_clamp_with_metadata(input)
                 input_q.quant_metadata = input.quant_metadata
                 inputs_q.append(input_q)
+        elif self.fp_module:
+            inputs_q = [input.to(self.dtype) for input in inputs]
         else:
             inputs_q = inputs
 
         # Forward through wrapped module
-        accum = self.quantized_forward(*inputs_q)
+        if not self.fp_module:
+            accum = self.quantized_forward(*inputs_q)
+        else:
+            accum = self.forward(*inputs_q)
 
         # Re-quantize accumulator to quantized output range
         out_scale, out_zero_point = self.get_output_quantization_params(accum)
@@ -654,7 +667,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
-            self.is_simulated_quant_weight_shifted.add_(1) # i.e. is_simulated_quant_weight_shifted = True
+            self.is_simulated_quant_weight_shifted.add_(1)  # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += input_q.quant_metadata.zero_point
         accum = self.wrapped_module.forward(input_q)
@@ -991,6 +1004,7 @@ class PostTrainLinearQuantizer(Quantizer):
             The dict should be in the format exported by distiller.data_loggers.QuantCalibrationStatsCollector.
             If None then parameters are calculated dynamically.
         fp16 (bool): Set to True to convert modules to half precision.
+            WARNING - this argument is deprecated, use instead the argument `fp_module`
         clip_n_stds (float): When clip_acts == ClipMode.N_STD, this is the number of standard deviations to use
         clip_half_range (bool): When clip_acts is
         scale_approx_mult_bits (int): If not None, scale factors will be approximated using an integer multiplication
@@ -998,15 +1012,18 @@ class PostTrainLinearQuantizer(Quantizer):
             calculations.
             If None, scale factors will be kept in their original FP32 values.
         inputs_quant_auto_fallback (bool): TODO
+        fp_module (Union[int, str]): use the modules in floating point mode and only quantize their outputs.
+            takes the values (16, 32, 64) only.
     Note:
-        If fp16 is set to True, all the layers (except those overridden in `overrides`) will be converted
-        to half precision, regardless of bits_activations/parameters/accum.
+        If fp_module is set, all the layers (except those overridden in `overrides`) will be converted
+        to the set precision, regardless of bits_activations/parameters/accum.
     """
     def __init__(self, model, bits_activations=8, bits_parameters=8, bits_accum=32,
                  overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  per_channel_wts=False, model_activation_stats=None, fp16=False,
                  clip_n_stds=None, clip_half_range=False,
-                 scale_approx_mult_bits=None, inputs_quant_auto_fallback=False):
+                 scale_approx_mult_bits=None, inputs_quant_auto_fallback=False,
+                 fp_module=None):
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
                                                        overrides=overrides, train_with_fp_copy=False)
