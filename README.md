@@ -383,7 +383,7 @@ Open distiller/docs/site/index.html to view the documentation home page.
 * [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
 * [Jupyter](http://jupyter.org/) - Notebook serving.
 * [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
-
+* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
 
 ## Versioning
 
