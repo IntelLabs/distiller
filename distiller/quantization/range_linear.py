@@ -628,8 +628,8 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,  activation_stats=None,
                  clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None):
         super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
-                                                                clip_acts, activation_stats, clip_n_stds, clip_half_range,
-                                                                scale_approx_mult_bits)
+                                                            clip_acts, activation_stats, clip_n_stds, clip_half_range,
+                                                            scale_approx_mult_bits)
 
         if not isinstance(wrapped_module, (distiller.modules.Matmul, distiller.modules.BatchMatmul)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
@@ -755,7 +755,8 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 
         super(RangeLinearQuantEltwiseAddWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                                 clip_acts=clip_acts, activation_stats=activation_stats,
-                                                                clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
+                                                                clip_n_stds=clip_n_stds,
+                                                                clip_half_range=clip_half_range,
                                                                 scale_approx_mult_bits=scale_approx_mult_bits)
 
         if self.preset_act_stats:
@@ -808,7 +809,8 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
 
         super(RangeLinearQuantEltwiseMultWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                                  clip_acts=clip_acts, activation_stats=activation_stats,
-                                                                 clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
+                                                                 clip_n_stds=clip_n_stds,
+                                                                 clip_half_range=clip_half_range,
                                                                  scale_approx_mult_bits=scale_approx_mult_bits)
 
         if self.preset_act_stats:
@@ -971,6 +973,9 @@ class PostTrainLinearQuantizer(Quantizer):
                                 clip_acts=clip_acts, clip_half_range=False, clip_n_stds=clip_n_stds):
             if fp16:
                 return FP16Wrapper(module)
+
+            # TODO: Try auto-detecting when clip_half_range is needed
+            #  instead of having the user pass it as a parameter (same for replace_non_param_layer)
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
             return RangeLinearQuantParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,

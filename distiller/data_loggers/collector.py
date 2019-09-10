@@ -733,8 +733,10 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            disable_inplace_attrs=disable_inplace_attrs,
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector):
+        msglogger.info('Pass 1: Collecting min, max, avg_min, avg_max, mean, std')
         test_fn(model=model)
         # Collect Laplace distribution stats:
+        msglogger.info('Pass 2: Collecting b parameter')
         quant_stats_collector.start_laplace()
         test_fn(model=model)
         quant_stats_collector.stop_laplace()
