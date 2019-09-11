@@ -74,6 +74,7 @@ class SummaryGraph(object):
         self._src_model = model
         self._adj_map = None
         self._layers_topological_order = None
+        self._top_level_ops = set()
         model_clone = distiller.make_non_parallel_copy(model)
 
         # Switch all instances of torch.nn.ModuleList in the model to our DistillerModuleList
@@ -84,6 +85,7 @@ class SummaryGraph(object):
             
             device = distiller.model_device(model_clone)
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
+            self.dummy_input = dummy_input
             trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
 
             # As of PyTorch 1.1.0, ONNX trace optimization has two issues that result in incorrect scope names
@@ -596,6 +598,14 @@ class SummaryGraph(object):
         assert {k for k in ret if ranked_ops[k].rank == 0} <= set(roots)
         self._layers_topological_order = ret
         return ret
+
+    def top_level_ops(self):
+        if self._top_level_ops:
+            return self._top_level_ops
+        for op_name in self.ops:
+            if not self.predecessors(op_name, 1):
+                self._top_level_ops.add(op_name)
+        return self._top_level_ops
 
 
 class _OpRank:

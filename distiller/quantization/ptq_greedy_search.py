@@ -76,15 +76,46 @@ CLIP_MODES = ['NONE',
               ]
 
 
-def module_override(**kwargs):
-    override = OrderedDict()
-    if kwargs.get('fp16', False):
-        override['fp16'] = True
-        return override
+def override_odict(**kwargs):
     return OrderedDict(kwargs)
 
 
-def module_override_generator(module, module_name, sg, overrides_dict):
+def get_input_modules(sg, recurrent=False):
+    """
+    Finds the modules in the graph that take the user input directly
+    Args:
+        sg (SummaryGraph): the summary graph of the model
+        recurrent: see SummaryGraph.layers_topological_order
+    """
+    input_modules = set()
+    layers = set(sg.layers_topological_order(recurrent))
+    for op in sg.top_level_ops():
+        input_modules.update(set(sg.successors(op, 1)) & layers)
+    return list(input_modules)
+
+
+def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
+    """
+    Generator for overrides on inputs of the input layers.
+    Args:
+        module (nn.Module): the module
+        module_name (str): module name as it appears in the summary graph
+        sg (SummaryGraph): a summary graph of the model
+        overrides_dict (OrderedDict): the fixed overrides already applied
+        kwargs: additional arguments, if needed
+    """
+    input_nodes = sg.predecessors(module_name, 1)
+    input_idx = kwargs.get('input_idx', 0)
+    assert input_idx < len(input_nodes)
+    for clip_mode in CLIP_MODES:
+        input_idx_override = override_odict(bits_activations=8,
+                                            clip_acts=clip_mode)
+        input_overrides = OrderedDict([(input_idx, input_idx_override)])
+        current_module_override = override_odict(input_overrides=input_overrides)
+        yield current_module_override
+
+
+def module_override_generator(module, module_name, sg, overrides_dict, **kwargs):
     """
     Standard generator of overrides for the greedy search algorithm.
     Args:
@@ -92,54 +123,86 @@ def module_override_generator(module, module_name, sg, overrides_dict):
         module_name (str): module name as it appears in the summary graph
         sg (SummaryGraph): a summary graph of the model
         overrides_dict (OrderedDict): the fixed overrides already applied
+        kwargs: additional arguments, if needed
     """
-    if isinstance(module, FP16_LAYERS):
-        yield module_override(fp16=True)
-        return
-    if isinstance(module, UNQUANTIZED_MODULES):
-        yield module_override()
-        return
     adj_map = sg.adjacency_map()
-
+    layers_quant_order = sg.layers_topological_order()
     modules_dict = dict(sg._src_model.named_modules())
     # Quantize input explicitly:
-    quantize_input = False
-    last_outputs_settings = [overrides_dict.get(op.name, OrderedDict()) for op in adj_map[module_name].predecessors]
-
-    def _is_output_quantized_int8(local_override: OrderedDict):
-        return local_override.get('bits_activations', None) or local_override.get('bits_weights', None)
-
-    if last_outputs_settings:
-        last_outputs_to_quantize = [i for i, setting in enumerate(last_outputs_settings)
-                                    if not _is_output_quantized_int8(setting)]
-        for input_to_quantize in last_outputs_to_quantize:
-            for clip in clip_mode:
-                yield clip
-        quantize_input = len(last_outputs_to_quantize) > 0
-
-
+    quantize_input = len(adj_map[module_name].predecessors) == 0
     successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
+    fake = len(set(layers_quant_order) & set(successors_names)) > 0
     use_half_range = all([isinstance(modules_dict[succ], nn.ReLU) for succ in successors_names])
+    use_fake = False
+    fpq_module = None
+    if isinstance(module, FP16_LAYERS):
+        fpq_module = 16
+        use_fake = fake
+    if isinstance(module, UNQUANTIZED_MODULES) or not isinstance(module, QUANTIZED_MODULES):
+        fpq_module = 32
+        use_fake = fake
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
-            current_module_override = module_override(clip_acts=clip_mode,
-                                                      bits_weights=8,
-                                                      bits_activations=8,
-                                                      bits_bias=32)
+            current_module_override = override_odict(clip_acts=clip_mode,
+                                                     bits_weights=8,
+                                                     bits_activations=8,
+                                                     bits_bias=32)
         else:
-            current_module_override = module_override(clip_acts=clip_mode,
-                                                      bits_weights=8,
-                                                      bits_activations=8)
+            current_module_override = override_odict(clip_acts=clip_mode,
+                                                     fpq_module=fpq_module,
+                                                     fake=use_fake,
+                                                     bits_weights=8,
+                                                     bits_activations=8)
         if quantize_input:
-            current_module_override['input_overrides'] = OrderedDict([(0, module_override(bits_activations=8))])
+            current_module_override['input_overrides'] = OrderedDict([(0, override_odict(bits_activations=8))])
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
-        yield current_module_override, 'output'
+        yield current_module_override
+
+
+def search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict, override_gen_fn, **kwargs):
+    msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
+    overrides_dict = deepcopy(best_overrides_dict)
+    best_performance, best_local_override = float("-inf"), OrderedDict()
+    normalized_module_name = module_name
+    if isinstance(model, nn.DataParallel):
+        normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
+    for local_override in override_gen_fn(module, module_name, sg, best_overrides_dict, **kwargs):
+        overrides_dict[normalized_module_name] = local_override
+        temp_act_stats = deepcopy(act_stats)
+        quantizer = PostTrainLinearQuantizer(deepcopy(model),
+                                             bits_activations=None,
+                                             bits_parameters=None,
+                                             bits_accum=32,
+                                             mode=LinearQuantMode.ASYMMETRIC_SIGNED,
+                                             clip_acts=ClipMode.NONE,
+                                             overrides=deepcopy(overrides_dict),
+                                             model_activation_stats=deepcopy(temp_act_stats),
+                                             inputs_quant_auto_fallback=True)
+        quantizer.prepare_model(dummy_input)
+
+        current_performance = eval_fn(quantizer.model)
+        if not isinstance(module, UNQUANTIZED_MODULES):
+            clip_mode = local_override['clip_acts']
+            msglogger.info('\t%s\t score = %.3f\tLayer overrides: %s' %
+                           (clip_mode, current_performance, local_override))
+        else:
+            msglogger.info('\t Module is not quantized to int8. Not clipping activations.')
+            msglogger.info('\t score = %.3f\tLayer overrides: %s' %
+                           (current_performance, local_override))
+        if current_performance > best_performance:
+            best_performance = current_performance
+            best_local_override = local_override
+
+    msglogger.info('\t Choosing overrides: %s' % best_local_override)
+    return best_local_override
 
 
 def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                       recurrent=False, act_stats=None,
-                      args=None, module_override_gen_fn=None, fold_sequences=True):
+                      args=None,
+                      module_override_gen_fn=None, input_override_gen_fn=None,
+                      fold_sequences=True):
     """
     Perform greedy search on Post Train Quantization configuration for the model.
     Args:
@@ -157,8 +220,12 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         args: command line arguments
         module_override_gen_fn: A function to generate module overrides.
           assumes signature
-          `def module_override_gen_fn(module: nn.Module, module_name: str, sg: distiller.SummaryGraph, overrides_dict)
-            -> Generator[Tuple(OrderedDict, str), None, None]`
+          `def module_override_gen_fn(module: nn.Module,
+                                      module_name: str,
+                                      sg: distiller.SummaryGraph,
+                                      overrides_dict: OrderedDict,
+                                      **kwargs)-> Generator[OrderedDict, None, None]`
+        input_override_gen_fn: Same as module_override_gen_fn, only quantized inputs to the top level layers.
         fold_sequences (bool): fold batch norms before quantizing
     Returns:
         (quantized_model, best_overrides_dict)
@@ -178,6 +245,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                            if m not in args.qe_no_quant_layers]
 
     module_override_gen_fn = module_override_gen_fn or module_override_generator
+    input_override_gen_fn = input_override_gen_fn or input_override_generator
 
     calib_eval_fn = calib_eval_fn or eval_fn
     if not act_stats:
@@ -190,13 +258,14 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             msglogger.info('Done. Saving act stats into %s' % act_stats_path)
             distiller.yaml_ordered_save(act_stats_path, act_stats)
     msglogger.info('Evaluating baseline score for model...')
-    base_score = eval_fn(model)
+    base_score = args.base_score or eval_fn(model)
     msglogger.info("Base score: %.3f" % base_score)
 
     def recalibrate_stats(module_name, act_stats):
         """
         Re-collects quant-calibration stats for successor modules of the current module.
         """
+        msglogger.info('Recalibrating stats...')
         modules_to_recalibrate = {op.name for op in adjacency_map[module_name].successors} & set(act_stats)
         if not modules_to_recalibrate:
             # either there aren't any successors or
@@ -214,47 +283,45 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         q.prepare_model(dummy_input)
         # recalibrate on the current best quantized version of the model.
         recalib_act_stats = collect_quant_stats(q.model, calib_eval_fn, modules_to_collect=modules_to_recalibrate)
+        msglogger.info('Done.')
         act_stats.update(recalib_act_stats)
         return act_stats
+    # Quantize inputs:
+    input_modules = get_input_modules(sg, recurrent)  # top level modules
+    for module_name in input_modules:
+        module = modules_dict[module_name]
+        if isinstance(module, SKIP_MODULES):
+            msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, type(module)))
+            continue
+        msglogger.info('Quantizing top level inputs for %s' % module_name)
 
+        normalized_module_name = module_name
+        if isinstance(model, nn.DataParallel):
+            normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
+        if not best_overrides_dict.get(normalized_module_name, None):
+            best_overrides_dict[normalized_module_name] = OrderedDict()
+        input_idxs = [i for i, op in enumerate(sg.predecessors(module_name, 1)) if op in sg.top_level_ops()]
+        for input_idx in input_idxs:
+            best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
+                                                              input_override_gen_fn, input_idx=input_idx)
+            best_overrides_dict[normalized_module_name].update(best_module_override)
+
+    # Quantize layers as a whole:
     for module_name in modules_to_quantize:
         module = modules_dict[module_name]
         if isinstance(module, SKIP_MODULES):
             msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, type(module)))
             continue
 
-        msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
-        overrides_dict = deepcopy(best_overrides_dict)
-        best_performance = float("-inf")
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
-        for current_module_override in module_override_gen_fn(module, module_name, sg, best_overrides_dict):
-            overrides_dict[normalized_module_name] = current_module_override
-            temp_act_stats = deepcopy(act_stats)
-            quantizer = PostTrainLinearQuantizer(deepcopy(model),
-                                                 bits_activations=None,
-                                                 bits_parameters=None,
-                                                 bits_accum=32,
-                                                 mode=LinearQuantMode.ASYMMETRIC_SIGNED,
-                                                 clip_acts=ClipMode.NONE,
-                                                 overrides=deepcopy(overrides_dict),
-                                                 model_activation_stats=deepcopy(temp_act_stats),
-                                                 inputs_quant_auto_fallback=True)
-            quantizer.prepare_model(dummy_input)
+        if not best_overrides_dict.get(normalized_module_name, None):
+            best_overrides_dict[normalized_module_name] = OrderedDict()
 
-            current_perf = eval_fn(quantizer.model)
-            if isinstance(module, QUANTIZED_MODULES):
-                clip_mode = current_module_override['clip_acts']
-                msglogger.info('\t%s\t score = %.3f\tLayer overrides: %s' %
-                      (clip_mode, current_perf, current_module_override))
-            else:
-                msglogger.info('\t Module is not quantized to int8. Not clipping activations.')
-                msglogger.info('\t score = %.3f\tLayer overrides: %s' %
-                      (current_perf, current_module_override))
-            if current_perf > best_performance:
-                best_overrides_dict[normalized_module_name] = current_module_override
-                best_performance = current_perf
+        best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
+                                                          module_override_gen_fn)
+        best_overrides_dict[normalized_module_name].update(best_module_override)
 
         # end of search - we update the calibration of the next layers:
         recalibrate_stats(module_name, act_stats)
@@ -286,6 +353,7 @@ if __name__ == "__main__":
                         help='The portion of the dataset to use for calibration stats collection.')
     parser.add_argument('--qe-calib-batchsize', type=int, default=256,
                         help='The portion of the dataset to use for calibration stats collection.')
+    parser.add_argument('--base-score', type=float, default=None)
     args = parser.parse_args()
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
