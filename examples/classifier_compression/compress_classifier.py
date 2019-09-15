@@ -117,9 +117,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.evaluate:
         test_loader = load_test_data(args)
-        activations_collectors = classifier.create_activation_stats_collectors(model, *args.activation_stats)
-        classifier.evaluate_model(test_loader, model, criterion, pylogger, activations_collectors,
-                                  args, compression_scheduler)
+        classifier.evaluate_model(test_loader, model, criterion, pylogger, args=args, scheduler=compression_scheduler)
         do_exit = True
     elif args.thinnify:
         #zeros_mask_dict = distiller.create_model_masks_dict(model)

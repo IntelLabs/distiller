@@ -613,11 +613,11 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     return _validate(val_loader, model, criterion, loggers, args, epoch)
 
 
-def test(test_loader, model, criterion, loggers, activations_collectors, args):
+def test(test_loader, model, criterion, loggers, activations_collectors=None, args=None):
     """Model Test"""
     msglogger.info('--- test ---------------------')
-    if activations_collectors is None:
-        activations_collectors = create_activation_stats_collectors(model, None)
+    activations_collectors = activations_collectors or create_activation_stats_collectors(
+        model, *args.activation_stats)
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
@@ -817,12 +817,11 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
     if not args.quantize_eval:
         return test(test_loader, model, criterion, loggers, activations_collectors, args=args)
     else:
-        return quantize_and_test_model(test_loader, model, criterion, loggers, activations_collectors,
+        return quantize_and_test_model(test_loader, model, criterion, loggers,
                                        args=args, scheduler=scheduler, save_flag=True)
 
 
-def quantize_and_test_model(test_loader, model, criterion, loggers=None, activations_collectors=None, args=None,
-                            scheduler=None, save_flag=False):
+def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=None, scheduler=None, save_flag=False):
     if args is None:
         raise NotImplementedError('args cannot be set to None')
 
@@ -838,7 +837,7 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, activat
         quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
         qe_model.to(args.device)
 
-        test_res = test(test_loader, qe_model, criterion, loggers, activations_collectors, args=args)
+        test_res = test(test_loader, qe_model, criterion, loggers, args=args)
 
         if save_flag:
             checkpoint_name = 'quantized'
