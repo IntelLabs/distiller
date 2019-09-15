@@ -51,6 +51,7 @@ models, or with the provided sample models:
 - MobileNet for ImageNet: https://github.com/marvis/pytorch-mobilenet
 """
 
+import copy
 import traceback
 import logging
 from functools import partial
