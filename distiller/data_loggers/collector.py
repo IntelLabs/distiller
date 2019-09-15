@@ -206,7 +206,11 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
         records_dict = self.value()
         with xlsxwriter.Workbook(fname) as workbook:
-            worksheet = workbook.add_worksheet(self.stat_name)
+            try:
+                worksheet = workbook.add_worksheet(self.stat_name)
+            except xlsxwriter.exceptions.InvalidWorksheetName:
+                worksheet = workbook.add_worksheet()
+
             col_names = []
             for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
                 if not isinstance(module_summary_data, list):
@@ -284,7 +288,11 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         records_dict = self.value()
         with xlsxwriter.Workbook(fname) as workbook:
             for module_name, module_act_records in records_dict.items():
-                worksheet = workbook.add_worksheet(module_name)
+                try:
+                    worksheet = workbook.add_worksheet(module_name)
+                except xlsxwriter.exceptions.InvalidWorksheetName:
+                    worksheet = workbook.add_worksheet()
+
                 col_names = []
                 for col, (col_name, col_data) in enumerate(module_act_records.items()):
                     if col_name == 'shape':

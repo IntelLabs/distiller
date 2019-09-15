@@ -16,7 +16,7 @@ ipywidgets==7.4.2
 bqplot==0.11.5
 pyyaml
 pytest~=4.6.1
-xlsxwriter>=1.1.1
+xlsxwriter>=1.2.1
 pretrainedmodels==0.7.4
 scikit-learn==0.21.2
 gym==0.12.5
