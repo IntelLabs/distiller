@@ -288,9 +288,8 @@ class Quantizer(object):
                     replace_msg(full_name)
                 continue
             current_qbits = self.module_qbits_map[full_name]
-            if current_qbits.acts is None and current_qbits.wts is None:
-                if self.module_overrides_map[full_name]:
-                    raise ValueError("Adding overrides while not quantizing is not allowed.")
+            # TODO - Review necessity of the block below
+            if current_qbits.acts is None and current_qbits.wts is None and not self.module_overrides_map[full_name]:
                 # We indicate this module wasn't replaced by a wrapper
                 replace_msg(full_name)
                 self.modules_processed[module] = full_name, None

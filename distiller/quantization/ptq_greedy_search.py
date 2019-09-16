@@ -18,13 +18,13 @@ Here we implement the greedy search algorithm for automatic quantization.
 """
 import torch
 import torch.nn as nn
-from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode, FP16Wrapper
+from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode
 from distiller.summary_graph import SummaryGraph
 from distiller.model_transforms import fold_batch_norms
 import distiller.modules
 from distiller.data_loggers import collect_quant_stats
 from distiller.models import create_model
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import logging
 from copy import deepcopy
 import distiller.apputils.image_classifier as classifier
@@ -80,18 +80,25 @@ def override_odict(**kwargs):
     return OrderedDict(kwargs)
 
 
-def get_input_modules(sg, recurrent=False):
+def get_inputs_to_quantize(sg, args, recurrent=False):
     """
     Finds the modules in the graph that take the user input directly
     Args:
         sg (SummaryGraph): the summary graph of the model
         recurrent: see SummaryGraph.layers_topological_order
+    TODO - implement properly
     """
-    input_modules = set()
-    layers = set(sg.layers_topological_order(recurrent))
-    for op in sg.top_level_ops():
-        input_modules.update(set(sg.successors(op, 1)) & layers)
-    return list(input_modules)
+    # input_modules = set()
+    # layers = set(sg.layers_topological_order(recurrent))
+    # for op in sg.top_level_ops():
+    #     input_modules.update(set(sg.successors(op, 1)) & layers)
+    # return list(input_modules)
+    result = defaultdict(lambda: [])
+    for input_str in args.quantize_inputs:
+        module_name, input_idx_str = input_str.split('#')
+        input_idx = int(input_idx_str)
+        result[module_name].append(input_idx)
+    return result
 
 
 def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
@@ -112,6 +119,10 @@ def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
                                             clip_acts=clip_mode)
         input_overrides = OrderedDict([(input_idx, input_idx_override)])
         current_module_override = override_odict(input_overrides=input_overrides)
+        # add basic quantization so the quantizer doesn't reject this override
+        current_module_override['bits_activations'] = 8
+        if isinstance(module, PARAM_MODULES):
+            current_module_override['bits_weights'] = 8
         yield current_module_override
 
 
@@ -128,8 +139,6 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
     adj_map = sg.adjacency_map()
     layers_quant_order = sg.layers_topological_order()
     modules_dict = dict(sg._src_model.named_modules())
-    # Quantize input explicitly:
-    quantize_input = len(adj_map[module_name].predecessors) == 0
     successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
     fake = len(set(layers_quant_order) & set(successors_names)) > 0
     use_half_range = all([isinstance(modules_dict[succ], nn.ReLU) for succ in successors_names])
@@ -153,8 +162,6 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
                                                      fake=use_fake,
                                                      bits_weights=8,
                                                      bits_activations=8)
-        if quantize_input:
-            current_module_override['input_overrides'] = OrderedDict([(0, override_odict(bits_activations=8))])
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
         yield current_module_override
@@ -168,7 +175,9 @@ def search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_
     if isinstance(model, nn.DataParallel):
         normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
     for local_override in override_gen_fn(module, module_name, sg, best_overrides_dict, **kwargs):
-        overrides_dict[normalized_module_name] = local_override
+        if not overrides_dict.get(normalized_module_name, None):
+            overrides_dict[normalized_module_name] = OrderedDict()
+        overrides_dict[normalized_module_name].update(local_override)
         temp_act_stats = deepcopy(act_stats)
         quantizer = PostTrainLinearQuantizer(deepcopy(model),
                                              bits_activations=None,
@@ -178,14 +187,14 @@ def search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_
                                              clip_acts=ClipMode.NONE,
                                              overrides=deepcopy(overrides_dict),
                                              model_activation_stats=deepcopy(temp_act_stats),
-                                             inputs_quant_auto_fallback=True)
+                                             inputs_quant_auto_fallback=False)
         quantizer.prepare_model(dummy_input)
 
         current_performance = eval_fn(quantizer.model)
         if not isinstance(module, UNQUANTIZED_MODULES):
-            clip_mode = local_override['clip_acts']
+            clip_mode = local_override.get('clip_acts', None)
             msglogger.info('\t%s\t score = %.3f\tLayer overrides: %s' %
-                           (clip_mode, current_performance, local_override))
+                           (clip_mode or '', current_performance, local_override))
         else:
             msglogger.info('\t Module is not quantized to int8. Not clipping activations.')
             msglogger.info('\t score = %.3f\tLayer overrides: %s' %
@@ -236,6 +245,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     if fold_sequences:
         model = fold_batch_norms(model, dummy_input)
     best_overrides_dict = OrderedDict()
+    if args.resume_search_from:
+        with open(args.resume_search_from, 'r') as f:
+            best_overrides_dict = distiller.yaml_ordered_load(f)
+        msglogger.info('Loaded search checkpoint from %s' % args.resume_search_from)
     overrides_dict = OrderedDict()
     sg = SummaryGraph(model, dummy_input)
     modules_to_quantize = sg.layers_topological_order(recurrent)
@@ -279,7 +292,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                      clip_acts=ClipMode.NONE,
                                      overrides=deepcopy(best_overrides_dict),
                                      model_activation_stats=deepcopy(act_stats),
-                                     inputs_quant_auto_fallback=True)
+                                     inputs_quant_auto_fallback=False)
         q.prepare_model(dummy_input)
         # recalibrate on the current best quantized version of the model.
         recalib_act_stats = collect_quant_stats(q.model, calib_eval_fn, modules_to_collect=modules_to_recalibrate)
@@ -287,9 +300,10 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         act_stats.update(recalib_act_stats)
         return act_stats
     # Quantize inputs:
-    input_modules = get_input_modules(sg, recurrent)  # top level modules
-    for module_name in input_modules:
-        module = modules_dict[module_name]
+    input_modules = get_inputs_to_quantize(sg, args, recurrent)  # top level modules
+    for module_name, input_idxs in input_modules.items():
+        denormalized_module_name = distiller.denormalize_module_name(model, module_name)
+        module = modules_dict[denormalized_module_name]
         if isinstance(module, SKIP_MODULES):
             msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, type(module)))
             continue
@@ -298,9 +312,14 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
+        if normalized_module_name in best_overrides_dict and \
+                best_overrides_dict[normalized_module_name].get('input_overrides', None):
+            # This means the loaded dict already has the module
+            msglogger.info("  Quantizing '%s' based on loaded checkpoint: %s" %
+                           (module_name, best_overrides_dict[normalized_module_name]))
+            continue
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
-        input_idxs = [i for i, op in enumerate(sg.predecessors(module_name, 1)) if op in sg.top_level_ops()]
         for input_idx in input_idxs:
             best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
                                                               input_override_gen_fn, input_idx=input_idx)
@@ -316,22 +335,42 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
+        if normalized_module_name in best_overrides_dict and \
+                best_overrides_dict[normalized_module_name].get('bits_activations', None):
+            # This means the loaded dict already has the module
+            msglogger.info("  Quantizing '%s' based on loaded checkpoint: %s" %
+                           (module_name, best_overrides_dict[normalized_module_name]))
+            continue
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
-
+        # Hard coded workaround for avgpool->reshape->fc
+        if normalized_module_name == 'fc':
+            input_override = override_odict(bits_activations=8,
+                                            clip_acts='NONE')
+            best_overrides_dict['fc'].update(OrderedDict([
+                ('input_overrides', OrderedDict([
+                    (0, input_override)
+                ]))
+            ]))
         best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
                                                           module_override_gen_fn)
         best_overrides_dict[normalized_module_name].update(best_module_override)
+        distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, best_overrides_dict)
+        # # end of search - we update the calibration of the next layers:
+        # recalibrate_stats(module_name, act_stats)
 
-        # end of search - we update the calibration of the next layers:
-        recalibrate_stats(module_name, act_stats)
-
-    quantizer = PostTrainLinearQuantizer(model, mode=LinearQuantMode.ASYMMETRIC_SIGNED,
-                                         clip_acts=ClipMode.NONE, overrides=deepcopy(best_overrides_dict),
-                                         model_activation_stats=act_stats)
+    quantizer = PostTrainLinearQuantizer(model,
+                                         bits_activations=None,
+                                         bits_parameters=None,
+                                         bits_accum=32,
+                                         mode=LinearQuantMode.ASYMMETRIC_SIGNED,
+                                         clip_acts=ClipMode.NONE,
+                                         overrides=deepcopy(best_overrides_dict),
+                                         model_activation_stats=act_stats,
+                                         inputs_quant_auto_fallback=False)
     quantizer.prepare_model(dummy_input)
     msglogger.info('best_overrides_dict: %s' % best_overrides_dict)
-    msglogger.info('Best score ', eval_fn(quantizer.model))
+    msglogger.info('Best score: %f'% eval_fn(quantizer.model))
     return model, best_overrides_dict
 
 
@@ -354,6 +393,10 @@ if __name__ == "__main__":
     parser.add_argument('--qe-calib-batchsize', type=int, default=256,
                         help='The portion of the dataset to use for calibration stats collection.')
     parser.add_argument('--base-score', type=float, default=None)
+    parser.add_argument('--quantize-inputs', type=str, nargs='+', metavar='LAYER_NAME#INPUT_IDX', default=[],
+                        help='The inputs of layers to quantize')
+    parser.add_argument('--resume-search-from', type=str, help='Search checkpoint file to resume.',
+                        default=None)
     args = parser.parse_args()
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
@@ -390,7 +433,17 @@ if __name__ == "__main__":
             act_stats = distiller.yaml_ordered_load(f)
     else:
         act_stats = None
-    m, overrides = ptq_greedy_search(model, dummy_input, test_fn,
-                                     calib_eval_fn=calib_eval_fn, args=args,
-                                     act_stats=act_stats)
-    distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, overrides)
+    model, overrides = ptq_greedy_search(model, dummy_input, test_fn,
+                                         calib_eval_fn=calib_eval_fn, args=args,
+                                         act_stats=act_stats)
+    # Prepare a compression scheduler yaml config file:
+    quantizer_dict = OrderedDict(deepcopy(model.quantizer_metadata['params']))
+    quantizer_dict['overrides'] = overrides
+    quantizer_dict['model_activation_stats'] = os.path.abspath('%s_act_stats.yaml' % args.arch)
+    quantizer_dict['class'] = 'PostTrainLinearQuantizer'
+    sched_dict = OrderedDict([
+        ('quantizers', OrderedDict([
+            ('post_train_quantizer', quantizer_dict)
+        ]))
+    ])
+    distiller.yaml_ordered_save('%s.ptqgs_quantizer_sched_dict.yaml' % args.arch, sched_dict)
