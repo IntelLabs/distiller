@@ -437,10 +437,12 @@ if __name__ == "__main__":
                                          calib_eval_fn=calib_eval_fn, args=args,
                                          act_stats=act_stats)
     # Prepare a compression scheduler yaml config file:
-    quantizer_dict = OrderedDict(deepcopy(model.quantizer_metadata['params']))
+    quantizer_dict = OrderedDict([
+        ('class', 'PostTrainLinearQuantizer')
+    ])
+    quantizer_dict.update(deepcopy(model.quantizer_metadata['params']))
     quantizer_dict['overrides'] = overrides
     quantizer_dict['model_activation_stats'] = os.path.abspath('%s_act_stats.yaml' % args.arch)
-    quantizer_dict['class'] = 'PostTrainLinearQuantizer'
     sched_dict = OrderedDict([
         ('quantizers', OrderedDict([
             ('post_train_quantizer', quantizer_dict)
