@@ -198,8 +198,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
     if not model:
         model = _create_model_from_ckpt()
         if not model:
-            raise ValueError("You didn't provide a model, and the checkpoint doesn't contain"
-                             "enough information to create one")
+            raise ValueError("You didn't provide a model, and the checkpoint %s doesn't contain "
+                             "enough information to create one", chkpt_file)
 
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0
