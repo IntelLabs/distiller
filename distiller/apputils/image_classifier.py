@@ -252,8 +252,6 @@ def init_classifier_compression_arg_parser():
                         help='an optional parameter for sensitivity testing '
                              'providing the range of sparsities to test.\n'
                              'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
-    parser.add_argument('--extras', default=None, type=str,
-                        help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
     parser.add_argument('--seed', type=int, default=None,
