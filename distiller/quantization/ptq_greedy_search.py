@@ -115,14 +115,14 @@ def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
     input_idx = kwargs.get('input_idx', 0)
     assert input_idx < len(input_nodes)
     for clip_mode in CLIP_MODES:
-        input_idx_override = override_odict(bits_activations=8,
+        input_idx_override = override_odict(bits_activations=6,
                                             clip_acts=clip_mode)
         input_overrides = OrderedDict([(input_idx, input_idx_override)])
         current_module_override = override_odict(input_overrides=input_overrides)
         # add basic quantization so the quantizer doesn't reject this override
-        current_module_override['bits_activations'] = 8
+        current_module_override['bits_activations'] = 6
         if isinstance(module, PARAM_MODULES):
-            current_module_override['bits_weights'] = 8
+            current_module_override['bits_weights'] = 6
         yield current_module_override
 
 
@@ -137,31 +137,29 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
         kwargs: additional arguments, if needed
     """
     adj_map = sg.adjacency_map()
-    layers_quant_order = sg.layers_topological_order()
     modules_dict = dict(sg._src_model.named_modules())
     successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
-    fake = len(set(layers_quant_order) & set(successors_names)) > 0
     use_half_range = all([isinstance(modules_dict[succ], nn.ReLU) for succ in successors_names])
     use_fake = False
     fpq_module = None
     if isinstance(module, FP16_LAYERS):
         fpq_module = 16
-        use_fake = fake
+        use_fake = True
     if isinstance(module, UNQUANTIZED_MODULES) or not isinstance(module, QUANTIZED_MODULES):
         fpq_module = 32
-        use_fake = fake
+        use_fake = True
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
             current_module_override = override_odict(clip_acts=clip_mode,
-                                                     bits_weights=8,
-                                                     bits_activations=8,
+                                                     bits_weights=6,
+                                                     bits_activations=6,
                                                      bits_bias=32)
         else:
             current_module_override = override_odict(clip_acts=clip_mode,
                                                      fpq_module=fpq_module,
                                                      fake=use_fake,
-                                                     bits_weights=8,
-                                                     bits_activations=8)
+                                                     bits_weights=6,
+                                                     bits_activations=6)
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
         yield current_module_override
@@ -299,6 +297,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         msglogger.info('Done.')
         act_stats.update(recalib_act_stats)
         return act_stats
+
+    loaded_from_checkpoint = []
     # Quantize inputs:
     input_modules = get_inputs_to_quantize(sg, args, recurrent)  # top level modules
     for module_name, input_idxs in input_modules.items():
@@ -317,6 +317,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             # This means the loaded dict already has the module
             msglogger.info("  Quantizing '%s' based on loaded checkpoint: %s" %
                            (module_name, best_overrides_dict[normalized_module_name]))
+            if best_overrides_dict[normalized_module_name].get('bits_activations'):
+                loaded_from_checkpoint.append(normalized_module_name)
             continue
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
@@ -324,6 +326,9 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
                                                               input_override_gen_fn, input_idx=input_idx)
             best_overrides_dict[normalized_module_name].update(best_module_override)
+        # Leave only the input_overrides settings:
+        current_input_overrides = best_overrides_dict[normalized_module_name]['input_overrides']
+        best_overrides_dict[normalized_module_name] = override_odict(input_overrides=current_input_overrides)
 
     # Quantize layers as a whole:
     for module_name in modules_to_quantize:
@@ -335,17 +340,20 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
             normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
+
         if normalized_module_name in best_overrides_dict and \
-                best_overrides_dict[normalized_module_name].get('bits_activations', None):
+                best_overrides_dict[normalized_module_name].get('bits_activations', None)\
+                and normalized_module_name not in loaded_from_checkpoint:
             # This means the loaded dict already has the module
             msglogger.info("  Quantizing '%s' based on loaded checkpoint: %s" %
                            (module_name, best_overrides_dict[normalized_module_name]))
+            loaded_from_checkpoint.append(normalized_module_name)
             continue
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
         # Hard coded workaround for avgpool->reshape->fc
         if normalized_module_name == 'fc':
-            input_override = override_odict(bits_activations=8,
+            input_override = override_odict(bits_activations=6,
                                             clip_acts='NONE')
             best_overrides_dict['fc'].update(OrderedDict([
                 ('input_overrides', OrderedDict([

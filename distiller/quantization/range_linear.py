@@ -1370,6 +1370,10 @@ class PostTrainLinearQuantizer(Quantizer):
                 # Add half range clipping to module overrides
                 m_override = model_overrides.get(n, OrderedDict())
                 m_override['clip_half_range'] = True
+                relu_name = distiller.denormalize_module_name(self.model, successor.name)
+                # We fuse ReLU into the model in the case of Asymmetric quantization
+                # By making it a no-op since we already fused the stats:
+                relu_overrides = model_overrides.get(relu_name, OrderedDict())
                 model_overrides[n] = m_override
             elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
                 # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside

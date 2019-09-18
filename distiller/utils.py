@@ -755,3 +755,18 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
 
     return val
 
+
+def model_setattr(model, attr_name, val, register=False):
+    """
+    Sets attribute of a model, through the entire hierarchy.
+    Args:
+        model (nn.Module): the model.
+        attr_name (str): the attribute name as shown by model.named_<parameters/modules/buffers>()
+        val: the value of the attribute
+    """
+
+    def split_name(name):
+        if '.' in name:
+            return name.rsplit('.', 1)
+        else:
+            return '', name
