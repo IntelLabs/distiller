@@ -314,7 +314,7 @@ class _QuantStatsRecord(object):
         records = OrderedDict()
         records['min'] = float_info.max
         records['max'] = -float_info.max
-        for stat_name in ['avg_min', 'avg_max', 'mean', 'std']:
+        for stat_name in ['avg_min', 'avg_max', 'mean', 'std', 'b']:
             records[stat_name] = 0
         records['shape'] = ''
         return records
@@ -389,6 +389,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
         self.batch_idx = 0
         self.inplace_runtime_check = inplace_runtime_check
+        self.collecting_laplace = False
 
         if disable_inplace_attrs:
             if not inplace_attr_names:
@@ -397,6 +398,38 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 for n in inplace_attr_names:
                     if hasattr(m, n):
                         setattr(m, n, False)
+
+    def _check_required_stats(self):
+        """
+        Check whether the required statistics were collected to allow collecting laplace distribution stats.
+        """
+        for name, module in self.model.named_modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
+            if not hasattr(module, 'quant_stats'):
+                raise RuntimeError('Collection of Laplace distribution statistics is '
+                                   'only allowed after collection of stats has started.')
+            for i, input_stats_record in enumerate(module.quant_stats.inputs):
+                if 'mean' not in input_stats_record:
+                    raise RuntimeError('The required stats for input[%d] in module "%s" were not collected. '
+                                       'Please collect the required statistics using `collector.start()` and evaluating'
+                                       ' the model for enough batches.' % (i, name))
+            if 'mean' not in module.quant_stats.output:
+                raise RuntimeError('The required stats for the output in module "%s" were not collected. '
+                                   'Please collect the required statistics using `collector.start()` and evaluating'
+                                   ' the model for enough batches.' % name)
+
+    def start_laplace(self):
+        self._check_required_stats()
+        self.collecting_laplace = True
+        # reset batch_idx for all leaf modules
+        for module in self.model.modules():
+            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+                continue
+            module.batch_idx = 0
+
+    def stop_laplace(self):
+        self.collecting_laplace = False
 
     def _activation_stats_cb(self, module, inputs, output):
         def update_mean(old_mean, new_val):
@@ -412,10 +445,20 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             M += mean_diffs.sum()
             return sqrt((M / (total_values_so_far + numel - 1)).item())
 
+        def update_b(values, old_b, mean):
+            """
+            Updates the 'b' parameter of Laplace Distribution.
+            """
+            current_b = (values - mean).abs().mean().item()
+            return old_b + (current_b - old_b) / module.batch_idx
+
         def update_record(record, tensor):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
+            if self.collecting_laplace:
+                record['b'] = update_b(act, record['b'], record['mean'])
+                return
 
             # In the general case, the average min/max that we're collecting are averages over the per-sample
             # min/max values. That is - we first calculate the min/max for each sample in the batch, then average
@@ -690,7 +733,14 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            disable_inplace_attrs=disable_inplace_attrs,
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector):
+        msglogger.info('Pass 1: Collecting min, max, avg_min, avg_max, mean, std')
         test_fn(model=model)
+        # Collect Laplace distribution stats:
+        msglogger.info('Pass 2: Collecting b parameter')
+        quant_stats_collector.start_laplace()
+        test_fn(model=model)
+        quant_stats_collector.stop_laplace()
+
     msglogger.info('Stats collection complete')
     if save_dir is not None:
         save_path = os.path.join(save_dir, 'acts_quantization_stats.yaml')
