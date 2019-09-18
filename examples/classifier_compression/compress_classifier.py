@@ -120,7 +120,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         #zeros_mask_dict = distiller.create_model_masks_dict(model)
         assert args.resumed_checkpoint_path is not None, \
             "You must use --resume-from to provide a checkpoint file to thinnify"
-        distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
+        distiller.contract_model(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
                                  name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")),
                                  dir=msglogger.logdir)
