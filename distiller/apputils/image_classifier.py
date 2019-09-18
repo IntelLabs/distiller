@@ -93,7 +93,7 @@ class ClassifierCompressor(object):
                                      loggers=[self.tflogger, self.pylogger], args=self.args)
             if verbose:
                 distiller.log_weights_sparsity(self.model, epoch, [self.tflogger, self.pylogger])
-            distiller.log_activation_statsitics(epoch, "train", loggers=[self.tflogger],
+            distiller.log_activation_statistics(epoch, "train", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             if self.args.masks_sparsity:
                 msglogger.info(distiller.masks_sparsity_tbl_summary(self.model, 
@@ -119,7 +119,7 @@ class ClassifierCompressor(object):
         with collectors_context(self.activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(self.val_loader, self.model, self.criterion, 
                                          [self.pylogger], self.args, epoch)
-            distiller.log_activation_statsitics(epoch, "valid", loggers=[self.tflogger],
+            distiller.log_activation_statistics(epoch, "valid", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
 
@@ -253,8 +253,6 @@ def init_classifier_compression_arg_parser():
                         help='an optional parameter for sensitivity testing '
                              'providing the range of sparsities to test.\n'
                              'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
-    parser.add_argument('--extras', default=None, type=str,
-                        help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
     parser.add_argument('--seed', type=int, default=None,
@@ -620,7 +618,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors=None, ar
         model, *args.activation_stats)
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
-        distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
+        distiller.log_activation_statistics(-1, "test", loggers, collector=collectors['sparsity'])
         save_collectors_data(collectors, msglogger.logdir)
     return top1, top5, lossses
 

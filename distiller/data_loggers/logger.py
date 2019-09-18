@@ -52,7 +52,7 @@ class DataLogger(object):
     def log_training_progress(self, stats_dict, epoch, completed, total, freq):
         pass
 
-    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
+    def log_activation_statistic(self, phase, stat_name, activation_stats, epoch):
         pass
 
     def log_weights_sparsity(self, model, epoch):
@@ -83,7 +83,7 @@ class PythonLogger(DataLogger):
                 log = log + '{name} {val:.6f}    '.format(name=name, val=val)
         self.pylogger.info(log)
 
-    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
+    def log_activation_statistic(self, phase, stat_name, activation_stats, epoch):
         data = []
         for layer, statistic in activation_stats.items():
             data.append([layer, statistic])
@@ -146,7 +146,7 @@ class TensorBoardLogger(DataLogger):
             self.tblogger.scalar_summary(prefix+tag, value, total_steps(total, epoch, completed))
         self.tblogger.sync_to_file()
 
-    def log_activation_statsitic(self, phase, stat_name, activation_stats, epoch):
+    def log_activation_statistic(self, phase, stat_name, activation_stats, epoch):
         group = stat_name + '/activations/' + phase + "/"
         for tag, value in activation_stats.items():
             self.tblogger.scalar_summary(group+tag, value, epoch)

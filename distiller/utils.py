@@ -529,12 +529,12 @@ def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total
         logger.log_weights_distribution(params_dict, steps_completed)
 
 
-def log_activation_statsitics(epoch, phase, loggers, collector):
+def log_activation_statistics(epoch, phase, loggers, collector):
     """Log information about the sparsity of the activations"""
     if collector is None:
         return
     for logger in loggers:
-        logger.log_activation_statsitic(phase, collector.stat_name, collector.value(), epoch)
+        logger.log_activation_statistic(phase, collector.stat_name, collector.value(), epoch)
 
 
 def log_weights_sparsity(model, epoch, loggers):

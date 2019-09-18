@@ -9,11 +9,11 @@ most the same number of iterations."
 their smallest-magnitude weights. The set of connections that survives this process is the architecture
 of a winning ticket. Unique to our work, the winning ticket’s weights are the values to which these
 connections were initialized before training. This forms our central experiment:
->1. Randomly initialize a neural network f(x; theta_0) (where theta_0 ~ D_0).
->2. Train the network for j iterations, reaching parameters theta_j .
+>1. Randomly initialize a neural network f(x; theta_0) (where theta_0 ~ D_0).
+>2. Train the network for j iterations, reaching parameters theta_j.
 >3. Prune s% of the parameters, creating a mask m where Pm = (100 - s)%.
->4. To extract the winning ticket, reset the remaining parameters to their values intheta_0, creating
-the untrained network f(x;m *theta_0).
+>4. To extract the winning ticket, reset the remaining parameters to their values in theta_0, creating
+the untrained network f(x; m * theta_0).
 
 ### Example
 Train a ResNet20-CIFAR10 network from scratch, and save the untrained, randomized initial network weights in a checkpoint file.
@@ -23,7 +23,7 @@ python3 compress_classifier.py --arch resnet20_cifar  ${CIFAR10_PATH} -p=50 --ep
 ``` 
 
 After training the network, we have two outputs: the best trained network (`resnet20_best.pth.tar`) and the initial untrained network (`resnet20_untrained_checkpoint.pth.tar`).<br>
-In this example, we copy them into the `examples/lottery_ticket` directory for convenience.
+In this example, we copy both checkpoints into the `examples/lottery_ticket` directory for convenience.
 
 ```bash
 cp logs/resnet20___2019.08.22-220243/resnet20_best.pth.tar ../lottery_ticket/
