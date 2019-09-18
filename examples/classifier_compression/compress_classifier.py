@@ -106,7 +106,6 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.sensitivity is not None:
         test_loader = load_test_data(args)
-        #sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
         sensitivities = np.arange(*args.sensitivity_range)
         sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
         do_exit = True
@@ -117,7 +116,6 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                   args, compression_scheduler)
         do_exit = True
     elif args.thinnify:
-        #zeros_mask_dict = distiller.create_model_masks_dict(model)
         assert args.resumed_checkpoint_path is not None, \
             "You must use --resume-from to provide a checkpoint file to thinnify"
         distiller.contract_model(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
