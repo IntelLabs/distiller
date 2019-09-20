@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,19 +20,24 @@ The code below supports fine-grained tensor thresholding and group-wise threshol
 """
 import torch
 import numpy as np
+from distiller.norms import *
 
 
-def threshold_mask(weights, threshold):
+__all__ = ["threshold_mask", "GroupThresholdMixin",
+           "group_threshold_binary_map", "group_threshold_mask"]
+
+
+def threshold_mask(param, threshold):
     """Create a threshold mask for the provided parameter tensor using
     magnitude thresholding.
 
     Arguments:
-        weights: a parameter tensor which should be pruned.
+        param: a parameter tensor which should be pruned.
         threshold: the pruning threshold.
     Returns:
         prune_mask: The pruning mask.
     """
-    return torch.gt(torch.abs(weights), threshold).type(weights.type())
+    return torch.gt(torch.abs(param), threshold).type(param.type())
 
 
 class GroupThresholdMixin(object):
@@ -48,74 +53,71 @@ class GroupThresholdMixin(object):
 
 
 def group_threshold_binary_map(param, group_type, threshold, threshold_criteria):
-    """Return a threshold mask for the provided parameter and group type.
+    """Return a threshold binary map for the provided parameter and group type.
+
+    This function thresholds a parameter tensor, using the provided threshold.
+    Thresholding is performed by breaking the parameter tensor into groups as
+    specified by group_type, computing the norm of each group instance using
+    threshold_criteria, and then thresholding that norm.  The result is called
+    binary_map and contains 1s where the group norm was larger than the threshold
+    value, zero otherwise.
 
     Args:
         param: The parameter to mask
         group_type: The elements grouping type (structure).
-          One of:2D, 3D, 4D, Channels, Row, Cols
+          One of:2D, 3D, Channels, Row, Cols
         threshold: The threshold
         threshold_criteria: The thresholding criteria.
-          'Mean_Abs' thresholds the entire element group using the mean of the
+          ('Mean_Abs', 'Mean_L1', 'L1') - thresholds the entire element group using the mean of the
           absolute values of the tensor elements.
-          'Max' thresholds the entire group using the magnitude of the largest
+          ('Mean_L2', 'L2') -  - thresholds the entire element group using the L2 norm
+          'Max' - thresholds the entire group using the magnitude of the largest
           element in the group.
+
+    Returns:
+        binary_map
     """
+    if isinstance(threshold, torch.Tensor):
+        threshold = threshold.item()
+    length_normalized = 'Mean' in threshold_criteria
+    if threshold_criteria in ('Mean_Abs', 'Mean_L1', 'L1'):
+        p = l1_norm
+    elif threshold_criteria in ('Mean_L2', 'L2'):
+        p = l2_norm
+    elif threshold_criteria == 'Max':
+        p = max_norm
+    else:
+        raise ValueError("Illegal threshold_criteria %s", threshold_criteria)
+
     if group_type == '2D':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
-        view_2d = param.view(-1, param.size(2) * param.size(3))
-        # 1. Determine if the kernel "value" is below the threshold, by creating a 1D
-        #    thresholds tensor with length = #IFMs * # OFMs
-        thresholds = torch.Tensor([threshold] * param.size(0) * param.size(1)).to(param.device)
-        # 2. Create a binary thresholds mask, where we use the mean of the abs values of the
-        #    elements in each channel as the threshold filter.
-        # 3. Apply the threshold filter
-        binary_map = threshold_policy(view_2d, thresholds, threshold_criteria)
-        return binary_map
+        thresholds = param.new_full((param.size(0) * param.size(1),), threshold)
+        norms = kernels_lp_norm(param, p, length_normalized)
 
     elif group_type == 'Rows':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
-        thresholds = torch.Tensor([threshold] * param.size(0)).to(param.device)
-        binary_map = threshold_policy(param, thresholds, threshold_criteria)
-        return binary_map
+        thresholds = param.new_full((param.size(0),), threshold)
+        norms = rows_lp_norm(param, p, length_normalized)
 
     elif group_type == 'Cols':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
-        thresholds = torch.Tensor([threshold] * param.size(1)).to(param.device)
-        binary_map = threshold_policy(param, thresholds, threshold_criteria, dim=0)
-        return binary_map
+        thresholds = param.new_full((param.size(1),), threshold)
+        norms = cols_lp_norm(param, p, length_normalized)
 
     elif group_type == '3D' or group_type == 'Filters':
         assert param.dim() == 4 or param.dim() == 3, "This pruning is only supported for 3D and 4D weights"
-        view_filters = param.view(param.size(0), -1)
-        thresholds = torch.Tensor([threshold] * param.size(0)).to(param.device)
-        binary_map = threshold_policy(view_filters, thresholds, threshold_criteria)
-        return binary_map
-
-    elif group_type == '4D':
-        assert param.dim() == 4, "This thresholding is only supported for 4D weights"
-        if threshold_criteria == 'Mean_Abs':
-            if param.data.abs().mean() > threshold:
-                return None
-            return torch.zeros_like(param.data)
-        elif threshold_criteria == 'Max':
-            if param.data.abs().max() > threshold:
-                return None
-            return torch.zeros_like(param.data)
-        raise ValueError("Invalid threshold_criteria {}".format(threshold_criteria))
+        n_filters = param.size(0)
+        thresholds = param.new_full((n_filters,), threshold)
+        norms = filters_lp_norm(param, p, length_normalized)
 
     elif group_type == 'Channels':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
-        num_filters = param.size(0)
-        num_kernels_per_filter = param.size(1)
+        n_channels = param.size(1)
+        thresholds = param.new_full((n_channels,),  threshold)
+        norms = channels_lp_norm(param, p, length_normalized)
 
-        view_2d = param.view(-1, param.size(2) * param.size(3))
-        # Next, compute the sum of the squares (of the elements in each row/kernel)
-        kernel_means = view_2d.abs().mean(dim=1)
-        k_means_mat = kernel_means.view(num_filters, num_kernels_per_filter).t()
-        thresholds = torch.Tensor([threshold] * num_kernels_per_filter).to(param.device)
-        binary_map = k_means_mat.data.mean(dim=1).gt(thresholds).type(param.type())
-        return binary_map
+    binary_map = norms.gt(thresholds).type(param.type())
+    return binary_map
 
 
 def group_threshold_mask(param, group_type, threshold, threshold_criteria, binary_map=None):
@@ -124,76 +126,57 @@ def group_threshold_mask(param, group_type, threshold, threshold_criteria, binar
     Args:
         param: The parameter to mask
         group_type: The elements grouping type (structure).
-          One of:2D, 3D, 4D, Channels, Row, Cols
+          One of:2D, 3D, Channels, Row, Cols
         threshold: The threshold
         threshold_criteria: The thresholding criteria.
           'Mean_Abs' thresholds the entire element group using the mean of the
           absolute values of the tensor elements.
           'Max' thresholds the entire group using the magnitude of the largest
           element in the group.
-    """
-    if group_type == '2D':
-        if binary_map is None:
-            binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
+        binary_map:
 
-        # 3. Finally, expand the thresholds and view as a 4D tensor
+    Returns:
+        (mask, binary_map)
+    """
+    assert group_type in ('2D', 'Rows', 'Cols', '3D', 'Filters', 'Channels')
+    if binary_map is None:
+        binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
+
+    # Now let's expand back up to a 4D mask
+    return expand_binary_map(param, group_type, binary_map)
+
+
+def expand_binary_map(param, group_type, binary_map):
+    """Expands a binary_map to the shape of the provided parameter.
+
+    Args:
+        param: The parameter to mask
+        group_type: The elements grouping type (structure).
+          One of:2D, 3D, 4D, Channels, Row, Cols
+        binary_map: the binary map that matches the specified `group_type`
+
+    Returns:
+        (mask, binary_map)
+    """
+    assert group_type in ('2D', 'Rows', 'Cols', '3D', 'Filters', '4D', 'Channels')
+    assert binary_map is not None
+
+    # Now let's expand back up to a 4D mask
+    if group_type == '2D':
         a = binary_map.expand(param.size(2) * param.size(3),
                               param.size(0) * param.size(1)).t()
         return a.view(param.size(0), param.size(1), param.size(2), param.size(3)), binary_map
-
     elif group_type == 'Rows':
-        if binary_map is None:
-            binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         return binary_map.expand(param.size(1), param.size(0)).t(), binary_map
-
     elif group_type == 'Cols':
-        if binary_map is None:
-            binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         return binary_map.expand(param.size(0), param.size(1)), binary_map
-
     elif group_type == '3D' or group_type == 'Filters':
-        if binary_map is None:
-            binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         a = binary_map.expand(np.prod(param.shape[1:]), param.size(0)).t()
         return a.view(*param.shape), binary_map
-
-    elif group_type == '4D':
-        assert param.dim() == 4, "This thresholding is only supported for 4D weights"
-        if threshold_criteria == 'Mean_Abs':
-            if param.data.abs().mean() > threshold:
-                return None
-            return torch.zeros_like(param.data)
-        elif threshold_criteria == 'Max':
-            if param.data.abs().max() > threshold:
-                return None
-            return torch.zeros_like(param.data)
-        raise ValueError("Invalid threshold_criteria {}".format(threshold_criteria))
-
     elif group_type == 'Channels':
-        if binary_map is None:
-            binary_map = group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
-        num_filters = param.size(0)
-        num_kernels_per_filter = param.size(1)
-
-        # Now let's expand back up to a 4D mask
-        a = binary_map.expand(num_filters, num_kernels_per_filter)
+        num_filters, num_channels = param.size(0), param.size(1)
+        a = binary_map.expand(num_filters, num_channels)
         c = a.unsqueeze(-1)
-        d = c.expand(num_filters, num_kernels_per_filter, param.size(2) * param.size(3)).contiguous()
+        d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
         return d.view(param.size(0), param.size(1), param.size(2), param.size(3)), binary_map
 
-
-def threshold_policy(weights, thresholds, threshold_criteria, dim=1):
-    """
-    """
-    if threshold_criteria in ['Mean_Abs', 'Mean_L1']:
-        return weights.data.norm(p=1, dim=dim).div(weights.size(dim)).gt(thresholds).type(weights.type())
-    if threshold_criteria == 'Mean_L2':
-        return weights.data.norm(p=2, dim=dim).div(weights.size(dim)).gt(thresholds).type(weights.type())
-    elif threshold_criteria == 'L1':
-        return weights.data.norm(p=1, dim=dim).gt(thresholds).type(weights.type())
-    elif threshold_criteria == 'L2':
-        return weights.data.norm(p=2, dim=dim).gt(thresholds).type(weights.type())
-    elif threshold_criteria == 'Max':
-        maxv, _ = weights.data.abs().max(dim=dim)
-        return maxv.gt(thresholds).type(weights.type())
-    raise ValueError("Invalid threshold_criteria {}".format(threshold_criteria))
