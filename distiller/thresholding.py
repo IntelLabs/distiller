@@ -81,40 +81,40 @@ def group_threshold_binary_map(param, group_type, threshold, threshold_criteria)
         threshold = threshold.item()
     length_normalized = 'Mean' in threshold_criteria
     if threshold_criteria in ('Mean_Abs', 'Mean_L1', 'L1'):
-        p = l1_norm
+        norm_fn = l1_norm
     elif threshold_criteria in ('Mean_L2', 'L2'):
-        p = l2_norm
+        norm_fn = l2_norm
     elif threshold_criteria == 'Max':
-        p = max_norm
+        norm_fn = max_norm
     else:
         raise ValueError("Illegal threshold_criteria %s", threshold_criteria)
 
     if group_type == '2D':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         thresholds = param.new_full((param.size(0) * param.size(1),), threshold)
-        norms = kernels_lp_norm(param, p, length_normalized)
+        norms = kernels_norm(param, norm_fn, length_normalized=length_normalized)
 
     elif group_type == 'Rows':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
         thresholds = param.new_full((param.size(0),), threshold)
-        norms = rows_lp_norm(param, p, length_normalized)
+        norms = sub_matrix_norm(param, norm_fn, group_len=1, length_normalized=length_normalized, dim=1)
 
     elif group_type == 'Cols':
         assert param.dim() == 2, "This regularization is only supported for 2D weights"
         thresholds = param.new_full((param.size(1),), threshold)
-        norms = cols_lp_norm(param, p, length_normalized)
+        norms = sub_matrix_norm(param, norm_fn, group_len=1, length_normalized=length_normalized, dim=0)
 
     elif group_type == '3D' or group_type == 'Filters':
         assert param.dim() == 4 or param.dim() == 3, "This pruning is only supported for 3D and 4D weights"
         n_filters = param.size(0)
         thresholds = param.new_full((n_filters,), threshold)
-        norms = filters_lp_norm(param, p, length_normalized)
+        norms = filters_norm(param, norm_fn, length_normalized=length_normalized)
 
     elif group_type == 'Channels':
         assert param.dim() == 4, "This thresholding is only supported for 4D weights"
         n_channels = param.size(1)
         thresholds = param.new_full((n_channels,),  threshold)
-        norms = channels_lp_norm(param, p, length_normalized)
+        norms = channels_norm(param, norm_fn, length_normalized=length_normalized)
 
     binary_map = norms.gt(thresholds).type(param.type())
     return binary_map
