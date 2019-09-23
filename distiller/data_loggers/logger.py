@@ -36,7 +36,7 @@ from contextlib import ExitStack
 import os
 #msglogger = logging.getLogger()
 
-__all__ = ['PythonLogger', 'TensorBoardLogger', 'CsvLogger']
+__all__ = ['PythonLogger', 'TensorBoardLogger', 'CsvLogger', 'NullLogger']
 
 
 class DataLogger(object):
@@ -63,6 +63,9 @@ class DataLogger(object):
 
     def log_model_buffers(self, model, buffer_names, tag_prefix, epoch, completed, total, freq):
         pass
+
+# Log to null-space
+NullLogger = DataLogger
 
 
 class PythonLogger(DataLogger):
