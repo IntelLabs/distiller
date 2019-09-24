@@ -149,7 +149,7 @@ class Quantizer(object):
             regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex_overrides = re.compile(regex_overrides_str)
 
-        self.module_qbits_map = {}
+        self.module_qbits_map = {}  # type: OrderedDict[str, QBits]
         self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
             name_to_match = module_full_name

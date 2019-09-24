@@ -15,6 +15,7 @@
 #
 
 import torch.nn as nn
+import torch.nn.functional as f
 import argparse
 from enum import Enum
 from collections import OrderedDict, namedtuple
@@ -106,6 +107,7 @@ def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None):
     return fns[clip_mode]
 
 
+# TODO: Move to q_utils, add tests
 def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, per_channel=False, num_stds=None,
                                   half_range=False, scale_approx_mult_bits=None):
     if per_channel and tensor.dim() not in [2, 4]:
@@ -143,6 +145,7 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
     return scale, zp
 
 
+# TODO: Move to q_utils, add tests
 def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE, num_stds=None, half_range=False,
                                       scale_approx_mult_bits=None):
     if clip == ClipMode.N_STD:
@@ -201,10 +204,9 @@ class QuantSettings(namedtuple('QuantSettings',
 
     def __str__(self):
         return '(num_bits={} ; quant_mode={} ; clip_mode={} ; clip_n_stds={} ; clip_half_range={}' \
-               ' ; per_channel={})'.format(
-            self.num_bits, _enum_to_str(self.quant_mode),
-            _enum_to_str(self.clip_mode), self.clip_n_stds, self.clip_half_range,
-            self.per_channel
+               ' ; per_channel={})'.format(self.num_bits, _enum_to_str(self.quant_mode),
+                                           _enum_to_str(self.clip_mode), self.clip_n_stds, self.clip_half_range,
+                                           self.per_channel
         )
 
 
@@ -301,10 +303,12 @@ class RangeLinearQuantWrapper(nn.Module):
         super(RangeLinearQuantWrapper, self).__init__()
 
         input_overrides = input_overrides or OrderedDict()
+
+        self.wrapped_module = wrapped_module
+        self.clip_half_range = clip_half_range
         self.scale_approx_mult_bits = scale_approx_mult_bits
         self.requires_quantized_inputs = requires_quantized_inputs
         self.inputs_quant_auto_fallback = inputs_quant_auto_fallback
-        self.wrapped_module = wrapped_module
 
         self.output_quant_settings = QuantSettings(num_bits_acts, mode, clip_acts, clip_n_stds, clip_half_range, False)
         self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
@@ -317,8 +321,10 @@ class RangeLinearQuantWrapper(nn.Module):
                     quant_settings = self.output_quant_settings
                 else:
                     quant_settings = QuantSettings(v.pop('bits_activations', self.output_quant_settings.num_bits),
-                                                   v.pop('mode', self.output_quant_settings.quant_mode),
-                                                   v.pop('clip_acts', self.output_quant_settings.clip_mode),
+                                                   verify_quant_mode(
+                                                       v.pop('mode', self.output_quant_settings.quant_mode)),
+                                                   verify_clip_mode(
+                                                       v.pop('clip_acts', self.output_quant_settings.clip_mode)),
                                                    v.pop('clip_n_stds', self.output_quant_settings.clip_n_stds),
                                                    v.pop('clip_half_range', self.output_quant_settings.clip_half_range),
                                                    False)
@@ -388,7 +394,11 @@ class RangeLinearQuantWrapper(nn.Module):
         else:
             inputs_q = inputs
 
+        # Forward through wrapped module
         accum = self.quantized_forward(*inputs_q)
+
+        if self.clip_half_range:
+            accum = f.relu(accum)
 
         # Re-quantize accumulator to quantized output range
         out_scale, out_zero_point = self.get_output_quantization_params(accum)
@@ -438,7 +448,7 @@ class RangeLinearQuantWrapper(nn.Module):
                         q_settings = self.output_quant_settings
                     scale, zp = _get_quant_params_from_tensor(input, q_settings.num_bits, q_settings.quant_mode,
                                                               q_settings.clip_mode, q_settings.per_channel,
-                                                              q_settings.clip_n_stds,
+                                                              q_settings.clip_n_stds, q_settings.clip_half_range,
                                                               self.scale_approx_mult_bits)
                     signed = q_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
                     min_q_val, max_q_val = get_quantized_range(q_settings.num_bits, signed)
@@ -541,6 +551,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
         clip_n_stds (float): See RangeLinearQuantWrapper
+        clip_half_range (bool) : See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
@@ -670,6 +681,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         q_set = self.output_quant_settings
         return _get_quant_params_from_tensor(y_f, q_set.num_bits, q_set.quant_mode,
                                              clip=q_set.clip_mode, num_stds=q_set.clip_n_stds,
+                                             half_range=q_set.clip_half_range,
                                              scale_approx_mult_bits=self.scale_approx_mult_bits)
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
@@ -744,6 +756,7 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         q_set = self.output_quant_settings
         return _get_quant_params_from_tensor(y_f, q_set.num_bits, q_set.quant_mode,
                                              clip=q_set.clip_mode, num_stds=q_set.clip_n_stds,
+                                             half_range=q_set.clip_half_range,
                                              scale_approx_mult_bits=self.scale_approx_mult_bits)
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
@@ -780,8 +793,8 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
         # For concatenation to make sense input scales need to match, so we re-quantize all inputs
         # based on the output scale
         inputs_re_q = [linear_quantize_clamp(input_q + input_q.quant_metadata.zero_point,
-                                             self.output_scale / input_q.quant_metadata.scale, self.output_zero_point,
-                                             self.acts_min_q_val, self.acts_max_q_val, inplace=False)
+                                             self.output_scale / input_q.quant_metadata.scale, 0.,
+                                             self.accum_min_q_val, self.accum_max_q_val, inplace=False)
                        for input_q in inputs_q]
         return self.wrapped_module(*inputs_re_q)
 
@@ -790,7 +803,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         # Nothing to do here, since we already re-quantized in quantized_forward prior to the actual concatenation
-        return 1., 0.
+        return 1., self.output_zero_point
 
 
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
@@ -939,13 +952,6 @@ class RangeLinearEmbeddingWrapper(nn.Module):
 
 
 class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
-    """
-    Wrapper around any layer to quantize the outputs of the layer.
-    Args: TODO- complete
-        fpq_module (Union[int, str]): use the module in floating point mode and only quantize the outputs.
-            takes the values (16, 32, 64) only.
-            Note - this overrides `requires_quantized_inputs` to False.
-    """
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
                  fpq_module=None):
@@ -1138,14 +1144,19 @@ class PostTrainLinearQuantizer(Quantizer):
                                   'Keeping the original FP32 module'.format(name, module.__class__.__name__))
                 return module
 
-        def replace_embedding(module, name, qbits_map):
+        def replace_embedding(module, name, qbits_map, fp16=fp16):
+            if fp16:
+                return FP16Wrapper(module, convert_input=False)
             norm_name = distiller.utils.normalize_module_name(name)
             return RangeLinearEmbeddingWrapper(module, qbits_map[name].wts, mode=mode,
                                                stats=self.model_activation_stats.get(norm_name, None))
 
         def replace_fake_quant(module, name, qbits_map, fp16=fp16,
                                clip_acts=clip_acts, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
-                               scale_approx_mult_bits=scale_approx_mult_bits, fpq_module=fpq_module, fake=True):
+                               scale_approx_mult_bits=scale_approx_mult_bits, fpq_module=fpq_module, fake=True,
+                               make_identity=False):
+            if isinstance(module, nn.ReLU) and make_identity:
+                return nn.Identity()
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
             if distiller.has_children(module):
@@ -1266,6 +1277,7 @@ class PostTrainLinearQuantizer(Quantizer):
         if not self.has_bidi_distiller_lstm:
             self._apply_bn_folding(dummy_input)
             self._apply_activation_stats_fusions()
+            self._apply_fuse_relu()
         else:
             self._apply_bidi_distiller_lstm_stats_fusion()
 
@@ -1337,7 +1349,6 @@ class PostTrainLinearQuantizer(Quantizer):
 
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
-        model_overrides = self.module_overrides_map
         for n, m in named_modules.items():
             if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm) )\
                     or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
@@ -1367,14 +1378,6 @@ class PostTrainLinearQuantizer(Quantizer):
                 # ReLU zeros out all negative values, so there's no need to quantize them
                 msglogger.debug('  Module {} followed by Relu, updating stats'.format(n))
                 self._clip_stats(m_stats['output'], 0., m_stats['output']['max'])
-                # Add half range clipping to module overrides
-                m_override = model_overrides.get(n, OrderedDict())
-                m_override['clip_half_range'] = True
-                relu_name = distiller.denormalize_module_name(self.model, successor.name)
-                # We fuse ReLU into the model in the case of Asymmetric quantization
-                # By making it a no-op since we already fused the stats:
-                relu_overrides = model_overrides.get(relu_name, OrderedDict())
-                model_overrides[n] = m_override
             elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
                 # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
                 # of these ranges
@@ -1383,6 +1386,30 @@ class PostTrainLinearQuantizer(Quantizer):
                 self._clip_stats(m_stats['output'], -sat_val, sat_val)
                 if succ_stats is not None:
                     succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+
+    def _apply_fuse_relu(self):
+        """Fuses ReLU layers to the linear layers before them."""
+        model_overrides = self.module_overrides_map
+        qbits_map = self.module_qbits_map
+        named_modules = dict(self.model.named_modules())
+        for n, m in named_modules.items():
+            # Don't fuse if the module isn't quantized:
+            qbits = qbits_map.get(n, QBits(None, None, None))
+            if qbits.acts is None and qbits.wts is None:
+                continue
+            if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm))\
+                    or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
+                continue
+            successor = self.adjacency_map[n].successors[0]
+            n = distiller.normalize_module_name(n)
+            # Add half range clipping to module overrides
+            m_override = model_overrides.get(n, OrderedDict())
+            m_override['clip_half_range'] = True
+            model_overrides[n] = m_override
+            if successor.name in named_modules:
+                m_override = model_overrides.get(successor.name, OrderedDict())
+                m_override['make_identity'] = True
+                model_overrides[successor.name] = m_override
 
     def _apply_bidi_distiller_lstm_stats_fusion(self):
         distiller_lstm_cells = [n for n, m in self.model.named_modules() if

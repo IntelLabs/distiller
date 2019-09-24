@@ -66,7 +66,8 @@ SKIP_MODULES = (
     nn.Identity,
     nn.BatchNorm1d,
     nn.BatchNorm2d,
-    nn.BatchNorm3d
+    nn.BatchNorm3d,
+    nn.ReLU
 )
 
 CLIP_MODES = ['NONE',
@@ -115,14 +116,14 @@ def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
     input_idx = kwargs.get('input_idx', 0)
     assert input_idx < len(input_nodes)
     for clip_mode in CLIP_MODES:
-        input_idx_override = override_odict(bits_activations=6,
+        input_idx_override = override_odict(bits_activations=8,
                                             clip_acts=clip_mode)
         input_overrides = OrderedDict([(input_idx, input_idx_override)])
         current_module_override = override_odict(input_overrides=input_overrides)
         # add basic quantization so the quantizer doesn't reject this override
-        current_module_override['bits_activations'] = 6
+        current_module_override['bits_activations'] = 8
         if isinstance(module, PARAM_MODULES):
-            current_module_override['bits_weights'] = 6
+            current_module_override['bits_weights'] = 8
         yield current_module_override
 
 
@@ -136,6 +137,11 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
         overrides_dict (OrderedDict): the fixed overrides already applied
         kwargs: additional arguments, if needed
     """
+    if isinstance(module, nn.ReLU):
+        yield override_odict(make_identity=True,
+                             bits_weights=8,
+                             bits_activations=8)
+        return
     adj_map = sg.adjacency_map()
     modules_dict = dict(sg._src_model.named_modules())
     successors_names = {op.name for op in adj_map[module_name].successors if op.name in modules_dict}
@@ -151,15 +157,15 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
             current_module_override = override_odict(clip_acts=clip_mode,
-                                                     bits_weights=6,
-                                                     bits_activations=6,
+                                                     bits_weights=8,
+                                                     bits_activations=8,
                                                      bits_bias=32)
         else:
             current_module_override = override_odict(clip_acts=clip_mode,
                                                      fpq_module=fpq_module,
                                                      fake=use_fake,
-                                                     bits_weights=6,
-                                                     bits_activations=6)
+                                                     bits_weights=8,
+                                                     bits_activations=8)
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
         yield current_module_override
@@ -353,7 +359,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             best_overrides_dict[normalized_module_name] = OrderedDict()
         # Hard coded workaround for avgpool->reshape->fc
         if normalized_module_name == 'fc':
-            input_override = override_odict(bits_activations=6,
+            input_override = override_odict(bits_activations=8,
                                             clip_acts='NONE')
             best_overrides_dict['fc'].update(OrderedDict([
                 ('input_overrides', OrderedDict([
