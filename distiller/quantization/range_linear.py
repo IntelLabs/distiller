@@ -1155,7 +1155,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                clip_acts=clip_acts, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                scale_approx_mult_bits=scale_approx_mult_bits, fpq_module=fpq_module, fake=True,
                                make_identity=False):
-            if isinstance(module, nn.ReLU) and make_identity:
+            if isinstance(module, (nn.ReLU, nn.ReLU6)) and make_identity:
                 return nn.Identity()
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
@@ -1376,7 +1376,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
             if succ_type == 'Relu':
                 # ReLU zeros out all negative values, so there's no need to quantize them
-                msglogger.debug('  Module {} followed by Relu, updating stats'.format(n))
+                msglogger.debug('  Module {} followed by ReLU, updating stats'.format(n))
                 self._clip_stats(m_stats['output'], 0., m_stats['output']['max'])
             elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
                 # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
@@ -1386,6 +1386,11 @@ class PostTrainLinearQuantizer(Quantizer):
                 self._clip_stats(m_stats['output'], -sat_val, sat_val)
                 if succ_stats is not None:
                     succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+            elif isinstance(named_modules.get(successor.name, None), nn.ReLU6):
+                # ReLU zeros out all negative values, so there's no need to quantize them
+                msglogger.debug('  Module {} followed by ReLU6, updating stats'.format(n))
+                self._clip_stats(m_stats['output'], 0., min(m_stats['output']['max'], 6))
+
 
     def _apply_fuse_relu(self):
         """Fuses ReLU layers to the linear layers before them."""

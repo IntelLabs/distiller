@@ -171,8 +171,9 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
         yield current_module_override
 
 
-def search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict, override_gen_fn, **kwargs):
-    msglogger.info('Searching optimal quantization in \'%s\':' % module_name)
+def search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best_overrides_dict, override_gen_fn,
+                               **kwargs):
+    msglogger.info('Searching optimal quantization in \'%s\'(%s):' % (module_name, module.__class__.__name__))
     overrides_dict = deepcopy(best_overrides_dict)
     best_performance, best_local_override = float("-inf"), OrderedDict()
     normalized_module_name = module_name
@@ -257,7 +258,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     sg = SummaryGraph(model, dummy_input)
     modules_to_quantize = sg.layers_topological_order(recurrent)
     adjacency_map = sg.adjacency_map()
-    modules_dict = dict(model.named_modules())
+    modules_dict = OrderedDict(model.named_modules())  # type: OrderedDict[str, nn.Module]
     modules_to_quantize = [m for m in modules_to_quantize
                            if m not in args.qe_no_quant_layers]
 
@@ -329,7 +330,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
         for input_idx in input_idxs:
-            best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
+            best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best_overrides_dict,
                                                               input_override_gen_fn, input_idx=input_idx)
             best_overrides_dict[normalized_module_name].update(best_module_override)
         # Leave only the input_overrides settings:
@@ -340,7 +341,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
     for module_name in modules_to_quantize:
         module = modules_dict[module_name]
         if isinstance(module, SKIP_MODULES):
-            msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, type(module)))
+            msglogger.info('Skipping module \'%s\' of type %s.' % (module_name, module.__class__.__name__))
             continue
 
         normalized_module_name = module_name
@@ -351,8 +352,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                 best_overrides_dict[normalized_module_name].get('bits_activations', None)\
                 and normalized_module_name not in loaded_from_checkpoint:
             # This means the loaded dict already has the module
-            msglogger.info("  Quantizing '%s' based on loaded checkpoint: %s" %
-                           (module_name, best_overrides_dict[normalized_module_name]))
+            msglogger.info("  Quantizing '%s'(%s) based on loaded checkpoint: %s" %
+                           (module_name, module.__class__.__name__, best_overrides_dict[normalized_module_name]))
             loaded_from_checkpoint.append(normalized_module_name)
             continue
         if not best_overrides_dict.get(normalized_module_name, None):
@@ -366,7 +367,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                     (0, input_override)
                 ]))
             ]))
-        best_module_override = search_best_local_settings(module, module_name, sg, eval_fn, best_overrides_dict,
+        best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best_overrides_dict,
                                                           module_override_gen_fn)
         best_overrides_dict[normalized_module_name].update(best_module_override)
         distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, best_overrides_dict)
