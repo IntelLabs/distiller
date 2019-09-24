@@ -62,8 +62,11 @@ class ClassifierCompressor(object):
         
         # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
         # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
-        self.tflogger = TensorBoardLogger(msglogger.logdir)
-        self.pylogger = PythonLogger(msglogger)
+        if not self.logdir:
+            self.pylogger = self.tflogger = NullLogger()
+        else:
+            self.tflogger = TensorBoardLogger(msglogger.logdir)
+            self.pylogger = PythonLogger(msglogger)
         (self.model, self.compression_scheduler, self.optimizer, 
              self.start_epoch, self.ending_epoch) = _init_learner(args)
 
@@ -92,7 +95,7 @@ class ClassifierCompressor(object):
                                      loggers=[self.tflogger, self.pylogger], args=self.args)
             if verbose:
                 distiller.log_weights_sparsity(self.model, epoch, [self.tflogger, self.pylogger])
-            distiller.log_activation_statsitics(epoch, "train", loggers=[self.tflogger],
+            distiller.log_activation_statistics(epoch, "train", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             if self.args.masks_sparsity:
                 msglogger.info(distiller.masks_sparsity_tbl_summary(self.model, 
@@ -118,7 +121,7 @@ class ClassifierCompressor(object):
         with collectors_context(self.activations_collectors["valid"]) as collectors:
             top1, top5, vloss = validate(self.val_loader, self.model, self.criterion, 
                                          [self.pylogger], self.args, epoch)
-            distiller.log_activation_statsitics(epoch, "valid", loggers=[self.tflogger],
+            distiller.log_activation_statistics(epoch, "valid", loggers=[self.tflogger],
                                                 collector=collectors["sparsity"])
             save_collectors_data(collectors, msglogger.logdir)
 
@@ -133,15 +136,16 @@ class ClassifierCompressor(object):
 
     def _finalize_epoch(self, epoch, perf_scores_history, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
-        update_training_scores_history(perf_scores_history, self.model, 
+        update_training_scores_history(perf_scores_history, self.model,
                                        top1, top5, epoch, self.args.num_best_scores)
         is_best = epoch == perf_scores_history[0].epoch
         checkpoint_extras = {'current_top1': top1,
                              'best_top1': perf_scores_history[0].top1,
                              'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer, 
-                                 scheduler=self.compression_scheduler, extras=checkpoint_extras, 
-                                 is_best=is_best, name=self.args.name, dir=msglogger.logdir)
+        if msglogger.logdir:
+            apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer,
+                                     scheduler=self.compression_scheduler, extras=checkpoint_extras,
+                                     is_best=is_best, name=self.args.name, dir=msglogger.logdir)
 
 
     def run_training_loop(self):
@@ -160,6 +164,7 @@ class ClassifierCompressor(object):
             msglogger.info('\n')
             top1, top5, loss = self.train_validate_with_scheduling(epoch)
             self._finalize_epoch(epoch, perf_scores_history, top1, top5)
+        return perf_scores_history
 
     def validate(self, epoch=-1):
         self.load_datasets()
@@ -225,7 +230,7 @@ def init_classifier_compression_arg_parser():
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--activation-histograms', '--act-hist',
-                        type=float_range(exc_min=True),
+                        type=distiller.utils.float_range_argparse_checker(exc_min=True),
                         metavar='PORTION_OF_TEST_SET',
                         help='Run the model in evaluation mode on the specified portion of the test dataset and '
                              'generate activation histograms. NOTE: This slows down evaluation significantly')
@@ -287,9 +292,11 @@ def init_classifier_compression_arg_parser():
 
 
 def _init_logger(args, script_dir):
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     global msglogger
-
+    if not script_dir or not hasattr(args, "output_dir") or not args.output_dir:
+        msglogger.logdir = None
+        return None
+    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'),
@@ -302,6 +309,7 @@ def _init_logger(args, script_dir):
         msglogger.logdir, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
     return msglogger.logdir
+
 
 def _config_determinism(args):
     if args.evaluate:
@@ -323,6 +331,7 @@ def _config_determinism(args):
         # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
         cudnn.benchmark = True
     msglogger.info("Random seed: %d", args.seed)
+
 
 def _config_compute_device(args):
     if args.cpu or not torch.cuda.is_available():
@@ -619,7 +628,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
         activations_collectors = create_activation_stats_collectors(model, None)
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
-        distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
+        distiller.log_activation_statistics(-1, "test", loggers, collector=collectors['sparsity'])
         save_collectors_data(collectors, msglogger.logdir)
     return top1, top5, lossses
 
@@ -727,7 +736,7 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
     perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'), reverse=True)
     for score in perf_scores_history[:num_best_scores]:
         msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d on epoch: %d]',
-                       score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
+                       score.top1, score.top5, score.sparsity, score.params_nnz_cnt, score.epoch)
 
 
 def earlyexit_loss(output, target, criterion, args):
