@@ -103,9 +103,9 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = _create_mnist_model(arch, pretrained)
     except ValueError:
         if _is_registered_extension(arch, dataset, pretrained):
-            model = _get_extension_model(arch, dataset)
+            model = _create_extension_model(arch, dataset)
         else:
-            raise ValueError('Could not recognize dataset {} and model {} pair'.format(dataset, arch))
+            raise ValueError('Could not recognize dataset {} and arch {} pair'.format(dataset, arch))
 
     msglogger.info("=> created a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '',
                                                                      arch, dataset))
@@ -200,10 +200,10 @@ def register_user_model(arch, dataset, model):
 
 def _is_registered_extension(arch, dataset, pretrained):
     try:
-        return _model_extensions[(arch, dataset)]
+        return _model_extensions[(arch, dataset)] is not None
     except KeyError:
         return None
 
 
-def _get_extension_model(arch, dataset):
-    return _model_extensions[(arch, dataset)]
+def _create_extension_model(arch, dataset):
+    return _model_extensions[(arch, dataset)]()

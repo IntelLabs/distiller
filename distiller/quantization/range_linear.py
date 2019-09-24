@@ -541,6 +541,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             output channel
         activation_stats (dict): See RangeLinearQuantWrapper
         clip_n_stds (float): See RangeLinearQuantWrapper
+        clip_half_range (bool) : See RangeLinearQuantWrapper
         scale_approx_mult_bits (int): See RangeLinearQuantWrapper
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
