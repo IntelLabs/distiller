@@ -293,10 +293,9 @@ def init_classifier_compression_arg_parser():
 
 def _init_logger(args, script_dir):
     global msglogger
-    if not script_dir or not hasattr(args, "output_dir") or not args.output_dir:
+    if script_dir is None or not hasattr(args, "output_dir") or args.output_dir is None:
         msglogger.logdir = None
         return None
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'),
@@ -306,7 +305,7 @@ def _init_logger(args, script_dir):
     # to refer to past experiment executions and this information may be useful.
     apputils.log_execution_env_state(
         filter(None, [args.compress, args.qe_stats_file]),  # remove both None and empty strings
-        msglogger.logdir, gitroot=module_path)
+        msglogger.logdir)
     msglogger.debug("Distiller: %s", distiller.__version__)
     return msglogger.logdir
 
