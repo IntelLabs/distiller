@@ -1410,7 +1410,7 @@ class PostTrainLinearQuantizer(Quantizer):
             # Add half range clipping to module overrides
             m_override = model_overrides.get(n, OrderedDict())
             model_overrides[n] = m_override
-            if successor.name in named_modules and isinstance(successor_module, (nn.ReLU, nn.ReLU)):
+            if successor.name in named_modules and isinstance(successor_module, (nn.ReLU, nn.ReLU6)):
                 m_override['clip_half_range'] = True
                 m_override = model_overrides.get(successor.name, OrderedDict())
                 m_override['make_identity'] = True

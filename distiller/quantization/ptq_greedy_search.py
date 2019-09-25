@@ -414,6 +414,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume-search-from', type=str, help='Search checkpoint file to resume.',
                         default=None)
     args = parser.parse_args()
+    args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
 
@@ -438,6 +439,8 @@ if __name__ == "__main__":
     model = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
     args.device = next(model.parameters()).device
+    if args.resumed_checkpoint_path:
+        args.load_model_path = args.resumed_checkpoint_path
     if args.load_model_path:
         msglogger.info("Loading checkpoint from %s" % args.load_model_path)
         model = apputils.load_lean_checkpoint(model, args.load_model_path,
