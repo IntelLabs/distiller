@@ -230,7 +230,8 @@ class AciqSymmetricClipper(AciqClipper):
             mean = torch.tensor(t['mean'])
         else:
             mean = t.mean()
-        return torch.abs(mean) + alpha
+        clip_val = torch.abs(mean) + alpha
+        return -clip_val, clip_val
 
 
 class AciqAsymmetricClipper(AciqClipper):

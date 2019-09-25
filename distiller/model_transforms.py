@@ -24,7 +24,7 @@ import logging
 msglogger = logging.getLogger()
 
 
-__all__ = ["fuse_modules", "fold_batch_norms_inference"]
+__all__ = ["fuse_modules", "fold_batch_norms"]
 
 
 def fuse_modules(model, types_sequence, fuse_fn, dummy_input=None, adjacency_map=None):

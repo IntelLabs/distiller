@@ -67,7 +67,8 @@ SKIP_MODULES = (
     nn.BatchNorm1d,
     nn.BatchNorm2d,
     nn.BatchNorm3d,
-    nn.ReLU
+    nn.ReLU,
+    nn.ReLU6
 )
 
 CLIP_MODES = ['NONE',

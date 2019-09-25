@@ -1391,7 +1391,6 @@ class PostTrainLinearQuantizer(Quantizer):
                 msglogger.debug('  Module {} followed by ReLU6, updating stats'.format(n))
                 self._clip_stats(m_stats['output'], 0., min(m_stats['output']['max'], 6))
 
-
     def _apply_fuse_relu(self):
         """Fuses ReLU layers to the linear layers before them."""
         model_overrides = self.module_overrides_map
@@ -1406,12 +1405,13 @@ class PostTrainLinearQuantizer(Quantizer):
                     or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
                 continue
             successor = self.adjacency_map[n].successors[0]
+            successor_module = named_modules.get(successor.name, None)
             n = distiller.normalize_module_name(n)
             # Add half range clipping to module overrides
             m_override = model_overrides.get(n, OrderedDict())
-            m_override['clip_half_range'] = True
             model_overrides[n] = m_override
-            if successor.name in named_modules:
+            if successor.name in named_modules and isinstance(successor_module, (nn.ReLU, nn.ReLU)):
+                m_override['clip_half_range'] = True
                 m_override = model_overrides.get(successor.name, OrderedDict())
                 m_override['make_identity'] = True
                 model_overrides[successor.name] = m_override
