@@ -17,7 +17,7 @@
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
 import copy
-
+from functools import partial
 import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
@@ -58,9 +58,9 @@ MNIST_MODEL_NAMES = sorted(name for name in mnist_models.__dict__
 ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
+
 # A temporary monkey-patch to get past this Torchvision bug:
 # https://github.com/pytorch/pytorch/issues/20516
-from functools import partial
 def patch_torchvision_mobilenet_v2_bug(model):
     def patched_forward(self, x):
         x = self.features(x)
@@ -202,7 +202,7 @@ def _is_registered_extension(arch, dataset, pretrained):
     try:
         return _model_extensions[(arch, dataset)] is not None
     except KeyError:
-        return None
+        return False
 
 
 def _create_extension_model(arch, dataset):
