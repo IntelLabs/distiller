@@ -1406,7 +1406,6 @@ class PostTrainLinearQuantizer(Quantizer):
                 continue
             successor = self.adjacency_map[n].successors[0]
             successor_module = named_modules.get(successor.name, None)
-            n = distiller.normalize_module_name(n)
             # Add half range clipping to module overrides
             m_override = model_overrides.get(n, OrderedDict())
             model_overrides[n] = m_override
