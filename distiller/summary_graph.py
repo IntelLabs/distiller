@@ -564,7 +564,7 @@ class SummaryGraph(object):
         if self._layers_topological_order:
             return self._layers_topological_order
         adj_map = self.adjacency_map()
-        ranked_ops = {k: _OpRank(v, 0) for k, v in adj_map.items()}
+        ranked_ops = OrderedDict([(k, _OpRank(v, 0)) for k, v in adj_map.items()])
 
         def _recurrent_ancestor(ranked_ops_dict, dest_op_name, src_op_name):
             def _is_descendant(parent_op_name, dest_op_name):
