@@ -32,6 +32,35 @@ AMC [1] trains a Deep Deterministic Policy Gradient (DDPG) RL agent to compress 
 
 We thank Prof. Song Han and his team for their [help](https://github.com/mit-han-lab/amc-compressed-models) with certain critical parts of this implementation.  However, all bugs in interpretation and/or implementation are ours ;-).
 
+## Installation
+Our AMC implementation is designed such that you can easily switch between RL libraries (i.e. different agent implementations). The `--amc-rllib` argument instructs us which library to use.
+For `--amc-rllib=coach` you need to install coach in your Python virtual-env. The "hanlab" library, `--amc-rllib=hanlab`, refers to HAN Lab's DDPG agent implementation.
+
+### Using Intel AI Lab's Coach
+Some of the features required for AMC are not yet in the official [Coach](https://github.com/NervanaSystems/coach) release, so you should use the `master` branch.
+Therefore, follow Coach's [installation instructions](https://github.com/NervanaSystems/coach#installation) for a development environment, and use the `master` branch.
+<br>
+Coach uses TensorFlow and Distiller uses PyTorch, and the two frameworks do not share GPUs well.  The easiest work-around for this is to execute Coach code (the RL agent) on the CPU and Distiller code on the GPU(s).
+<br>
+To do this, please uninstall TensorFlow:<br>
+`$ pip uninstall tensorflow tensorflow-gpu`
+<br>
+and then reinstall TensorFlow: <br>
+`$ pip install tensorflow ` 
+ 
+### Using MIT HAN Lab's DDPG agent
+We integrated MIT HAN's Lab's AMC DDPG agent directly into the code base, so there is no explicit effort required to use it.   
+
+## Notable algorithm details
+
+### Feature-map reconstruction
+
+### DDPG Agent
+- AMC uses truncated normal distribution for exploration policy
+- AMC uses reward shaping 
+
+## References
+
 [1] AMC: AutoML for Model Compression and Acceleration on Mobile Devices.<br>
      Yihui He, Ji Lin, Zhijian Liu, Hanrui Wang, Li-Jia Li, Song Han.<br>
      In Proceedings of the European Conference on Computer Vision (ECCV), 2018.<br>

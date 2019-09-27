@@ -17,7 +17,7 @@
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
 import copy
-
+from functools import partial
 import torch
 import torchvision.models as torch_models
 from . import cifar10 as cifar10_models
@@ -58,9 +58,9 @@ MNIST_MODEL_NAMES = sorted(name for name in mnist_models.__dict__
 ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
+
 # A temporary monkey-patch to get past this Torchvision bug:
 # https://github.com/pytorch/pytorch/issues/20516
-from functools import partial
 def patch_torchvision_mobilenet_v2_bug(model):
     def patched_forward(self, x):
         x = self.features(x)
@@ -103,9 +103,9 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
             model = _create_mnist_model(arch, pretrained)
     except ValueError:
         if _is_registered_extension(arch, dataset, pretrained):
-            model = _get_extension_model(arch, dataset)
+            model = _create_extension_model(arch, dataset)
         else:
-            raise ValueError('Could not recognize dataset {} and model {} pair'.format(dataset, arch))
+            raise ValueError('Could not recognize dataset {} and arch {} pair'.format(dataset, arch))
 
     msglogger.info("=> created a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '',
                                                                      arch, dataset))
@@ -200,10 +200,10 @@ def register_user_model(arch, dataset, model):
 
 def _is_registered_extension(arch, dataset, pretrained):
     try:
-        return _model_extensions[(arch, dataset)]
+        return _model_extensions[(arch, dataset)] is not None
     except KeyError:
-        return None
+        return False
 
 
-def _get_extension_model(arch, dataset):
-    return _model_extensions[(arch, dataset)]
+def _create_extension_model(arch, dataset):
+    return _model_extensions[(arch, dataset)]()

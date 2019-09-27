@@ -188,7 +188,6 @@ def main():
     global msglogger
 
     script_dir = os.path.dirname(__file__)
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
 
     args = parse_args()
 
@@ -206,7 +205,7 @@ def main():
     args.qe_mode = str(args.qe_mode).split('.')[1]
     args.qe_clip_acts = str(args.qe_clip_acts).split('.')[1]
 
-    apputils.log_execution_env_state(sys.argv, gitroot=module_path)
+    apputils.log_execution_env_state(sys.argv)
 
     if args.gpus is not None:
         try:
