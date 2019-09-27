@@ -1,7 +1,9 @@
 # Training baseline networks
 
-The term baseline networks refers to the trained FP32 networks (models) that we use in compression.
+The term *baseline-networks* refers to the trained FP32 networks (models) that we use in compression.  We use the performance of these networks as the baseline results to which we compare the performance of our compression algorithms.
 
-Besides their use in some algorithms, we also use the performance of these networks as the baseline results to which we compare the results of our compression algorithms.
+This directory contains YAML schedule files that explain:
+1. How we trained our baseline-networks (we provide the command-line we used); and
+2. Contain the performance results of these networks.  
 
-This directory contains YAML schedule files, which contain the command-line and the performance results.  You can use these files to train your own baseline networks.
+We provide these files for the purpose of reproducibility and documentation.
