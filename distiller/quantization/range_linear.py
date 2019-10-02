@@ -1321,21 +1321,20 @@ class PostTrainLinearQuantizer(Quantizer):
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
         for n, m in named_modules.items():
-            try:
-                # Look for the mark left by distiller.model_transforms.fold_batch_norms
-                folded_bn_module = distiller.normalize_module_name(m.fused_sequence[0])
-
-                # Propagate the output stats of the folded BN module to this module
-                # If stats were collected after folding was applied, then stats for the BN module won't exist,
-                # in which case we just move on
-                model_stats[m.fused_module_name]['output'] = model_stats.pop(folded_bn_module)['output']
-                # Here we indicate that the fused batch-norms don't need to be processed again
-                # in self._pre_process_container
-                fused_module = named_modules[m.fused_module_name]
-                self.modules_processed[fused_module] = m.fused_module_name, None
-                msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
-            except (AttributeError, KeyError):
+            # Look for the mark left by distiller.model_transforms.fold_batch_norms
+            fused_modules = getattr(m, 'fused_modules', None)
+            if fused_modules is None:
                 continue
+            folded_bn_module = distiller.normalize_module_name(fused_modules[0])
+
+            # Propagate the output stats of the folded BN module to this module
+            # If stats were collected after folding was applied, then stats for the BN module won't exist,
+            # in which case we just move on
+            folded_bn_stats = model_stats.pop(folded_bn_module, None)
+            if folded_bn_stats is None:
+                continue
+            model_stats[distiller.normalize_module_name(n)]['output'] = folded_bn_stats['output']
+            msglogger.debug('  {} --> {}'.format(folded_bn_module, n))
 
     def _apply_activation_stats_fusions(self):
         # Now we look for certain "fusions" of layers and activations
