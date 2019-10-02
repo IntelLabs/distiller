@@ -31,6 +31,7 @@ import distiller.apputils.image_classifier as classifier
 import os
 import distiller.apputils as apputils
 import re
+import argparse
 
 __all__ = ['ptq_greedy_search']
 
@@ -78,6 +79,23 @@ CLIP_MODES = ['NONE',
               ]
 
 
+def get_default_args():
+    parser = classifier.init_classifier_compression_arg_parser()
+    parser.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
+                       help='List of layer names for which to skip quantization.')
+    parser.add_argument('--qe-calib-portion', type=float, default=1.0,
+                        help='The portion of the dataset to use for calibration stats collection.')
+    parser.add_argument('--qe-calib-batchsize', type=int, default=256,
+                        help='The portion of the dataset to use for calibration stats collection.')
+    parser.add_argument('--base-score', type=float, default=None)
+    parser.add_argument('--quantize-inputs', type=str, nargs='+', metavar='LAYER_NAME#INPUT_IDX', default=[],
+                        help='The inputs of layers to quantize')
+    parser.add_argument('--resume-search-from', type=str, help='Search checkpoint file to resume.',
+                        default=None)
+    args = parser.parse_args()
+    return args
+
+
 def override_odict(**kwargs):
     return OrderedDict(kwargs)
 
@@ -113,18 +131,20 @@ def input_override_generator(module, module_name, sg, overrides_dict, **kwargs):
         overrides_dict (OrderedDict): the fixed overrides already applied
         kwargs: additional arguments, if needed
     """
+    bits_acts = kwargs.get('bits_activations', 8)
+    bits_wts = kwargs.get('bits_weights', 8)
     input_nodes = sg.predecessors(module_name, 1)
     input_idx = kwargs.get('input_idx', 0)
     assert input_idx < len(input_nodes)
     for clip_mode in CLIP_MODES:
-        input_idx_override = override_odict(bits_activations=4,
+        input_idx_override = override_odict(bits_activations=bits_acts,
                                             clip_acts=clip_mode)
         input_overrides = OrderedDict([(input_idx, input_idx_override)])
         current_module_override = override_odict(input_overrides=input_overrides)
         # add basic quantization so the quantizer doesn't reject this override
-        current_module_override['bits_activations'] = 4
+        current_module_override['bits_activations'] = bits_acts
         if isinstance(module, PARAM_MODULES):
-            current_module_override['bits_weights'] = 4
+            current_module_override['bits_weights'] = bits_wts
         yield current_module_override
 
 
@@ -138,10 +158,12 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
         overrides_dict (OrderedDict): the fixed overrides already applied
         kwargs: additional arguments, if needed
     """
+    bits_acts = kwargs.get('bits_activations', 8)
+    bits_wts = kwargs.get('bits_weights', 8)
     if isinstance(module, nn.ReLU):
         yield override_odict(make_identity=True,
-                             bits_weights=4,
-                             bits_activations=4)
+                             bits_weights=bits_wts,
+                             bits_activations=bits_acts)
         return
     adj_map = sg.adjacency_map()
     modules_dict = dict(sg._src_model.named_modules())
@@ -158,15 +180,15 @@ def module_override_generator(module, module_name, sg, overrides_dict, **kwargs)
     for clip_mode in CLIP_MODES:
         if isinstance(module, PARAM_MODULES):
             current_module_override = override_odict(clip_acts=clip_mode,
-                                                     bits_weights=4,
-                                                     bits_activations=4,
+                                                     bits_weights=bits_wts,
+                                                     bits_activations=bits_acts,
                                                      bits_bias=32)
         else:
             current_module_override = override_odict(clip_acts=clip_mode,
                                                      fpq_module=fpq_module,
                                                      fake=use_fake,
-                                                     bits_weights=4,
-                                                     bits_activations=4)
+                                                     bits_weights=bits_wts,
+                                                     bits_activations=bits_acts)
         current_module_override['clip_half_range'] = use_half_range and clip_mode in ['GAUSS', 'LAPLACE']
 
         yield current_module_override
@@ -193,7 +215,8 @@ def search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best
                                              clip_acts=ClipMode.NONE,
                                              overrides=deepcopy(overrides_dict),
                                              model_activation_stats=deepcopy(temp_act_stats),
-                                             inputs_quant_auto_fallback=False)
+                                             inputs_quant_auto_fallback=False,
+                                             per_channel_wts=kwargs.get('per_channel', False))
         quantizer.prepare_model(dummy_input)
 
         current_performance = eval_fn(quantizer.model)
@@ -232,7 +255,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         recurrent (bool): a flag to indicate whether the model has recurrent connections.
         act_stats (OrderedDict): quant calibration activation stats.
           if None provided - will be calculated on runtime.
-        args: command line arguments
+        args (dict or argparse.Namespace): command line arguments. alternatively - a dict.
         module_override_gen_fn: A function to generate module overrides.
           assumes signature
           `def module_override_gen_fn(module: nn.Module,
@@ -248,6 +271,13 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         It is assumed that `eval_fn` returns a satisfying metric of performance (e.g. accuracy)
         and the greedy search aims to maximize this metric.
     """
+    if args is None:
+        args = get_default_args()
+    elif isinstance(args, dict):
+        updated_args = get_default_args()
+        updated_args.__dict__.update(args)
+        args = updated_args
+
     if fold_sequences:
         model = fold_batch_norms(model, dummy_input)
     best_overrides_dict = OrderedDict()
@@ -298,7 +328,8 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                      clip_acts=ClipMode.NONE,
                                      overrides=deepcopy(best_overrides_dict),
                                      model_activation_stats=deepcopy(act_stats),
-                                     inputs_quant_auto_fallback=False)
+                                     inputs_quant_auto_fallback=False,
+                                     per_channel_wts=args.qe_per_channel)
         q.prepare_model(dummy_input)
         # recalibrate on the current best quantized version of the model.
         recalib_act_stats = collect_quant_stats(q.model, calib_eval_fn, modules_to_collect=modules_to_recalibrate)
@@ -331,8 +362,12 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
         if not best_overrides_dict.get(normalized_module_name, None):
             best_overrides_dict[normalized_module_name] = OrderedDict()
         for input_idx in input_idxs:
-            best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best_overrides_dict,
-                                                              input_override_gen_fn, input_idx=input_idx)
+            best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn,
+                                                              best_overrides_dict,
+                                                              input_override_gen_fn, input_idx=input_idx,
+                                                              bits_activations=args.qe_bits_acts,
+                                                              bits_weights=args.qe_bits_wts,
+                                                              per_channel=args.qe_per_channel)
             best_overrides_dict[normalized_module_name].update(best_module_override)
         # Leave only the input_overrides settings:
         current_input_overrides = best_overrides_dict[normalized_module_name]['input_overrides']
@@ -361,15 +396,19 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
             best_overrides_dict[normalized_module_name] = OrderedDict()
         # Hard coded workaround for avgpool->reshape->fc
         if normalized_module_name == 'fc':
-            input_override = override_odict(bits_activations=4,
+            input_override = override_odict(bits_activations=8,
                                             clip_acts='NONE')
             best_overrides_dict['fc'].update(OrderedDict([
                 ('input_overrides', OrderedDict([
                     (0, input_override)
                 ]))
             ]))
-        best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best_overrides_dict,
-                                                          module_override_gen_fn)
+        best_module_override = search_best_local_settings(module, module_name, sg, act_stats, eval_fn,
+                                                          best_overrides_dict,
+                                                          module_override_gen_fn,
+                                                          bits_activations=args.qe_bits_acts,
+                                                          bits_weights=args.qe_bits_wts,
+                                                          per_channel=args.qe_per_channel)
         best_overrides_dict[normalized_module_name].update(best_module_override)
         distiller.yaml_ordered_save('%s.ptq_greedy_search.yaml' % args.arch, best_overrides_dict)
         # # end of search - we update the calibration of the next layers:
@@ -383,37 +422,16 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
                                          clip_acts=ClipMode.NONE,
                                          overrides=deepcopy(best_overrides_dict),
                                          model_activation_stats=act_stats,
-                                         inputs_quant_auto_fallback=False)
+                                         inputs_quant_auto_fallback=False,
+                                         per_channel_wts=args.qe_per_channel)
     quantizer.prepare_model(dummy_input)
     msglogger.info('best_overrides_dict: %s' % best_overrides_dict)
     msglogger.info('Best score: %f'% eval_fn(quantizer.model))
     return model, best_overrides_dict
 
 
-def config_verbose(verbose):
-    if verbose:
-        loglevel = logging.DEBUG
-    else:
-        loglevel = logging.INFO
-        logging.getLogger().setLevel(logging.WARNING)
-    for module in ["distiller.apputils.image_classifier", ]:
-        logging.getLogger(module).setLevel(loglevel)
-
-
 if __name__ == "__main__":
-    parser = classifier.init_classifier_compression_arg_parser()
-    parser.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                       help='List of layer names for which to skip quantization.')
-    parser.add_argument('--qe-calib-portion', type=float, default=1.0,
-                        help='The portion of the dataset to use for calibration stats collection.')
-    parser.add_argument('--qe-calib-batchsize', type=int, default=256,
-                        help='The portion of the dataset to use for calibration stats collection.')
-    parser.add_argument('--base-score', type=float, default=None)
-    parser.add_argument('--quantize-inputs', type=str, nargs='+', metavar='LAYER_NAME#INPUT_IDX', default=[],
-                        help='The inputs of layers to quantize')
-    parser.add_argument('--resume-search-from', type=str, help='Search checkpoint file to resume.',
-                        default=None)
-    args = parser.parse_args()
+    args = get_default_args()
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)

@@ -189,7 +189,7 @@ class SummaryGraph(object):
                 # so we "unroll" them.
                 same_module_cnt = len(self.module_ops_map[module_name])
                 if same_module_cnt:
-                    new_op['name'] += "__" + str(same_module_cnt)
+                    new_op['name'] += "_%s_%d" % (new_op['type'], same_module_cnt)
                 self.module_ops_map[module_name].append(new_op['name'])
 
                 # Finally we register the new op in the ops collection
@@ -510,6 +510,14 @@ class SummaryGraph(object):
                 self._src_model, normalized_layer_name)
             yield sgraph_layer_name, param_name, param
 
+    def _dedicated_module_check(self, n, dedicated_modules_only=False):
+        if not dedicated_modules_only:
+            return True
+        module_name = self.ops[n]['module-name']
+        named_modules = OrderedDict(self._src_model.named_modules())
+        module = named_modules[module_name]
+        return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
+
     def adjacency_map(self, dedicated_modules_only=False):
         """Returns a mapping from each op in the graph to its immediate predecessors and successors.
 
@@ -526,29 +534,22 @@ class SummaryGraph(object):
         if self._adj_map and not dedicated_modules_only:
             return self._adj_map
         adj_map = OrderedDict()
-        named_modules = OrderedDict(self._src_model.named_modules())
 
         for op_name, op in self.ops.items():
-            def dedicated_module_check(n):
-                if not dedicated_modules_only:
-                    return True
-                module_name = self.ops[n]['module-name']
-                module = named_modules[module_name]
-                return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
 
             def op_meta(n):
                 return OpSimpleMetadata(distiller.denormalize_module_name(self._src_model, n), self.ops[n]['type'])
 
-            if not dedicated_module_check(op_name):
+            if not self._dedicated_module_check(op_name, dedicated_modules_only):
                 continue
 
             entry = AdjacentsEntry(op_meta(op_name))
             # Find the immediate preceding and succeeding modules. Depth of 1 gets us the
             # input and output tensors, depth of 2 gets the actual modules
             entry.predecessors = [op_meta(n) for n in self.predecessors(op, 2, denorm_names=False)
-                                  if dedicated_module_check(n)]
+                                  if self._dedicated_module_check(n, dedicated_modules_only)]
             entry.successors = [op_meta(n) for n in self.successors(op, 2, denorm_names=False)
-                                if dedicated_module_check(n)]
+                                if self._dedicated_module_check(n, dedicated_modules_only)]
 
             adj_map[entry.op_meta.name] = entry
         self._adj_map = adj_map
@@ -606,6 +607,13 @@ class SummaryGraph(object):
             if not self.predecessors(op_name, 1):
                 self._top_level_ops.add(op_name)
         return self._top_level_ops
+
+    def missing_modules(self):
+        """
+        Returns a list of ops that aren't registered as modules.
+        """
+        return [op_name for op_name in self.adjacency_map()
+                if not self._dedicated_module_check(op_name, True)]
 
 
 class _OpRank:

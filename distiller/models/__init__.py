@@ -60,16 +60,18 @@ MNIST_MODEL_NAMES = sorted(name for name in mnist_models.__dict__
 ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
-# A temporary monkey-patch to get past this Torchvision bug:
-# https://github.com/pytorch/pytorch/issues/20516
-from functools import partial
-def patch_torchvision_mobilenet_v2_bug(model):
+
+def patch_torchvision_mobilenet_v2_for_quantization(model):
+    """
+    Modifies TorchVision's MobileNetV2 to allow quantization.
+    This inserts
+    """
     if not isinstance(model, torch_models.MobileNetV2):
         raise TypeError("Only MobileNetV2 is acceptable.")
 
     def patched_forward_mobilenet_v2(self, x):
         x = self.features(x)
-        #x = x.mean([2, 3])
+        # x = x.mean([2, 3]) # this was a bug: https://github.com/pytorch/pytorch/issues/20516
         x = self.mean32(x)
         x = self.classifier(x)
         return x
@@ -159,7 +161,7 @@ def _create_imagenet_model(arch, pretrained):
         try:
             model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
-                patch_torchvision_mobilenet_v2_bug(model)
+                patch_torchvision_mobilenet_v2_for_quantization(model)
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError
