@@ -193,14 +193,17 @@ class TensorQuantMetadata(namedtuple('TensorQuantMetadata', ['scale', 'zero_poin
 
     def __str__(self):
         return '(scale={} ; zero_point={})'.format(_quant_param_to_str(self.scale),
-                                                  _quant_param_to_str(self.zero_point))
+                                                   _quant_param_to_str(self.zero_point))
 
 
-class QuantSettings(namedtuple('QuantSettings',
-                               ['num_bits', 'quant_mode',
-                                'clip_mode', 'clip_n_stds', 'clip_half_range',
-                                'per_channel'])):
-    __slots__ = ()
+class QuantSettings(object):
+    def __init__(self, num_bits, quant_mode, clip_mode, clip_n_stds, clip_half_range, per_channel):
+        self.num_bits = num_bits
+        self.quant_mode = quant_mode
+        self.clip_mode = clip_mode
+        self.clip_n_stds = clip_n_stds
+        self.clip_half_range = clip_half_range
+        self.per_channel = per_channel
 
     def __str__(self):
         return '(num_bits={} ; quant_mode={} ; clip_mode={} ; clip_n_stds={} ; clip_half_range={}' \
@@ -318,7 +321,8 @@ class RangeLinearQuantWrapper(nn.Module):
             for k, v in input_overrides.items():
                 idx = int(k)
                 if v.pop('from_output', None):
-                    quant_settings = self.output_quant_settings
+                    quant_settings = deepcopy(self.output_quant_settings)
+                    quant_settings.clip_half_range = False
                 else:
                     quant_settings = QuantSettings(v.pop('bits_activations', self.output_quant_settings.num_bits),
                                                    verify_quant_mode(
@@ -326,8 +330,7 @@ class RangeLinearQuantWrapper(nn.Module):
                                                    verify_clip_mode(
                                                        v.pop('clip_acts', self.output_quant_settings.clip_mode)),
                                                    v.pop('clip_n_stds', self.output_quant_settings.clip_n_stds),
-                                                   v.pop('clip_half_range', self.output_quant_settings.clip_half_range),
-                                                   False)
+                                                   False, False)
                     if v:
                         # Poor man's input checking on input overrides dict
                         raise ValueError('Input overrides dict contains unsupported keys:', list(v.keys()))
@@ -445,7 +448,8 @@ class RangeLinearQuantWrapper(nn.Module):
                         # if self.num_forwards == 0:
                         #     msglogger.info('<{}> Input {}: No embedded quantization metadata, '
                         #                    'falling back to output settings'.format(self.distiller_name, idx))
-                        q_settings = self.output_quant_settings
+                        q_settings = deepcopy(self.output_quant_settings)
+                        q_settings.clip_half_range = False
                     scale, zp = _get_quant_params_from_tensor(input, q_settings.num_bits, q_settings.quant_mode,
                                                               q_settings.clip_mode, q_settings.per_channel,
                                                               q_settings.clip_n_stds, q_settings.clip_half_range,
