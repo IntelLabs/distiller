@@ -17,7 +17,7 @@
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
 import copy
-
+from functools import partial
 import torch
 import torchvision.models as torch_models
 import torch.nn as nn
@@ -228,7 +228,7 @@ def _is_registered_extension(arch, dataset, pretrained):
     try:
         return _model_extensions[(arch, dataset)] is not None
     except KeyError:
-        return None
+        return False
 
 
 def _create_extension_model(arch, dataset):

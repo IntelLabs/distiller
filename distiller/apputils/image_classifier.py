@@ -156,6 +156,12 @@ class ClassifierCompressor(object):
             validate_one_epoch
             finalize_epoch
         """
+        if self.start_epoch >= self.ending_epoch:
+            msglogger.error(
+                'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
+                self.start_epoch, self.ending_epoch))
+            raise ValueError('Epochs parameter is too low. Nothing to do.')
+
         # Load the datasets lazily
         self.load_datasets()
 
@@ -230,7 +236,7 @@ def init_classifier_compression_arg_parser():
                         help='collect activation statistics on phases: train, valid, and/or test'
                         ' (WARNING: this slows down training)')
     parser.add_argument('--activation-histograms', '--act-hist',
-                        type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                        type=float_range(exc_min=True),
                         metavar='PORTION_OF_TEST_SET',
                         help='Run the model in evaluation mode on the specified portion of the test dataset and '
                              'generate activation histograms. NOTE: This slows down evaluation significantly')
@@ -251,8 +257,6 @@ def init_classifier_compression_arg_parser():
                         help='an optional parameter for sensitivity testing '
                              'providing the range of sparsities to test.\n'
                              'This is equivalent to creating sensitivities = np.arange(start, stop, step)')
-    parser.add_argument('--extras', default=None, type=str,
-                        help='file with extra configuration information')
     parser.add_argument('--deterministic', '--det', action='store_true',
                         help='Ensure deterministic execution for re-producible results.')
     parser.add_argument('--seed', type=int, default=None,
@@ -404,13 +408,7 @@ def _init_learner(args):
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
 
-    ending_epoch = args.epochs
-    if start_epoch >= ending_epoch:
-        msglogger.error(
-            'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
-            start_epoch, ending_epoch))
-        raise ValueError('Epochs parameter is too low. Nothing to do.')
-    return model, compression_scheduler, optimizer, start_epoch, ending_epoch
+    return model, compression_scheduler, optimizer, start_epoch, args.epochs
 
 
 def create_activation_stats_collectors(model, *phases):
