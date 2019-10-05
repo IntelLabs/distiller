@@ -61,10 +61,12 @@ ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
 
-def patch_torchvision_mobilenet_v2_for_quantization(model):
+def patch_torchvision_mobilenet_v2(model):
     """
-    Modifies TorchVision's MobileNetV2 to allow quantization.
-    This inserts
+    Patches TorchVision's MobileNetV2:
+    * To allow quantization, this adds modules for tensor operations (mean, element-wise addition) to the
+      model instance and patches the forward functions accordingly
+    * Fixes a bug in the torchvision implementation that prevents export to ONNX (and creation of SummaryGraph)
     """
     if not isinstance(model, torch_models.MobileNetV2):
         raise TypeError("Only MobileNetV2 is acceptable.")
@@ -161,7 +163,7 @@ def _create_imagenet_model(arch, pretrained):
         try:
             model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
-                patch_torchvision_mobilenet_v2_for_quantization(model)
+                patch_torchvision_mobilenet_v2(model)
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError
