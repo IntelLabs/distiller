@@ -78,11 +78,20 @@ max_norm = NamedFunction(_max_norm, "Max")
 
 
 def kernels_lp_norm(param, p=1, group_len=1, length_normalized=False):
-    """L1/L2 norm of kernel sub-tensors in a 4D tensor
+    """L1/L2 norm of kernel sub-tensors in a 4D tensor.
+
+    A kernel is an m x n matrix used for convolving a feature-map to extract features.
 
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         p: the exponent value in the norm formulation
+        group_len: the numbers of (adjacent) kernels in each group.  Norms are calculated
+           on the entire group.
+        length_normalized: if True then normalize the norm.  I.e.
+           norm = group_norm / num_elements_in_group
+
+    Returns:
+        1D tensor with norms of the groups
     """
     assert p in (1, 2)
     norm_fn = l1_norm if p == 1 else l2_norm
@@ -96,9 +105,10 @@ def kernels_norm(param, norm_fn, group_len=1, length_normalized=False):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         norm_fn: a callable that computes a normal
+        group_len: the numbers of (adjacent) kernels in each group.  Norms are calculated
+           on the entire group.
         length_normalized: if True then normalize the norm.  I.e.
-           norm = channel_norm / num_elements_in_channel
-        group_len: the number of kernels in each group
+           norm = group_norm / num_elements_in_group
 
     Returns:
         1D tensor with lp-norms of the groups
@@ -114,6 +124,13 @@ def channels_lp_norm(param, p=1, group_len=1, length_normalized=False):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         p: the exponent value in the norm formulation
+        group_len: the numbers of (adjacent) channels in each group.  Norms are calculated
+           on the entire group.
+        length_normalized: if True then normalize the norm.  I.e.
+           norm = group_norm / num_elements_in_group
+
+    Returns:
+        1D tensor with norms of the groups
     """
     assert p in (1, 2)
     norm_fn = l1_norm if p == 1 else l2_norm
@@ -127,9 +144,10 @@ def channels_norm(param, norm_fn, group_len=1, length_normalized=False):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         norm_fn: a callable that computes a normal
+        group_len: the numbers of (adjacent) channels in each group.  Norms are calculated
+           on the entire group.
         length_normalized: if True then normalize the norm.  I.e.
-           norm = channel_norm / num_elements_in_channel
-        group_len: the number of kernels in each group
+           norm = group_norm / num_elements_in_group
 
     Returns:
         1D tensor with lp-norms of the groups
@@ -146,6 +164,13 @@ def filters_lp_norm(param, p=1, group_len=1, length_normalized=False):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         p: the exponent value in the norm formulation
+        group_len: the numbers of (adjacent) filters in each group.  Norms are calculated
+           on the entire group.
+        length_normalized: if True then normalize the norm.  I.e.
+           norm = group_norm / num_elements_in_group
+
+    Returns:
+        1D tensor with norms of the groups
     """
     assert p in (1, 2)
     norm_fn = l1_norm if p == 1 else l2_norm
@@ -159,9 +184,10 @@ def filters_norm(param, norm_fn, group_len=1, length_normalized=False):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         norm_fn: a callable that computes a normal
+        group_len: the numbers of (adjacent) filters in each group.  Norms are calculated
+           on the entire group.
         length_normalized: if True then normalize the norm.  I.e.
-           norm = channel_norm / num_elements_in_channel
-        group_len: the number of kernels in each group
+           norm = group_norm / num_elements_in_group
 
     Returns:
         1D tensor with lp-norms of the groups
@@ -178,9 +204,10 @@ def sub_matrix_norm(param, norm_fn, group_len, length_normalized, dim):
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         norm_fn: a callable that computes a normal
+        group_len: the numbers of (adjacent) filters in each group.  Norms are calculated
+           on the entire group.
         length_normalized: if True then normalize the norm.  I.e.
-           norm = channel_norm / num_elements_in_channel
-        group_len: the number of kernels in each group
+           norm = group_norm / num_elements_in_group
 
     Returns:
         1D tensor with lp-norms of the groups
