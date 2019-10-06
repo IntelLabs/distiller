@@ -46,6 +46,7 @@ def _quant_param_to_str(val):
 
 
 def _enum_to_str(enum_val):
+    TODO: This can probably be removed
     if isinstance(enum_val, str): # temporary fix
         return enum_val
     return str(enum_val).split('.')[1]
@@ -1006,10 +1007,8 @@ class PostTrainLinearQuantizer(Quantizer):
     be done BEFORE creating the quantizer. See the docs for more details:
     https://nervanasystems.github.io/distiller/prepare_model_quant.html
 
-    Any leaf module not in the list above will be "fake-quantized". That is - the original FP32 module will be
-    executed, and its output will be quantized.
-
-    TODO: Add details on propagation of activations quantization settings + input overrides
+    Any leaf module not in the list above will be "fake-quantized". That is - the floating-point module will be
+    executed (FP64/32/16 can be specified with the fpq_module argument), and its output will be quantized.
 
     Args:
         model (torch.nn.Module): Model to be quantized
@@ -1031,7 +1030,9 @@ class PostTrainLinearQuantizer(Quantizer):
             followed by a bit-wise shift. This eliminates floating-point scale factors, replacing them with integer
             calculations.
             If None, scale factors will be kept in their original FP32 values.
-        inputs_quant_auto_fallback (bool): TODO
+        inputs_quant_auto_fallback (bool): Enabled by default.
+            See <distiller_root>/examples/post_train_quant/resnet18_imagenet_post_train_input_overrides.yaml
+            For details what this does and how to override it.
         fpq_module (Union[int, str]): use the modules in floating point mode and only quantize their outputs.
             takes the values (16, 32, 64) only, this will use RangeLinearFakeQuantWrapper.
     Note:
@@ -1042,8 +1043,9 @@ class PostTrainLinearQuantizer(Quantizer):
                  overrides=None, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  per_channel_wts=False, model_activation_stats=None, fp16=False,
                  clip_n_stds=None, clip_half_range=False,
-                 scale_approx_mult_bits=None, inputs_quant_auto_fallback=False,
+                 scale_approx_mult_bits=None, inputs_quant_auto_fallback=True,
                  fpq_module=None):
+        overrides_bkp = deepcopy(overrides)
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
                                                        overrides=overrides, train_with_fp_copy=False)
@@ -1082,9 +1084,11 @@ class PostTrainLinearQuantizer(Quantizer):
                                                     'clip_n_stds': clip_n_stds,
                                                     'clip_half_range': clip_half_range,
                                                     'per_channel_wts': per_channel_wts,
-                                                    'fp16': fp16,
                                                     'scale_approx_mult_bits': scale_approx_mult_bits,
-                                                    'inputs_quant_auto_fallback': inputs_quant_auto_fallback}}
+                                                    'inputs_quant_auto_fallback': inputs_quant_auto_fallback,
+                                                    'fpq_module': fpq_module,
+                                                    'model_activation_stats': model_activation_stats,
+                                                    'overrides': overrides_bkp}}
 
         def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
