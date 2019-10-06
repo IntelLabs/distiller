@@ -37,12 +37,14 @@ def has_bias(module):
 
 def hack_float_backup_parameter(module, name, num_bits):
     try:
-        data = dict(module.named_parameters())[name].data
+        param = dict(module.named_parameters())[name]
+        param_id = id(param)
     except KeyError:
         raise ValueError('Module has no Parameter named ' + name)
-    module.register_parameter(FP_BKP_PREFIX + name, nn.Parameter(data))
+    module.register_parameter(FP_BKP_PREFIX + name, param)
+    assert id(getattr(module, FP_BKP_PREFIX + name)) == param_id
     delattr(module, name)
-    module.register_buffer(name, torch.zeros_like(data))
+    module.register_buffer(name, torch.zeros_like(param))
 
     first = False
     if not hasattr(module, 'repr_mod'):
@@ -218,6 +220,8 @@ class Quantizer(object):
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
 
+        model_device = distiller.model_device(self.model)
+
         self._pre_prepare_model(dummy_input)
 
         self._pre_process_container(self.model)
@@ -240,11 +244,13 @@ class Quantizer(object):
 
         # If an optimizer was passed, assume we need to update it
         if self.optimizer:
-            optimizer_type = type(self.optimizer)
-            new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
-            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+            for pg in self._get_new_optimizer_params_groups():
+                self.optimizer.add_param_group(pg)
 
         self._post_prepare_model()
+
+        # Re-transfer model to the device it was on, in case the quantizer created new parameters/buffers
+        self.model.to(model_device)
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
@@ -308,19 +314,18 @@ class Quantizer(object):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
 
-    def _get_updated_optimizer_params_groups(self):
+    def _get_new_optimizer_params_groups(self):
         """
-        Returns a list of model parameter groups and optimizer hyper-parameter overrides,
-        as expected by the __init__ function of torch.optim.Optimizer.
-        This is called after all model changes were made in prepare_model, in case an Optimizer instance was
-        passed to __init__.
+        If the quantizer adds new trainable parameters to the model, this function should return a list of one
+        or more parameter groups pertaining. Each parameter group is expected to be a dict in the format
+        expected by torch.optim.Optimizer.
+        For details, See https://pytorch.org/docs/stable/optim.html#per-parameter-options
 
         Subclasses which add parameters to the model should override as needed.
 
         :return: List of parameter groups
         """
-        # Default implementation - just return all model parameters as one group
-        return [{'params': self.model.parameters()}]
+        return list()
 
     def _post_prepare_model(self):
         pass
