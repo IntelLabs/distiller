@@ -46,7 +46,7 @@ def _quant_param_to_str(val):
 
 
 def _enum_to_str(enum_val):
-    TODO: This can probably be removed
+    # TODO: This can probably be removed
     if isinstance(enum_val, str): # temporary fix
         return enum_val
     return str(enum_val).split('.')[1]
