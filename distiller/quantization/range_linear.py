@@ -1407,6 +1407,10 @@ class NCFQuantAwareTrainQuantizer(QuantAwareTrainRangeLinearQuantizer):
                                                           per_channel_wts=per_channel_wts,
                                                           quantize_inputs=False)
 
+        # Remove 'quantize_inputs' from the metadata dict since this quantizer hard-codes it and doesn't
+        # actually take it as an argument
+        self.model.quantizer_metadata['params'].pop('quantize_inputs')
+
         self.replacement_factory[distiller.modules.EltwiseMult] = self.activation_replace_fn
         self.replacement_factory[distiller.modules.Concat] = self.activation_replace_fn
         self.replacement_factory[nn.Linear] = self.activation_replace_fn
