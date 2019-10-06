@@ -220,6 +220,8 @@ class Quantizer(object):
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
 
+        model_device = distiller.model_device(self.model)
+
         self._pre_prepare_model(dummy_input)
 
         self._pre_process_container(self.model)
@@ -246,6 +248,9 @@ class Quantizer(object):
                 self.optimizer.add_param_group(pg)
 
         self._post_prepare_model()
+
+        # Re-transfer model to the device it was on, in case the quantizer created new parameters/buffers
+        self.model.to(model_device)
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
