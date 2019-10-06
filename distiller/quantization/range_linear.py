@@ -119,9 +119,6 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
             raise ValueError('N_STD clipping not supported with per-channel quantization')
         if num_stds is None:
             raise ValueError('Clip mode set top N_STD but \'num_stds\' parameter not provided')
-    if half_range and clip not in [ClipMode.GAUSS, ClipMode.LAPLACE]:
-        warnings.warn("Using clip_half_range without ACIQ clip modes (GAUSS or LAPACE) will have no"
-                      " effect.")
 
     dim = 0 if clip == ClipMode.AVG or per_channel else None
     sat_fn = _get_saturation_fn(mode, clip, num_stds, num_bits)
@@ -154,9 +151,6 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
             raise ValueError('Clip mode set to N_STD but \'num_stds\' parameter not provided')
         if num_stds <= 0:
             raise ValueError('n_stds must be > 0, got {}'.format(num_stds))
-    if half_range and clip not in [ClipMode.GAUSS, ClipMode.LAPLACE]:
-        warnings.warn("Using clip_half_range without ACIQ clip modes (GAUSS or LAPACE) will have no"
-                      " effect.")
 
     prefix = 'avg_' if clip == ClipMode.AVG else ''
     sat_min = torch.tensor(float(stats[prefix + 'min']))
