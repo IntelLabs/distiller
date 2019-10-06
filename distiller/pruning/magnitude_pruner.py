@@ -59,7 +59,5 @@ class MagnitudeParameterPruner(_ParameterPruner):
             mask = distiller.threshold_mask(param.data, threshold)
             return mask
 
-    # @staticmethod
-    # def apply_mask(param, mask):
 
 
