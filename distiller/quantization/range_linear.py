@@ -1164,7 +1164,10 @@ class PostTrainLinearQuantizer(Quantizer):
                                scale_approx_mult_bits=scale_approx_mult_bits, fpq_module=fpq_module, fake=True,
                                make_identity=False):
             if isinstance(module, (nn.ReLU, nn.ReLU6)) and make_identity:
-                return nn.Identity()
+                named_modules = OrderedDict(self.model.named_modules())
+                pred = self.adjacency_map[name].predecessors[0].name
+                if isinstance(named_modules[pred], RangeLinearQuantWrapper):
+                    return nn.Identity()
             norm_name = distiller.utils.normalize_module_name(name)
             clip_acts = verify_clip_mode(clip_acts)
             if distiller.has_children(module):
