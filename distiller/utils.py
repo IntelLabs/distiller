@@ -756,6 +756,7 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
     return val
 
 
+# TODO: Is this needed?
 def model_setattr(model, attr_name, val, register=False):
     """
     Sets attribute of a model, through the entire hierarchy.

@@ -154,12 +154,9 @@ class Quantizer(object):
         self.module_qbits_map = {}  # type: OrderedDict[str, QBits]
         self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
-            name_to_match = module_full_name
-            if isinstance(model, nn.DataParallel):
-                # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
-                # module with a wrapper module called 'module' :)
-                # i.e. remove only `module.` prefix from everything
-                name_to_match = re.sub(r'module\.', '', name_to_match)
+            # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
+            # module with a wrapper module called 'module' :)
+            name_to_match = module_full_name.replace('module.', '', 1)
             qbits = self.default_qbits
             override_entry = self.overrides.get(name_to_match, OrderedDict())
             if regex_overrides:
@@ -232,9 +229,6 @@ class Quantizer(object):
 
         self._pre_process_container(self.model)
         for module_name, module in self.model.named_modules():
-            if getattr(module, 'is_fused', False):
-                # we quantize only the fuse wrapper
-                continue
             qbits = self.module_qbits_map[module_name]
             curr_parameters = dict(module.named_parameters())
             for param_name, param in curr_parameters.items():

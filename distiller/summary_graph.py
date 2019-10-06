@@ -72,6 +72,7 @@ class SummaryGraph(object):
 
     def __init__(self, model, dummy_input, apply_scope_name_workarounds=True):
         self._src_model = model
+        self._named_modules = OrderedDict(model.named_modules())
         self._adj_map = None
         self._layers_topological_order = None
         self._top_level_ops = set()
@@ -189,6 +190,8 @@ class SummaryGraph(object):
                 # so we "unroll" them.
                 same_module_cnt = len(self.module_ops_map[module_name])
                 if same_module_cnt:
+                    # TODO: Was this meant to be applied only to 'top_level_ops'? Also, it's not
+                    #       applied to the first module that had the same name
                     new_op['name'] += "_%s_%d" % (new_op['type'], same_module_cnt)
                 self.module_ops_map[module_name].append(new_op['name'])
 
@@ -514,8 +517,7 @@ class SummaryGraph(object):
         if not dedicated_modules_only:
             return True
         module_name = self.ops[n]['module-name']
-        named_modules = OrderedDict(self._src_model.named_modules())
-        module = named_modules[module_name]
+        module = self._named_modules[module_name]
         return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
 
     def adjacency_map(self, dedicated_modules_only=False):

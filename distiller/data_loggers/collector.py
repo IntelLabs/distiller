@@ -97,10 +97,6 @@ class ActivationStatsCollector(object):
         for module_name in modules_list:
             modules_dict[module_name].apply(self.start_module)
 
-    def _start_for_single_module(self, module_name):
-        module = dict(self.model.named_modules())[module_name]
-        module.apply(self.start_module)
-
     def start_module(self, module):
         """Iteratively register to the forward-pass callback of all eligible modules.
 

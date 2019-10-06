@@ -230,6 +230,7 @@ class AciqSymmetricClipper(AciqClipper):
             mean = torch.tensor(t['mean'])
         else:
             mean = t.mean()
+
         clip_val = torch.abs(mean) + alpha
         return -clip_val, clip_val
 
@@ -251,7 +252,6 @@ class AciqAsymmetricClipper(AciqClipper):
             alpha = AciqClipper.get_alpha_gauss(t, across_dim, self.num_bits, half_range=half_range)
         min_val = torch.max(min_val, mean - alpha)
         delta = alpha if half_range else 2 * alpha
-
         return min_val, min_val + delta
 
 
