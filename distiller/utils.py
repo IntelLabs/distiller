@@ -58,7 +58,7 @@ def to_np(var):
 def size2str(torch_size):
     if isinstance(torch_size, torch.Size):
         return size_to_str(torch_size)
-    if isinstance(torch_size, torch.FloatTensor) or isinstance(torch_size, torch.cuda.FloatTensor):
+    if isinstance(torch_size, (torch.FloatTensor, torch.cuda.FloatTensor)):
         return size_to_str(torch_size.size())
     if isinstance(torch_size, torch.autograd.Variable):
         return size_to_str(torch_size.data.size())
@@ -198,10 +198,10 @@ def sparsity_3D(tensor):
     """Filter-wise sparsity for 4D tensors"""
     if tensor.dim() != 4:
         return 0
-    view_3d = tensor.view(-1, tensor.size(1) * tensor.size(2) * tensor.size(3))
-    num_filters = view_3d.size()[0]
-    nonzero_filters = len(torch.nonzero(view_3d.abs().sum(dim=1)))
-    return 1 - nonzero_filters/num_filters
+    l1_norms = distiller.norms.filters_lp_norm(tensor, p=1, length_normalized=False)
+    num_nonzero_filters = len(torch.nonzero(l1_norms))
+    num_filters = tensor.size(0)
+    return 1 - num_nonzero_filters / num_filters
 
 
 def density_3D(tensor):
@@ -255,16 +255,8 @@ def non_zero_channels(tensor):
     if tensor.dim() != 4:
         raise ValueError("Expecting a 4D tensor")
 
-    n_filters, n_channels, k_h, k_w = (tensor.size(i) for i in range(4))
-
-    # First, reshape the weights tensor such that each channel (kernel) in
-    # the original tensor, is now a row in a 2D tensor.
-    view_2d = tensor.view(-1, k_h * k_w)
-    # Next, compute the sums of each kernel
-    kernel_sums = view_2d.abs().sum(dim=1)
-    # Now group by channels
-    k_sums_mat = kernel_sums.view(n_filters, n_channels).t()
-    nonzero_channels = torch.nonzero(k_sums_mat.abs().sum(dim=1))
+    norms = distiller.norms.channels_lp_norm(tensor, p=1)
+    nonzero_channels = torch.nonzero(norms)
     return nonzero_channels
 
 
@@ -400,15 +392,7 @@ def model_params_stats(model, param_dims=[2, 4], param_types=['weight', 'bias'])
 
 
 def norm_filters(weights, p=1):
-    """Compute the p-norm of convolution filters.
-
-    Args:
-        weights - a 4D convolution weights tensor.
-                  Has shape = (#filters, #channels, k_w, k_h)
-        p - the exponent value in the norm formulation
-    """
-    assert weights.dim() == 4
-    return weights.view(weights.size(0), -1).norm(p=p, dim=1)
+    return distiller.norms.filters_lp_norm(weights, p)
 
 
 def model_numel(model, param_dims=[2, 4], param_types=['weight', 'bias']):

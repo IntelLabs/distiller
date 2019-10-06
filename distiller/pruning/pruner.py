@@ -17,6 +17,10 @@
 import torch
 import distiller
 
+
+__all__ = ["mask_tensor"]
+
+
 class _ParameterPruner(object):
     """Base class for all pruners.
 
@@ -29,12 +33,18 @@ class _ParameterPruner(object):
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         raise NotImplementedError
 
-def threshold_model(model, threshold):
-    """Threshold an entire model using the provided threshold
 
-    This function prunes weights only (biases are left untouched).
+def mask_tensor(tensor, mask):
+    """Mask the provided tensor
+
+    Args:
+        tensor - the torch-tensor to mask
+        mask - binary coefficient-masking tensor.  Has the same type and shape as `tensor`
+    Returns:
+        tensor = tensor * mask  ;where * is the element-wise multiplication operator
     """
-    for name, p in model.named_parameters():
-       if 'weight' in name:
-           mask = distiller.threshold_mask(p.data, threshold)
-           p.data = p.data.mul_(mask)
+    assert tensor.type() == mask.type()
+    assert tensor.shape == mask.shape
+    if mask:
+        tensor.data.mul_(mask)
+    return tensor
