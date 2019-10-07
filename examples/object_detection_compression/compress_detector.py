@@ -23,6 +23,8 @@ from distiller.data_loggers import *
 import distiller.apputils as apputils
 import distiller.pruning
 import distiller.quantization
+import distiller.models
+from distiller.model_transforms import fold_batch_norms
 
 from coco_utils import get_coco, get_coco_kp
 
@@ -112,6 +114,7 @@ def main(args):
     print("Creating model")
     model = torchvision.models.detection.__dict__[args.model](num_classes=num_classes,
                                                               pretrained=args.pretrained)
+    distiller.models.patch_fastrcnn(model)
     model.to(device)
 
     if args.summary and utils.is_main_process():

@@ -20,13 +20,15 @@ import copy
 from functools import partial
 import torch
 import torchvision.models as torch_models
+from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
+from torchvision.ops.misc import FrozenBatchNorm2d
 import torch.nn as nn
 from . import cifar10 as cifar10_models
 from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
 
-from distiller.utils import set_model_input_shape_attr
+from distiller.utils import set_model_input_shape_attr, model_setattr
 from distiller.modules import Mean, EltwiseAdd
 
 import logging
@@ -95,6 +97,29 @@ def patch_torchvision_mobilenet_v2(model):
         if is_inverted_residual(m):
             m.residual_eltwiseadd = EltwiseAdd()
             m.__class__.forward = patched_forward_invertedresidual
+
+
+def patch_fastrcnn(model):
+    """
+    Patches torchvision's FastRCNN models to allow quantization.
+    Args:
+        model (GeneralizedRCNN): the model to patch
+    """
+    assert isinstance(model, GeneralizedRCNN)
+
+    def replace_frozen_bn(frozen_bn: FrozenBatchNorm2d):
+        num_features = frozen_bn.weight.shape[0]
+        bn = nn.BatchNorm2d(num_features)
+        eps = bn.eps
+        bn.weight.data = frozen_bn.weight.data
+        bn.bias.data = frozen_bn.bias.data
+        bn.running_mean.data = frozen_bn.running_mean.data
+        bn.running_var.data = frozen_bn.running_var.data
+        return bn.eval()
+
+    for n, m in model.named_modules():
+        if isinstance(m, FrozenBatchNorm2d):
+            model_setattr(model, n, replace_frozen_bn(m))
 
 
 _model_extensions = {}

@@ -16,6 +16,7 @@
 
 import torch
 import torch.nn as nn
+from torchvision.ops.misc import FrozenBatchNorm2d
 from collections import OrderedDict
 import distiller
 import distiller.modules
@@ -129,7 +130,7 @@ def fold_batch_norms(model, dummy_input=None, adjacency_map=None, inference=True
         return folded_module
 
     foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
-    batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
+    batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, FrozenBatchNorm2d)
     return fuse_modules(model, (foldables, batchnorms), fold_bn, dummy_input, adjacency_map)
 
 
