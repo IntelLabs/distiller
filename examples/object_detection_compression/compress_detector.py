@@ -3,7 +3,7 @@ r"""PyTorch Detection Training.
 To run in a multi-gpu environment, use the distributed launcher::
 
     python -m torch.distributed.launch --nproc_per_node=$NGPU --use_env \
-        train.py ... --world-size $NGPU
+        compress_detector.py ... --world-size $NGPU
 
 """
 import datetime
@@ -74,7 +74,7 @@ def main(args):
         # to refer to past experiment executions and this information may be useful.
         apputils.log_execution_env_state(
             filter(None, [args.compress, args.qe_stats_file]),  # remove both None and empty strings
-            msglogger.logdir, gitroot=module_path)
+            msglogger.logdir)
         msglogger.debug("Distiller: %s", distiller.__version__)
     else:
         msglogger = logging.getLogger()
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--aspect-ratio-group-factor', default=0, type=int)
     parser.add_argument(
-        "--test-only",
+        "--evaluate",
         dest="test_only",
         help="Only test the model",
         action="store_true",
