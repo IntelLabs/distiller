@@ -186,10 +186,18 @@ def apply_default_logger_cfg(log_filename):
                 'formatter': 'simple',
             },
         },
-        'root': {
-            'level': 'DEBUG',
-            'handlers': ['console', 'file']
-        },
+        'loggers': {
+            '': {  # root logger
+                'level': 'DEBUG',
+                'handlers': ['console', 'file'],
+                'propagate': False
+            },
+            'app_cfg': {
+                'level': 'DEBUG',
+                'handlers': ['file'],
+                'propagate': False
+            },
+        }
     }
 
     logging.config.dictConfig(d)
