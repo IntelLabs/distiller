@@ -102,6 +102,10 @@ class Quantizer(object):
                 3.1 Gradients calculated with respect to q_weights
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
+        Note:
+            The `overrides` dictionary assumes the keys are *not* the module names in the
+            `nn.DataParallel` case - i.e. without the `module.` prefix. e.g.:
+            module.conv1 -> OrderedDict([('conv1', OrderedDict(...))])
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
@@ -147,7 +151,7 @@ class Quantizer(object):
             regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex_overrides = re.compile(regex_overrides_str)
 
-        self.module_qbits_map = {}
+        self.module_qbits_map = {}  # type: OrderedDict[str, QBits]
         self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
             # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
@@ -171,7 +175,8 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         # Unspecified layer types return None by default.
-        self.replacement_factory = defaultdict(lambda: None)
+        self.replacement_factory = OrderedDict([(nn.Identity, None)])
+        self.default_repalcement_fn = None
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -252,6 +257,8 @@ class Quantizer(object):
         # Re-transfer model to the device it was on, in case the quantizer created new parameters/buffers
         self.model.to(model_device)
 
+        distiller.assign_layer_fq_names(self.model)
+
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_prepare_model(self, dummy_input):
@@ -281,15 +288,15 @@ class Quantizer(object):
                     replace_msg(full_name)
                 continue
             current_qbits = self.module_qbits_map[full_name]
-            if current_qbits.acts is None and current_qbits.wts is None:
-                if self.module_overrides_map[full_name]:
-                    raise ValueError("Adding overrides while not quantizing is not allowed.")
+            # TODO - Review necessity of the block below
+            if current_qbits.acts is None and current_qbits.wts is None and not self.module_overrides_map[full_name]:
                 # We indicate this module wasn't replaced by a wrapper
                 replace_msg(full_name)
                 self.modules_processed[module] = full_name, None
             else:
                 # We use a type hint comment to let IDEs know replace_fn is a function
-                replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
+                replace_fn = self.replacement_factory.get(type(module),
+                                                          self.default_repalcement_fn)  # type: Optional[Callable]
                 # If the replacement function wasn't specified - continue without replacing this module.
                 if replace_fn is not None:
                     valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name],
@@ -299,16 +306,21 @@ class Quantizer(object):
                                             as override arguments for %s. Allowed kwargs: %s"""
                                         % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
                     new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
-                    replace_msg(full_name, (module, new_module))
-                    # Add to history of prepared submodules
-                    self.modules_processed[module] = full_name, new_module
-                    setattr(container, name, new_module)
+                    if new_module != module:
+                        replace_msg(full_name, (module, new_module))
+                        # Add to history of prepared submodules
+                        self.modules_processed[module] = full_name, new_module
+                        setattr(container, name, new_module)
 
-                    # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
-                    if not distiller.has_children(module) and distiller.has_children(new_module):
-                        for sub_module_name, sub_module in new_module.named_modules():
-                            self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
-                        self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                        # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
+                        if not distiller.has_children(module) and distiller.has_children(new_module):
+                            for sub_module_name, sub_module in new_module.named_modules():
+                                self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module),
+                                                      current_qbits)
+                            self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                    else:
+                        replace_msg(full_name)
+                        self.modules_processed[module] = full_name, None
 
             if distiller.has_children(module):
                 # For container we call recursively

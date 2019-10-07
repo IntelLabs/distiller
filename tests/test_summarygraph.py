@@ -125,7 +125,7 @@ def test_layer_search(parallel, denorm_names):
     assert preds == prefix_strs(['conv1'], prefix)
 
     preds = g.predecessors_f('layer1.1.conv1', 'Conv', [], logging, denorm_names=denorm_names)
-    assert preds == prefix_strs(['layer1.0.conv2', 'conv1'], prefix)
+    assert preds == prefix_strs(['conv1', 'layer1.0.conv2'], prefix)
 
 
 def test_vgg():
@@ -306,7 +306,7 @@ def test_scope_name_workarounds():
     # may fix them, in which case we can remove the workarounds
     sg = SummaryGraph(m, dummy_input, apply_scope_name_workarounds=False)
     names, types = zip(*[(op_name, op['type']) for op_name, op in sg.ops.items()])
-    assert names == ('drop1', 'drop2', 'drop2__1', 'relu2', 'drop3')
+    assert names == ('drop1', 'drop2', 'drop2_Gemm_1', 'relu2', 'drop3')
     assert types == expected_types
 
     # Now test with the workarounds

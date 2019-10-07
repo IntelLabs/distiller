@@ -18,9 +18,9 @@ from .eltwise import *
 from .grouping import *
 from .matmul import *
 from .rnn import *
-from .aggregate import Norm
+from .aggregate import *
 
 __all__ = ['EltwiseAdd', 'EltwiseMult', 'EltwiseDiv', 'Matmul', 'BatchMatmul',
            'Concat', 'Chunk', 'Split', 'Stack',
            'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm',
-           'Norm']
+           'Norm', 'Mean']

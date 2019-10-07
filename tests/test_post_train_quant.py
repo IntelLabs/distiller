@@ -25,9 +25,26 @@ from copy import deepcopy
 from distiller.quantization import RangeLinearQuantParamLayerWrapper, LinearQuantMode, ClipMode, \
     RangeLinearQuantConcatWrapper, RangeLinearQuantEltwiseMultWrapper, RangeLinearQuantEltwiseAddWrapper, \
     PostTrainLinearQuantizer
+from distiller.quantization.range_linear import _get_quant_params_from_tensor, _get_quant_params_from_stats_dict,\
+    TensorQuantMetadata
+from distiller.quantization import q_utils
 from distiller.data_loggers import QuantCalibrationStatsCollector, collector_context
 import distiller.modules
 from common import WrappedSequential
+
+
+def attach_quant_metadata(t, num_bits, quant_mode, stats=None, clip_mode=ClipMode.NONE, per_channel=False,
+                          num_stds=None, scale_approx_mult_bits=None):
+    if stats is None:
+        scale, zp = _get_quant_params_from_tensor(t, num_bits, quant_mode, clip_mode, per_channel, num_stds,
+                                                  scale_approx_mult_bits)
+    else:
+        scale, zp = _get_quant_params_from_stats_dict(stats, num_bits, quant_mode, clip_mode, num_stds,
+                                                      scale_approx_mult_bits)
+    signed = quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
+    min_q_val, max_q_val = q_utils.get_quantized_range(num_bits, signed)
+    t.quant_metadata = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
+    return t
 
 
 ###############################################################################
@@ -121,6 +138,10 @@ def test_conv_layer_wrapper(conv_input, conv_weights, mode, clip_acts, per_chann
     model = RangeLinearQuantParamLayerWrapper(layer, 8, 8, mode=mode, clip_acts=clip_acts,
                                               per_channel_wts=per_channel_wts, activation_stats=conv_stats)
 
+    input_stats = None if conv_stats is None else conv_stats['inputs'][0]
+    conv_input = attach_quant_metadata(conv_input, 8, mode, stats=input_stats, clip_mode=clip_acts,
+                                       per_channel=False, num_stds=None, scale_approx_mult_bits=None)
+
     with pytest.raises(RuntimeError):
         model(conv_input)
 
@@ -174,6 +195,9 @@ def test_linear_layer_wrapper(linear_input, linear_weights, linear_bias,
     model = RangeLinearQuantParamLayerWrapper(layer, 8, 8, mode=mode, clip_acts=clip_acts,
                                               per_channel_wts=per_channel_wts)
 
+    linear_input = attach_quant_metadata(linear_input, 8, mode, stats=None, clip_mode=clip_acts,
+                                         per_channel=False, num_stds=None, scale_approx_mult_bits=None)
+
     with pytest.raises(RuntimeError):
         model(linear_input)
 
@@ -196,7 +220,7 @@ def inputs():
     in_1_b_0 = torch.tensor([[[[-3, 6], [0, 8]], [[4, 10], [-7, 1]]]], dtype=torch.float32)
     in_1_b_1 = torch.tensor([[[[-100, 50], [6, 12]], [[80, -30], [-16, 3]]]], dtype=torch.float32)
     in_1 = torch.cat((in_1_b_0, in_1_b_1), 0)
-    return in_0, in_1
+    return [in_0, in_1]
 
 
 input_stats = OrderedDict()
@@ -264,6 +288,11 @@ def test_concat_layer_wrapper(inputs, concat_stats, mode, clip_acts, expected_ou
         # Check exception on no stats
         RangeLinearQuantConcatWrapper(layer, 8, mode, clip_acts, activation_stats=None)
 
+    for idx in range(len(inputs)):
+        inputs[idx] = attach_quant_metadata(inputs[idx], 8, mode, stats=concat_stats['inputs'][idx],
+                                            clip_mode=clip_acts, per_channel=False, num_stds=None,
+                                            scale_approx_mult_bits=None)
+
     model = RangeLinearQuantConcatWrapper(layer, 8, mode, clip_acts, concat_stats)
     model.eval()
     output = model(*inputs)
@@ -319,6 +348,11 @@ def test_eltwise_mult_layer_wrapper(inputs, eltwise_mult_stats, mode, clip_acts,
         # Check exception on no stats
         RangeLinearQuantEltwiseMultWrapper(layer, 8, mode, clip_acts, activation_stats=None)
 
+    for idx in range(len(inputs)):
+        inputs[idx] = attach_quant_metadata(inputs[idx], 8, mode, stats=eltwise_mult_stats['inputs'][idx],
+                                            clip_mode=clip_acts, per_channel=False, num_stds=None,
+                                            scale_approx_mult_bits=None)
+
     model = RangeLinearQuantEltwiseMultWrapper(layer, 8, mode, clip_acts, eltwise_mult_stats)
     model.eval()
     output = model(*inputs)
@@ -373,6 +407,11 @@ def test_eltwise_add_layer_wrapper(inputs, eltwise_add_stats, mode, clip_acts, e
     with pytest.raises(NotImplementedError):
         # Check exception on no stats
         RangeLinearQuantEltwiseAddWrapper(layer, 8, mode, clip_acts, activation_stats=None)
+
+    for idx in range(len(inputs)):
+        inputs[idx] = attach_quant_metadata(inputs[idx], 8, mode, stats=eltwise_add_stats['inputs'][idx],
+                                            clip_mode=clip_acts, per_channel=False, num_stds=None,
+                                            scale_approx_mult_bits=None)
 
     model = RangeLinearQuantEltwiseAddWrapper(layer, 8, mode, clip_acts, eltwise_add_stats)
     model.eval()
@@ -439,8 +478,8 @@ def test_override_no_clip(overrides, e_clip_acts, e_n_stds, rnn_model, rnn_model
                                          model_activation_stats=rnn_model_stats)
     quantizer.prepare_model(torch.randn(1, 1, 20))
     assert isinstance(quantizer.model.rnn.cells[0].eltwisemult_hidden, RangeLinearQuantEltwiseMultWrapper)
-    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_acts == e_clip_acts
-    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.clip_n_stds == e_n_stds
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.output_quant_settings.clip_mode == e_clip_acts
+    assert quantizer.model.rnn.cells[0].eltwisemult_hidden.output_quant_settings.clip_n_stds == e_n_stds
 
 
 ###############################################################################
@@ -551,7 +590,7 @@ def test_stats_fusion_just_bn():
 @pytest.mark.parametrize(
     'act_type, act_as_module, bn_out_stats, conv_out_expected_stats',
     [
-        ('relu', True, stats_entry(-5., 5., -3., 3., 0., 0.5), None),
+        ('relu', True, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
         ('relu', False, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
         ('relu', False, stats_entry(1., 5., 2., 3., 2.5, 0.5), stats_entry(1., 5., 2., 3., 2.5, 0.5)),
         ('relu', False, stats_entry(-5., -1., -4., -2., -2.5, 0.5), stats_entry(0., 0, 0, 0., -2.5, 0.5)),
@@ -577,16 +616,9 @@ def test_stats_fusion_sequential(act_type, act_as_module, bn_out_stats, conv_out
 
     expected = deepcopy(stats)
     expected.pop('bn')  # After BN folding BN stats are removed
-    if act_type == 'relu':
-        if act_as_module:
-            expected['conv']['output'] = deepcopy(stats['act']['output'])
-            expected['act']['inputs'][0] = deepcopy(stats['act']['output'])
-        else:
-            expected['conv']['output'] = conv_out_expected_stats
-    else:
-        expected['conv']['output'] = conv_out_expected_stats
-        if act_as_module:
-            expected['act']['inputs'][0] = conv_out_expected_stats
+    expected['conv']['output'] = conv_out_expected_stats
+    if act_as_module:
+        expected['act']['inputs'][0] = conv_out_expected_stats
 
     assert quantizer.model_activation_stats == expected
 

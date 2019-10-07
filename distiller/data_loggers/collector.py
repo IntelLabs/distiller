@@ -82,14 +82,20 @@ class ActivationStatsCollector(object):
         self.model.apply(partial(self._collect_activations_stats, activation_stats=activation_stats))
         return activation_stats
 
-    def start(self):
+    def start(self, modules_list=None):
         """Start collecting activation stats.
 
         This will iteratively register the modules' forward-hooks, so that the collector
         will be called from the forward traversal and get exposed to activation data.
+        modules_list (iterable): track stats for modules in the list. If None/empty - will track for all modules.
         """
         assert len(self.fwd_hook_handles) == 0
-        self.model.apply(self.start_module)
+        if not modules_list:
+            self.model.apply(self.start_module)
+            return
+        modules_dict = dict(self.model.named_modules())
+        for module_name in modules_list:
+            modules_dict[module_name].apply(self.start_module)
 
     def start_module(self, module):
         """Iteratively register to the forward-pass callback of all eligible modules.
@@ -707,7 +713,8 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
 
 
 def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_runtime_check=False,
-                        disable_inplace_attrs=False, inplace_attr_names=('inplace',)):
+                        disable_inplace_attrs=False, inplace_attr_names=('inplace',),
+                        modules_to_collect=None):
     """
     Helper function for collecting quantization calibration statistics for a model using QuantCalibrationStatsCollector
 
@@ -722,6 +729,8 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
         inplace_runtime_check (bool): See QuantCalibrationStatsCollector
         disable_inplace_attrs (bool): See QuantCalibrationStatsCollector
         inplace_attr_names (iterable): See QuantCalibrationStatsCollector
+        modules_to_collect (iterable): enable stats collection for a predefined modules (specified by names).
+          if None - will track stats for all layers.
 
     Returns:
         Dictionary with quantization stats (see QuantCalibrationStatsCollector for a description of the dictionary
@@ -732,7 +741,7 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            inplace_runtime_check=inplace_runtime_check,
                                                            disable_inplace_attrs=disable_inplace_attrs,
                                                            inplace_attr_names=inplace_attr_names)
-    with collector_context(quant_stats_collector):
+    with collector_context(quant_stats_collector, modules_to_collect):
         msglogger.info('Pass 1: Collecting min, max, avg_min, avg_max, mean, std')
         test_fn(model=model)
         # Collect Laplace distribution stats:
@@ -799,10 +808,10 @@ def collect_histograms(model, test_fn, save_dir=None, activation_stats=None,
 
 
 @contextmanager
-def collector_context(collector):
+def collector_context(collector, modules_list=None):
     """A context manager for an activation collector"""
     if collector is not None:
-        collector.reset().start()
+        collector.reset().start(modules_list)
     yield collector
     if collector is not None:
         collector.stop()
