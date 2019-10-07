@@ -246,23 +246,35 @@ def density_2D(tensor):
     return 1 - sparsity_2D(tensor)
 
 
+def non_zero_channels(tensor):
+    """Returns the indices of non-zero channels.
+
+    Non-zero channels are channels that have at least one coefficient that
+    is not zero.  Counting non-zero channels involves some tensor acrobatics.
+    """
+    if tensor.dim() != 4:
+        raise ValueError("Expecting a 4D tensor")
+
+    n_filters, n_channels, k_h, k_w = (tensor.size(i) for i in range(4))
+
+    # First, reshape the weights tensor such that each channel (kernel) in
+    # the original tensor, is now a row in a 2D tensor.
+    view_2d = tensor.view(-1, k_h * k_w)
+    # Next, compute the sums of each kernel
+    kernel_sums = view_2d.abs().sum(dim=1)
+    # Now group by channels
+    k_sums_mat = kernel_sums.view(n_filters, n_channels).t()
+    nonzero_channels = torch.nonzero(k_sums_mat.abs().sum(dim=1))
+    return nonzero_channels
+
+
 def sparsity_ch(tensor):
     """Channel-wise sparsity for 4D tensors"""
     if tensor.dim() != 4:
         return 0
-
-    num_filters = tensor.size(0)
-    num_kernels_per_filter = tensor.size(1)
-
-    # First, reshape the weights tensor such that each channel (kernel) in the original
-    # tensor, is now a row in the 2D tensor.
-    view_2d = tensor.view(-1, tensor.size(2) * tensor.size(3))
-    # Next, compute the sums of each kernel
-    kernel_sums = view_2d.abs().sum(dim=1)
-    # Now group by channels
-    k_sums_mat = kernel_sums.view(num_filters, num_kernels_per_filter).t()
-    nonzero_channels = len(torch.nonzero(k_sums_mat.abs().sum(dim=1)))
-    return 1 - nonzero_channels/num_kernels_per_filter
+    nonzero_channels = len(non_zero_channels(tensor))
+    n_channels = tensor.size(1)
+    return 1 - nonzero_channels/n_channels
 
 
 def density_ch(tensor):
@@ -355,19 +367,19 @@ def density_rows(tensor, transposed=True):
     return 1 - sparsity_rows(tensor, transposed)
 
 
-def model_sparsity(model, param_dims=[2, 4]):
+def model_sparsity(model, param_dims=[2, 4], param_types=['weight', 'bias']):
     """Returns the model sparsity as a fraction in [0..1]"""
-    sparsity, _, _ = model_params_stats(model, param_dims)
+    sparsity, _, _ = model_params_stats(model, param_dims, param_types)
     return sparsity
 
 
-def model_params_size(model, param_dims=[2, 4]):
-    """Returns the model sparsity as a fraction in [0..1]"""
-    _, _, sparse_params_cnt = model_params_stats(model, param_dims)
+def model_params_size(model, param_dims=[2, 4], param_types=['weight', 'bias']):
+    """Returns the size of the model parameters, w/o counting zero coefficients"""
+    _, _, sparse_params_cnt = model_params_stats(model, param_dims, param_types)
     return sparse_params_cnt
 
 
-def model_params_stats(model, param_dims=[2, 4]):
+def model_params_stats(model, param_dims=[2, 4], param_types=['weight', 'bias']):
     """Returns the model sparsity, weights count, and the count of weights in the sparse model.
 
     Returns:
@@ -379,7 +391,7 @@ def model_params_stats(model, param_dims=[2, 4]):
     params_cnt = 0
     params_nnz_cnt = 0
     for name, param in model.state_dict().items():
-        if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
+        if param.dim() in param_dims and any(type in name for type in param_types):
             _density = density(param)
             params_cnt += torch.numel(param)
             params_nnz_cnt += param.numel() * _density
@@ -399,12 +411,12 @@ def norm_filters(weights, p=1):
     return weights.view(weights.size(0), -1).norm(p=p, dim=1)
 
 
-def model_numel(model, param_dims=[2, 4]):
+def model_numel(model, param_dims=[2, 4], param_types=['weight', 'bias']):
     """Count the number elements in a model's parameter tensors"""
     total_numel = 0
     for name, param in model.state_dict().items():
         # Extract just the actual parameter's name, which in this context we treat as its "type"
-        if param.dim() in param_dims and any(type in name for type in ['weight', 'bias']):
+        if param.dim() in param_dims and any(type in name for type in param_types):
             total_numel += torch.numel(param)
     return total_numel
 
@@ -516,12 +528,12 @@ def log_training_progress(stats_dict, params_dict, epoch, steps_completed, total
         logger.log_weights_distribution(params_dict, steps_completed)
 
 
-def log_activation_statsitics(epoch, phase, loggers, collector):
+def log_activation_statistics(epoch, phase, loggers, collector):
     """Log information about the sparsity of the activations"""
     if collector is None:
         return
     for logger in loggers:
-        logger.log_activation_statsitic(phase, collector.stat_name, collector.value(), epoch)
+        logger.log_activation_statistic(phase, collector.stat_name, collector.value(), epoch)
 
 
 def log_weights_sparsity(model, epoch, loggers):
@@ -743,3 +755,35 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
 
     return val
 
+
+# TODO: Is this needed?
+def model_setattr(model, attr_name, val, register=False):
+    """
+    Sets attribute of a model, through the entire hierarchy.
+    Args:
+        model (nn.Module): the model.
+        attr_name (str): the attribute name as shown by model.named_<parameters/modules/buffers>()
+        val: the value of the attribute
+        register (bool): if True - register_buffer(val) if val is a torch.Tensor and
+          register_parameter(val) if it's an nn.Parameter.
+    """
+    def split_name(name):
+        if '.' in name:
+            return name.rsplit('.', 1)
+        else:
+            return '', name
+    modules_dict = OrderedDict(model.named_modules())
+    lowest_depth_container_name, lowest_depth_attr_name = split_name(attr_name)
+    while lowest_depth_container_name and lowest_depth_container_name not in modules_dict:
+        container_name, attr = split_name(lowest_depth_container_name)
+        lowest_depth_container_name = container_name
+        lowest_depth_attr_name = '%s%s' % (attr, lowest_depth_attr_name)
+    lowest_depth_container = modules_dict[lowest_depth_container_name]  # type: nn.Module
+
+    if register and torch.is_tensor(val):
+        if isinstance(val, nn.Parameter):
+            lowest_depth_container.register_parameter(lowest_depth_attr_name, val)
+        else:
+            lowest_depth_container.register_buffer(lowest_depth_attr_name, val)
+    else:
+        setattr(lowest_depth_container, lowest_depth_attr_name, val)

@@ -284,3 +284,58 @@ class AnimatedScatter(object):
 
     def show(self):
         plt.show()
+
+
+# PCA Projection
+
+from sklearn.decomposition import PCA
+from collections import OrderedDict
+
+def net2nparray(record):
+    net_layer_sizes = json.loads(record["performance"])
+    net_as_nparray = np.array(list(net_layer_sizes.values()), dtype=np.float32)
+    return net_as_nparray
+
+def collect_info(df):
+    arch_shapes_dict = OrderedDict()
+    for i in range(len(df.index)):
+        record = df.iloc[i]
+        episode = record['episode']
+        top1 = record['top1']
+        arch_shapes_dict[episode] = (net2nparray(record), top1)
+    return arch_shapes_dict
+
+def pca_projection(arch_shapes_dict, title, show_legend, show_episode_ids):
+    import math
+    pca = PCA(n_components=2)
+    # Unpack the dictionary
+    packed_arch_shapes = arch_shapes_dict.values()
+    arch_shapes = list(shape_vec for shape_vec, top1 in packed_arch_shapes)
+    arch_top1s = list(top1 for shape_vec, top1 in packed_arch_shapes)
+    principal_components = pca.fit_transform(arch_shapes)
+    #episodes = [str(episode) for episode in arch_shapes_dict.keys()]
+    pc_df = pd.DataFrame(data=principal_components, columns = ['pc1', 'pc2'])
+    #pc_df = pd.concat([pc_df, pd.Series(episodes)], axis = 1)
+
+    fig = plt.figure(figsize = (10,10))
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('Principal Component 1', fontsize=15)
+    ax.set_ylabel('Principal Component 2', fontsize=15)
+    ax.set_title(title, fontsize=20)
+
+    cnt_nets = len(arch_shapes_dict)
+    colors = ['lightskyblue', 'orange', 'red', 'green', 'blue', 'purple', 'pink','lime']
+
+    episodes = list(arch_shapes_dict.keys())
+    #rescaled_top1 = [math.log(top1)*30 for top1 in arch_top1s]
+    rescaled_top1 = arch_top1s * 30
+    for i in range(cnt_nets):
+        x,y = pc_df.pc1, pc_df.pc2
+        ax.scatter(x[i], y[i], label=episodes[i], s=rescaled_top1[i],
+                   color=colors[episodes[i]//100], alpha=0.5)
+        if show_episode_ids:
+            ax.text(x[i], y[i], episodes[i], fontsize=9)
+    if show_legend:
+        plt.legend(labels, loc='best')
+    ax.grid()
+    print("Which components explain the variance best", pca.explained_variance_ratio_)

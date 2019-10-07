@@ -42,7 +42,7 @@ except ImportError:
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
+def log_execution_env_state(config_paths=None, logdir=None):
     """Log information about the execution environment.
 
     Files in 'config_paths' will be copied to directory 'logdir'. A common use-case
@@ -62,7 +62,7 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
         It is useful to know what git tag we're using, and if we have outstanding code.
         """
         try:
-            repo = Repo(gitroot)
+            repo = Repo(os.path.join(os.path.dirname(__file__), '..', '..'))
             assert not repo.bare
         except InvalidGitRepositoryError:
             logger.debug("Cannot find a Git repository.  You probably downloaded an archive of Distiller.")
@@ -138,6 +138,9 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=Fa
     log_filename = os.path.join(logdir, exp_full_name + '.log')
     if os.path.isfile(log_cfg_file):
         logging.config.fileConfig(log_cfg_file, defaults={'logfilename': log_filename})
+    else:
+        print("Could not find the logger configuration file (%s) - using default logger configuration" % log_cfg_file)
+        apply_default_logger_cfg(log_filename)
     msglogger = logging.getLogger()
     msglogger.logdir = logdir
     msglogger.log_filename = log_filename
@@ -160,3 +163,33 @@ def config_pylogger(log_cfg_file, experiment_name, output_dir='logs', verbose=Fa
     except OSError:
         msglogger.debug("Failed to create symlinks to latest logs")
     return msglogger
+
+
+def apply_default_logger_cfg(log_filename):
+    d = {
+        'version': 1,
+        'formatters': {
+            'simple': {
+                'class': 'logging.Formatter',
+                'format': '%(asctime)s - %(message)s'
+            }
+        },
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'level': 'INFO',
+            },
+            'file': {
+                'class': 'logging.FileHandler',
+                'filename': log_filename,
+                'mode': 'w',
+                'formatter': 'simple',
+            },
+        },
+        'root': {
+            'level': 'DEBUG',
+            'handlers': ['console', 'file']
+        },
+    }
+
+    logging.config.dictConfig(d)

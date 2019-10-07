@@ -62,7 +62,7 @@ agent_params.pre_network_filter.add_observation_filter('observation', 'normalize
 # Environment #
 ###############
 env_params = GymVectorEnvironment()
-env_params.level = '../automated_deep_compression/ADC.py:DistillerWrapperEnvironment'
+env_params.level = './environment.py:DistillerWrapperEnvironment'
 
 vis_params = VisualizationParameters()
 vis_params.dump_parameters_documentation = False

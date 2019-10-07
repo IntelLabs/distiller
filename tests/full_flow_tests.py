@@ -23,6 +23,7 @@ import argparse
 import time
 
 DS_CIFAR = 'cifar10'
+DS_MNIST = 'mnist'
 
 distiller_root = os.path.realpath('..')
 examples_root = os.path.join(distiller_root, 'examples')
@@ -122,13 +123,16 @@ test_configs = [
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [44.460, 91.230]),
     TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-clip-acts avg --qe-no-clip-layers {1}'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar'), 'fc'),
-               DS_CIFAR, accuracy_checker, [91.64, 99.63]),
+               DS_CIFAR, accuracy_checker, [91.57, 99.62]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
                DS_CIFAR, accuracy_checker, [44.370, 89.640]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)])
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)]),
+    TestConfig('--arch simplenet_mnist --epochs 3 -p=50 --compress={0}'.
+               format(os.path.join('full_flow_tests', 'simplenet_mnist_pruning.yaml')),
+               DS_MNIST, accuracy_checker, [98.78, 100.]),
 ]
 
 
@@ -169,11 +173,13 @@ def validate_dataset_path(path, default, name):
 def run_tests():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cifar10-path', dest='cifar10_path', metavar='DIR', help='Path to CIFAR-10 dataset')
+    parser.add_argument('--mnist-path', dest='mnist_path', metavar='DIR', help='Path to MNIST dataset')
     args = parser.parse_args()
 
     cifar10_path = validate_dataset_path(args.cifar10_path, default='data.cifar10', name='CIFAR-10')
+    mnist_path = validate_dataset_path(args.mnist_path, default='data.mnist', name='MNIST')
 
-    datasets = {DS_CIFAR: cifar10_path}
+    datasets = {DS_CIFAR: cifar10_path, DS_MNIST: mnist_path}
     total_configs = len(test_configs)
     failed_tests = []
     for idx, tc in enumerate(test_configs):

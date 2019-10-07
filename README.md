@@ -164,6 +164,9 @@ Beware.
   - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
   - Sample implementation of Early Exit
+* **Low rank decomposition**
+  - Sample implementation of [truncated SVD](https://github.com/NervanaSystems/distiller/blob/master/jupyter/truncated_svd.ipynb)
+* Lottery Ticket Hypothesis training 
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
 * A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
@@ -380,7 +383,7 @@ Open distiller/docs/site/index.html to view the documentation home page.
 * [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
 * [Jupyter](http://jupyter.org/) - Notebook serving.
 * [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
-
+* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
 
 ## Versioning
 

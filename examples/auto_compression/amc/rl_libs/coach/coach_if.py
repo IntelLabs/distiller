@@ -47,10 +47,11 @@ class RlLibInterface(object):
             graph_manager.heatup_steps = EnvironmentEpisodes(amc_cfg.ddpg_cfg.num_heatup_episodes)
             # Replay buffer size
             graph_manager.agent_params.memory.max_size = (MemoryGranularity.Transitions, amc_cfg.ddpg_cfg.replay_buffer_size)
+            amc_cfg.ddpg_cfg.training_noise_decay = amc_cfg.ddpg_cfg.training_noise_decay ** (1. / steps_per_episode)
         elif "ClippedPPO" in amc_cfg.agent_algo:
-            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params
+            from examples.auto_compression.amc.rl_libs.coach.presets.ADC_ClippedPPO import graph_manager, agent_params
         elif "TD3" in amc_cfg.agent_algo:
-            from examples.automated_deep_compression.rl_libs.coach.presets.ADC_TD3 import graph_manager, agent_params
+            from examples.auto_compression.amc.rl_libs.coach.presets.ADC_TD3 import graph_manager, agent_params
         else:
             raise ValueError("The agent algorithm you are trying to use (%s) is not supported" % amc_cfg.amc_agent_algo)
 
@@ -61,10 +62,10 @@ class RlLibInterface(object):
         graph_manager.steps_between_evaluation_periods = EnvironmentEpisodes(n_training_episodes)
 
         # These parameters are passed to the Distiller environment
-        env_cfg  = {'model': model, 
-                    'app_args': app_args,
-                    'amc_cfg': amc_cfg,
-                    'services': services}
+        env_cfg = {'model': model,
+                   'app_args': app_args,
+                   'amc_cfg': amc_cfg,
+                   'services': services}
         graph_manager.env_params.additional_simulator_parameters = env_cfg
 
         coach_logs_dir = os.path.join(msglogger.logdir, 'coach')

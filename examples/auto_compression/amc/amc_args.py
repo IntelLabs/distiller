@@ -1,6 +1,6 @@
-def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
+def add_automl_args(argparser):
     """
-    Helper function to make it easier to add command-line arguments for AMC to any application.
+    Helper function which defines command-line arguments specific to AMC.
 
     Arguments:
         argparser (argparse.ArgumentParser): Existing parser to which to add the arguments
@@ -46,7 +46,7 @@ def add_automl_args(argparser, arch_choices=None, enable_pretrained=False):
                        default="l1-rank", help="The pruning method")
     group.add_argument('--amc-rllib', choices=["coach",
                                                "spinningup",
-                                               "private",
+                                               "hanlab",
                                                "random"],
                        default=None, help="Choose which RL library to use")
     group.add_argument('--amc-group-size', type=int, default=1,

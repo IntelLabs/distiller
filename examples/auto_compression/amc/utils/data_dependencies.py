@@ -38,7 +38,7 @@ def find_dependencies(dependency_type, sgraph, layers, layer_name, dependencies_
 
 
 def _find_dependencies_channels(sgraph, layers, layer_name, dependencies_list):
-    # Find all instances of Convolution layers that immediately preceed this layer
+    # Find all instances of Convolution layers that immediately precede this layer
     predecessors = sgraph.predecessors_f(layer_name, ['Conv'])
     for predecessor in predecessors:
         dependencies_list.append(predecessor)

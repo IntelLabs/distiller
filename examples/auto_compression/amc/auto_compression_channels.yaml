@@ -1,6 +1,6 @@
 # rl_lib:
 #     # Choose which RL library to use: Coach from Intel AI Lab, or Spinup from OpenAI
-#     name: private # one of: coach, spinningup, private
+#     name: hanlab # one of: coach, spinningup, hanlab
 
 network:
   mobilenet:
@@ -9,7 +9,8 @@ network:
       "module.model.3.3",  "module.model.4.3", "module.model.5.3",
       "module.model.6.3",  "module.model.7.3", "module.model.8.3",
       "module.model.9.3",  "module.model.10.3", "module.model.11.3",
-      "module.model.12.3", "module.model.13.3"]
+      "module.model.12.3", "module.model.13.3",
+      "module.fc"]
 
   mobilenet_v2:
       # Only conv 1x1, without shortcut connection dependencies
@@ -94,7 +95,8 @@ network:
       "module.layer2.2.conv1", "module.layer2.2.conv2",
       "module.layer3.0.conv1", "module.layer3.0.conv2",
       "module.layer3.1.conv1", "module.layer3.1.conv2",
-      "module.layer3.2.conv1", "module.layer3.2.conv2"]
+      "module.layer3.2.conv1", "module.layer3.2.conv2",
+      "module.fc"]
 
   simplenet_mnist:
     ["module.conv2"]

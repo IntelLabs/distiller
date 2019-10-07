@@ -58,31 +58,26 @@ def mac_constrained_experimental_reward_fn(env, top1, top5, vloss, total_macs):
 
 def mac_constrained_clamp_action(env, pruning_action):
     """Compute a resource-constrained action"""
-
-    # Todo: this is tightly coupled to the environment - refactor
-    flops = env.net_wrapper.layer_macs(env.current_layer())
-    assert flops > 0
-    reduced = env._removed_macs
-    prunable_rest, rest = env.rest_macs_raw()
-    rest += prunable_rest * env.action_high  # how much we have to remove in other layers
-    target_reduction = (1 - env.amc_cfg.target_density) * env.original_model_macs
+    layer_macs = env.net_wrapper.layer_macs(env.current_layer())
+    assert layer_macs > 0
+    reduced = env.removed_macs
+    prunable_rest, non_prunable_rest = env.rest_macs_raw()
+    rest = prunable_rest * min(0.9, env.action_high)
+    target_reduction = (1. - env.amc_cfg.target_density) * env.original_model_macs
     assert reduced == env.original_model_macs - env.net_wrapper.total_macs
     duty = target_reduction - (reduced + rest)
-    pruning_action_final = min(env.action_high, max(pruning_action, duty/flops))
+    pruning_action_final = min(1., max(pruning_action, duty/layer_macs))
 
-    msglogger.debug("\t\tflops=%.3f  reduced=%.3f  rest=%.3f  duty=%.3f" % (flops, reduced, rest, duty))
+    msglogger.debug("\t\tflops=%.3f  reduced=%.3f  rest=%.3f  duty=%.3f" % (layer_macs, reduced, rest, duty))
     msglogger.debug("\t\tpruning_action=%.3f  pruning_action_final=%.3f" % (pruning_action, pruning_action_final))
-    msglogger.debug("\t\ttarget={:.2f} reduced={:.2f} rest={:.2f} duty={:.2f} flops={:.2f}".
-                        format( 1-env.amc_cfg.target_density, reduced/env.original_model_macs,
-                                rest/env.original_model_macs, 
-                                duty/env.original_model_macs,
-                                flops/env.original_model_macs))
+    msglogger.debug("\t\ttarget={:.2f} reduced={:.2f} rest={:.2f} duty={:.2f} flops={:.2f}\n".
+                    format(1-env.amc_cfg.target_density, reduced/env.original_model_macs,
+                           rest/env.original_model_macs,
+                           duty/env.original_model_macs,
+                           layer_macs/env.original_model_macs))
     if pruning_action_final != pruning_action:
-        msglogger.debug("action ********** pruning_action={}==>pruning_action_final={:.2f}: reduced={:.2f} rest={:.2f} target={:.2f} duty={:.2f} flops={:.2f}".
-                        format(pruning_action, pruning_action_final, reduced/env.original_model_macs,
-                                rest/env.original_model_macs, 1-env.amc_cfg.target_density,
-                                duty/env.original_model_macs,
-                                flops/env.original_model_macs))
+        msglogger.debug("pruning_action={:.2f}==>pruning_action_final={:.2f}".format(pruning_action,
+                                                                                     pruning_action_final))
     return pruning_action_final
 
 

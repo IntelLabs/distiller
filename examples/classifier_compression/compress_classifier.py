@@ -106,7 +106,6 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.sensitivity is not None:
         test_loader = load_test_data(args)
-        #sensitivities = np.arange(args.sensitivity_range[0], args.sensitivity_range[1], args.sensitivity_range[2])
         sensitivities = np.arange(*args.sensitivity_range)
         sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
         do_exit = True
@@ -117,10 +116,9 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                   args, compression_scheduler)
         do_exit = True
     elif args.thinnify:
-        #zeros_mask_dict = distiller.create_model_masks_dict(model)
         assert args.resumed_checkpoint_path is not None, \
             "You must use --resume-from to provide a checkpoint file to thinnify"
-        distiller.remove_filters(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
+        distiller.contract_model(model, compression_scheduler.zeros_mask_dict, args.arch, args.dataset, optimizer=None)
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, scheduler=compression_scheduler,
                                  name="{}_thinned".format(args.resumed_checkpoint_path.replace(".pth.tar", "")),
                                  dir=msglogger.logdir)
@@ -161,6 +159,12 @@ class ClassifierCompressorSampleApp(classifier.ClassifierCompressor):
     def __init__(self, args, script_dir):
         super().__init__(args, script_dir)
         early_exit_init(args)
+        # Save the randomly-initialized model before training (useful for lottery-ticket method)
+        if args.save_untrained_model:
+            ckpt_name = '_'.join((self.args.name or "", "untrained"))
+            apputils.save_checkpoint(0, self.args.arch, self.model,
+                                     name=ckpt_name, dir=msglogger.logdir)
+
 
     def handle_subapps(self):
         return handle_subapps(self.model, self.criterion, self.optimizer,
