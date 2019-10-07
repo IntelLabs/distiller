@@ -20,12 +20,14 @@ import copy
 from functools import partial
 import torch
 import torchvision.models as torch_models
+import torch.nn as nn
 from . import cifar10 as cifar10_models
 from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
 
 from distiller.utils import set_model_input_shape_attr
+from distiller.modules import Mean, EltwiseAdd
 
 import logging
 msglogger = logging.getLogger()
@@ -59,16 +61,41 @@ ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
 
-# A temporary monkey-patch to get past this Torchvision bug:
-# https://github.com/pytorch/pytorch/issues/20516
-def patch_torchvision_mobilenet_v2_bug(model):
-    def patched_forward(self, x):
+def patch_torchvision_mobilenet_v2(model):
+    """
+    Patches TorchVision's MobileNetV2:
+    * To allow quantization, this adds modules for tensor operations (mean, element-wise addition) to the
+      model instance and patches the forward functions accordingly
+    * Fixes a bug in the torchvision implementation that prevents export to ONNX (and creation of SummaryGraph)
+    """
+    if not isinstance(model, torch_models.MobileNetV2):
+        raise TypeError("Only MobileNetV2 is acceptable.")
+
+    def patched_forward_mobilenet_v2(self, x):
         x = self.features(x)
-        #x = x.mean([2, 3])
-        x = x.mean(3).mean(2)
+        # x = x.mean([2, 3]) # this was a bug: https://github.com/pytorch/pytorch/issues/20516
+        x = self.mean32(x)
         x = self.classifier(x)
         return x
-    model.__class__.forward = patched_forward
+    model.mean32 = nn.Sequential(
+        Mean(3), Mean(2)
+    )
+    model.__class__.forward = patched_forward_mobilenet_v2
+
+    def is_inverted_residual(module):
+        return isinstance(module, nn.Module) and module.__class__.__name__ == 'InvertedResidual'
+
+    def patched_forward_invertedresidual(self, x):
+        if self.use_res_connect:
+            return self.residual_eltwiseadd(self.conv(x), x)
+        else:
+            return self.conv(x)
+
+    for n, m in model.named_modules():
+        if is_inverted_residual(m):
+            if m.use_res_connect:
+                m.residual_eltwiseadd = EltwiseAdd()
+            m.__class__.forward = patched_forward_invertedresidual
 
 
 _model_extensions = {}
@@ -137,7 +164,7 @@ def _create_imagenet_model(arch, pretrained):
         try:
             model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
-                patch_torchvision_mobilenet_v2_bug(model)
+                patch_torchvision_mobilenet_v2(model)
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError
