@@ -245,7 +245,6 @@ class ParameterMasker(object):
     def apply_mask(self, parameter):
         """Apply a mask on the weights tensor (parameter)."""
         if self.mask is None:
-            msglogger.debug('No mask for parameter {0}'.format(self.param_name))
             return
         if self.use_double_copies:
             self.unmasked_copy = parameter.clone().detach()
