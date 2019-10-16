@@ -470,11 +470,16 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
+    # create flag to indicate if model is inception to use proper image size
+    if args.arch in ['inception_v3', 'inceptionv3', 'inceptionv4', 'inceptionresnetv2']:
+        is_inception = True
+    else:
+        is_inception = False
     train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset, sequential)
+                              fixed_subset, sequential, is_inception)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -575,9 +580,17 @@ def train(train_loader, model, criterion, optimizer, epoch,
             output = args.kd_policy.forward(inputs)
 
         if not early_exit_mode(args):
-            loss = criterion(output, target)
+            # For inception, we need to add losses for both classifier outputs
+            if isinstance(output, tuple):
+                loss = sum((criterion(o,target) for o in output))
+            else:
+                loss = criterion(output, target)
             # Measure accuracy
-            classerr.add(output.detach(), target)
+            # For inception, we only consider accuracy of main classifier
+            if isinstance(output, tuple):
+                classerr.add(output[0].detach(), target)
+            else:
+                classerr.add(output.detach(), target)
             acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
