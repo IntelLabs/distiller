@@ -202,11 +202,11 @@ class SummaryGraph(object):
 
                 for input_ in node.inputs():
                     self.__add_input(new_op, input_)
-                    self.edges.append(SummaryGraph.Edge(input_.uniqueName(), new_op['name']))
+                    self.edges.append(SummaryGraph.Edge(input_.debugName(), new_op['name']))
 
                 for output in node.outputs():
                     self.__add_output(new_op, output)
-                    self.edges.append(SummaryGraph.Edge(new_op['name'], output.uniqueName()))
+                    self.edges.append(SummaryGraph.Edge(new_op['name'], output.debugName()))
 
                 new_op['attrs'] = OrderedDict([(attr_name, node[attr_name]) for attr_name in node.attributeNames()])
 
@@ -273,16 +273,16 @@ class SummaryGraph(object):
             op['outputs'].append(param['id'])
 
     def __add_param(self, n):
-        if n.uniqueName() not in self.params:
+        if n.debugName() not in self.params:
             param = self.__tensor_desc(n)
-            self.params[n.uniqueName()] = param
+            self.params[n.debugName()] = param
         else:
-            param = self.params[n.uniqueName()]
+            param = self.params[n.debugName()]
         return param
 
     def __tensor_desc(self, n):
         tensor = OrderedDict()
-        tensor['id'] = n.uniqueName()
+        tensor['id'] = n.debugName()
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
             s = str(n.node())
