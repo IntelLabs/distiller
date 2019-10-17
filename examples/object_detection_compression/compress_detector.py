@@ -150,6 +150,12 @@ def main(args):
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
 
+    if args.qe_calibration:
+        def test_fn(model):
+            return evaluate(model, data_loader_test, device=device)
+        collect_quant_stats(model, test_fn, save_dir=args.output_dir)
+        return
+
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
         model_without_ddp.load_state_dict(checkpoint['model'])
