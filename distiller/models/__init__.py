@@ -95,7 +95,8 @@ def patch_torchvision_mobilenet_v2(model):
 
     for n, m in model.named_modules():
         if is_inverted_residual(m):
-            m.residual_eltwiseadd = EltwiseAdd()
+            if m.use_res_connect:
+                m.residual_eltwiseadd = EltwiseAdd()
             m.__class__.forward = patched_forward_invertedresidual
 
 

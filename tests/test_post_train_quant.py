@@ -590,7 +590,7 @@ def test_stats_fusion_just_bn():
 @pytest.mark.parametrize(
     'act_type, act_as_module, bn_out_stats, conv_out_expected_stats',
     [
-        ('relu', True, stats_entry(-5., 5., -3., 3., 0., 0.5), None),
+        ('relu', True, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
         ('relu', False, stats_entry(-5., 5., -3., 3., 0., 0.5), stats_entry(0., 5., 0, 3., 0., 0.5)),
         ('relu', False, stats_entry(1., 5., 2., 3., 2.5, 0.5), stats_entry(1., 5., 2., 3., 2.5, 0.5)),
         ('relu', False, stats_entry(-5., -1., -4., -2., -2.5, 0.5), stats_entry(0., 0, 0, 0., -2.5, 0.5)),
@@ -616,16 +616,9 @@ def test_stats_fusion_sequential(act_type, act_as_module, bn_out_stats, conv_out
 
     expected = deepcopy(stats)
     expected.pop('bn')  # After BN folding BN stats are removed
-    if act_type == 'relu':
-        if act_as_module:
-            expected['conv']['output'] = deepcopy(stats['act']['output'])
-            expected['act']['inputs'][0] = deepcopy(stats['act']['output'])
-        else:
-            expected['conv']['output'] = conv_out_expected_stats
-    else:
-        expected['conv']['output'] = conv_out_expected_stats
-        if act_as_module:
-            expected['act']['inputs'][0] = conv_out_expected_stats
+    expected['conv']['output'] = conv_out_expected_stats
+    if act_as_module:
+        expected['act']['inputs'][0] = conv_out_expected_stats
 
     assert quantizer.model_activation_stats == expected
 

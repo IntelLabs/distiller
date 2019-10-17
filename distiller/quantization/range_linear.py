@@ -1378,22 +1378,29 @@ class PostTrainLinearQuantizer(Quantizer):
                     succ_type = 'Sigmoid'
                 succ_stats = None
 
+            # Set the clipping values
             if succ_type == 'Relu':
                 # ReLU zeros out all negative values, so there's no need to quantize them
-                msglogger.debug('  Module {} followed by ReLU, updating stats'.format(n))
-                self._clip_stats(m_stats['output'], 0., m_stats['output']['max'])
+                min_val = 0.
+                max_val = m_stats['output']['max']
             elif succ_type == 'Sigmoid' or succ_type == 'Tanh':
                 # Tanh / Sigmoid saturate at ~4 / ~6 respectively. No need to quantize their inputs outside
                 # of these ranges
-                msglogger.debug('  Module {} followed by {}, updating stats'.format(n, succ_type))
-                sat_val = 4. if succ_type == 'Tanh' else 6.
-                self._clip_stats(m_stats['output'], -sat_val, sat_val)
-                if succ_stats is not None:
-                    succ_stats['inputs'][0] = deepcopy(m_stats['output'])
+                max_val = 4. if succ_type == 'Tanh' else 6.
+                min_val = -max_val
             elif isinstance(named_modules.get(successor.name, None), nn.ReLU6):
+                succ_type = 'ReLU6'
                 # ReLU zeros out all negative values, so there's no need to quantize them
-                msglogger.debug('  Module {} followed by ReLU6, updating stats'.format(n))
-                self._clip_stats(m_stats['output'], 0., min(m_stats['output']['max'], 6))
+                min_val = 0.
+                max_val = min(m_stats['output']['max'], 6)
+            else:
+                continue
+
+            # Clip the stats
+            msglogger.debug('  Module {} followed by {}, updating stats'.format(n, succ_type))
+            self._clip_stats(m_stats['output'], min_val, max_val)
+            if succ_stats is not None:
+                succ_stats['inputs'][0] = deepcopy(m_stats['output'])
 
     def _apply_fuse_relu(self):
         """Fuses ReLU layers to the linear layers before them."""
