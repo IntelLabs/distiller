@@ -439,7 +439,7 @@ if __name__ == "__main__":
     # quant calibration dataloader:
     args.effective_test_size = args.qe_calib_portion
     args.batch_size = args.qe_calib_batchsize
-    calib_data_loader = classifier.load_data(args, load_train=False, load_val=False)
+    calib_data_loader = classifier.load_data(args, fixed_subset=True, load_train=False, load_val=False)
     # logging
     logging.getLogger().setLevel(logging.WARNING)
     msglogger = logging.getLogger(__name__)
