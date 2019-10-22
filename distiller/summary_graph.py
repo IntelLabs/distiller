@@ -89,21 +89,12 @@ class SummaryGraph(object):
             self.dummy_input = dummy_input
             trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
 
-            # As of PyTorch 1.1.0, ONNX trace optimization has two issues that result in incorrect scope names
+            # As of PyTorch 1.3.0, ONNX trace optimization has an issue that results in incorrect scope names
             # of nodes in the trace graph.
             # These can make it impossible, in some cases, to derive the connectivity of the model using the original
             # module names. So we try to detect these cases and apply workarounds
 
-            # Issue #1:
-            #   Gemm ops (aka "Linear" / "addmm" / "FC") get the scope name of the last non-Gemm node
-            #   that came before them.
-            #   Note that if the node prior to the Gemm node isn't the result of a dedicated module call,
-            #   then this issue doesn't occur. For simplicity we just track all Gemms.
-            # TODO: This should be fixed in PyTorch 1.2.0, revisit when it's released
-            aten_addmm_nodes_scope_names = []
-            onnx_gemm_count = 0
-
-            # Issue #2:
+            # The issue is:
             #   Dropout ops are removed by ONNX trace optimization. However, the op BEFORE the original dropout op
             #   gets the scope name of the dropout op
             pre_dropout_nodes_scope_names = OrderedDict()
@@ -118,8 +109,6 @@ class SummaryGraph(object):
                         pre_dropout_nodes_scope_names[node.scopeName()] = prev_non_dropout_op.scopeName()
                 else:
                     prev_non_dropout_op = node
-                    if kind == 'aten::addmm':
-                        aten_addmm_nodes_scope_names.append(node.scopeName())
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
@@ -140,12 +129,6 @@ class SummaryGraph(object):
                 new_op = self.__create_op(node)
 
                 if apply_scope_name_workarounds:
-                    # Here we apply the workaround to the Gemm nodes scope name issue mentioned above
-                    if new_op['type'] == 'Gemm':
-                        new_op['orig-name'] = aten_addmm_nodes_scope_names[onnx_gemm_count]
-                        new_op['name'] = new_op['orig-name']
-                        onnx_gemm_count += 1
-
                     # Here we apply the workaround to the issue of dropout op scope name overriding previous op's
                     # scope name
                     if new_op['name'] in pre_dropout_nodes_scope_names:
