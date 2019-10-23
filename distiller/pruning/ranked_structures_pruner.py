@@ -147,10 +147,14 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
                                 model=None, binary_map=None, magnitude_fn=distiller.norms.l1_norm,
                                 noise=0.0, group_size=1, rounding_fn=math.floor):
         if binary_map is None:
+
+            if param.dim() == 2:
+                # 2D Linear parameters 
+                return LpRankedStructureParameterPruner.rank_and_prune_rows(fraction_to_prune, param, param_name,
+                                                                            zeros_mask_dict, model, binary_map,
+                                                                            magnitude_fn, group_size)
             bottomk_channels, channel_mags = distiller.norms.rank_channels(param, group_size, magnitude_fn,
                                                                            fraction_to_prune, rounding_fn, noise)
-            # bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(
-            #     magnitude_fn, fraction_to_prune, param, group_size, rounding_fn, noise)
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
                 return
@@ -689,13 +693,12 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
         if binary_map is None:
             op_type = 'conv' if param.dim() == 4 else 'fc'
             if op_type == 'conv':
-                bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(
-                    magnitude_fn, fraction_to_prune, param, group_size, rounding_fn, noise)
-
+                bottomk_channels, channel_mags = distiller.norms.rank_channels(param, group_size, magnitude_fn,
+                                                                               fraction_to_prune, rounding_fn, noise)
             else:
-                bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_cols(
-                     magnitude_fn, fraction_to_prune, param)
-
+                bottomk_channels, channel_mags = distiller.norms.rank_cols(param, group_size, magnitude_fn,
+                                                                           fraction_to_prune, rounding_fn=math.floor,
+                                                                           noise=None)
             # Todo: this little piece of code can be refactored
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
@@ -703,7 +706,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
 
             threshold = bottomk_channels[-1]
             binary_map = channel_mags.gt(threshold)
-
 
             # These are the indices of channels we want to keep
             indices = binary_map.nonzero().squeeze()
@@ -757,8 +759,8 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
         if zeros_mask_dict is not None:
             binary_map = binary_map.type(param.type())
             if op_type == 'conv':
-                zeros_mask_dict[param_name].mask = _ = distiller.thresholding.expand_binary_map(param,
-                                                                                                'Channels', binary_map)
+                zeros_mask_dict[param_name].mask, _ = distiller.thresholding.expand_binary_map(param,
+                                                                                               'Channels', binary_map)
                 msglogger.info("FMReconstructionChannelPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                                param_name,
                                distiller.sparsity_ch(zeros_mask_dict[param_name].mask),
