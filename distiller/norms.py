@@ -152,7 +152,9 @@ def channels_norm(param, norm_fn, group_len=1, length_normalized=False):
     Returns:
         1D tensor with lp-norms of the groups
     """
-    assert param.dim() == 4, "param has invalid dimensions"
+    assert param.dim() in (2, 4), "param has invalid dimensions"
+    if param.dim() == 2:
+        return cols_norm(param, norm_fn, group_len, length_normalized)
     param = param.transpose(0, 1).contiguous()
     group_size = group_len * np.prod(param.shape[1:])
     return generic_norm(param.view(-1, group_size), norm_fn, group_size, length_normalized, dim=1)
@@ -296,7 +298,7 @@ def k_smallest_elems(mags, k, noise):
 
 
 def rank_channels(param, group_len, magnitude_fn, fraction_to_partition, rounding_fn, noise):
-    assert param.dim() == 4, "This ranking is only supported for 4D tensors"
+    assert param.dim() in (2, 4), "This ranking is only supported for 2D and 4D tensors"
     n_channels = param.size(1)
     n_ch_to_prune = num_structs_to_prune(n_channels, group_len, fraction_to_partition, rounding_fn)
     if n_ch_to_prune == 0:
