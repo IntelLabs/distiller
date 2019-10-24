@@ -14,8 +14,9 @@ import torch
 import torch.utils.data
 from torch import nn
 import torchvision
-import torchvision.models.detection
-import torchvision.models.detection.mask_rcnn
+import torchvision.models.detection as detection
+from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
+from torchvision.ops.misc import FrozenBatchNorm2d
 import torch.distributed as dist
 
 import distiller
@@ -55,6 +56,30 @@ def get_transform(train):
     if train:
         transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
+
+
+def patch_fastrcnn(model):
+    """
+    Partial patch for torchvision's FastRCNN models to allow quantization, by replacing all FrozenBatchNorm2d
+    with regular nn.BatchNorm2d-s.
+    Args:
+        model (GeneralizedRCNN): the model to patch
+    """
+    assert isinstance(model, GeneralizedRCNN)
+
+    def replace_frozen_bn(frozen_bn: FrozenBatchNorm2d):
+        num_features = frozen_bn.weight.shape[0]
+        bn = nn.BatchNorm2d(num_features)
+        eps = bn.eps
+        bn.weight.data = frozen_bn.weight.data
+        bn.bias.data = frozen_bn.bias.data
+        bn.running_mean.data = frozen_bn.running_mean.data
+        bn.running_var.data = frozen_bn.running_var.data
+        return bn.eval()
+
+    for n, m in model.named_modules():
+        if isinstance(m, FrozenBatchNorm2d):
+            distiller.model_setattr(model, n, replace_frozen_bn(m))
 
 
 def main(args):
@@ -112,9 +137,9 @@ def main(args):
         collate_fn=utils.collate_fn)
 
     print("Creating model")
-    model = torchvision.models.detection.__dict__[args.model](num_classes=num_classes,
+    model = detection.__dict__[args.model](num_classes=num_classes,
                                                               pretrained=args.pretrained)
-    distiller.models.patch_fastrcnn(model)
+    patch_fastrcnn(model)
     model.to(device)
 
     if args.summary and utils.is_main_process():
@@ -153,7 +178,9 @@ def main(args):
     if args.qe_calibration:
         def test_fn(model):
             return evaluate(model, data_loader_test, device=device)
-        collect_quant_stats(model, test_fn, save_dir=args.output_dir)
+        collect_quant_stats(model_without_ddp, test_fn, save_dir=args.output_dir,
+                            modules_to_collect=['backbone', 'rpn', 'roi_heads'])
+        # We skip `.transform` because it is a pre-processing unit.
         return
 
     if args.resume:

@@ -25,6 +25,7 @@ from contextlib import contextmanager
 import torch
 from torchnet.meter import AverageValueMeter
 import logging
+import warnings
 from math import sqrt
 import matplotlib
 matplotlib.use('Agg')
@@ -458,10 +459,10 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             current_b = (values - mean).abs().mean().item()
             return old_b + (current_b - old_b) / module.batch_idx
 
-        def update_record(record, tensor):
+        def update_record(record, tensor: torch.Tensor, batch_first=True):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
-            act = tensor.view(tensor.size(0), -1)
+            act = tensor.view(tensor.size(0), -1) if batch_first else tensor
             if self.collecting_laplace:
                 record['b'] = update_b(act, record['b'], record['mean'])
                 return
@@ -499,6 +500,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                                'See QuantCalibrationStatsCollector class documentation for more info.')
 
         module.batch_idx += 1
+        module.num_elements_so_far += inputs.numel()
 
         if not module.quant_stats.inputs:
             # Delayed initialization of inputs records, because only now we know the # of inputs
@@ -507,7 +509,16 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
         with torch.no_grad():
             for idx, input in enumerate(inputs):
-                update_record(module.quant_stats.inputs[idx], input)
+                if input is None:
+                    continue
+                if isinstance(input, torch.Tensor):
+                    update_record(module.quant_stats.inputs[idx], input)
+                elif isinstance(input, (list, tuple)) and all(isinstance(inp, torch.Tensor) for inp in input):
+                    for inp in input:
+                        update_record(module.quant_stats.inputs[idx], inp, batch_first=False)
+                else:
+                    warnings.warn("Only torch.Tensors or List/Tuple[torch.Tensor] are supported.", RuntimeWarning)
+
             update_record(module.quant_stats.output, output)
 
     def _start_counter(self, module):
