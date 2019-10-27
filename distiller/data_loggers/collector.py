@@ -460,15 +460,6 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             m = current_sample_numel
             return (t*old_mean + m*new_val) / (t+m)
 
-        # def update_std(values, old_std, old_mean, new_mean, total_values_so_far):
-        #     # See here:
-        #     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
-        #     numel = values.numel() if isinstance(values, torch.Tensor) else values.size
-        #     M = (old_std ** 2) * (total_values_so_far - 1)
-        #     mean_diffs = (values - old_mean) * (values - new_mean)
-        #     M += mean_diffs.sum()
-        #     return sqrt((M / (total_values_so_far + numel - 1)).item())
-
         def update_std(values, old_std, mean, total_values_so_far):
             """
             Updates std of the module.
