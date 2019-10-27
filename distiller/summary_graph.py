@@ -328,11 +328,10 @@ class SummaryGraph(object):
                 try:
                     n_ifm = self.param_shape(conv_in)[1]
                     n_ofm = self.param_shape(conv_out)[1]
+                except IndexError:
                     msglogger.error("An input to a Convolutional layer is missing shape information.")
                     msglogger.error("For details see https://github.com/NervanaSystems/distiller/issues/360")
-                except IndexError:
-                    n_ifm = 0
-                    n_ofm = 0
+                    n_ifm = n_ofm = 0
 
                 # MACs = #IFM * #OFM
                 op['attrs']['MACs'] = n_ofm * n_ifm
