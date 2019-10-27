@@ -30,6 +30,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
+import numpy as np
+
 msglogger = logging.getLogger()
 
 __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
@@ -323,6 +325,7 @@ class _QuantStatsRecord(object):
         for stat_name in ['avg_min', 'avg_max', 'mean', 'std', 'b']:
             records[stat_name] = 0
         records['shape'] = ''
+        records['total_numel'] = 0
         return records
 
     def __init__(self):
@@ -395,7 +398,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
 
         self.batch_idx = 0
         self.inplace_runtime_check = inplace_runtime_check
-        self.collecting_laplace = False
+        self.collecting_second_pass = False
 
         if disable_inplace_attrs:
             if not inplace_attr_names:
@@ -425,45 +428,83 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                                    'Please collect the required statistics using `collector.start()` and evaluating'
                                    ' the model for enough batches.' % name)
 
-    def start_laplace(self):
+    def start_second_pass(self):
         self._check_required_stats()
-        self.collecting_laplace = True
+        self.collecting_second_pass = True
         # reset batch_idx for all leaf modules
         for module in self.model.modules():
             if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
                 continue
             module.batch_idx = 0
+            for record in module.quant_stats.inputs:
+                record['total_numel'] = 0
+            module.quant_stats.output['total_numel'] = 0
 
-    def stop_laplace(self):
-        self.collecting_laplace = False
+    def stop_second_pass(self):
+        self.collecting_second_pass = False
 
     def _activation_stats_cb(self, module, inputs, output):
-        def update_mean(old_mean, new_val):
-            return old_mean + (new_val - old_mean) / module.batch_idx
+        """
+        A callback for updating the required statistics for quantization in a module.
+        """
+        def update_mean(old_mean, new_val, total_values_so_far, current_sample_numel):
+            """
+            Updates the running_mean of the values.
+            Args:
+                old_mean: the old mean
+                new_val: the new value
+                total_values_so_far: the weight of the values so far
+                current_sample_numel: the weight of the new val
+            """
+            t = total_values_so_far
+            m = current_sample_numel
+            return (t*old_mean + m*new_val) / (t+m)
 
-        def update_std(values, old_std, old_mean, new_mean):
-            # See here:
-            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
-            numel = values.numel() if isinstance(values, torch.Tensor) else values.size
-            total_values_so_far = numel * (module.batch_idx - 1)
-            M = (old_std ** 2) * (total_values_so_far - 1)
-            mean_diffs = (values - old_mean) * (values - new_mean)
-            M += mean_diffs.sum()
-            return sqrt((M / (total_values_so_far + numel - 1)).item())
+        # def update_std(values, old_std, old_mean, new_mean, total_values_so_far):
+        #     # See here:
+        #     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_Online_algorithm
+        #     numel = values.numel() if isinstance(values, torch.Tensor) else values.size
+        #     M = (old_std ** 2) * (total_values_so_far - 1)
+        #     mean_diffs = (values - old_mean) * (values - new_mean)
+        #     M += mean_diffs.sum()
+        #     return sqrt((M / (total_values_so_far + numel - 1)).item())
 
-        def update_b(values, old_b, mean):
+        def update_std(values, old_std, mean, total_values_so_far):
+            """
+            Updates std of the module.
+            Args:
+                values (torch.Tensor or np.ndarray): the activations to add to aggregation
+                old_std (float): the previous aggregation
+                mean (float): the total mean of all activations
+            """
+            old_variance = old_std**2
+            old_numel = total_values_so_far
+            curr_var = torch.mean((values-mean)**2).item()
+            curr_numel = values.numel() if isinstance(values, torch.Tensor) else values.size
+            new_variance = (curr_numel*curr_var + old_numel*old_variance) / (curr_numel + old_numel)
+            return np.sqrt(new_variance).item()
+
+        def update_b(values, previous_b, mean, total_values_so_far):
             """
             Updates the 'b' parameter of Laplace Distribution.
             """
-            current_b = (values - mean).abs().mean().item()
-            return old_b + (current_b - old_b) / module.batch_idx
+            curr_b = (values - mean).abs().mean().item()
+            curr_numel = values.numel()
+            return (curr_numel * curr_b + total_values_so_far * previous_b) / (total_values_so_far + curr_numel)
 
         def update_record(record, tensor):
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
-            if self.collecting_laplace:
-                record['b'] = update_b(act, record['b'], record['mean'])
+            numel = act.numel()
+            if self.collecting_second_pass:
+                try:
+                    record['b'] = update_b(act, record['b'], record['mean'], record['total_numel'])
+                    record['std'] = update_std(act, record['std'], record['mean'], record['total_numel'])
+                except RuntimeError:
+                    record['b'] = update_b(act.cpu().numpy(), record['b'], record['mean'], record['total_numel'])
+                    record['std'] = update_std(act.cpu().numpy(), record['std'], record['mean'], record['total_numel'])
+                record['total_numel'] += numel
                 return
 
             # In the general case, the average min/max that we're collecting are averages over the per-sample
@@ -479,16 +520,20 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             record['min'] = min(record['min'], min_per_sample.min().item())
             record['max'] = max(record['max'], max_per_sample.max().item())
             try:
-                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.mean().item())
-                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.mean().item())
-                new_mean = update_mean(record['mean'], act.mean().item())
-                record['std'] = update_std(tensor, record['std'], record['mean'], new_mean)
+                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.mean().item(),
+                                                record['total_numel'], act.numel())
+                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.mean().item(),
+                                                record['total_numel'], act.numel())
+                new_mean = update_mean(record['mean'], act.mean().item(), record['total_numel'], act.numel())
             except RuntimeError:
-                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.cpu().numpy().mean().item(0))
-                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.cpu().numpy().mean().item(0))
-                new_mean = update_mean(record['mean'], act.cpu().numpy().mean().item(0))
-                record['std'] = update_std(tensor.cpu().numpy(), record['std'], record['mean'], new_mean)
+                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.cpu().numpy().mean().item(0),
+                                                record['total_numel'], act.numel())
+                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.cpu().numpy().mean().item(0),
+                                                record['total_numel'], act.numel())
+                new_mean = update_mean(record['mean'], act.cpu().numpy().mean().item(0),
+                                       record['total_numel'], act.numel())
             record['mean'] = new_mean
+            record['total_numel'] += numel
 
             if not record['shape']:
                 record['shape'] = distiller.size2str(tensor)
@@ -742,13 +787,13 @@ def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_run
                                                            disable_inplace_attrs=disable_inplace_attrs,
                                                            inplace_attr_names=inplace_attr_names)
     with collector_context(quant_stats_collector, modules_to_collect):
-        msglogger.info('Pass 1: Collecting min, max, avg_min, avg_max, mean, std')
+        msglogger.info('Pass 1: Collecting min, max, avg_min, avg_max, mean')
         test_fn(model=model)
         # Collect Laplace distribution stats:
-        msglogger.info('Pass 2: Collecting b parameter')
-        quant_stats_collector.start_laplace()
+        msglogger.info('Pass 2: Collecting b, std parameters')
+        quant_stats_collector.start_second_pass()
         test_fn(model=model)
-        quant_stats_collector.stop_laplace()
+        quant_stats_collector.stop_second_pass()
 
     msglogger.info('Stats collection complete')
     if save_dir is not None:
