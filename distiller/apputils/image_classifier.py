@@ -271,7 +271,7 @@ def init_classifier_compression_arg_parser():
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
     parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
     parser.add_argument('--validation-split', '--valid-size', '--vs', dest='validation_split',
-                        type=float_range(exc_max=True), default=0.1,
+                        type=float_range(exc_max=True), default=0,
                         help='Portion of training dataset to set aside for validation')
     parser.add_argument('--effective-train-size', '--etrs', type=float_range(exc_min=True), default=1.,
                         help='Portion of training dataset to be used in each epoch. '
