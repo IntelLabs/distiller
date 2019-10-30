@@ -479,10 +479,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 prev_mean (float): the previous running mean
                 total_values_so_far (int): the number of the values so far
             """
-            curr_mean = values.mean().item()
             curr_numel = values.numel()
             prev_numel = total_values_so_far
-            return (prev_numel * prev_mean + curr_numel * curr_mean) / (prev_numel + curr_numel)
+            return (prev_numel * prev_mean + values.sum().item()) / (prev_numel + curr_numel)
 
         def update_std(values, prev_std, mean, total_values_so_far):
             """
