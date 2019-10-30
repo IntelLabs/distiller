@@ -148,6 +148,31 @@ class ActivationStatsCollector(object):
         raise NotImplementedError
 
 
+class RunningStatsMeter(AverageValueMeter):
+    """
+    A correction to torchnet's AverageValueMeter which doesn't implement
+    std collection correctly by taking into account the batch size.
+    """
+    def add(self, value, n=1):
+        self.val = value
+        self.sum += value
+        self.var += value * value
+
+        if n <= 0:
+            raise ValueError("Cannot use a non-positive weight for the running stat.")
+        elif self.n == 1:
+            self.mean = 0.0 + self.sum  # This is to force a copy in torch/numpy
+            self.std = np.inf
+            self.mean_old = self.mean
+            self.m_s = 0.0
+        else:
+            self.mean = self.mean_old + (value - n * self.mean_old) / float(self.n+n)
+            self.m_s += n*(value - self.mean_old) * (value - self.mean)
+            self.mean_old = self.mean
+            self.std = np.sqrt(self.m_s / (self.n + n - 1.0))
+        self.n += n
+
+
 class SummaryActivationStatsCollector(ActivationStatsCollector):
     """This class collects activiations statistical summaries.
 
@@ -167,7 +192,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         This is a callback from the forward() of 'module'.
         """
         try:
-            getattr(module, self.stat_name).add(self.summary_fn(output.data))
+            getattr(module, self.stat_name).add(self.summary_fn(output.data), output.data.numel())
         except RuntimeError as e:
             if "The expanded size of the tensor" in e.args[0]:
                 raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
@@ -183,7 +208,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):
-            setattr(module, self.stat_name, AverageValueMeter())
+            setattr(module, self.stat_name, RunningStatsMeter())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
                 getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
