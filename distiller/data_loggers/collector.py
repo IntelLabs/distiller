@@ -472,54 +472,46 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         """
         A callback for updating the required statistics for quantization in a module.
         """
-        def update_mean(old_mean, new_val, total_values_so_far, current_sample_numel):
+        def update_running_mean(values, prev_mean, total_values_so_far):
             """
-            Updates the running_mean of the values.
+            Updates a running mean of a tensor of values
             Args:
-                old_mean: the old mean
-                new_val: the new value
-                total_values_so_far: the weight of the values so far
-                current_sample_numel: the weight of the new val
+                values (torch.Tensor): the new tensor
+                prev_mean (float): the previous running mean
+                total_values_so_far (int): the number of the values so far
             """
-            t = total_values_so_far
-            m = current_sample_numel
-            return (t*old_mean + m*new_val) / (t+m)
+            curr_mean = values.mean().item()
+            curr_numel = values.numel()
+            prev_numel = total_values_so_far
+            return (prev_numel * prev_mean + curr_numel * curr_mean) / (prev_numel + curr_numel)
 
-        def update_std(values, old_std, mean, total_values_so_far):
+        def update_std(values, prev_std, mean, total_values_so_far):
             """
-            Updates std of the module.
-            Args:
-                values (torch.Tensor or np.ndarray): the activations to add to aggregation
-                old_std (float): the previous aggregation
-                mean (float): the total mean of all activations
+            Updates std of the tensor
             """
-            old_variance = old_std**2
-            old_numel = total_values_so_far
-            curr_var = torch.mean((values-mean)**2).item()
-            curr_numel = values.numel() if isinstance(values, torch.Tensor) else values.size
-            new_variance = (curr_numel*curr_var + old_numel*old_variance) / (curr_numel + old_numel)
-            return np.sqrt(new_variance).item()
+            prev_variance = prev_std ** 2
+            curr_sqr_dists = (values - mean) ** 2
+            new_variance = update_running_mean(curr_sqr_dists, prev_variance, total_values_so_far)
+            return sqrt(new_variance)
 
         def update_b(values, previous_b, mean, total_values_so_far):
             """
             Updates the 'b' parameter of Laplace Distribution.
             """
-            curr_b = (values - mean).abs().mean().item()
-            curr_numel = values.numel()
-            return (curr_numel * curr_b + total_values_so_far * previous_b) / (total_values_so_far + curr_numel)
+            curr_abs_dists = (values - mean).abs()
+            return update_running_mean(curr_abs_dists, previous_b, total_values_so_far)
 
         def update_record(record, tensor):
+            if tensor.dtype not in [torch.float16, torch.float32, torch.float64]:
+                # Mean function only works for float tensors
+                tensor = tensor.to(torch.float32)
             if not tensor.is_contiguous():
                 tensor = tensor.contiguous()
             act = tensor.view(tensor.size(0), -1)
             numel = act.numel()
             if self.collecting_second_pass:
-                try:
-                    record['b'] = update_b(act, record['b'], record['mean'], record['total_numel'])
-                    record['std'] = update_std(act, record['std'], record['mean'], record['total_numel'])
-                except RuntimeError:
-                    record['b'] = update_b(act.cpu().numpy(), record['b'], record['mean'], record['total_numel'])
-                    record['std'] = update_std(act.cpu().numpy(), record['std'], record['mean'], record['total_numel'])
+                record['b'] = update_b(act, record['b'], record['mean'], record['total_numel'])
+                record['std'] = update_std(act, record['std'], record['mean'], record['total_numel'])
                 record['total_numel'] += numel
                 return
 
@@ -529,25 +521,15 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             # But - If each sample contains just a single value, then such a per-sample calculation we'll result in
             # avg_min = avg_max. So in that case we "revert" to calculating "global" values, for the whole batch,
             # instead of per-sample values
-            dim = 0 if act.numel() == act.shape[0] else 1
+            dim = 0 if numel == act.shape[0] else 1
 
             min_per_sample = act.min(dim=dim)[0]
             max_per_sample = act.max(dim=dim)[0]
             record['min'] = min(record['min'], min_per_sample.min().item())
             record['max'] = max(record['max'], max_per_sample.max().item())
-            try:
-                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.mean().item(),
-                                                record['total_numel'], act.numel())
-                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.mean().item(),
-                                                record['total_numel'], act.numel())
-                new_mean = update_mean(record['mean'], act.mean().item(), record['total_numel'], act.numel())
-            except RuntimeError:
-                record['avg_min'] = update_mean(record['avg_min'], min_per_sample.cpu().numpy().mean().item(0),
-                                                record['total_numel'], act.numel())
-                record['avg_max'] = update_mean(record['avg_max'], max_per_sample.cpu().numpy().mean().item(0),
-                                                record['total_numel'], act.numel())
-                new_mean = update_mean(record['mean'], act.cpu().numpy().mean().item(0),
-                                       record['total_numel'], act.numel())
+            record['avg_min'] = update_running_mean(min_per_sample, record['avg_min'], record['total_numel'])
+            record['avg_max'] = update_running_mean(max_per_sample, record['avg_max'], record['total_numel'])
+            new_mean = update_running_mean(act, record['mean'], record['total_numel'])
             record['mean'] = new_mean
             record['total_numel'] += numel
 
