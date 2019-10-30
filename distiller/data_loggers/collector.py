@@ -148,7 +148,7 @@ class ActivationStatsCollector(object):
         raise NotImplementedError
 
 
-class RunningStatsMeter(AverageValueMeter):
+class WeightedAverageValueMeter(AverageValueMeter):
     """
     A correction to torchnet's AverageValueMeter which doesn't implement
     std collection correctly by taking into account the batch size.
@@ -158,7 +158,7 @@ class RunningStatsMeter(AverageValueMeter):
         if n <= 0:
             raise ValueError("Cannot use a non-positive weight for the running stat.")
         elif self.n == 0:
-            self.mean = 0.0 + self.sum  # This is to force a copy in torch/numpy
+            self.mean = 0.0 + value  # This is to force a copy in torch/numpy
             self.std = np.inf
             self.mean_old = self.mean
             self.m_s = 0.0
@@ -207,7 +207,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):
-            setattr(module, self.stat_name, RunningStatsMeter())
+            setattr(module, self.stat_name, WeightedAverageValueMeter())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
                 getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
