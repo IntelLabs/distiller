@@ -154,8 +154,7 @@ class RunningStatsMeter(AverageValueMeter):
     std collection correctly by taking into account the batch size.
     """
     def add(self, value, n=1):
-        self.val = value
-        self.sum += value
+        self.sum += value*n
         if n <= 0:
             raise ValueError("Cannot use a non-positive weight for the running stat.")
         elif self.n == 0:
@@ -164,10 +163,12 @@ class RunningStatsMeter(AverageValueMeter):
             self.mean_old = self.mean
             self.m_s = 0.0
         else:
-            self.mean = self.mean_old + (value - n * self.mean_old) / float(self.n+n)
+            self.mean = self.mean_old + n * (value - self.mean_old) / float(self.n+n)
             self.m_s += n*(value - self.mean_old) * (value - self.mean)
             self.mean_old = self.mean
             self.std = np.sqrt(self.m_s / (self.n + n - 1.0))
+        self.var = self.std**2
+
         self.n += n
 
 
