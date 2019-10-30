@@ -26,7 +26,7 @@
 #     # of parameters: 270,896
 #
 # Results:
-#     Best Top1: 91.490 (on Epoch: 339)
+#     Best Top1: 91.43
 #     Total MACs: 40,813,184
 #     Total sparsity: 69.1%
 #     # of parameters: 83,671
@@ -126,7 +126,7 @@ policies:
         keep_mask: True
         mini_batch_pruning_frequency: 1
         mask_on_forward_only: True
-        # use_double_copies: True
+        #use_double_copies: True
     starting_epoch: 0
     ending_epoch: 100
     frequency: 1

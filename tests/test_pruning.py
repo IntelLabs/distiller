@@ -414,18 +414,6 @@ def test_mobilenet_conv_fc_interface(is_parallel=parallel, model=None, zeros_mas
                            zeros_mask_dict=zeros_mask_dict)
 
 
-def test_threshold_mask():
-    # Create a 4-D tensor of 1s
-    a = torch.ones(3, 64, 32, 32)
-    # Change one element
-    a[1, 4, 17, 31] = 0.2
-    # Create and apply a mask
-    mask = distiller.threshold_mask(a, threshold=0.3)
-    assert np.sum(distiller.to_np(mask)) == (distiller.volume(a) - 1)
-    assert mask[1, 4, 17, 31] == 0
-    assert common.almost_equal(distiller.sparsity(mask), 1/distiller.volume(a))
-
-
 def test_magnitude_pruning():
     # Create a 4-D tensor of 1s
     a = torch.ones(3, 64, 32, 32)

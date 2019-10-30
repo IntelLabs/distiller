@@ -63,8 +63,11 @@ class ClassifierCompressor(object):
         
         # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
         # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
-        self.tflogger = TensorBoardLogger(msglogger.logdir)
-        self.pylogger = PythonLogger(msglogger)
+        if not self.logdir:
+            self.pylogger = self.tflogger = NullLogger()
+        else:
+            self.tflogger = TensorBoardLogger(msglogger.logdir)
+            self.pylogger = PythonLogger(msglogger)
         (self.model, self.compression_scheduler, self.optimizer, 
              self.start_epoch, self.ending_epoch) = _init_learner(args)
 
@@ -134,15 +137,16 @@ class ClassifierCompressor(object):
 
     def _finalize_epoch(self, epoch, perf_scores_history, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
-        update_training_scores_history(perf_scores_history, self.model, 
+        update_training_scores_history(perf_scores_history, self.model,
                                        top1, top5, epoch, self.args.num_best_scores)
         is_best = epoch == perf_scores_history[0].epoch
         checkpoint_extras = {'current_top1': top1,
                              'best_top1': perf_scores_history[0].top1,
                              'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer, 
-                                 scheduler=self.compression_scheduler, extras=checkpoint_extras, 
-                                 is_best=is_best, name=self.args.name, dir=msglogger.logdir)
+        if msglogger.logdir:
+            apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer,
+                                     scheduler=self.compression_scheduler, extras=checkpoint_extras,
+                                     is_best=is_best, name=self.args.name, dir=msglogger.logdir)
 
 
     def run_training_loop(self):
@@ -167,6 +171,7 @@ class ClassifierCompressor(object):
             msglogger.info('\n')
             top1, top5, loss = self.train_validate_with_scheduling(epoch)
             self._finalize_epoch(epoch, perf_scores_history, top1, top5)
+        return perf_scores_history
 
     def validate(self, epoch=-1):
         self.load_datasets()
@@ -292,9 +297,10 @@ def init_classifier_compression_arg_parser():
 
 
 def _init_logger(args, script_dir):
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
     global msglogger
-
+    if script_dir is None or not hasattr(args, "output_dir") or args.output_dir is None:
+        msglogger.logdir = None
+        return None
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'),
@@ -304,9 +310,10 @@ def _init_logger(args, script_dir):
     # to refer to past experiment executions and this information may be useful.
     apputils.log_execution_env_state(
         filter(None, [args.compress, args.qe_stats_file]),  # remove both None and empty strings
-        msglogger.logdir, gitroot=module_path)
+        msglogger.logdir)
     msglogger.debug("Distiller: %s", distiller.__version__)
     return msglogger.logdir
+
 
 def _config_determinism(args):
     if args.evaluate:
@@ -328,6 +335,7 @@ def _config_determinism(args):
         # See here: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/3
         cudnn.benchmark = True
     msglogger.info("Random seed: %d", args.seed)
+
 
 def _config_compute_device(args):
     if args.cpu or not torch.cuda.is_available():
@@ -726,7 +734,7 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
     perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'), reverse=True)
     for score in perf_scores_history[:num_best_scores]:
         msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d on epoch: %d]',
-                       score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
+                       score.top1, score.top5, score.sparsity, score.params_nnz_cnt, score.epoch)
 
 
 def earlyexit_loss(output, target, criterion, args):
@@ -827,7 +835,9 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=No
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
         args_copy.effective_test_size = args_copy.qe_calibration
-        args.qe_stats_file = acts_quant_stats_collection(load_data(args_copy)[2], model, criterion, loggers, args_copy)
+        args.qe_stats_file = acts_quant_stats_collection(
+            load_data(args_copy, fixed_subset=True)[2],
+            model, criterion, loggers, args_copy)
 
     with distiller.get_nonparallel_clone_model(model) as qe_model:
         qe_model.cpu()

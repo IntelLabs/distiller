@@ -79,7 +79,7 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
         super().set_param_mask(param, param_name, zeros_mask_dict, meta)
 
     def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
-        return SparsityLevelParameterPruner.prune_level(param, param_name, zeros_mask_dict, target_sparsity)
+        zeros_mask_dict[param_name].mask = SparsityLevelParameterPruner.create_mask(param, target_sparsity)
 
 
 class StructuredAGP(AutomatedGradualPrunerBase):
@@ -96,8 +96,6 @@ class StructuredAGP(AutomatedGradualPrunerBase):
         self.pruner.prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity, model)
 
 
-# TODO: this class parameterization is cumbersome: the ranking functions (per structure)
-# should come from the YAML schedule
 class L1RankedStructureParameterPruner_AGP(StructuredAGP):
     def __init__(self, name, initial_sparsity, final_sparsity, group_type, weights, group_dependency=None, kwargs=None):
         super().__init__(name, initial_sparsity, final_sparsity)

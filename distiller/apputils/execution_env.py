@@ -42,7 +42,7 @@ except ImportError:
 logger = logging.getLogger("app_cfg")
 
 
-def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
+def log_execution_env_state(config_paths=None, logdir=None):
     """Log information about the execution environment.
 
     Files in 'config_paths' will be copied to directory 'logdir'. A common use-case
@@ -62,7 +62,7 @@ def log_execution_env_state(config_paths=None, logdir=None, gitroot='.'):
         It is useful to know what git tag we're using, and if we have outstanding code.
         """
         try:
-            repo = Repo(gitroot)
+            repo = Repo(os.path.join(os.path.dirname(__file__), '..', '..'))
             assert not repo.bare
         except InvalidGitRepositoryError:
             logger.debug("Cannot find a Git repository.  You probably downloaded an archive of Distiller.")
@@ -186,10 +186,18 @@ def apply_default_logger_cfg(log_filename):
                 'formatter': 'simple',
             },
         },
-        'root': {
-            'level': 'DEBUG',
-            'handlers': ['console', 'file']
-        },
+        'loggers': {
+            '': {  # root logger
+                'level': 'DEBUG',
+                'handlers': ['console', 'file'],
+                'propagate': False
+            },
+            'app_cfg': {
+                'level': 'DEBUG',
+                'handlers': ['file'],
+                'propagate': False
+            },
+        }
     }
 
     logging.config.dictConfig(d)

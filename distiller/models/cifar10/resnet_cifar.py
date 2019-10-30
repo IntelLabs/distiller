@@ -37,6 +37,7 @@ This ResNet also has layer gates, to be able to dynamically remove layers.
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
+from distiller.modules import EltwiseAdd
 
 
 __all__ = ['resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
@@ -62,6 +63,7 @@ class BasicBlock(nn.Module):
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
+        self.residual_eltwiseadd = EltwiseAdd()
 
     def forward(self, x):
         residual = out = x
@@ -78,7 +80,7 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
+        out = self.residual_eltwiseadd(residual, out)
         out = self.relu2(out)
 
         return out

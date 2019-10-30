@@ -399,9 +399,16 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
 ### Research papers citing Distiller:
+- Maxim Zemlyanikin, Alexander Smorkalov, Tatiana Khanova, Anna Petrovicheva, Grigory Serebryakov.<br>
+*[512KiB RAM Is Enough! Live Camera Face Recognition DNN on MCU](http://openaccess.thecvf.com/content_ICCVW_2019/html/LPCV/Zemlyanikin_512KiB_RAM_Is_Enough_Live_Camera_Face_Recognition_DNN_on_ICCVW_2019_paper.html)*,<br>
+In IEEE International Conference on Computer Vision (ICCV), 2019.
+
+- Ziheng Wang, Jeremy Wohlwend, Tao Lei.<br>
+*[Structured Pruning of Large Language Models](https://arxiv.org/abs/1910.04732)*,<br>
+arXiv:1910.04732, 2019.
 
 - Soroush Ghodrati, Hardik Sharma, Sean Kinzer, Amir Yazdanbakhsh, Kambiz Samadi, Nam Sung Kim, Doug Burger, Hadi Esmaeilzadeh.<br>
-*[Mixed-Signal Charge-Domain Acceleration of Deep Neural networks through Interleaved Bit-Partitioned Arithmetic]( https://arxiv.org/abs/1906.11915)*,<br>
+*[Mixed-Signal Charge-Domain Acceleration of Deep Neural networks through Interleaved Bit-Partitioned Arithmetic](https://arxiv.org/abs/1906.11915)*,<br>
 arXiv:1906.11915, 2019.
 
 - Gil Shomron, Tal Horowitz, Uri Weiser.<br>

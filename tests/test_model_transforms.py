@@ -225,7 +225,7 @@ def test_fuse_modules_with_pre_exist_adj_map():
 )
 def test_fold_batch_norms_inference_no_fold(model, input_shape):
     orig_model = deepcopy(model)
-    folded_model = mt.fold_batch_norms_inference(model, dummy_input=torch.randn(input_shape))
+    folded_model = mt.fold_batch_norms(model, dummy_input=torch.randn(input_shape), inference=True)
     for (n_orig, m_orig), (n_folded, m_folded) in zip(orig_model.named_modules(), folded_model.named_modules()):
         assert n_folded == n_orig
         assert type(m_folded) == type(m_orig)
@@ -255,7 +255,7 @@ def test_fold_batch_norms_inference(model, input_shape):
     model.eval()
     orig_model = deepcopy(model)
     dummy_input = torch.randn(input_shape)
-    folded_model = mt.fold_batch_norms_inference(model, dummy_input=dummy_input)
+    folded_model = mt.fold_batch_norms(model, dummy_input=dummy_input, inference=True)
     assert type(folded_model.seq[0]) == type(orig_model.seq[0])
     assert type(folded_model.seq[1]) == nn.Identity
 
