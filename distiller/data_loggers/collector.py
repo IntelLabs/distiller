@@ -156,11 +156,9 @@ class RunningStatsMeter(AverageValueMeter):
     def add(self, value, n=1):
         self.val = value
         self.sum += value
-        self.var += value * value
-
         if n <= 0:
             raise ValueError("Cannot use a non-positive weight for the running stat.")
-        elif self.n == 1:
+        elif self.n == 0:
             self.mean = 0.0 + self.sum  # This is to force a copy in torch/numpy
             self.std = np.inf
             self.mean_old = self.mean
