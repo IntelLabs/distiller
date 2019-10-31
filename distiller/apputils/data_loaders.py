@@ -71,7 +71,7 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
 
     Args:
         dataset: a string with the name of the dataset to load (cifar10/imagenet)
-        data_dir: the directory where the datset resides
+        data_dir: the directory where the dataset resides
         batch_size: the batch size
         workers: the number of worker threads to use for loading the data
         validation_split: portion of training dataset to set aside for validation
