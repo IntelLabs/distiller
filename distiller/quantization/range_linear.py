@@ -1210,6 +1210,7 @@ class PostTrainLinearQuantizer(Quantizer):
         self.replacement_factory[nn.Embedding] = replace_embedding
 
         self.default_repalcement_fn = replace_fake_quant
+        self.replacement_blacklist.append(nn.Dropout)
 
         save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
         self.save_per_layer_parameters(save_dir)
