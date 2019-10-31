@@ -54,7 +54,7 @@ quantizers:
         input_overrides:
           0:
             # Shorthand to take the quantization settings of the output (ignores any other settings)
-            from_outputs: True
+            from_output: True
 
       fc:
         # Here we show an example of mixing output overrides and input overrides
