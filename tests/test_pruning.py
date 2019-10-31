@@ -453,9 +453,9 @@ def test_row_pruning():
                           [7., 8., 9.]])
     from distiller.pruning import L1RankedStructureParameterPruner
 
-    masker = distiller.scheduler.ParameterMasker("why name")
+    masker = distiller.scheduler.ParameterMasker("debug name")
     zeros_mask_dict = {"some name": masker}
-    L1RankedStructureParameterPruner.rank_and_prune_rows(0.5, param, "some name", zeros_mask_dict)
+    L1RankedStructureParameterPruner.rank_and_prune_channels(0.5, param, "some name", zeros_mask_dict)
     print(distiller.sparsity_rows(masker.mask))
     assert math.isclose(distiller.sparsity_rows(masker.mask), 1/3)
     pass
