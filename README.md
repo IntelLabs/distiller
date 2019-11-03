@@ -399,6 +399,12 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
 ### Research papers citing Distiller:
+- Hui Guan, Lin Ning, Zhen Lin, Xipeng Shen, Huiyang Zhou, Seung-Hwan Lim.<br>
+*[In-Place Zero-Space Memory Protection for CNN](https://arxiv.org/abs/1910.14479)*,<br>
+In Conference on Neural Information Processing Systems (NeurIPS), 2019.<br>
+arXiv:1910.14479, 2019<br>
+[code](https://github.com/guanh01/wot)
+
 - Maxim Zemlyanikin, Alexander Smorkalov, Tatiana Khanova, Anna Petrovicheva, Grigory Serebryakov.<br>
 *[512KiB RAM Is Enough! Live Camera Face Recognition DNN on MCU](http://openaccess.thecvf.com/content_ICCVW_2019/html/LPCV/Zemlyanikin_512KiB_RAM_Is_Enough_Live_Camera_Face_Recognition_DNN_on_ICCVW_2019_paper.html)*,<br>
 In IEEE International Conference on Computer Vision (ICCV), 2019.
@@ -426,7 +432,8 @@ In IEEE Computer Architecture Letters (CAL), 2019.
 - Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
   *[SinReQ: Generalized Sinusoidal Regularization for Low-Bitwidth Deep Quantized Training](https://arxiv.org/abs/1905.01416),*<br>
   arXiv:1905.01416, 2019.
-
+  [code](https://github.com/sinreq/sinreq_code)
+  
 - Goncharenko A., Denisov A., Alyamkin S., Terentev E.<br>
 *[Trainable Thresholds for Neural Network Quantization](https://rd.springer.com/chapter/10.1007/978-3-030-20518-8_26),*<br>
 In: Rojas I., Joya G., Catala A. (eds) Advances in Computational Intelligence Lecture Notes in Computer Science, vol 11507. Springer, Cham.  International Work-Conference on Artificial Neural Networks (IWANN 2019).
