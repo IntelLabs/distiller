@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,55 +14,52 @@
 # limitations under the License.
 #
 
-# This is the same code as in https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
-# However, it contains one type of change: whenever a ReLU module is used, we make sure to use a different
-# instance.  This is necessary when we want to collect activation statistics.
+# The TorchVision implementation in https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
+# has 2 issues in the implementation of the BasicBlock and Bottleneck modules, which impact our ability to
+# collect activation statistics and run quantization:
+#   1. Re-used ReLU modules
+#   2. Element-wise addition as a direct tensor operation
+# Here we provide an implementation of both classes that fixes these issues, and we provide the same API to create
+# ResNet and ResNeXt models as in the TorchVision implementation.
+# We reuse the original implementation as much as possible.
 
+from collections import OrderedDict
 import torch.nn as nn
-import math
-import torch.utils.model_zoo as model_zoo
+from torchvision.models.resnet import ResNet, BasicBlock, Bottleneck, _resnet
 
 from distiller.modules import EltwiseAdd
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-           'resnet152']
+           'resnet152', 'resnext50_32x4d', 'resnext101_32x8d']
 
 
-model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-}
+class DistillerBasicBlock(BasicBlock):
+    def __init__(self, *args, **kwargs):
+        # Initialize torchvision version
+        super(DistillerBasicBlock, self).__init__(*args, **kwargs)
 
-
-def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
-
-
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes)
+        # Remove original relu in favor of numbered modules
+        delattr(self, 'relu')
         self.relu1 = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes)
         self.relu2 = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
+        self.add = EltwiseAdd(inplace=True)  # Replace '+=' operator with inplace module
 
-        # Replace '+=' operator with inplace module
-        self.add = EltwiseAdd(inplace=True)
+        # Trick to make the modules accessible in their topological order
+        modules = OrderedDict()
+        modules['conv1'] = self.conv1
+        modules['bn1'] = self.bn1
+        modules['relu1'] = self.relu1
+        modules['conv2'] = self.conv2
+        modules['bn2'] = self.bn2
+        if self.downsample is not None:
+            modules['downsample'] = self.downsample
+        modules['add'] = self.add
+        modules['relu2'] = self.relu2
+        self._modules = modules
 
     def forward(self, x):
-        residual = x
+        identity = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -72,38 +69,44 @@ class BasicBlock(nn.Module):
         out = self.bn2(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            identity = self.downsample(x)
 
-        # out += residual
-        out = self.add(out, residual)
+        out = self.add(out, identity)
         out = self.relu2(out)
 
         return out
 
 
-class Bottleneck(nn.Module):
-    expansion = 4
+class DistillerBottleneck(Bottleneck):
+    def __init__(self, *args, **kwargs):
+        # Initialize torchvision version
+        super(DistillerBottleneck, self).__init__(*args, **kwargs)
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        # Remove original relu in favor of numbered modules
+        delattr(self, 'relu')
         self.relu1 = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
         self.relu2 = nn.ReLU(inplace=True)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu3 = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
+        self.add = EltwiseAdd(inplace=True)  # Replace '+=' operator with inplace module
 
-        # Replace '+=' operator with inplace module
-        self.add = EltwiseAdd(inplace=True)
+        # Trick to make the modules accessible in their topological order
+        modules = OrderedDict()
+        modules['conv1'] = self.conv1
+        modules['bn1'] = self.bn1
+        modules['relu1'] = self.relu1
+        modules['conv2'] = self.conv2
+        modules['bn2'] = self.bn2
+        modules['relu2'] = self.relu2
+        modules['conv3'] = self.conv3
+        modules['bn3'] = self.bn3
+        if self.downsample is not None:
+            modules['downsample'] = self.downsample
+        modules['add'] = self.add
+        modules['relu3'] = self.relu3
+        self._modules = modules
 
     def forward(self, x):
-        residual = x
+        identity = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -117,130 +120,90 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            identity = self.downsample(x)
 
-        # out += residual
-        out = self.add(out, residual)
+        out = self.add(out, identity)
         out = self.relu3(out)
 
         return out
 
 
-class ResNet(nn.Module):
-
-    def __init__(self, block, layers, num_classes=1000):
-        self.inplanes = 64
-        super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
-
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
-        return x
-
-
-def resnet18(pretrained=False, **kwargs):
+def resnet18(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-18 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
-    return model
+    return _resnet('resnet18', DistillerBasicBlock, [2, 2, 2, 2], pretrained, progress,
+                   **kwargs)
 
 
-def resnet34(pretrained=False, **kwargs):
+def resnet34(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-34 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34']))
-    return model
+    return _resnet('resnet34', DistillerBasicBlock, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnet50(pretrained=False, **kwargs):
+def resnet50(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-50 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
-    return model
+    return _resnet('resnet50', DistillerBottleneck, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnet101(pretrained=False, **kwargs):
+def resnet101(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-101 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
-    return model
+    return _resnet('resnet101', DistillerBottleneck, [3, 4, 23, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnet152(pretrained=False, **kwargs):
+def resnet152(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-152 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
-    return model
+    return _resnet('resnet152', DistillerBottleneck, [3, 8, 36, 3], pretrained, progress,
+                   **kwargs)
+
+
+def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
+    """Constructs a ResNeXt-50 32x4d model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['groups'] = 32
+    kwargs['width_per_group'] = 4
+    return _resnet('resnext50_32x4d', DistillerBottleneck, [3, 4, 6, 3],
+                   pretrained, progress, **kwargs)
+
+
+def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
+    """Constructs a ResNeXt-101 32x8d model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['groups'] = 32
+    kwargs['width_per_group'] = 8
+    return _resnet('resnext101_32x8d', DistillerBottleneck, [3, 4, 23, 3],
+                   pretrained, progress, **kwargs)
