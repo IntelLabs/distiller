@@ -20,7 +20,6 @@ import time
 import os
 import logging
 from collections import OrderedDict
-import copy
 import numpy as np
 import torch
 import torch.nn as nn
