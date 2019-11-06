@@ -434,6 +434,7 @@ if __name__ == "__main__":
     args = get_default_args()
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
+    args = deepcopy(cc.args)  # Get back args after modifications in ClassifierCompressor.__init__
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
 
     # quant calibration dataloader:
