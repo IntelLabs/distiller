@@ -668,3 +668,43 @@ def test_stats_fusion_split_act(act1_type, act2_type, bn_out_stats, linear_out_e
     expected.pop('bn')  # After BN folding BN stats are removed
     expected['linear']['output'] = linear_out_expected_stats
     assert quantizer.model_activation_stats == expected
+
+
+###############################################################################
+# Test Get/Set scale & zero_point of wrappers
+###############################################################################
+@pytest.mark.parametrize(
+    'act1_type, act2_type, bn_out_stats',
+    [
+        ('relu', 'relu', stats_entry(-5., 5., -3., 3., 0., 0.5)),
+        ('relu', 'sigmoid', stats_entry(-5., 5., -3., 3., 0., 0.5)),
+        ('relu', 'tanh', stats_entry(-5., 5., -3., 3., 0., 0.5)),
+    ],
+    ids=['relu-relu', 'relu-sigmoid', 'relu-tanh']
+)
+def test_acts_quant_params(act1_type, act2_type, bn_out_stats):
+    # prepare model:
+    model = LinearBNSplitAct(act1_type, act2_type)
+    stats = gen_stats_for_model(model)
+    stats['bn']['output'] = bn_out_stats
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer.prepare_model(torch.randn(10, 10))
+    # get quant params:
+    expected_quant_params_keys = {
+        'linear.output_zero_point',
+        'linear.output_scale',
+        'act1.output_zero_point',
+        'act1.output_scale',
+        'act2.output_zero_point',
+        'act2.output_scale'
+    }
+    assert set(quantizer.acts_quant_params) == expected_quant_params_keys
+    quantizer.set_act_quant_param('linear.output_zero_point', 2.)
+    quantizer.set_act_quant_param('linear.output_scale', 30.)
+    assert model.linear.output_zero_point == 2.
+    assert model.linear.output_scale == 30.
+    expected_quant_param_linear_dict = {
+        'output_zero_point': torch.tensor(2.),
+        'output_scale': 30.
+    }
+    assert dict(model.linear.named_acts_quant_params()) == expected_quant_param_linear_dict
