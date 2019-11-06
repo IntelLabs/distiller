@@ -667,7 +667,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             self.is_simulated_quant_weight_shifted.add_(1)  # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += input_q.quant_metadata.zero_point
-        accum = self.wrapped_module.forward(input_q)
+        accum = self.wrapped_module(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
         return accum
@@ -742,8 +742,8 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
     def quantized_forward(self, input0_q, input1_q):
         self.accum_scale = input0_q.quant_metadata.scale * input1_q.quant_metadata.scale
-        accum = self.wrapped_module.forward(input0_q + input0_q.quant_metadata.zero_point,
-                                            input1_q + input1_q.quant_metadata.zero_point)
+        accum = self.wrapped_module(input0_q + input0_q.quant_metadata.zero_point,
+                                    input1_q + input1_q.quant_metadata.zero_point)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
         return accum
 
