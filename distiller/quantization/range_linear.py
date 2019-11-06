@@ -1234,7 +1234,23 @@ class PostTrainLinearQuantizer(Quantizer):
                     yield full_buff_name, buff
 
     def set_act_quant_param(self, name, val):
+        """
+        Sets the the quant parameter by module_name.quant_param_name.
+        Args:
+             name (str): the name of the quant param [module_name].[quant_param_name]
+             val (int or float or torch.Tensor): the new value.
+        """
         self.acts_quant_params[name].fill_(val)
+
+    def update_acts_quant_params(self, new_config):
+        """
+        Updates all the quant params using a dictionary.
+        Args:
+             new_config (dict): the new configuration dict.
+        """
+        for k, v in new_config.items():
+            self.set_act_quant_param(k, v)
+
 
     @classmethod
     def from_args(cls, model, args):
