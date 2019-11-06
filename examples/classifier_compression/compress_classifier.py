@@ -73,7 +73,7 @@ def main():
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
-    init_knowledge_distillation(app.args,  app.model, app.compression_scheduler)
+    init_knowledge_distillation(app.args, app.model, app.compression_scheduler)
     app.run_training_loop()
     # Finally run results on the test set
     return app.test()
