@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import copy
 import math
 import time
 import os
