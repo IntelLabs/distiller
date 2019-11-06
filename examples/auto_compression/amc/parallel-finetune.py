@@ -178,13 +178,13 @@ def finetune_checkpoint(ckpt_file, gpu, app_args, loaders):
     app = classifier.ClassifierCompressor(app_args, script_dir=os.path.dirname(__file__))
     app.train_loader, app.val_loader, app.test_loader = loaders
     best = [float("-inf"), float("-inf"), float("inf")]
-    for epoch in range(app_args.epochs):
-        validate = epoch >= math.floor((1-app_args.validate_enable_factor) * app_args.epochs)
+    for epoch in range(app.args.epochs):
+        validate = epoch >= math.floor((1 - app.args.validate_enable_factor) * app.args.epochs)
         top1, top5, loss = app.train_validate_with_scheduling(epoch, validate=validate, verbose=False)
         if validate:
             if top1 > best[0]:
                 best = [top1, top5, loss]
-    if app_args.validate_enable_factor == 0:
+    if app.args.validate_enable_factor == 0:
         # We did not validate, so our score is the performance on the Test dataset
         return (name, app.test())
     return (name, best)
