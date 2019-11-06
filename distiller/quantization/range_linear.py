@@ -365,8 +365,6 @@ class RangeLinearQuantWrapper(nn.Module):
                                                           clip_n_stds, clip_half_range, scale_approx_mult_bits)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
-            self.register_buffer('orig_output_scale', scale)
-            self.register_buffer('orig_output_zero_point', zp)
         else:
             self.preset_act_stats = False
 
