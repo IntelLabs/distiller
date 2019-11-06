@@ -21,7 +21,7 @@ from distiller.model_transforms import fold_batch_norms
 import distiller.modules
 from distiller.data_loggers import collect_quant_stats
 from distiller.models import create_model
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 import logging
 from copy import deepcopy
 import distiller.apputils.image_classifier as classifier
