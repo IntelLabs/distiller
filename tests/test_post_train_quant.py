@@ -682,7 +682,7 @@ def test_stats_fusion_split_act(act1_type, act2_type, bn_out_stats, linear_out_e
     ],
     ids=['relu-relu', 'relu-sigmoid', 'relu-tanh']
 )
-def test_acts_quant_params(act1_type, act2_type, bn_out_stats):
+def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
     # prepare model:
     model = LinearBNSplitAct(act1_type, act2_type)
     stats = gen_stats_for_model(model)
@@ -708,3 +708,35 @@ def test_acts_quant_params(act1_type, act2_type, bn_out_stats):
         'output_scale': 30.
     }
     assert dict(model.linear.named_acts_quant_params()) == expected_quant_param_linear_dict
+    new_config = {
+        'linear.output_zero_point': 4.,
+        'act2.output_scale': 50
+    }
+    quantizer.update_acts_quant_params(new_config)
+    assert model.linear.output_zero_point == 4
+    assert model.act2.output_scale == 50
+
+
+class DummyWordLangModel(nn.Module):
+    def __init__(self, embedding, rnn):
+        super(DummyWordLangModel, self).__init__()
+        self.embedding = embedding
+        self.rnn = rnn
+
+    def forward(self, x):
+        return self.rnn(self.embedding(x))
+
+
+def test_acts_quant_params_rnn(rnn_model):
+    model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model).cuda()
+    stats = gen_stats_for_model(model)
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    dummy_input = torch.randint(0, 41, size=(79, 23))
+    quantizer.prepare_model(dummy_input)
+    new_config = {
+        'rnn.rnn.cells.0.act_o.output_scale': 4,
+        'embedding.w_scale': torch.tensor(59.0)
+    }
+    quantizer.update_acts_quant_params(new_config)
+    assert model.rnn.rnn.cells[0].act_o.output_scale == 4
+    assert model.embedding.w_scale == 59.0
