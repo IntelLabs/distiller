@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import copy
 import math
 import time
 import os
@@ -54,11 +55,11 @@ class ClassifierCompressor(object):
         - Classifier training, verification and testing
     """
     def __init__(self, args, script_dir):
-        self.args = args
-        _infer_implicit_args(args)
-        self.logdir = _init_logger(args, script_dir)
-        _config_determinism(args)
-        _config_compute_device(args)
+        self.args = copy.deepcopy(args)
+        _infer_implicit_args(self.args)
+        self.logdir = _init_logger(self.args, script_dir)
+        _config_determinism(self.args)
+        _config_compute_device(self.args)
         
         # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
         # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -68,12 +69,13 @@ class ClassifierCompressor(object):
             self.tflogger = TensorBoardLogger(msglogger.logdir)
             self.pylogger = PythonLogger(msglogger)
         (self.model, self.compression_scheduler, self.optimizer, 
-             self.start_epoch, self.ending_epoch) = _init_learner(args)
+             self.start_epoch, self.ending_epoch) = _init_learner(self.args)
 
         # Define loss function (criterion)
-        self.criterion = nn.CrossEntropyLoss().to(args.device)
+        self.criterion = nn.CrossEntropyLoss().to(self.args.device)
         self.train_loader, self.val_loader, self.test_loader = (None, None, None)
-        self.activations_collectors = create_activation_stats_collectors(self.model, *args.activation_stats)
+        self.activations_collectors = create_activation_stats_collectors(
+            self.model, *self.args.activation_stats)
     
     def load_datasets(self):
         """Load the datasets"""
