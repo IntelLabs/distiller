@@ -993,8 +993,13 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         return output_scale, output_zero_point
 
 
-def _is_range_linear_wrapper(module):
-    return isinstance(module, (RangeLinearEmbeddingWrapper, RangeLinearQuantWrapper))
+_ptq_wrappers_int_only = (RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper)
+_ptq_wrappers_all = _ptq_wrappers_int_only + (FPWrapper,)
+
+
+def is_post_train_quant_wrapper(module, include_fpwrapper=True):
+    types = _ptq_wrappers_all if include_fpwrapper else _ptq_wrappers_int_only
+    return isinstance(module, types)
 
 
 class PostTrainLinearQuantizer(Quantizer):
@@ -1231,7 +1236,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def named_acts_quant_params(self):
         for module_name, module in self.model.named_modules():
-            if _is_range_linear_wrapper(module):
+            if is_post_train_quant_wrapper(module, include_fpwrapper=False):
                 for buff_name, buff in module.named_acts_quant_params():
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff

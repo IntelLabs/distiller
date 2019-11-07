@@ -30,7 +30,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
-from distiller.quantization.range_linear import RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, FPWrapper
+from distiller.quantization.range_linear import is_post_train_quant_wrapper
 import numpy as np
 
 msglogger = logging.getLogger()
@@ -39,10 +39,6 @@ __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
            'QuantCalibrationStatsCollector', 'ActivationHistogramsCollector',
            'collect_quant_stats', 'collect_histograms',
            'collector_context', 'collectors_context']
-
-
-def _is_ptq_wrapper(module):
-    return isinstance(module, (RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, FPWrapper))
 
 
 class ActivationStatsCollector(object):
@@ -84,11 +80,11 @@ class ActivationStatsCollector(object):
         distiller.utils.assign_layer_fq_names(model)
 
         # Currently this is internal, and its only purpose is to enable skipping collection
-        # for wrapped modules inside post-training quantization wrapper classes
-        # When doing PTQ, these outputs of these wrapped modules are actually intermediate results
-        # which are not relevant for tracking
+        # for wrapped modules inside post-training quantization wrapper classes.
+        # When doing PTQ, the outputs of these wrapped modules are actually intermediate results
+        # which are not relevant for tracking.
         self._dont_collect_list = [module.wrapped_module.distiller_name for module in model.modules() if
-                                   _is_ptq_wrapper(module)]
+                                   is_post_train_quant_wrapper(module)]
 
     def value(self):
         """Return a dictionary containing {layer_name: statistic}"""
@@ -163,7 +159,7 @@ class ActivationStatsCollector(object):
         # We make an exception for models that were quantized with 'PostTrainLinearQuantizer'. In these
         # models, the quantized modules are actually wrappers of the original FP32 modules, so they are
         # NOT leaf modules - but we still want to track them.
-        if distiller.has_children(module) and not _is_ptq_wrapper(module):
+        if distiller.has_children(module) and not is_post_train_quant_wrapper(module):
             return False
         if isinstance(module, torch.nn.Identity):
             return False
