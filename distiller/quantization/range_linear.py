@@ -371,8 +371,10 @@ class RangeLinearQuantWrapper(nn.Module):
         self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
 
     def named_acts_quant_params(self):
-        yield 'output_scale', self.output_scale
-        yield 'output_zero_point', self.output_zero_point
+        if self.preset_act_stats:
+            # Output scale buffers are saved in the model only when stats are used
+            yield 'output_scale', self.output_scale
+            yield 'output_zero_point', self.output_zero_point
 
     def forward(self, *inputs):
         if self.training:
