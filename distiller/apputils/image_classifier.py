@@ -56,7 +56,7 @@ class ClassifierCompressor(object):
     """
     def __init__(self, args, script_dir):
         self.args = copy.deepcopy(args)
-        _infer_implicit_args(self.args)
+        self._infer_implicit_args(self.args)
         self.logdir = _init_logger(self.args, script_dir)
         _config_determinism(self.args)
         _config_compute_device(self.args)
@@ -86,6 +86,25 @@ class ClassifierCompressor(object):
     @property
     def data_loaders(self):
         return self.train_loader, self.val_loader, self.test_loader
+
+    @staticmethod
+    def _infer_implicit_args(args):
+        # Infer the dataset from the model name
+        if not hasattr(args, 'dataset'):
+            args.dataset = distiller.apputils.classification_dataset_str_from_arch(args.arch)
+        if not hasattr(args, "num_classes"):
+            args.num_classes = distiller.apputils.classification_num_classes(args.dataset)
+        return args
+
+    @staticmethod
+    def mock_args():
+        """Generate a Namespace based on default arguments"""
+        return ClassifierCompressor._infer_implicit_args(
+            init_classifier_compression_arg_parser().parse_args(['fictive_required_arg',]))
+
+    @classmethod
+    def mock_classifier(cls):
+        return cls(cls.mock_args(), '')
 
     def train_one_epoch(self, epoch, verbose=True):
         """Train for one epoch"""
@@ -359,14 +378,6 @@ def _config_compute_device(args):
             torch.cuda.set_device(args.gpus[0])
 
 
-def _infer_implicit_args(args):
-    # Infer the dataset from the model name
-    if not hasattr(args, 'dataset'):
-        args.dataset = distiller.apputils.classification_dataset_str_from_arch(args.arch)
-    if not hasattr(args, "num_classes"):
-        args.num_classes = distiller.apputils.classification_num_classes(args.dataset)
-
-
 def _init_learner(args):
     # Create the model
     model = create_model(args.pretrained, args.dataset, args.arch,
@@ -620,11 +631,14 @@ def validate(val_loader, model, criterion, loggers, args, epoch=-1):
     return _validate(val_loader, model, criterion, loggers, args, epoch)
 
 
-def test(test_loader, model, criterion, loggers, activations_collectors=None, args=None):
+def test(test_loader, model, criterion, loggers=None, activations_collectors=None, args=None):
     """Model Test"""
     msglogger.info('--- test ---------------------')
+    if args is None:
+        args = ClassifierCompressor.mock_args()
     activations_collectors = activations_collectors or create_activation_stats_collectors(
-        model, *args.activation_stats)
+            model, *args.activation_stats)
+
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statistics(-1, "test", loggers, collector=collectors['sparsity'])
@@ -836,24 +850,32 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=No
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
         args_copy.effective_test_size = args_copy.qe_calibration
+        # set stats into args stats field
         args.qe_stats_file = acts_quant_stats_collection(
             load_data(args_copy, fixed_subset=True)[2],
-            model, criterion, loggers, args_copy)
+            model, criterion, loggers, args_copy, save_to_file=save_flag)
 
-    with distiller.get_nonparallel_clone_model(model) as qe_model:
+    args_qe = copy.deepcopy(args)
+    if args.qe_cpu:
+        # 'device' must match the model device, for dataset to be loaded correctly
+        args_qe.device = 'cpu'
+        qe_model = distiller.make_non_parallel_copy(model)
         qe_model.cpu()
-        quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args)
-        quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
-        qe_model.to(args.device)
+    else:
+        qe_model = copy.deepcopy(model)
 
-        test_res = test(test_loader, qe_model, criterion, loggers, args=args)
+    quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args_qe)
+    quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
 
-        if save_flag:
-            checkpoint_name = 'quantized'
-            apputils.save_checkpoint(0, args.arch, qe_model, scheduler=scheduler,
-                                     name='_'.join([args.name, checkpoint_name]) if args.name else checkpoint_name,
-                                     dir=msglogger.logdir, extras={'quantized_top1': test_res[0]})
+    test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 
+    if save_flag:
+        checkpoint_name = 'quantized'
+        apputils.save_checkpoint(0, args_qe.arch, qe_model, scheduler=scheduler,
+            name='_'.join([args_qe.name, checkpoint_name]) if args_qe.name else checkpoint_name,
+            dir=msglogger.logdir, extras={'quantized_top1': test_res[0]})
+
+    del qe_model
     return test_res
 
 
