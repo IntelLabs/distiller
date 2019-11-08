@@ -19,8 +19,9 @@ from .grouping import *
 from .matmul import *
 from .rnn import *
 from .aggregate import *
+from .topology import *
 
 __all__ = ['EltwiseAdd', 'EltwiseMult', 'EltwiseDiv', 'Matmul', 'BatchMatmul',
            'Concat', 'Chunk', 'Split', 'Stack',
            'DistillerLSTMCell', 'DistillerLSTM', 'convert_model_to_distiller_lstm',
-           'Norm', 'Mean']
+           'Norm', 'Mean', 'BranchPoint']
