@@ -852,8 +852,9 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=No
         args_copy.effective_test_size = args_copy.qe_calibration
         # set stats into args stats field
         args.qe_stats_file = acts_quant_stats_collection(
-            load_data(args_copy, fixed_subset=True)[2],
-            model, criterion, loggers, args_copy, save_to_file=save_flag)
+            model, criterion, loggers, args_copy,
+            test_loader=load_data(args_copy, fixed_subset=True)[2],
+            save_to_file=save_flag)
 
     args_qe = copy.deepcopy(args)
     if args.qe_cpu:
@@ -879,9 +880,13 @@ def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=No
     return test_res
 
 
-def acts_quant_stats_collection(test_loader, model, criterion, loggers, args, save_to_file=False):
+def acts_quant_stats_collection(model, criterion, loggers, args, test_loader=None, save_to_file=False):
     msglogger.info('Collecting quantization calibration stats based on {:.1%} of test dataset'
                    .format(args.qe_calibration))
+    if test_loader is None:
+        tmp_args = copy.deepcopy(args)
+        tmp_args.effective_test_size = tmp_args.qe_calibration
+        test_loader = load_data(tmp_args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
     with distiller.get_nonparallel_clone_model(model) as cmodel:
