@@ -534,7 +534,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     data_time = tnt.AverageValueMeter()
 
     # For Early Exit, we define statistics for each exit, so
-    # exiterrors is analogous to classerr for the non-Early Exit case
+    # `exiterrors` is analogous to `classerr` in the non-Early Exit case
     if early_exit_mode(args):
         args.exiterrors = []
         for exitnum in range(args.num_exits):
@@ -749,6 +749,8 @@ def earlyexit_loss(output, target, criterion, args):
     sum_lossweights = sum(args.earlyexit_lossweights)
     assert sum_lossweights < 1
     for exitnum in range(args.num_exits-1):
+        if output[exitnum] is None:
+            continue
         exit_loss = criterion(output[exitnum], target)
         weighted_loss += args.earlyexit_lossweights[exitnum] * exit_loss
         args.exiterrors[exitnum].add(output[exitnum].detach(), target)
