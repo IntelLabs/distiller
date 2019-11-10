@@ -363,20 +363,22 @@ class RangeLinearQuantWrapper(nn.Module):
 
             scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode, clip_acts,
                                                           clip_n_stds, clip_half_range, scale_approx_mult_bits)
-            self.register_buffer('output_scale', scale)
-            self.register_buffer('output_zero_point', zp)
+            self.output_scale = nn.Parameter(scale)
+            self.output_zero_point = nn.Parameter(zp)
         else:
             self.preset_act_stats = False
 
         self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
 
-    def named_acts_quant_params(self):
-        yield 'output_scale', self.output_scale
-        yield 'output_zero_point', self.output_zero_point
+    def named_linear_quant_params(self):
+        if self.preset_act_stats:
+            # Output scale buffers are saved in the model only when stats are used
+            yield 'output_scale', self.output_scale
+            yield 'output_zero_point', self.output_zero_point
 
     def forward(self, *inputs):
-        if self.training:
-            raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
+        # if self.training:
+        #     raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
 
         device = inputs[0].device
         for buffer_name, buffer in self._buffers.items():
@@ -583,8 +585,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                                               self.wts_quant_settings.quant_mode,
                                                               per_channel=self.wts_quant_settings.per_channel)
 
-        self.register_buffer('w_scale', w_scale)
-        self.register_buffer('w_zero_point', w_zero_point)
+        self.w_scale = nn.Parameter(w_scale)
+        self.w_zero_point = nn.Parameter(w_zero_point)
         linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.params_min_q_val,
                               self.params_max_q_val, inplace=True)
 
@@ -600,7 +602,6 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             self.accum_scale = torch.ones(1).to(device)
 
         # Quantize bias
-        self.has_bias = hasattr(wrapped_module, 'bias') and wrapped_module.bias is not None
         if self.has_bias and not self.preset_act_stats:
             b_scale, b_zero_point = _get_quant_params_from_tensor(wrapped_module.bias,
                                                                   self.wts_quant_settings.num_bits,
@@ -618,6 +619,11 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # Upon calling `self.state_dict()` - we restore the actual quantized weights.
         # i.e. is_simulated_quant_weight_shifted = False
         self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
+
+    def named_linear_quant_params(self):
+        yield 'w_scale', self.w_scale
+        yield 'w_zero_point', self.w_zero_point
+        yield from super(RangeLinearQuantParamLayerWrapper, self).named_linear_quant_params()
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         if self.is_simulated_quant_weight_shifted:
@@ -947,7 +953,7 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         self.quant_metadata = TensorQuantMetadata(self.w_scale, self.w_zero_point, self.min_q_val, self.max_q_val)
         self.wrapped_module = wrapped_module
 
-    def named_acts_quant_params(self):
+    def named_linear_quant_params(self):
         yield 'w_scale', self.w_scale
         yield 'w_zero_point', self.w_zero_point
 
@@ -1223,24 +1229,24 @@ class PostTrainLinearQuantizer(Quantizer):
 
         self.default_repalcement_fn = replace_fake_quant
 
-        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
-        self.save_per_layer_parameters(save_dir)
+        # To be filled by .prepare_model()
+        self.linear_quant_params = None
 
-    def named_acts_quant_params(self):
+    def named_linear_quant_params(self):
         for module_name, module in self.model.named_modules():
             if _is_range_linear_wrapper(module):
-                for buff_name, buff in module.named_acts_quant_params():
+                for buff_name, buff in module.named_linear_quant_params():
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff
 
-    def set_act_quant_param(self, name, val):
+    def set_linear_quant_param(self, name, val):
         """
         Sets the the quant parameter by module_name.quant_param_name.
         Args:
              name (str): the name of the quant param [module_name].[quant_param_name]
              val (int or float or torch.Tensor): the new value.
         """
-        self.acts_quant_params[name].fill_(val)
+        self.linear_quant_params[name].data.fill_(val)
 
     def update_acts_quant_params(self, new_config):
         """
@@ -1249,7 +1255,7 @@ class PostTrainLinearQuantizer(Quantizer):
              new_config (dict): the new configuration dict.
         """
         for k, v in new_config.items():
-            self.set_act_quant_param(k, v)
+            self.set_linear_quant_param(k, v)
 
 
     @classmethod
@@ -1297,6 +1303,11 @@ class PostTrainLinearQuantizer(Quantizer):
                 actual_v = self.module_overrides_map[n].get(k, v)
                 d[k] = actual_v
             out[n] = d
+        if self.linear_quant_params:
+            out['linear_quant_params'] = lqp_dict = OrderedDict()
+            for k, v in self.linear_quant_params.items():  # type: str, torch.Tensor
+                lqp_dict[k] = v.item()
+
         save_path = os.path.join(save_dir, 'layer_quant_params.yaml')
         distiller.yaml_ordered_save(save_path, out)
         msglogger.info('Per-layer quantization parameters saved to ' + save_path)
@@ -1316,7 +1327,10 @@ class PostTrainLinearQuantizer(Quantizer):
             raise ValueError('PostTrainLinearQuantizer requires dummy input in order to perform certain optimizations')
         super(PostTrainLinearQuantizer, self).prepare_model(dummy_input)
 
-        self.acts_quant_params = OrderedDict(self.named_acts_quant_params())
+        self.linear_quant_params = OrderedDict(self.named_linear_quant_params())
+
+        save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
+        self.save_per_layer_parameters(save_dir)
 
     def _pre_prepare_model(self, dummy_input):
         if not self.has_bidi_distiller_lstm:
