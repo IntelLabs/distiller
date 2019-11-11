@@ -838,14 +838,11 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
     if not args.quantize_eval:
         return test(test_loader, model, criterion, loggers, activations_collectors, args=args)
     else:
-        return quantize_and_test_model(test_loader, model, criterion, loggers,
-                                       args=args, scheduler=scheduler, save_flag=True)
+        return quantize_and_test_model(test_loader, model, criterion, args, loggers,
+                                       scheduler=scheduler, save_flag=True)
 
 
-def quantize_and_test_model(test_loader, model, criterion, loggers=None, args=None, scheduler=None, save_flag=False):
-    if args is None:
-        raise NotImplementedError('args cannot be set to None')
-
+def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, scheduler=None, save_flag=False):
     if not (args.qe_dynamic or args.qe_stats_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
