@@ -1,10 +1,8 @@
 import torch.nn as nn
-import math
-import torch.utils.model_zoo as model_zoo
 import torchvision.models as models
-from torchvision.models.resnet import Bottleneck
-from torchvision.models.resnet import BasicBlock
-
+from torchvision.models.resnet import ResNet, BasicBlock, Bottleneck
+from .resnet import DistillerBottleneck
+import distiller
 
 __all__ = ['resnet50_earlyexit']
 
@@ -15,59 +13,49 @@ def conv3x3(in_planes, out_planes, stride=1):
                      padding=1, bias=False)
 
 
+def get_exits_def(num_classes):
+    expansion = 1 # models.ResNet.BasicBlock.expansion
+    exits_def = [('layer1.2.relu3', nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
+                                                  nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True),
+                                                  nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True),
+                                                  #nn.AdaptiveAvgPool2d((1, 1)),
+                                                  nn.Flatten(),
+                                                  nn.Linear(12 * expansion, num_classes))),
+                                                  #distiller.modules.Print())),
+                 ('layer2.3.relu3', nn.Sequential(nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True),
+                                                  nn.AdaptiveAvgPool2d((1, 1)),
+                                                  nn.Flatten(),
+                                                  #distiller.modules.Print()))]
+                                                  nn.Linear(12 * expansion, num_classes)))]
+    return exits_def
+
+
 class ResNetEarlyExit(models.ResNet):
-
-    def __init__(self, block, layers, num_classes=1000):
-        super(ResNetEarlyExit, self).__init__(block, layers, num_classes)
-
-        # Define early exit layers
-        self.conv1_exit0 = nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True)
-        self.conv2_exit0 = nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True)
-        self.conv1_exit1 = nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True)
-        self.fc_exit0 = nn.Linear(147 * block.expansion, num_classes)
-        self.fc_exit1 = nn.Linear(192 * block.expansion, num_classes)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ee_mgr = distiller.EarlyExitMgr()
+        self.ee_mgr.attach_exits(self, get_exits_def(num_classes=1000))
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-
-        # Add early exit layers
-        exit0 = self.avgpool(x)
-        exit0 = self.conv1_exit0(exit0)
-        exit0 = self.conv2_exit0(exit0)
-        exit0 = self.avgpool(exit0)
-        exit0 = exit0.view(exit0.size(0), -1)
-        exit0 = self.fc_exit0(exit0)
-
-        x = self.layer2(x)
-
-        # Add early exit layers
-        exit1 = self.conv1_exit1(x)
-        exit1 = self.avgpool(exit1)
-        exit1 = exit1.view(exit1.size(0), -1)
-        exit1 = self.fc_exit1(exit1)
-
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
-        # return a list of probabilities
-        output = []
-        output.append(exit0)
-        output.append(exit1)
-        output.append(x)
-        return output
+        self.ee_mgr.delete_exits_outputs(self)
+        # Run the input through the network (including exits)
+        x = super().forward(x)
+        outputs = self.ee_mgr.get_exits_outputs(self) + [x]
+        return outputs
 
 
-def resnet50_earlyexit(pretrained=False, **kwargs):
-    """Constructs a ResNet-50 model.
-    """
-    model = ResNetEarlyExit(Bottleneck, [3, 4, 6, 3], **kwargs)
+def _resnet(arch, block, layers, pretrained, progress, **kwargs):
+    model = ResNetEarlyExit(block, layers, **kwargs)
+    assert not pretrained
     return model
+
+
+def resnet50_earlyexit(pretrained=False, progress=True, **kwargs):
+    """Constructs a ResNet-50 model, with early exit branches.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet('resnet50', DistillerBottleneck, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)

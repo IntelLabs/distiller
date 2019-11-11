@@ -123,6 +123,7 @@ def test_ranked_filter_pruning(parallel):
                                                    is_parallel=parallel)
     test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
+
 # todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
@@ -144,7 +145,6 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.
     """
     logger.info("executing: %s (invoked by %s)" % (inspect.currentframe().f_code.co_name,
                                                    inspect.currentframe().f_back.f_code.co_name))
-
 
     model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
