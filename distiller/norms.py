@@ -40,7 +40,7 @@ __all__ = ["kernels_lp_norm", "channels_lp_norm", "filters_lp_norm",
            "rows_lp_norm", "cols_lp_norm",
            "rows_norm", "cols_norm",
            "l1_norm", "l2_norm", "max_norm",
-           "rank_channels", "rank_filters", "rank_cols"]
+           "rank_channels", "rank_filters"]
 
 
 class NamedFunction:
@@ -138,9 +138,12 @@ def channels_lp_norm(param, p=1, group_len=1, length_normalized=False):
 
 
 def channels_norm(param, norm_fn, group_len=1, length_normalized=False):
-    """Compute some norm of 3D channels of 4D parameter tensors.
+    """Compute some norm of parameter input-channels.
 
-    Assumes 4D weights tensors.
+    Computing the norms of weight-matrices input channels is logically similar to computing
+    the norms of 4D Conv weights input channels so we treat both cases.
+    Assumes 2D or 4D weights tensors.
+
     Args:
         param: shape (num_filters(0), nun_channels(1), kernel_height(2), kernel_width(3))
         norm_fn: a callable that computes a normal
@@ -154,6 +157,13 @@ def channels_norm(param, norm_fn, group_len=1, length_normalized=False):
     """
     assert param.dim() in (2, 4), "param has invalid dimensions"
     if param.dim() == 2:
+        # For GEMM operations, PyTorch stores the weights matrices in a transposed format.  I.e.
+        # before performing GEMM, a matrix is transposed.  This is because the output is computed
+        # as follows (see torch.nn.functional.linear):
+        #   y = x(W^T) + b ; where W^T is the transpose of W
+        #
+        # Therefore, W is expected to have shape (output_channels, input_channels), and to compute
+        # the norms of input_channels, we compute the norms of W's columns.
         return cols_norm(param, norm_fn, group_len, length_normalized)
     param = param.transpose(0, 1).contiguous()
     group_size = group_len * np.prod(param.shape[1:])
@@ -316,13 +326,3 @@ def rank_filters(param, group_len, magnitude_fn, fraction_to_partition, rounding
     mags = filters_norm(param, magnitude_fn, group_len, length_normalized=True)
     return k_smallest_elems(mags, n_filters_to_prune, noise)
 
-
-def rank_cols(param, group_len, magnitude_fn, fraction_to_partition, rounding_fn, noise):
-    assert param.dim() == 2, "This ranking is only supported for 2D tensors"
-    COLS_DIM = 0
-    n_cols = param.size(COLS_DIM)
-    n_cols_to_prune = num_structs_to_prune(n_cols, group_len, fraction_to_partition, rounding_fn)
-    if n_cols_to_prune == 0:
-        return None, None
-    mags = cols_norm(param, magnitude_fn, group_len, length_normalized=True)
-    return k_smallest_elems(mags, n_cols_to_prune, noise)
