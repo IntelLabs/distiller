@@ -517,6 +517,8 @@ def log_activation_statistics(epoch, phase, loggers, collector):
     """Log information about the sparsity of the activations"""
     if collector is None:
         return
+    if loggers is None:
+        return
     for logger in loggers:
         logger.log_activation_statistic(phase, collector.stat_name, collector.value(), epoch)
 

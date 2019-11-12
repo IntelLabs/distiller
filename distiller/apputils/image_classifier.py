@@ -851,25 +851,29 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
                                        scheduler=scheduler, save_flag=True)
 
 
-def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, scheduler=None, save_flag=False):
+def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, scheduler=None, save_flag=True):
+    """Collect stats using test_loader, clone the model and quantize the clone, and finally, test it.
+
+    args.device is allowed to differ from the model's device.
+    When args.qe_calibration is set to None, uses 0.05 instead.
+
+    scheduler - pass scheduler to store it in checkpoint
+    save_flag - defaults to save both quantization statistics and checkpoint.
+    """
     if not (args.qe_dynamic or args.qe_stats_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
-        args_copy.effective_test_size = args_copy.qe_calibration
+
         # set stats into args stats field
         args.qe_stats_file = acts_quant_stats_collection(
-            model, criterion, loggers, args_copy,
-            test_loader=load_data(args_copy, fixed_subset=True)[2],
-            save_to_file=save_flag)
+            model, criterion, loggers, args_copy, save_to_file=save_flag)
 
     args_qe = copy.deepcopy(args)
-    if args.qe_cpu:
-        # 'device' must match the model device, for dataset to be loaded correctly
-        args_qe.device = 'cpu'
-        qe_model = distiller.make_non_parallel_copy(model)
-        qe_model.cpu()
+    if args.device == 'cpu':
+        # NOTE: Even though args.device is CPU, we allow here that model is not in CPU.
+        qe_model = distiller.make_non_parallel_copy(model).cpu()
     else:
-        qe_model = copy.deepcopy(model)
+        qe_model = copy.deepcopy(model).to(args.device)
 
     quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args_qe)
     quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
