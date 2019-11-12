@@ -637,8 +637,8 @@ def test(test_loader, model, criterion, loggers=None, activations_collectors=Non
     msglogger.info('--- test ---------------------')
     if args is None:
         args = ClassifierCompressor.mock_args()
-    activations_collectors = activations_collectors or create_activation_stats_collectors(
-            model, *args.activation_stats)
+    if activations_collectors is None:
+        activations_collectors = create_activation_stats_collectors(model, None)
 
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)

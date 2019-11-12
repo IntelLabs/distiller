@@ -99,7 +99,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                                 args.dataset, add_softmax=True, verbose=False)
         do_exit = True
     elif args.qe_calibration and not (args.evaluate and args.quantize_eval):
-        classifier.acts_quant_stats_collection(model, criterion, pylogger, args, save_to_file=True)
+        classifier.acts_quant_stats_collection(model, criterion, pylogger, args)
         do_exit = True
     elif args.activation_histograms:
         classifier.acts_histogram_collection(model, criterion, pylogger, args)
@@ -111,7 +111,9 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.evaluate:
         test_loader = load_test_data(args)
-        classifier.evaluate_model(test_loader, model, criterion, pylogger, args=args, scheduler=compression_scheduler)
+        classifier.evaluate_model(test_loader, model, criterion, pylogger,
+            classifier.create_activation_stats_collectors(model, *args.activation_stats),
+            args, scheduler=compression_scheduler)
         do_exit = True
     elif args.thinnify:
         assert args.resumed_checkpoint_path is not None, \
