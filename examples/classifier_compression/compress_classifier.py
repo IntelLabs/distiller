@@ -73,7 +73,7 @@ def main():
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
-    init_knowledge_distillation(app.args,  app.model, app.compression_scheduler)
+    init_knowledge_distillation(app.args, app.model, app.compression_scheduler)
     app.run_training_loop()
     # Finally run results on the test set
     return app.test()
@@ -158,7 +158,7 @@ def early_exit_init(args):
 class ClassifierCompressorSampleApp(classifier.ClassifierCompressor):
     def __init__(self, args, script_dir):
         super().__init__(args, script_dir)
-        early_exit_init(args)
+        early_exit_init(self.args)
         # Save the randomly-initialized model before training (useful for lottery-ticket method)
         if args.save_untrained_model:
             ckpt_name = '_'.join((self.args.name or "", "untrained"))

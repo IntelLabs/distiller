@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -434,12 +434,13 @@ if __name__ == "__main__":
     args = get_default_args()
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
+    args = deepcopy(cc.args)  # Get back args after modifications in ClassifierCompressor.__init__
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False)
 
     # quant calibration dataloader:
     args.effective_test_size = args.qe_calib_portion
     args.batch_size = args.qe_calib_batchsize
-    calib_data_loader = classifier.load_data(args, load_train=False, load_val=False)
+    calib_data_loader = classifier.load_data(args, fixed_subset=True, load_train=False, load_val=False)
     # logging
     logging.getLogger().setLevel(logging.WARNING)
     msglogger = logging.getLogger(__name__)
