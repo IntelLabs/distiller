@@ -152,10 +152,10 @@ TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker
 test_configs = [
     TestConfig('--arch resnet20_cifar_earlyexit --lr=0.3 --epochs=180 --earlyexit_thresholds 0.9 '
                '--earlyexit_lossweights 0.3 --epochs 2 -p 50', DS_CIFAR, earlyexit_accuracy_checker,
-               [(99.115, 100.),
-                (17.235, 64.914),
-                (18.160, 65.310),
-                (17.04, 64.42)]),
+               [(99.675, 100.),
+                (31.863, 84.985),
+                (36.040, 85.910),
+                (33.50, 85.980)]),
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [47.43, 92.51]),
     TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-clip-acts avg --qe-no-clip-layers {1}'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar'), 'fc'),
@@ -168,7 +168,7 @@ test_configs = [
                DS_CIFAR, collateral_checker, [('sensitivity.csv', 3172), ('sensitivity.png', 96157)]),
     TestConfig('--arch simplenet_mnist --epochs 3 -p=50 --compress={0}'.
                format(os.path.join('full_flow_tests', 'simplenet_mnist_pruning.yaml')),
-               DS_MNIST, accuracy_checker, [98.81, 99.99]),
+               DS_MNIST, accuracy_checker, [98.82, 100.00]),
 ]
 
 
