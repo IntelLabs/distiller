@@ -674,7 +674,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             self.is_simulated_quant_weight_shifted.fill_(True)  # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += input_q.quant_metadata.zero_point
-        accum = self.wrapped_module.forward(input_q)
+        accum = self.wrapped_module(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
         return accum
@@ -749,8 +749,8 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
     def quantized_forward(self, input0_q, input1_q):
         self.accum_scale = input0_q.quant_metadata.scale * input1_q.quant_metadata.scale
-        accum = self.wrapped_module.forward(input0_q + input0_q.quant_metadata.zero_point,
-                                            input1_q + input1_q.quant_metadata.zero_point)
+        accum = self.wrapped_module(input0_q + input0_q.quant_metadata.zero_point,
+                                    input1_q + input1_q.quant_metadata.zero_point)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
         return accum
 
@@ -994,8 +994,13 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         return output_scale, output_zero_point
 
 
-def _is_range_linear_wrapper(module):
-    return isinstance(module, (RangeLinearEmbeddingWrapper, RangeLinearQuantWrapper))
+_ptq_wrappers_int_only = (RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper)
+_ptq_wrappers_all = _ptq_wrappers_int_only + (FPWrapper,)
+
+
+def is_post_train_quant_wrapper(module, include_fpwrapper=True):
+    types = _ptq_wrappers_all if include_fpwrapper else _ptq_wrappers_int_only
+    return isinstance(module, types)
 
 
 class PostTrainLinearQuantizer(Quantizer):
@@ -1232,7 +1237,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def named_acts_quant_params(self):
         for module_name, module in self.model.named_modules():
-            if _is_range_linear_wrapper(module):
+            if is_post_train_quant_wrapper(module, include_fpwrapper=False):
                 for buff_name, buff in module.named_acts_quant_params():
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff
