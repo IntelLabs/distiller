@@ -236,14 +236,9 @@ def add_post_train_quant_args(argparser):
 
     group = argparser.add_argument_group('Arguments controlling quantization at evaluation time '
                                          '("post-training quantization")')
-    exc_group = group.add_mutually_exclusive_group()
-    exc_group.add_argument('--quantize-eval', '--qe', action='store_true',
+    group.add_argument('--quantize-eval', '--qe', action='store_true',
                        help='Apply linear quantization to model before evaluation. Applicable only if '
                             '--evaluate is also set')
-    exc_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
-                           metavar='PORTION_OF_TEST_SET',
-                           help='Run the model in evaluation mode on the specified portion of the test dataset and '
-                                'collect statistics. Ignores all other \'qe--*\' arguments')
     group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
                        help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
     group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
@@ -264,10 +259,16 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
-    group.add_argument('--qe-stats-file', type=str, metavar='PATH',
-                       help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
-                            'be run (Note that not all layer types are supported for dynamic quantization)')
-    group.add_argument('--qe-config-file', type=str, metavar='PATH',
+
+    stats_group = group.add_mutually_exclusive_group()
+    stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
+                       help='Path to YAML file with pre-made calibration stats')
+    stats_group.add_argument('--qe-dynamic', action='store_true', help='Apply dynamic quantization')
+    stats_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                       metavar='PORTION_OF_TEST_SET', default=None,
+                       help='Run the model in evaluation mode on the specified portion of the test dataset and '
+                            'collect statistics. Ignores all other \'qe--*\' arguments')
+    stats_group.add_argument('--qe-config-file', type=str, metavar='PATH',
                        help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
                             'all other --qe* arguments are ignored)')
 
@@ -1276,7 +1277,7 @@ class PostTrainLinearQuantizer(Quantizer):
                        mode=args.qe_mode,
                        clip_acts=args.qe_clip_acts,
                        per_channel_wts=args.qe_per_channel,
-                       model_activation_stats=args.qe_stats_file,
+                       model_activation_stats=(None if args.qe_dynamic else args.qe_stats_file),
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides,
