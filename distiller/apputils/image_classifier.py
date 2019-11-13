@@ -660,7 +660,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                                       ('Top5', classerr.value(5))])
         else:
             stats_dict = OrderedDict()
-            stats_dict['Test'] = validation_step
             for exitnum in range(args.num_exits):
                 la_string = 'LossAvg' + str(exitnum)
                 stats_dict[la_string] = args.losses_exits[exitnum].mean
