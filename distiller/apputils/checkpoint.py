@@ -182,6 +182,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
             # One of the values is missing so we can't perform the comparison
             pass
 
+    chkpt_file = os.path.expanduser(chkpt_file)
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
     assert optimizer == None, "argument optimizer is deprecated and must be set to None"
