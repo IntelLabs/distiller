@@ -852,15 +852,16 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
 
 
 def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, scheduler=None, save_flag=True):
-    """Collect stats using test_loader, clone the model and quantize the clone, and finally, test it.
+    """Collect stats using test_loader (when stats file is absent),
 
+    clone the model and quantize the clone, and finally, test it.
     args.device is allowed to differ from the model's device.
     When args.qe_calibration is set to None, uses 0.05 instead.
 
     scheduler - pass scheduler to store it in checkpoint
     save_flag - defaults to save both quantization statistics and checkpoint.
     """
-    if not (args.qe_dynamic or args.qe_stats_file):
+    if not (args.qe_dynamic or args.qe_stats_file or args.qe_config_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
 
