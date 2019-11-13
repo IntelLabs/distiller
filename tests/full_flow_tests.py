@@ -157,7 +157,7 @@ test_configs = [
                 (18.160, 65.310),
                 (17.04, 64.42)]),
     TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [44.460, 91.230]),
-    TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-clip-acts avg --qe-no-clip-layers {1}'.
+    TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-dynamic --qe-clip-acts avg --qe-no-clip-layers {1}'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar'), 'fc'),
                DS_CIFAR, accuracy_checker, [91.57, 99.62]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.

@@ -21,6 +21,7 @@ with some random helper functions.
 """
 import argparse
 from collections import OrderedDict
+import contextlib
 from copy import deepcopy
 import logging
 import operator
@@ -516,6 +517,8 @@ def log_activation_statistics(epoch, phase, loggers, collector):
     """Log information about the sparsity of the activations"""
     if collector is None:
         return
+    if loggers is None:
+        return
     for logger in loggers:
         logger.log_activation_statistic(phase, collector.stat_name, collector.value(), epoch)
 
@@ -642,6 +645,15 @@ def make_non_parallel_copy(model):
     replace_data_parallel(new_model)
 
     return new_model
+
+
+@contextlib.contextmanager
+def get_nonparallel_clone_model(model):
+    clone_model = make_non_parallel_copy(model)
+    try:
+        yield clone_model
+    finally:
+        del clone_model
 
 
 def set_seed(seed):
