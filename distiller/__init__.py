@@ -27,7 +27,7 @@ from .thinning import *
 from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLossWeights
 from .summary_graph import SummaryGraph, onnx_name_2_pytorch_name
 from .early_exit import EarlyExitMgr
-
+import pkg_resources
 import logging
 logging.captureWarnings(True)
 
@@ -35,7 +35,10 @@ del dict_config
 del thinning
 
 # Distiller version
-__version__ = "0.4.0-pre"
+try:
+    __version__ = pkg_resources.require("distiller")[0].version
+except pkg_resources.DistributionNotFound:
+    __version__ = "Unknown"
 
 
 def model_find_param_name(model, param_to_find):
