@@ -727,6 +727,9 @@ class DummyWordLangModel(nn.Module):
         return self.rnn(self.embedding(x))
 
 
+# Same warning filters as in test_override_no_clip
+@pytest.mark.filterwarnings('ignore:Iterating over a tensor might cause the trace to be incorrect')
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python index might cause the trace to be incorrect')
 def test_acts_quant_params_rnn(rnn_model):
     model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model).cuda()
     stats = gen_stats_for_model(model)

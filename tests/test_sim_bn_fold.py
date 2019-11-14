@@ -6,7 +6,7 @@ from distiller.quantization.sim_bn_fold import SimulatedFoldedBatchNorm
 from copy import deepcopy
 import pytest
 
-ATOL = 5e-5
+ATOL = 2e-4
 RTOL = 1e-3
 BATCH_SIZE = 32
 LR = 1e-3
