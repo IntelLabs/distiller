@@ -163,7 +163,6 @@ $ source env/bin/activate
 ```
 
 ### Install the package
-If you do not use CUDA 9 in your environment, please refer to [Pytorch website](https://pytorch.org/get-started/locally/) to install the compatible build of Pytorch 1.1 and torchvision 0.3, before installing the package.
 
 Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
@@ -172,7 +171,11 @@ $ pip3 install -e .
 ```
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
 
-PyTorch is included in the ```requirements.txt``` file, and will currently download PyTorch version 1.1.0 for CUDA 9.0.  This is the setup we've used for testing Distiller.
+### Required PyTorch Version
+
+Distiller is tested using the default installation of PyTorch 1.3.1, which uses CUDA 10.1. We use TorchVision version 0.4.2. These are included in Distiller's `requirements.txt` and will be automatically installed when installing the Distiller package as listed above.
+
+If you do not use CUDA 10.1 in your environment, please refer to [PyTorch website](https://pytorch.org/get-started/locally/) to install the compatible build of PyTorch 1.3.1 and torchvision 0.4.2.
 
 ## Getting Started
 

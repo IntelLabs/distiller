@@ -152,23 +152,23 @@ TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker
 test_configs = [
     TestConfig('--arch resnet20_cifar_earlyexit --lr=0.3 --epochs=180 --earlyexit_thresholds 0.9 '
                '--earlyexit_lossweights 0.3 --epochs 2 -p 50', DS_CIFAR, earlyexit_accuracy_checker,
-               [(99.115, 100.),
-                (17.235, 64.914),
-                (18.160, 65.310),
-                (17.04, 64.42)]),
-    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [44.460, 91.230]),
+               [(99.675, 100.),
+                (31.863, 84.985),
+                (36.040, 85.910),
+                (33.50, 85.980)]),
+    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [47.43, 92.51]),
     TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-dynamic --qe-clip-acts avg --qe-no-clip-layers {1}'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar'), 'fc'),
-               DS_CIFAR, accuracy_checker, [91.57, 99.62]),
+               DS_CIFAR, accuracy_checker, [91.47, 99.62]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
-               DS_CIFAR, accuracy_checker, [44.370, 89.640]),
+               DS_CIFAR, accuracy_checker, [47.47, 93.87]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)]),
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3172), ('sensitivity.png', 96157)]),
     TestConfig('--arch simplenet_mnist --epochs 3 -p=50 --compress={0}'.
                format(os.path.join('full_flow_tests', 'simplenet_mnist_pruning.yaml')),
-               DS_MNIST, accuracy_checker, [98.78, 100.]),
+               DS_MNIST, accuracy_checker, [98.82, 100.00]),
 ]
 
 
