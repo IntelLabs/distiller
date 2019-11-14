@@ -236,14 +236,9 @@ def add_post_train_quant_args(argparser):
 
     group = argparser.add_argument_group('Arguments controlling quantization at evaluation time '
                                          '("post-training quantization")')
-    exc_group = group.add_mutually_exclusive_group()
-    exc_group.add_argument('--quantize-eval', '--qe', action='store_true',
+    group.add_argument('--quantize-eval', '--qe', action='store_true',
                        help='Apply linear quantization to model before evaluation. Applicable only if '
                             '--evaluate is also set')
-    exc_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
-                           metavar='PORTION_OF_TEST_SET',
-                           help='Run the model in evaluation mode on the specified portion of the test dataset and '
-                                'collect statistics. Ignores all other \'qe--*\' arguments')
     group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
                        help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
     group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
@@ -264,10 +259,16 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
-    group.add_argument('--qe-stats-file', type=str, metavar='PATH',
-                       help='Path to YAML file with calibration stats. If not given, dynamic quantization will '
-                            'be run (Note that not all layer types are supported for dynamic quantization)')
-    group.add_argument('--qe-config-file', type=str, metavar='PATH',
+
+    stats_group = group.add_mutually_exclusive_group()
+    stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
+                       help='Path to YAML file with pre-made calibration stats')
+    stats_group.add_argument('--qe-dynamic', action='store_true', help='Apply dynamic quantization')
+    stats_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
+                       metavar='PORTION_OF_TEST_SET', default=None,
+                       help='Run the model in evaluation mode on the specified portion of the test dataset and '
+                            'collect statistics. Ignores all other \'qe--*\' arguments')
+    stats_group.add_argument('--qe-config-file', type=str, metavar='PATH',
                        help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
                             'all other --qe* arguments are ignored)')
 
@@ -673,7 +674,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             self.is_simulated_quant_weight_shifted.fill_(True)  # i.e. is_simulated_quant_weight_shifted = True
 
         input_q += input_q.quant_metadata.zero_point
-        accum = self.wrapped_module.forward(input_q)
+        accum = self.wrapped_module(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
         return accum
@@ -748,8 +749,8 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
 
     def quantized_forward(self, input0_q, input1_q):
         self.accum_scale = input0_q.quant_metadata.scale * input1_q.quant_metadata.scale
-        accum = self.wrapped_module.forward(input0_q + input0_q.quant_metadata.zero_point,
-                                            input1_q + input1_q.quant_metadata.zero_point)
+        accum = self.wrapped_module(input0_q + input0_q.quant_metadata.zero_point,
+                                    input1_q + input1_q.quant_metadata.zero_point)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
         return accum
 
@@ -993,8 +994,13 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         return output_scale, output_zero_point
 
 
-def _is_range_linear_wrapper(module):
-    return isinstance(module, (RangeLinearEmbeddingWrapper, RangeLinearQuantWrapper))
+_ptq_wrappers_int_only = (RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper)
+_ptq_wrappers_all = _ptq_wrappers_int_only + (FPWrapper,)
+
+
+def is_post_train_quant_wrapper(module, include_fpwrapper=True):
+    types = _ptq_wrappers_all if include_fpwrapper else _ptq_wrappers_int_only
+    return isinstance(module, types)
 
 
 class PostTrainLinearQuantizer(Quantizer):
@@ -1231,7 +1237,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def named_acts_quant_params(self):
         for module_name, module in self.model.named_modules():
-            if _is_range_linear_wrapper(module):
+            if is_post_train_quant_wrapper(module, include_fpwrapper=False):
                 for buff_name, buff in module.named_acts_quant_params():
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff
@@ -1276,7 +1282,7 @@ class PostTrainLinearQuantizer(Quantizer):
                        mode=args.qe_mode,
                        clip_acts=args.qe_clip_acts,
                        per_channel_wts=args.qe_per_channel,
-                       model_activation_stats=args.qe_stats_file,
+                       model_activation_stats=(None if args.qe_dynamic else args.qe_stats_file),
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides,
