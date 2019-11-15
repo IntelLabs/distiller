@@ -158,7 +158,7 @@ class ClassifierCompressor(object):
     def _finalize_epoch(self, epoch, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
         self.performance_tracker.step(self.model, top1, top5, epoch)
-        self.performance_tracker.log_best_scores(msglogger)
+        _log_best_scores(self.performance_tracker, msglogger)
         best_score = self.performance_tracker.best_scores()[0]
         is_best = epoch == best_score.epoch
         checkpoint_extras = {'current_top1': top1,
@@ -899,3 +899,17 @@ def acts_histogram_collection(model, criterion, loggers, args):
                       loggers=loggers, args=args, activations_collectors=None)
     collect_histograms(model, test_fn, save_dir=msglogger.logdir,
                        classes=None, nbins=2048, save_hist_imgs=True)
+
+
+def _log_best_scores(performance_tracker, logger, how_many=-1):
+    """Utility to log the best scores.
+
+    This function is currently written for pruning use-cases, but can be generalized.
+    """
+    if how_many < 1:
+        how_many = performance_tracker.max_len
+    how_many = min(how_many, performance_tracker.max_len)
+    best_scores = performance_tracker.best_scores(how_many)
+    for score in best_scores:
+        logger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
+                    score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)

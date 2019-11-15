@@ -20,7 +20,8 @@ import operator
 import distiller
 
 
-__all__ = ["SparsityAccuracyTracker"]
+__all__ = ["AccuracyPerformanceTracker",
+           "SparsityAccuracyTracker"]
 
 
 class AccuracyPerformanceTracker(object):
@@ -62,11 +63,3 @@ class SparsityAccuracyTracker(AccuracyPerformanceTracker):
         self.perf_scores_history.sort(
             key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'),
             reverse=True)
-
-    def log_best_scores(self, msglogger, how_many=-1):
-        if how_many < 1:
-            how_many = self.max_len
-        how_many = min(how_many, self.max_len)
-        for score in self.perf_scores_history[:self.max_len]:
-            msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
-                           score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
