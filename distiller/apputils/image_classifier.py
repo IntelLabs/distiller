@@ -580,13 +580,20 @@ def train(train_loader, model, criterion, optimizer, epoch,
             output = args.kd_policy.forward(inputs)
 
         if not early_exit_mode(args):
-            # For inception, we need to add losses for both classifier outputs
-            if isinstance(output, tuple):
-                loss = sum((criterion(o,target) for o in output))
+            # For inception_v3 and inceptionv3, we need to add losses for both classifier outputs (0.4 weight for aux classifier)
+            if len(output) == 2:  # output[1] is aux output
+                loss = criterion(output[0], target) + 0.4 * criterion(output[1], target)
+            # For googlenet, we need to add losses for main classifier as well as two aux classifiers (0.3 weight)
+            # by DEFAULT, two aux classifiers are not included in pytorch pretrained googlenet model, they are only present
+            # if googlenet is trained from scratch, if you need to fine tune aux classifiers after pruning a pretrained model
+            # then you have to explicitly enable aux classifiers when creating the model (NOT IMPLEMENTED)
+            # the following elif branch is only used if training googlenet from scratch
+            elif len(output) == 3:  # output[1] is aux2, output [2] is aux1
+                loss = criterion(output[0], target) + 0.3 * (criterion(output[1], target) + criterion(output[2], target))
             else:
                 loss = criterion(output, target)
             # Measure accuracy
-            # For inception, we only consider accuracy of main classifier
+            # For inception models and googlenet, we only consider accuracy of main classifier
             if isinstance(output, tuple):
                 classerr.add(output[0].detach(), target)
             else:
