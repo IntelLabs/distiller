@@ -2,7 +2,7 @@
 # of ResNet50 using the ImageNet dataset.
 # Top1 is 76.538 (=23.462 error rate) vs the published Top1: 76.15 (https://pytorch.org/docs/stable/torchvision/models.html)
 #
-# I ran this for 80 epochs, but it can probably run for a much shorter time and prodcue the same results (50 epochs?)
+# I ran this for 80 epochs, but it can probably run for a much shorter time and produce the same results (50 epochs?)
 #
 # time python3 compress_classifier.py -a=resnet50 --pretrained -p=50 ../../../data.imagenet/ -j=22 --epochs=80 --lr=0.001 --compress=resnet50.schedule_agp.yaml
 #
