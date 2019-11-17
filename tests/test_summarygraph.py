@@ -72,7 +72,7 @@ def test_connectivity(parallel, denorm_names):
     assert len(op_names) == 80
 
     edges = g.edges
-    assert edges[0].src == '0' and edges[0].dst == 'conv1'
+    assert edges[0].src == 'input.1' and edges[0].dst == 'conv1'
 
     # Test two sequential calls to predecessors (this was a bug once)
     preds = g.predecessors(g.find_op('bn1'), 1, denorm_names=denorm_names)
@@ -90,7 +90,7 @@ def test_connectivity(parallel, denorm_names):
     preds = g.predecessors(g.find_op('bn1'), 10, denorm_names=denorm_names)
     assert preds == []
     preds = g.predecessors(g.find_op('bn1'), 3, denorm_names=denorm_names)
-    assert preds == ['0', '1']
+    assert preds == ['input.1', '1']
 
 
 def test_layer_search(parallel, denorm_names):
@@ -282,31 +282,22 @@ def test_scope_name_workarounds():
     dummy_input = distiller.get_dummy_input(input_shape=(1, 100))
     expected_types = ('Gemm', 'Relu', 'Gemm', 'Relu', 'Gemm')
 
-    # We have workarounds for 2 issues:
-    #   1. GEMM ops get the scope name of the op that came before them
-    #   2. Ops that come before a dropout op get the scope name of the dropout op
-    # If both conditions apply, empirically that #2 is the issue that manifests
+    # We have a workaround for the following issue:
+    # (used to be 2 issues but one got fixed in PyTorch 1.2)
+    #   * Ops that come before a dropout op get the scope name of the dropout op
 
     # For the model above we expect the ops in the graph to be named (in order):
     #   'fc1', 'relu1', 'fc2', 'relu2', 'fc3'
     # (note that dropout ops are dropped)
     #
-    # But without our workarounds in place, we'll get:
-    #   'drop1', 'drop2', 'drop2__1', 'relu2', 'drop3'
-    #
-    # What happens is:
-    #   * 'fc1' - issue #1 applies, so 'fc1' --> 'drop1'
-    #   * 'relu1' - issue #2 applies, so 'relu1' --> 'drop2'
-    #   * 'fc2' - issue #1 applies, so 'fc1' --> 'drop2__1' ('__1' suffix because 'drop2' already exists)
-    #   * 'relu2' should be ok as-is
-    #   * 'fc3' is susceptible to both issues - it's a GEMM op AND it comes before a dropout. As mentioned above,
-    #     issue #2 "wins", so 'fc3' --> 'drop3'
+    # But since 'relu1' and 'fc3' come before a dropout op, without the workaround in place we'll get:
+    #   'fc1', 'drop2', 'fc2', 'relu2', 'drop3'
 
     # We test without the workarounds as a means to see if the issues still exist. New PyTorch versions
     # may fix them, in which case we can remove the workarounds
     sg = SummaryGraph(m, dummy_input, apply_scope_name_workarounds=False)
     names, types = zip(*[(op_name, op['type']) for op_name, op in sg.ops.items()])
-    assert names == ('drop1', 'drop2', 'drop2_Gemm_1', 'relu2', 'drop3')
+    assert names == ('fc1', 'drop2', 'fc2', 'relu2', 'drop3')
     assert types == expected_types
 
     # Now test with the workarounds

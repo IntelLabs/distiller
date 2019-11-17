@@ -123,6 +123,7 @@ def test_ranked_filter_pruning(parallel):
                                                    is_parallel=parallel)
     test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
+
 # todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
@@ -144,7 +145,6 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.
     """
     logger.info("executing: %s (invoked by %s)" % (inspect.currentframe().f_code.co_name,
                                                    inspect.currentframe().f_back.f_code.co_name))
-
 
     model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
@@ -453,9 +453,9 @@ def test_row_pruning():
                           [7., 8., 9.]])
     from distiller.pruning import L1RankedStructureParameterPruner
 
-    masker = distiller.scheduler.ParameterMasker("why name")
+    masker = distiller.scheduler.ParameterMasker("debug name")
     zeros_mask_dict = {"some name": masker}
-    L1RankedStructureParameterPruner.rank_and_prune_rows(0.5, param, "some name", zeros_mask_dict)
+    L1RankedStructureParameterPruner.rank_and_prune_channels(0.5, param, "some name", zeros_mask_dict)
     print(distiller.sparsity_rows(masker.mask))
     assert math.isclose(distiller.sparsity_rows(masker.mask), 1/3)
     pass

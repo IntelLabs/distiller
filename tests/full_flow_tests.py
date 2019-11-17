@@ -30,6 +30,7 @@ examples_root = os.path.join(distiller_root, 'examples')
 script_path = os.path.realpath(os.path.join(examples_root, 'classifier_compression',
                                             'compress_classifier.py'))
 
+
 ###########
 # Some Basic Logging Mechanisms
 ###########
@@ -86,7 +87,8 @@ def compare_values(name, expected, actual):
         return True
 
 
-def accuracy_checker(log, run_dir, expected_top1, expected_top5):
+def accuracy_checker(log, run_dir, expected_results):
+    expected_top1, expected_top5 = expected_results
     tops = re.findall(r"Top1: (?P<top1>\d*\.\d*) *Top5: (?P<top5>\d*\.\d*)", log)
     if not tops:
         error('No accuracy results in log')
@@ -96,7 +98,34 @@ def accuracy_checker(log, run_dir, expected_top1, expected_top5):
     return compare_values('Top-5', expected_top5, float(tops[-1][1]))
 
 
-def collateral_checker(log, run_dir, *collateral_list):
+def earlyexit_accuracy_checker(log, run_dir, expected_results):
+    regex_list = (r"Accuracy Stats for exit 0: top1 = (?P<top1>\d*\.\d*), top5 = (?P<top5>\d*\.\d*)",
+                  r"Accuracy Stats for exit 1: top1 = (?P<top1>\d*\.\d*), top5 = (?P<top5>\d*\.\d*)",
+                  r"Totals for entire network with early exits: top1 = (?P<top1>\d*\.\d*), top5 = (?P<top5>\d*\.\d*)",
+                  r"Top1: (?P<top1>\d*\.\d*) *Top5: (?P<top5>\d*\.\d*)")
+
+    for i, regex in enumerate(regex_list):
+        if not generic_results_checker(log, regex, expected_results[i]):
+            return False
+    return True
+
+
+def generic_results_checker(log, regex1, expected_results):
+    actual_results = re.findall(regex1, log)
+    if not actual_results:
+        error('No results in log')
+        return False
+
+    # Grab only the last line of printed results
+    actual_results = actual_results[-1]
+    # Perform the comparison between expected and actual results
+    for (actual_result, expected_result) in zip(actual_results, expected_results):
+        if not compare_values('Un-named', expected_result, float(actual_result)):
+            return False
+    return True
+
+
+def collateral_checker(log, run_dir, collateral_list):
     """Test that the test produced the expected collaterals.
 
     A collateral_list is a list of tuples, where tuple elements are:
@@ -119,20 +148,27 @@ def collateral_checker(log, run_dir, *collateral_list):
 ###########
 TestConfig = namedtuple('TestConfig', ['args', 'dataset', 'checker_fn', 'checker_args'])
 
+
 test_configs = [
-    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [44.460, 91.230]),
-    TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-clip-acts avg --qe-no-clip-layers {1}'.
+    TestConfig('--arch resnet20_cifar_earlyexit --lr=0.3 --epochs=180 --earlyexit_thresholds 0.9 '
+               '--earlyexit_lossweights 0.3 --epochs 2 -p 50', DS_CIFAR, earlyexit_accuracy_checker,
+               [(99.675, 100.),
+                (31.863, 84.985),
+                (36.040, 85.910),
+                (33.50, 85.980)]),
+    TestConfig('--arch simplenet_cifar --epochs 2', DS_CIFAR, accuracy_checker, [47.43, 92.51]),
+    TestConfig('-a resnet20_cifar --resume {0} --quantize-eval --evaluate --qe-dynamic --qe-clip-acts avg --qe-no-clip-layers {1}'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar'), 'fc'),
-               DS_CIFAR, accuracy_checker, [91.57, 99.62]),
+               DS_CIFAR, accuracy_checker, [91.47, 99.62]),
     TestConfig('-a preact_resnet20_cifar --epochs 2 --compress {0}'.
                format(os.path.join('full_flow_tests', 'preact_resnet20_cifar_pact_test.yaml')),
-               DS_CIFAR, accuracy_checker, [44.370, 89.640]),
+               DS_CIFAR, accuracy_checker, [47.47, 93.87]),
     TestConfig('-a resnet20_cifar --resume {0} --sense=filter --sense-range 0 0.10 0.05'.
                format(os.path.join(examples_root, 'ssl', 'checkpoints', 'checkpoint_trained_dense.pth.tar')),
-               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3175), ('sensitivity.png', 96157)]),
+               DS_CIFAR, collateral_checker, [('sensitivity.csv', 3172), ('sensitivity.png', 96157)]),
     TestConfig('--arch simplenet_mnist --epochs 3 -p=50 --compress={0}'.
                format(os.path.join('full_flow_tests', 'simplenet_mnist_pruning.yaml')),
-               DS_MNIST, accuracy_checker, [98.78, 100.]),
+               DS_MNIST, accuracy_checker, [98.82, 100.00]),
 ]
 
 
@@ -212,7 +248,7 @@ def run_tests():
                             format(p.returncode), idx, cmd, log_path, failed_tests, log)
             continue
         test_progress('Running checker: ' + colorize(tc.checker_fn.__name__, Colors.YELLOW))
-        if not tc.checker_fn(log, os.path.split(log_path)[0], *tc.checker_args):
+        if not tc.checker_fn(log, os.path.split(log_path)[0], tc.checker_args):
             process_failure('Checker failed', idx, cmd, log_path, failed_tests, log)
             continue
         success('TEST PASSED')
