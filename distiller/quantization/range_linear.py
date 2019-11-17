@@ -1289,7 +1289,7 @@ class PostTrainLinearQuantizer(Quantizer):
         """
         self.linear_quant_params[name].data.fill_(val)
 
-    def update_acts_quant_params(self, new_config):
+    def update_linear_quant_params(self, new_config):
         """
         Updates all the quant params using a dictionary.
         Args:
@@ -1298,6 +1298,10 @@ class PostTrainLinearQuantizer(Quantizer):
         for k, v in new_config.items():
             self.set_linear_quant_param(k, v)
 
+    def set_requires_grad_linear_quant_params(self, val=True):
+        for module in self.model.modules():
+            if is_post_train_quant_wrapper(module, include_fpwrapper=False):
+                module.requires_grad = val
 
     @classmethod
     def from_args(cls, model, args):
@@ -1335,7 +1339,7 @@ class PostTrainLinearQuantizer(Quantizer):
         for n in self.module_overrides_map:
             modules_dict = dict(self.model.named_modules())
             m = modules_dict[n]
-            if distiller.has_children(m) and not _is_range_linear_wrapper(m):
+            if distiller.has_children(m) and not is_post_train_quant_wrapper(m, include_fpwrapper=False):
                 continue
             qbits = self.module_qbits_map[n]
             d = OrderedDict()

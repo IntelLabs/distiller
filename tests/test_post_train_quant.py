@@ -716,7 +716,7 @@ def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
         'linear.output_zero_point': 4.,
         'act2.output_scale': 50
     }
-    quantizer.update_acts_quant_params(new_config)
+    quantizer.update_linear_quant_params(new_config)
     assert model.linear.output_zero_point == 4
     assert model.act2.output_scale == 50
 
@@ -744,6 +744,6 @@ def test_acts_quant_params_rnn(rnn_model):
         'rnn.rnn.cells.0.act_o.output_scale': 4,
         'embedding.w_scale': torch.tensor(59.0)
     }
-    quantizer.update_acts_quant_params(new_config)
+    quantizer.update_linear_quant_params(new_config)
     assert model.rnn.rnn.cells[0].act_o.output_scale == 4
     assert model.embedding.w_scale == 59.0
