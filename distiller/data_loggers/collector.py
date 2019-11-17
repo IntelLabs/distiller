@@ -30,6 +30,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
+from distiller.quantization.range_linear import is_post_train_quant_wrapper
 import numpy as np
 
 msglogger = logging.getLogger()
@@ -78,6 +79,13 @@ class ActivationStatsCollector(object):
         # a unique, human-readable name per layer.
         distiller.utils.assign_layer_fq_names(model)
 
+        # Currently this is internal, and its only purpose is to enable skipping collection
+        # for wrapped modules inside post-training quantization wrapper classes.
+        # When doing PTQ, the outputs of these wrapped modules are actually intermediate results
+        # which are not relevant for tracking.
+        self._dont_collect_list = [module.wrapped_module.distiller_name for module in model.modules() if
+                                   is_post_train_quant_wrapper(module)]
+
     def value(self):
         """Return a dictionary containing {layer_name: statistic}"""
         activation_stats = OrderedDict()
@@ -104,10 +112,7 @@ class ActivationStatsCollector(object):
 
         Eligible modules are currently filtered by their class type.
         """
-        if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
-            return
-        register_all_class_types = not self.classes
-        if register_all_class_types or isinstance(module, tuple(self.classes)):
+        if self._should_collect(module):
             self.fwd_hook_handles.append(module.register_forward_hook(self._activation_stats_cb))
             self._start_counter(module)
 
@@ -147,6 +152,24 @@ class ActivationStatsCollector(object):
         """Handle new activations - this is subclass-specific code"""
         raise NotImplementedError
 
+    def _should_collect(self, module):
+        if module.distiller_name in self._dont_collect_list:
+            return False
+        # In general, we only collect stats for "leaf" modules.
+        # We make an exception for models that were quantized with 'PostTrainLinearQuantizer'. In these
+        # models, the quantized modules are actually wrappers of the original FP32 modules, so they are
+        # NOT leaf modules - but we still want to track them.
+        if distiller.has_children(module) and not is_post_train_quant_wrapper(module):
+            return False
+        if isinstance(module, torch.nn.Identity):
+            return False
+
+        register_all_class_types = not self.classes
+        if register_all_class_types or isinstance(module, tuple(self.classes)):
+            return True
+
+        return False
+
 
 class WeightedAverageValueMeter(AverageValueMeter):
     """
@@ -173,7 +196,7 @@ class WeightedAverageValueMeter(AverageValueMeter):
 
 
 class SummaryActivationStatsCollector(ActivationStatsCollector):
-    """This class collects activiations statistical summaries.
+    """This class collects activations statistical summaries.
 
     This Collector computes the mean of some statistic of the activation.  It is rather
     light-weight and quicker than collecting a record per activation.
@@ -238,7 +261,11 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
         records_dict = self.value()
         with xlsxwriter.Workbook(fname) as workbook:
-            worksheet = workbook.add_worksheet(self.stat_name)
+            try:
+                worksheet = workbook.add_worksheet(self.stat_name)
+            except xlsxwriter.exceptions.InvalidWorksheetName:
+                worksheet = workbook.add_worksheet()
+
             col_names = []
             for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
                 if not isinstance(module_summary_data, list):
@@ -316,7 +343,11 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         records_dict = self.value()
         with xlsxwriter.Workbook(fname) as workbook:
             for module_name, module_act_records in records_dict.items():
-                worksheet = workbook.add_worksheet(module_name)
+                try:
+                    worksheet = workbook.add_worksheet(module_name)
+                except xlsxwriter.exceptions.InvalidWorksheetName:
+                    worksheet = workbook.add_worksheet()
+
                 col_names = []
                 for col, (col_name, col_data) in enumerate(module_act_records.items()):
                     if col_name == 'shape':
@@ -437,7 +468,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
         Check whether the required statistics were collected to allow collecting laplace distribution stats.
         """
         for name, module in self.model.named_modules():
-            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+            if not self._should_collect(module):
                 continue
             if not hasattr(module, 'quant_stats'):
                 raise RuntimeError('Collection of Laplace distribution statistics is '
@@ -455,9 +486,9 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
     def start_second_pass(self):
         self._check_required_stats()
         self.collecting_second_pass = True
-        # reset batch_idx for all leaf modules
+        # reset batch_idx for all tracked modules
         for module in self.model.modules():
-            if distiller.has_children(module) or isinstance(module, torch.nn.Identity):
+            if not self._should_collect(module):
                 continue
             module.batch_idx = 0
             for record in module.quant_stats.inputs:
@@ -563,8 +594,6 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             module.batch_idx = 0
 
     def _collect_activations_stats(self, module, activation_stats, name=''):
-        if distiller.utils.has_children(module):
-            return
         if not hasattr(module, 'quant_stats'):
             return
 
@@ -680,8 +709,6 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
             self._reset(module)
 
     def _collect_activations_stats(self, module, activation_stats, name=''):
-        if distiller.utils.has_children(module):
-            return
         if not hasattr(module, 'output_hist'):
             return
 

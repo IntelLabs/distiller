@@ -162,14 +162,17 @@ def expand_binary_map(param, group_type, binary_map):
     assert binary_map is not None
 
     # Now let's expand back up to a 4D mask
+    if group_type == 'Channels' and param.dim() == 2:
+        group_type = 'Cols'
+
     if group_type == '2D':
         a = binary_map.expand(param.size(2) * param.size(3),
                               param.size(0) * param.size(1)).t()
-        return a.view(param.size(0), param.size(1), param.size(2), param.size(3)), binary_map
+        return a.view(*param.shape), binary_map
     elif group_type == 'Rows':
         return binary_map.expand(param.size(1), param.size(0)).t(), binary_map
     elif group_type == 'Cols':
-        return binary_map.expand(param.size(0), param.size(1)), binary_map
+        return binary_map.expand(*param.shape), binary_map
     elif group_type == '3D' or group_type == 'Filters':
         a = binary_map.expand(np.prod(param.shape[1:]), param.size(0)).t()
         return a.view(*param.shape), binary_map
@@ -178,5 +181,5 @@ def expand_binary_map(param, group_type, binary_map):
         a = binary_map.expand(num_filters, num_channels)
         c = a.unsqueeze(-1)
         d = c.expand(num_filters, num_channels, param.size(2) * param.size(3)).contiguous()
-        return d.view(param.size(0), param.size(1), param.size(2), param.size(3)), binary_map
+        return d.view(*param.shape), binary_map
 

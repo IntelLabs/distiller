@@ -26,7 +26,8 @@ from .policy import *
 from .thinning import *
 from .knowledge_distillation import KnowledgeDistillationPolicy, DistillationLossWeights
 from .summary_graph import SummaryGraph, onnx_name_2_pytorch_name
-
+from .early_exit import EarlyExitMgr
+import pkg_resources
 import logging
 logging.captureWarnings(True)
 
@@ -34,7 +35,10 @@ del dict_config
 del thinning
 
 # Distiller version
-__version__ = "0.4.0-pre"
+try:
+    __version__ = pkg_resources.require("distiller")[0].version
+except pkg_resources.DistributionNotFound:
+    __version__ = "Unknown"
 
 
 def model_find_param_name(model, param_to_find):
@@ -103,13 +107,13 @@ def model_find_module(model, module_to_find):
 
 def check_pytorch_version():
     from pkg_resources import parse_version
-    if parse_version(torch.__version__) < parse_version('1.1.0'):
+    required = '1.3.1'
+    actual = torch.__version__
+    if parse_version(actual) < parse_version(required):
         msg = "\n\nWRONG PYTORCH VERSION\n"\
-              "The Distiller \'master\' branch now requires at least PyTorch version 1.1.0 due to "\
-              "PyTorch API changes which are not backward-compatible. Version detected is {}.\n"\
-              "To make sure PyTorch and all other dependencies are installed with their correct versions, " \
-              "go to the Distiller repo root directory and run:\n\n"\
-              "pip install -e .\n".format(torch.__version__)
+              "Required:  {}\n" \
+              "Installed: {}\n"\
+              "Please run 'pip install -e .' from the Distiller repo root dir\n".format(required, actual)
         raise RuntimeError(msg)
 
 

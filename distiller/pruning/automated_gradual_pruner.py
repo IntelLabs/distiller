@@ -56,9 +56,10 @@ class AutomatedGradualPrunerBase(_ParameterPruner):
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         target_sparsity = self.compute_target_sparsity(meta)
-        self.prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity, meta['model'])
+        self._set_param_mask_by_sparsity_target(param, param_name, zeros_mask_dict, target_sparsity, meta['model'])
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
+    def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
+        """Set the parameter mask using a target sparsity. Override this in subclasses"""
         raise NotImplementedError
 
 
@@ -78,7 +79,7 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
             return
         super().set_param_mask(param, param_name, zeros_mask_dict, meta)
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
+    def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
         zeros_mask_dict[param_name].mask = SparsityLevelParameterPruner.create_mask(param, target_sparsity)
 
 
@@ -92,8 +93,8 @@ class StructuredAGP(AutomatedGradualPrunerBase):
         super().__init__(name, initial_sparsity, final_sparsity)
         self.pruner = None
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
-        self.pruner.prune_to_target_sparsity(param, param_name, zeros_mask_dict, target_sparsity, model)
+    def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model):
+        self.pruner._set_param_mask_by_sparsity_target(param, param_name, zeros_mask_dict, target_sparsity, model)
 
 
 class L1RankedStructureParameterPruner_AGP(StructuredAGP):
