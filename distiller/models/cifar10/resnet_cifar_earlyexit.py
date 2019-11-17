@@ -14,12 +14,11 @@
 # limitations under the License.
 #
 
-"""Resnet for CIFAR10
+"""Resnet for CIFAR10 with Early Exit branches
 
 Resnet for CIFAR10, based on "Deep Residual Learning for Image Recognition".
 This is based on TorchVision's implementation of ResNet for ImageNet, with appropriate
 changes for the 10-class Cifar-10 dataset.
-This ResNet also has layer gates, to be able to dynamically remove layers.
 
 @inproceedings{DBLP:conf/cvpr/HeZRS16,
   author    = {Kaiming He and
@@ -34,16 +33,14 @@ This ResNet also has layer gates, to be able to dynamically remove layers.
 }
 
 """
-import torch.nn as nn
-import math
-import torch.utils.model_zoo as model_zoo
-import torchvision.models as models
 from .resnet_cifar import BasicBlock
 from .resnet_cifar import ResNetCifar
+import torch.nn as nn
+from distiller.modules import BranchPoint
 
 
 __all__ = ['resnet20_cifar_earlyexit', 'resnet32_cifar_earlyexit', 'resnet44_cifar_earlyexit',
-    'resnet56_cifar_earlyexit', 'resnet110_cifar_earlyexit', 'resnet1202_cifar_earlyexit']
+           'resnet56_cifar_earlyexit', 'resnet110_cifar_earlyexit', 'resnet1202_cifar_earlyexit']
 
 NUM_CLASSES = 10
 
@@ -53,39 +50,58 @@ def conv3x3(in_planes, out_planes, stride=1):
                      padding=1, bias=False)
 
 
+def get_exits_def():
+    exits_def = [('layer1.2.relu2', nn.Sequential(nn.AvgPool2d(3),
+                            nn.Flatten(),
+                            nn.Linear(1600, NUM_CLASSES)))]
+    return exits_def
+
+
+def find_module(model, mod_name):
+    """Locate a module, given its full name"""
+    for name, module in model.named_modules():
+        if name == mod_name:
+            return module
+    return None
+
+
+def split_module_name(mod_name):
+    name_parts = mod_name.split('.')
+    parent = '.'.join(name_parts[:-1])
+    node = name_parts[-1]
+    return parent, node
+
+
 class ResNetCifarEarlyExit(ResNetCifar):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.exit_points = []
+        self.attach_exits(get_exits_def())
 
-    def __init__(self, block, layers, num_classes=NUM_CLASSES):
-        super(ResNetCifarEarlyExit, self).__init__(block, layers, num_classes)
-
-        # Define early exit layers
-        self.linear_exit0 = nn.Linear(1600, num_classes)
-
+    def attach_exits(self, exits_def):
+        # For each exit point, we:
+        # 1. Cache the name of the exit_point module (i.e. the name of the module
+        #    whose output we forward to the exit branch).
+        # 2. Override the exit_point module with an instance of BranchPoint
+        for exit_point, exit_branch in exits_def:
+            self.exit_points.append(exit_point)
+            replaced_module = find_module(self, exit_point)
+            parent_name, node_name = split_module_name(exit_point)
+            parent_module = find_module(self, parent_name)
+            parent_module.__setattr__(node_name, BranchPoint(replaced_module, exit_branch))
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-
-        x = self.layer1(x)
-
-        # Add early exit layers
-        exit0 = nn.functional.avg_pool2d(x, 3)
-        exit0 = exit0.view(exit0.size(0), -1)
-        exit0 = self.linear_exit0(exit0)
-
-        x = self.layer2(x)
-        x = self.layer3(x)
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
-        # return a list of probabilities
-        output = []
-        output.append(exit0)
-        output.append(x)
-        return output
+        # Run the input through the network
+        x = super().forward(x)
+        # Collect the outputs of all the exits and return them
+        outputs = []
+        for exit_point in self.exit_points:
+            parent_name, node_name = split_module_name(exit_point)
+            parent_module = find_module(self, parent_name)
+            output = parent_module.__getattr__(node_name).output
+            outputs.append(output)
+        outputs += [x]
+        return outputs
 
 
 def resnet20_cifar_earlyexit(**kwargs):

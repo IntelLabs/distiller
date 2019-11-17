@@ -177,6 +177,7 @@ class Quantizer(object):
         # Unspecified layer types return None by default.
         self.replacement_factory = OrderedDict([(nn.Identity, None)])
         self.default_repalcement_fn = None
+        self.replacement_blacklist = []
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -276,6 +277,9 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
+            if isinstance(module, tuple(self.replacement_blacklist)):
+                replace_msg(full_name)
+                continue
             if module in self.modules_processed:
                 previous_name, previous_wrapper = self.modules_processed[module]
                 warnings.warn("Module '{0}' references to same module as '{1}'."

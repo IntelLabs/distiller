@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import copy
 import math
 import time
 import os
@@ -54,11 +55,11 @@ class ClassifierCompressor(object):
         - Classifier training, verification and testing
     """
     def __init__(self, args, script_dir):
-        self.args = args
-        _infer_implicit_args(args)
-        self.logdir = _init_logger(args, script_dir)
-        _config_determinism(args)
-        _config_compute_device(args)
+        self.args = copy.deepcopy(args)
+        _infer_implicit_args(self.args)
+        self.logdir = _init_logger(self.args, script_dir)
+        _config_determinism(self.args)
+        _config_compute_device(self.args)
         
         # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
         # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -68,12 +69,13 @@ class ClassifierCompressor(object):
             self.tflogger = TensorBoardLogger(msglogger.logdir)
             self.pylogger = PythonLogger(msglogger)
         (self.model, self.compression_scheduler, self.optimizer, 
-             self.start_epoch, self.ending_epoch) = _init_learner(args)
+             self.start_epoch, self.ending_epoch) = _init_learner(self.args)
 
         # Define loss function (criterion)
-        self.criterion = nn.CrossEntropyLoss().to(args.device)
+        self.criterion = nn.CrossEntropyLoss().to(self.args.device)
         self.train_loader, self.val_loader, self.test_loader = (None, None, None)
-        self.activations_collectors = create_activation_stats_collectors(self.model, *args.activation_stats)
+        self.activations_collectors = create_activation_stats_collectors(
+            self.model, *self.args.activation_stats)
     
     def load_datasets(self):
         """Load the datasets"""
@@ -500,7 +502,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             errs['Top1'] = classerr.value(1)
             errs['Top5'] = classerr.value(5)
         else:
-            # for Early Exit case, the Top1 and Top5 stats are computed for each exit.
+            # For Early Exit case, the Top1 and Top5 stats are computed for each exit.
             for exitnum in range(args.num_exits):
                 errs['Top1_exit' + str(exitnum)] = args.exiterrors[exitnum].value(1)
                 errs['Top5_exit' + str(exitnum)] = args.exiterrors[exitnum].value(5)
@@ -531,8 +533,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
     batch_time = tnt.AverageValueMeter()
     data_time = tnt.AverageValueMeter()
 
-    # For Early Exit, we define statistics for each exit
-    # So exiterrors is analogous to classerr for the non-Early Exit case
+    # For Early Exit, we define statistics for each exit, so
+    # exiterrors is analogous to classerr for the non-Early Exit case
     if early_exit_mode(args):
         args.exiterrors = []
         for exitnum in range(args.num_exits):
@@ -564,10 +566,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if not early_exit_mode(args):
             loss = criterion(output, target)
             # Measure accuracy
-            classerr.add(output.data, target)
+            classerr.add(output.detach(), target)
             acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
+            classerr.add(output[args.num_exits-1].detach(), target) # add the last exit (original exit)
             loss = earlyexit_loss(output, target, criterion, args)
         # Record loss
         losses[OBJECTIVE_LOSS_KEY].add(loss.item())
@@ -695,9 +698,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 loss = criterion(output, target)
                 # measure accuracy and record loss
                 losses['objective_loss'].add(loss.item())
-                classerr.add(output.data, target)
+                classerr.add(output.detach(), target)
                 if args.display_confusion:
-                    confusion.add(output.data, target)
+                    confusion.add(output.detach(), target)
             else:
                 earlyexit_validate_loss(output, target, criterion, args)
 
@@ -732,29 +735,35 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
     # Sort by sparsity as main sort key, then sort by top1, top5 and epoch
     perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'), reverse=True)
     for score in perf_scores_history[:num_best_scores]:
-        msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d on epoch: %d]',
-                       score.top1, score.top5, score.sparsity, score.params_nnz_cnt, score.epoch)
+        msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
+                       score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
 
 
 def earlyexit_loss(output, target, criterion, args):
-    loss = 0
-    sum_lossweights = 0
+    """Compute the weighted sum of the exits losses
+
+    Note that the last exit is the original exit of the model (i.e. the
+    exit that traverses the entire network.
+    """
+    weighted_loss = 0
+    sum_lossweights = sum(args.earlyexit_lossweights)
+    assert sum_lossweights < 1
     for exitnum in range(args.num_exits-1):
-        loss += (args.earlyexit_lossweights[exitnum] * criterion(output[exitnum], target))
-        sum_lossweights += args.earlyexit_lossweights[exitnum]
-        args.exiterrors[exitnum].add(output[exitnum].data, target)
+        exit_loss = criterion(output[exitnum], target)
+        weighted_loss += args.earlyexit_lossweights[exitnum] * exit_loss
+        args.exiterrors[exitnum].add(output[exitnum].detach(), target)
     # handle final exit
-    loss += (1.0 - sum_lossweights) * criterion(output[args.num_exits-1], target)
-    args.exiterrors[args.num_exits-1].add(output[args.num_exits-1].data, target)
-    return loss
+    weighted_loss += (1.0 - sum_lossweights) * criterion(output[args.num_exits-1], target)
+    args.exiterrors[args.num_exits-1].add(output[args.num_exits-1].detach(), target)
+    return weighted_loss
 
 
 def earlyexit_validate_loss(output, target, criterion, args):
     # We need to go through each sample in the batch itself - in other words, we are
-    # not doing batch processing for exit criteria - we do this as though it were batchsize of 1
+    # not doing batch processing for exit criteria - we do this as though it were batch size of 1,
     # but with a grouping of samples equal to the batch size.
     # Note that final group might not be a full batch - so determine actual size.
-    this_batch_size = target.size()[0]
+    this_batch_size = target.size(0)
     earlyexit_validate_criterion = nn.CrossEntropyLoss(reduce=False).to(args.device)
 
     for exitnum in range(args.num_exits):
