@@ -8,10 +8,11 @@
 # Baseline results:
 #     Top1: 92.850    Top5: 99.780    Loss: 0.364
 #     Total MACs: 125,747,840
-#
+#     Total parameters: 851504
 # Results:
 #     Top1: 93.030    Top5: 99.650    Loss: 1.533
 #     Total MACs: 78,856,832
+#     Total parameters: 634640 (74.53%)
 #
 #
 # time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../network_trimming/resnet56_cifar_activation_apoz.yaml --resume-from=checkpoint.resnet56_cifar_baseline.pth.tar --reset-optimizer --act-stats=valid

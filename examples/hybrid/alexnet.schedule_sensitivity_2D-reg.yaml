@@ -3,7 +3,7 @@
 # with 2D structure regularization for the Convolution weights.
 #
 # time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 24 --epochs 90 --pretrained --compress=../hybrid/alexnet.schedule_sensitivity_2D-reg.yaml
-# time python3 compress_classifier.py -a alexnet --lr 0.005 -p 50 ../../../data.imagenet -j 24 --epochs 90 --pretrained --compress=../hybrid/alexnet.schedule_sensitivity_2D-reg.yaml
+#
 # Parameters:
 #
 # +----+---------------------------+------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
