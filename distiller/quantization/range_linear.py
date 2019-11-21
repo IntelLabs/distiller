@@ -254,6 +254,8 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                        help='List of layer names for which not to clip activations. Applicable '
                             'only if --qe-clip-acts is not \'none\'')
+    group.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
+                        help='List of layer names for which to skip quantization.')
     group.add_argument('--qe-per-channel', '--qepc', action='store_true',
                        help='Enable per-channel quantization of weights (per output channel)')
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
@@ -1314,9 +1316,15 @@ class PostTrainLinearQuantizer(Quantizer):
                                                                  'PostTrainLinearQuantizer')
         else:
             overrides = OrderedDict(
-                [(layer, OrderedDict([('clip_acts', 'NONE')]))
-                 for layer in args.qe_no_clip_layers]
+                [
+                    (layer, OrderedDict([('bits_activations', None), ('bits_weights', None)]))
+                    for layer in args.qe_no_quant_layers
+                ]
             )
+            overrides.update(OrderedDict(
+                [(layer, OrderedDict([('clip_acts', 'NONE')]))
+                 for layer in args.qe_no_clip_layers if layer not in args.qe_no_quant_layers]
+            ))
             return cls(model,
                        bits_activations=args.qe_bits_acts,
                        bits_parameters=args.qe_bits_wts,

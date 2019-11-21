@@ -46,8 +46,6 @@ def quant_params_vec2dict(keys, vals):
 
 def get_default_args():
     parser = classifier.init_classifier_compression_arg_parser()
-    parser.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
-                        help='List of layer names for which to skip quantization.')
     parser.add_argument('--qe-calib-portion', type=float, default=1.0,
                         help='The portion of the dataset to use for calibration stats collection.')
     parser.add_argument('--qe-calib-batchsize', type=int, default=256,
@@ -119,16 +117,16 @@ def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=
     quantizer.prepare_model(dummy_input)
     best_data = {
         'score': eval_fn(model),
-        'qp_dict': deepcopy(quantizer.acts_quant_params)
+        'qp_dict': deepcopy(quantizer.linear_quant_params)
     }
     msglogger.info("Initial quantization score %.3f" % best_data['score'])
-    init_qp_dict = deepcopy(quantizer.acts_quant_params)
+    init_qp_dict = deepcopy(quantizer.linear_quant_params)
     keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
     _iter = count(0)
 
     def feed_forward_fn(qp_vec):
         qp_dict = quant_params_vec2dict(keys, qp_vec)
-        quantizer.update_acts_quant_params(qp_dict)
+        quantizer.update_linear_quant_params(qp_dict)
         return eval_fn(quantizer.model)
 
     def callback(qp_vec):
@@ -166,6 +164,7 @@ if __name__ == "__main__":
     args = get_default_args()
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
+    args = deepcopy(cc.args)
     args.effective_test_size = args.opt_test_size
     eval_data_loader = classifier.load_data(args, load_train=False, load_test=False, fixed_subset=True,
                                             )
