@@ -15,7 +15,9 @@
 #
 import torch
 import torch.nn as nn
-from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode
+from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode, \
+    RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, is_post_train_quant_wrapper
+from functools import partial
 from distiller.summary_graph import SummaryGraph
 from distiller.model_transforms import fold_batch_norms
 import distiller.modules
@@ -44,6 +46,118 @@ def quant_params_vec2dict(keys, vals):
     return OrderedDict(zip(keys, (val.item() for val in vals)))
 
 
+def lp_loss(x, y, p):
+    return (torch.sum(torch.abs(x-y)**p)**(1/p)).item()
+
+
+l1_loss = partial(lp_loss, p=1)
+l2_loss = partial(lp_loss, p=2)
+l3_loss = partial(lp_loss, p=3)
+
+
+_INIT_MODES = {
+    'NONE': ClipMode.NONE, 'AVG': ClipMode.AVG, 'LAPLACE': ClipMode.LAPLACE, 'GAUSS': ClipMode.GAUSS,
+    'L1': l1_loss, 'L2': l2_loss, 'L3': l3_loss
+}
+
+
+def _init_mode_from_str(init_mode_str):
+    if init_mode_str not in _INIT_MODES:
+        raise ValueError('Unsupported init mode \'%s\'. '
+                         'The supported init modes are: %s.' % (init_mode_str, _INIT_MODES))
+    return _INIT_MODES[init_mode_str]
+
+
+def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None):
+    """
+    Searches for optimal linear quantization parameters (scale, zero_point)
+    with respect to the loss function. Assumes loss_fn is of the signature `loss_fn(y, y_q)->float`
+    Args:
+        layer (nn.Module): the original, pre-quantized, layer.
+        quantized_layer (RangeLinearQuantWrapper or RangeLinearEmbeddingWrapper): the post-quantized layer.
+        loss_fn (callable): the loss function to optimize with respect to it.
+        method (str or callable): the method of optimization, as will be used by scipy.optimize.minimize.
+    Returns:
+        quantized_layer after optimization
+    """
+    init_qp_dict = OrderedDict(quantized_layer.named_linear_quant_params())
+    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
+
+    def feed_forward_fn(qp_vec):
+        qp_dict = quant_params_vec2dict(keys, qp_vec)
+        quantized_layer.update_linear_quant_params(qp_dict)
+        y, q_y = layer(input), quantized_layer(input)
+        return loss_fn(y, q_y)
+
+    _iter = count(1)
+
+    def callback(qp_vec):
+        score = feed_forward_fn(qp_vec)
+        i = next(_iter)
+        msglogger.debug("Step %d: \t Score=%.3f" % (i, score))
+
+    result = opt.minimize(feed_forward_fn, init_qp_vec, method=method, callback=callback)  # type: opt.OptimizeResult
+    qp_dict = quant_params_vec2dict(keys, result.x)
+    quantized_layer.update_linear_quant_params(qp_dict)
+    return quantized_layer
+
+
+def get_input_for_layer(model, layer_name, input_for_model):
+    layer = dict(model.named_modules())[layer_name]  # type: nn.Module
+    layer_inputs = []
+
+    def hook_layer_input(module, input, output):
+        layer_inputs.append(input)
+
+    handle = layer.register_forward_hook(hook_layer_input)
+    output = model(input_for_model)
+    assert len(layer_inputs) == 1
+    handle.remove()
+    return layer_inputs[0]
+
+
+def init_layer_linear_quant_params(quantizer, original_model, layer_name,
+                                   init_mode=None, init_mode_method='Powell', sample_input=None):
+    """
+    Initializes a layer's linear quant parameters.
+    This is done to set the scipy.optimize.minimize initial guess.
+    Args:
+        quantizer (PostTrainLinearQuantizer): the quantizer, **after** calling prepare model.
+        original_model (nn.Module): the original, pre-quantized, model.
+        layer_name (str): the name of the layer.
+        init_mode (ClipMode or callable or str): the initialization mode.
+          If ClipMode, the initialization will be according to the respective ClipMode.
+          If callable - init_mode will be treated as a loss function between the activations pre and post-quantization,
+            and the initialization process will attempt to find the minimum of that loss function.
+            E.g. if l1_loss has been passed, the initialization vector will be
+              scale, zero_point = argmin_{s, zp} (l1_loss(layer(input), q_layer(input; s, zp)))
+          If str - the mode will be chosen from a list of options. The options are:
+            [NONE, AVG, LAPLACE, GAUSS, L1, L2 ,L3].
+          Defaults to ClipMode.NONE
+        init_mode_method (str or callable): applicable only in the case of init_mode = 'L1/2/3' or callable.
+          chooses the minimization method for finding the local argmin_{s, zp}.
+          Defaults to 'Powell'
+        sample_input : a sample batch input for the model.
+          Not to be confused with dummy_input - this input has to be an actual batch from a data loader.
+          applicable only in the case of init_mode = 'L1/2/3' or callable.
+    """
+    if isinstance(init_mode, str):
+        init_mode = _init_mode_from_str(init_mode)
+    if isinstance(init_mode, ClipMode):
+        quantizer.module_overrides_map[layer_name]['clip_acts'] = init_mode
+    layer = dict(original_model.named_modules())[layer_name]
+    args, kwargs = quantizer.modules_processed_args[layer_name]
+    quantized_layer = quantizer.replacement_factory[type(layer)](deepcopy(layer), *args, **kwargs)
+    if not is_post_train_quant_wrapper(quantized_layer, False):
+        return quantized_layer  # the module wasn't quantized, nothing to do here
+
+    if callable(init_mode):
+        input_for_layer = get_input_for_layer(original_model, layer_name, sample_input)
+        quantized_layer = optimize_for_layer(layer, quantized_layer, init_mode, input_for_layer, init_mode_method)
+
+    distiller.model_setattr(quantizer.model, layer_name, quantized_layer)
+
+
 def get_default_args():
     parser = classifier.init_classifier_compression_arg_parser()
     parser.add_argument('--qe-calib-portion', type=float, default=1.0,
@@ -60,6 +174,12 @@ def get_default_args():
                         help='Use scipy.optimize.basinhopping stochastic global minimum search.')
     parser.add_argument('--opt-bh-niter', dest='niter', default=100,
                         help='Number of iterations for the basinhopping algorithm.')
+    parser.add_argument('--opt-init-mode', dest='init_mode', default='NONE',
+                        choices=list(_INIT_MODES),
+                        help='The mode of quant initalization. Choices: ' + '|'.join(list(_INIT_MODES)))
+    parser.add_argument('--opt-init-method', dest='init_mode_method',
+                        help='If --opt-init-mode was specified as L1/L2/L3, this specifies the method of '
+                             'minimization.')
     parser.add_argument('--opt-test-size', type=float, default=1,
                         help='Use portion of the test size.')
     parser.add_argument('--base-score', type=float, default=None)
@@ -166,13 +286,12 @@ if __name__ == "__main__":
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     args = deepcopy(cc.args)
     args.effective_test_size = args.opt_test_size
-    eval_data_loader = classifier.load_data(args, load_train=False, load_test=False, fixed_subset=True,
-                                            )
+    eval_data_loader = classifier.load_data(args, load_train=False, load_val=False, fixed_subset=True)
 
     # quant calibration dataloader:
     args.effective_test_size = args.qe_calib_portion
     args.batch_size = args.qe_calib_batchsize
-    calib_data_loader = classifier.load_data(args, fixed_subset=True, load_train=False, load_test=False)
+    calib_data_loader = classifier.load_data(args, fixed_subset=True, load_train=False, load_val=False)
     # logging
     logging.getLogger().setLevel(logging.WARNING)
     msglogger = logging.getLogger(__name__)

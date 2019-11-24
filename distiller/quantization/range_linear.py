@@ -400,6 +400,20 @@ class RangeLinearQuantWrapper(nn.Module):
             yield 'output_scale', self.output_scale
             yield 'output_zero_point', self.output_zero_point
 
+    def set_linear_quant_param(self, name, val):
+        if name not in self.named_linear_quant_params():
+            raise ValueError('%s is not a quantization parameter.' % name)
+        getattr(self, name).data.fill_(val)
+
+    def update_linear_quant_params(self, new_config):
+        """
+        Updates all the quant params using a dictionary.
+        Args:
+             new_config (dict): the new configuration dict.
+        """
+        for name, val in new_config.items():
+            self.set_linear_quant_param(name, val)
+
     def forward(self, *inputs):
         # if self.training:
         #     raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
@@ -993,6 +1007,20 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         yield 'w_scale', self.w_scale
         yield 'w_zero_point', self.w_zero_point
 
+    def set_linear_quant_param(self, name, val):
+        if name not in self.named_linear_quant_params():
+            raise ValueError('%s is not a quantization parameter.' % name)
+        getattr(self, name).data.fill_(val)
+
+    def update_linear_quant_params(self, new_config):
+        """
+        Updates all the quant params using a dictionary.
+        Args:
+             new_config (dict): the new configuration dict.
+        """
+        for name, val in new_config.items():
+            self.set_linear_quant_param(name, val)
+
     def forward(self, input):
         out_q = self.wrapped_module(input)
         out_f = linear_dequantize(out_q, self.w_scale, self.w_zero_point, inplace=True)
@@ -1146,14 +1174,14 @@ class PostTrainLinearQuantizer(Quantizer):
 
         def replace_param_layer(module, name, qbits_map, per_channel_wts=per_channel_wts,
                                 mode=mode, fp16=fp16, scale_approx_mult_bits=scale_approx_mult_bits,
-                                clip_acts=clip_acts, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
+                                clip_acts=None, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                 input_overrides=None, fpq_module=fpq_module, fake=False):
             if fp16:
                 warnings.warn("Argument 'fp16' is deprecated. Please use 'fpq_module'(=16/32/64) argument.",
                               DeprecationWarning)
                 fpq_module = fpq_module or 16
             norm_name = distiller.utils.normalize_module_name(name)
-            clip_acts = verify_clip_mode(clip_acts)
+            clip_acts = verify_clip_mode(clip_acts or self.clip_acts)
             if fpq_module:
                 if not fake:
                     return FPWrapper(module, fpq_module)
@@ -1176,11 +1204,11 @@ class PostTrainLinearQuantizer(Quantizer):
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
                                     scale_approx_mult_bits=scale_approx_mult_bits,
-                                    clip_acts=clip_acts, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
+                                    clip_acts=None, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                     input_overrides=None, inputs_quant_auto_fallback=inputs_quant_auto_fallback,
                                     fpq_module=fpq_module, fake=False):
             norm_name = distiller.utils.normalize_module_name(name)
-            clip_acts = verify_clip_mode(clip_acts)
+            clip_acts = verify_clip_mode(clip_acts or self.clip_acts)
             if fp16:
                 warnings.warn("Argument 'fp16' is deprecated. Please use 'fpq_module'(=16/32/64) argument.",
                               DeprecationWarning)
@@ -1214,7 +1242,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                                stats=self.model_activation_stats.get(norm_name, None))
 
         def replace_fake_quant(module, name, qbits_map, fp16=fp16,
-                               clip_acts=clip_acts, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
+                               clip_acts=None, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                scale_approx_mult_bits=scale_approx_mult_bits, fpq_module=fpq_module, fake=True,
                                make_identity=False):
             if isinstance(module, (nn.ReLU, nn.ReLU6)) and make_identity:
@@ -1223,7 +1251,7 @@ class PostTrainLinearQuantizer(Quantizer):
                 if isinstance(named_modules[pred], RangeLinearQuantWrapper):
                     return nn.Identity()
             norm_name = distiller.utils.normalize_module_name(name)
-            clip_acts = verify_clip_mode(clip_acts)
+            clip_acts = verify_clip_mode(clip_acts or self.clip_acts)
             if distiller.has_children(module):
                 return module
             if fp16:

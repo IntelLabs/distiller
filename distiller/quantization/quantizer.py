@@ -187,6 +187,7 @@ class Quantizer(object):
 
         # A dictionary of replaced modules and their respective names.
         self.modules_processed = OrderedDict()
+        self.modules_processed_args = OrderedDict()
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Conv3d, nn.Linear, nn.Embedding]:
@@ -314,6 +315,8 @@ class Quantizer(object):
                         replace_msg(full_name, (module, new_module))
                         # Add to history of prepared submodules
                         self.modules_processed[module] = full_name, new_module
+                        # To allow recreating this wrapper later on
+                        self.modules_processed_args[full_name] = (full_name, self.module_qbits_map), valid_kwargs
                         setattr(container, name, new_module)
 
                         # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
