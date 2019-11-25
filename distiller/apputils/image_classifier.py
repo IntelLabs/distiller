@@ -157,7 +157,7 @@ class ClassifierCompressor(object):
 
     def _finalize_epoch(self, epoch, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
-        self.performance_tracker.step(self.model, top1, top5, epoch)
+        self.performance_tracker.step(self.model, epoch, top1=top1, top5=top5)
         _log_best_scores(self.performance_tracker, msglogger)
         best_score = self.performance_tracker.best_scores()[0]
         is_best = epoch == best_score.epoch
