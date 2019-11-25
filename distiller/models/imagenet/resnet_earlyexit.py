@@ -1,8 +1,8 @@
 import torch.nn as nn
 import torchvision.models as models
-from torchvision.models.resnet import ResNet, BasicBlock, Bottleneck
 from .resnet import DistillerBottleneck
 import distiller
+
 
 __all__ = ['resnet50_earlyexit']
 
@@ -15,18 +15,15 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 def get_exits_def(num_classes):
     expansion = 1 # models.ResNet.BasicBlock.expansion
-    exits_def = [('layer1.2.relu3', nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
-                                                  nn.Conv2d(256, 50, kernel_size=7, stride=2, padding=3, bias=True),
-                                                  nn.Conv2d(50, 12, kernel_size=7, stride=2, padding=3, bias=True),
-                                                  #nn.AdaptiveAvgPool2d((1, 1)),
+    exits_def = [('layer1.2.relu3', nn.Sequential(nn.Conv2d(256, 10, kernel_size=7, stride=2, padding=3, bias=True),
+                                                  nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
                                                   nn.Flatten(),
-                                                  nn.Linear(12 * expansion, num_classes))),
+                                                  nn.Linear(1960, num_classes))),
                                                   #distiller.modules.Print())),
                  ('layer2.3.relu3', nn.Sequential(nn.Conv2d(512, 12, kernel_size=7, stride=2, padding=3, bias=True),
-                                                  nn.AdaptiveAvgPool2d((1, 1)),
+                                                  nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
                                                   nn.Flatten(),
-                                                  #distiller.modules.Print()))]
-                                                  nn.Linear(12 * expansion, num_classes)))]
+                                                  nn.Linear(588, num_classes)))]
     return exits_def
 
 
