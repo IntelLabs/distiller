@@ -470,7 +470,7 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
+    train_loader, val_loader, test_loader, _ = apputils.load_data(args.dataset, args.arch,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
@@ -483,7 +483,7 @@ def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_
     loaders = [loaders[i] for i, flag in enumerate(flags) if flag]
     
     if len(loaders) == 1:
-        # Unpack the list for convinience
+        # Unpack the list for convenience
         loaders = loaders[0]
     return loaders
 
