@@ -15,6 +15,7 @@
 #
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, \
     RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, is_post_train_quant_wrapper
 from functools import partial
@@ -215,6 +216,8 @@ def get_default_args():
                              'minimization.')
     parser.add_argument('--opt-test-size', type=float, default=1,
                         help='Use portion of the test size.')
+    parser.add_argument('--opt-eval-single-batch', dest='eval_single_batch', action='store_true', default=False,
+                        help='Stores the input batch in memory to optimize performance.')
     parser.add_argument('--search-for-weights', dest='save_fp_weights', action='store_true', default=False,
                         help='Whether or not search quantization parameters for weights as well.')
     parser.add_argument('--search-on', nargs='+', type=str, default=[],
@@ -274,11 +277,11 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
     msglogger.info('Evaluating baseline score for model...')
     base_score = args.base_score or eval_fn(model)
     msglogger.info("Baseline score: %.3f" % base_score)
+    # if test_fn:
+    #     l_top1, l_top5, l_loss = test_fn(model)
+    #     msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
     # Preparing model and init conditions:
     msglogger.info("Evaluating initial quantization score...")
-    if test_fn:
-        l_top1, l_top5, l_loss = test_fn(model)
-        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
 
     quantizer = PostTrainLinearQuantizer.from_args(model, args)
 
@@ -293,9 +296,9 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
         'qp_dict': deepcopy(quantizer.linear_quant_params)
     }
     msglogger.info("Initial quantization score %.3f" % best_data['score'])
-    if test_fn:
-        l_top1, l_top5, l_loss = test_fn(quantizer.model)
-        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+    # if test_fn:
+    #     l_top1, l_top5, l_loss = test_fn(quantizer.model)
+    #     msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
 
     init_qp_dict = deepcopy(quantizer.linear_quant_params)
     # filter buffers by the choices:
@@ -359,14 +362,33 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.WARNING)
     msglogger = logging.getLogger(__name__)
     msglogger.setLevel(logging.INFO)
+    model = create_model(args.pretrained, args.dataset, args.arch,
+                         parallel=not args.load_serialized, device_ids=args.gpus)
+    device = next(model.parameters()).device
     eval_counter = count(0)
 
+    if args.eval_single_batch:
+        memoized_data_loader = []
+        for images, targets in eval_data_loader:
+            batch = images.to(device), targets.to(device)
+            memoized_data_loader.append(batch)
+            break
+    else:
+        memoized_data_loader = None
+
     def eval_fn(model):
-        top1, top5, losses = classifier.test(eval_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None,
-                                             args)
+        if args.eval_single_batch:
+            losses = 0
+            for images, targets in memoized_data_loader:
+                outputs = model(images)
+                losses += cc.criterion(outputs, targets).item()
+            losses = losses / len(memoized_data_loader)
+        else:
+            _, _, losses = classifier.test(eval_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger],
+                                           None, args)
         i = next(eval_counter)
         if i % 20 == 0:
-            msglogger.info('%d evaluations: loss=%.3f, top1=%.3f, top5=%.3f ' % (i, losses, top1, top5))
+            msglogger.info('%d evaluations: loss=%.3f' % (i, losses))
         return losses
 
     def calib_eval_fn(model):
@@ -379,8 +401,6 @@ if __name__ == "__main__":
                                 args)
 
 
-    model = create_model(args.pretrained, args.dataset, args.arch,
-                         parallel=not args.load_serialized, device_ids=args.gpus)
     args.device = next(model.parameters()).device
     if args.resumed_checkpoint_path:
         args.load_model_path = args.resumed_checkpoint_path
