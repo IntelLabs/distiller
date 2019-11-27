@@ -83,6 +83,14 @@ class PlainCifar(nn.Module):
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.fc = nn.Linear(64 * block.expansion, num_classes)
 
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
     def _make_layer(self, block, planes, num_blocks, stride, batch_norm=True):
         # Each layer is composed on 2*num_blocks blocks, and the first block usually
         # performs downsampling of the input, and doubling of the number of filters/feature-maps.
