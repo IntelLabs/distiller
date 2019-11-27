@@ -277,9 +277,9 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
     msglogger.info('Evaluating baseline score for model...')
     base_score = args.base_score or eval_fn(model)
     msglogger.info("Baseline score: %.3f" % base_score)
-    # if test_fn:
-    #     l_top1, l_top5, l_loss = test_fn(model)
-    #     msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+    if test_fn:
+        l_top1, l_top5, l_loss = test_fn(model)
+        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
     # Preparing model and init conditions:
     msglogger.info("Evaluating initial quantization score...")
 
@@ -296,9 +296,9 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
         'qp_dict': deepcopy(quantizer.linear_quant_params)
     }
     msglogger.info("Initial quantization score %.3f" % best_data['score'])
-    # if test_fn:
-    #     l_top1, l_top5, l_loss = test_fn(quantizer.model)
-    #     msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+    if test_fn:
+        l_top1, l_top5, l_loss = test_fn(quantizer.model)
+        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
 
     init_qp_dict = deepcopy(quantizer.linear_quant_params)
     # filter buffers by the choices:
