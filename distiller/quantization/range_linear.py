@@ -369,8 +369,8 @@ class RangeLinearQuantWrapper(nn.Module):
                                                           clip_n_stds, clip_half_range, scale_approx_mult_bits)
             if not isinstance(scale, torch.Tensor):
                 scale, zp = torch.tensor(scale), torch.tensor(zp)
-            scale.requires_grad = requires_grad
-            zp.requires_grad = requires_grad
+            scale.requires_grad_(requires_grad)
+            zp.requires_grad_(requires_grad)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
         else:
@@ -392,7 +392,7 @@ class RangeLinearQuantWrapper(nn.Module):
             raise ValueError('No buffers in "%s" class that may acquire gradients.' %
                              self.__class__.__name__)
         for name, buffer in named_linear_quant_params:
-            buffer.requires_grad = val
+            buffer.requires_grad_(val)
 
     def named_linear_quant_params(self):
         if self.preset_act_stats:
@@ -401,7 +401,7 @@ class RangeLinearQuantWrapper(nn.Module):
             yield 'output_zero_point', self.output_zero_point
 
     def set_linear_quant_param(self, name, val):
-        if name not in self.named_linear_quant_params():
+        if name not in dict(self.named_linear_quant_params()):
             raise ValueError('%s is not a quantization parameter.' % name)
         getattr(self, name).data.fill_(val)
 
@@ -601,7 +601,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
                  clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
                  input_overrides=None, inputs_quant_auto_fallback=False,
-                 requires_grad=False):
+                 requires_grad=False, save_fp_weights=False):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds, clip_half_range,
                                                                 scale_approx_mult_bits,
@@ -618,15 +618,23 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         self.params_min_q_val, self.params_max_q_val = get_quantized_range(
             self.wts_quant_settings.num_bits,
             self.wts_quant_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+        self.save_fp_weights = save_fp_weights
+        # save the float weight to allow re-quantizing
+        if save_fp_weights:
+            wrapped_module.register_buffer('float_weight', wrapped_module.weight.clone().detach())
 
         # Quantize weights - overwrite FP32 weights
         w_scale, w_zero_point = _get_quant_params_from_tensor(wrapped_module.weight,
                                                               self.wts_quant_settings.num_bits,
                                                               self.wts_quant_settings.quant_mode,
                                                               per_channel=self.wts_quant_settings.per_channel)
+        w_scale = w_scale.requires_grad_(requires_grad) if isinstance(w_scale, torch.Tensor) \
+            else torch.tensor(w_scale, requires_grad=requires_grad)
+        w_zero_point = w_zero_point.requires_grad_(requires_grad) if isinstance(w_zero_point, torch.Tensor) \
+            else torch.tensor(w_zero_point, requires_grad=requires_grad)
 
-        self.register_buffer('w_scale', torch.tensor(w_scale, requires_grad=requires_grad))
-        self.register_buffer('w_zero_point', torch.tensor(w_zero_point, requires_grad=requires_grad))
+        self.register_buffer('w_scale', w_scale)
+        self.register_buffer('w_zero_point', w_zero_point)
         linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.params_min_q_val,
                               self.params_max_q_val, inplace=True)
 
@@ -661,9 +669,25 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
 
     def named_linear_quant_params(self):
-        yield 'w_scale', self.w_scale
-        yield 'w_zero_point', self.w_zero_point
+        if self.save_fp_weights:
+            yield 'w_scale', self.w_scale
+            yield 'w_zero_point', self.w_zero_point
         yield from super(RangeLinearQuantParamLayerWrapper, self).named_linear_quant_params()
+
+    def set_linear_quant_param(self, name, val):
+        if name in ['w_scale', 'w_zero_point']:
+            if self.save_fp_weights:
+                super().set_linear_quant_param(name, val)
+                self.wrapped_module.weight.data.fill_(self.wrapped_module.float_weight.data)
+                linear_quantize_clamp(self.wrapped_module.weight.data, self.w_scale, self.w_zero_point,
+                                      self.params_min_q_val,
+                                      self.params_max_q_val, inplace=True)
+            else:
+                raise ValueError('Cannot re-quantize the weights. Please specify \'save_fp_weights\' in '
+                                 'the %s constructor to enable re-quantizing the weights.' %
+                                 self.__class__.__name__)
+        else:
+            super().set_linear_quant_param(name, val)
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         if self.is_simulated_quant_weight_shifted:
@@ -994,8 +1018,8 @@ class RangeLinearEmbeddingWrapper(nn.Module):
 
         device = wrapped_module.weight.device
 
-        w_scale.requires_grad = requires_grad
-        w_zero_point.requires_grad = requires_grad
+        w_scale.requires_grad_(requires_grad)
+        w_zero_point.requires_grad_(requires_grad)
         self.register_buffer('w_scale', w_scale.to(device))
         self.register_buffer('w_zero_point', w_zero_point.to(device))
         linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.min_q_val,
@@ -1117,6 +1141,9 @@ class PostTrainLinearQuantizer(Quantizer):
             For details what this does and how to override it.
         fpq_module (Union[int, str]): use the modules in floating point mode and only quantize their outputs.
             takes the values (16, 32, 64) only, this will use RangeLinearFakeQuantWrapper.
+        save_fp_weights (bool): Indicates whether or not to save a copy of the floating point weights.
+          This allows re-quantization of weight after the initial quantization.
+          Defaults to False for performance.
     Note:
         If fpq_module is set, all the layers (except those overridden in `overrides`) will be converted
         to the set floating point precision, regardless of bits_activations/parameters/accum.
@@ -1126,7 +1153,7 @@ class PostTrainLinearQuantizer(Quantizer):
                  per_channel_wts=False, model_activation_stats=None, fp16=False,
                  clip_n_stds=None, clip_half_range=False,
                  scale_approx_mult_bits=None, inputs_quant_auto_fallback=True,
-                 fpq_module=None):
+                 fpq_module=None, save_fp_weights=False):
         overrides_bkp = deepcopy(overrides)
         super(PostTrainLinearQuantizer, self).__init__(model, bits_activations=bits_activations,
                                                        bits_weights=bits_parameters, bits_bias=bits_accum,
@@ -1200,7 +1227,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                                      scale_approx_mult_bits=scale_approx_mult_bits,
                                                      input_overrides=input_overrides,
-                                                     inputs_quant_auto_fallback=inputs_quant_auto_fallback)
+                                                     inputs_quant_auto_fallback=inputs_quant_auto_fallback,
+                                                     save_fp_weights=save_fp_weights)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
                                     scale_approx_mult_bits=scale_approx_mult_bits,
@@ -1364,7 +1392,8 @@ class PostTrainLinearQuantizer(Quantizer):
                        clip_n_stds=args.qe_clip_n_stds,
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides,
-                       inputs_quant_auto_fallback=True)
+                       inputs_quant_auto_fallback=True,
+                       save_fp_weights=args.save_fp_weights)
 
     def save_per_layer_parameters(self, save_dir=''):
         defaults = OrderedDict(self.model.quantizer_metadata['params'])
@@ -1409,8 +1438,6 @@ class PostTrainLinearQuantizer(Quantizer):
         elif dummy_input is None:
             raise ValueError('PostTrainLinearQuantizer requires dummy input in order to perform certain optimizations')
         super(PostTrainLinearQuantizer, self).prepare_model(dummy_input)
-
-        self.linear_quant_params = OrderedDict(self.named_linear_quant_params())
 
         save_dir = msglogger.logdir if hasattr(msglogger, 'logdir') else '.'
         self.save_per_layer_parameters(save_dir)
@@ -1582,6 +1609,7 @@ class PostTrainLinearQuantizer(Quantizer):
                 param.data = param.data.to(device)
             for buffer in m.buffers():
                 buffer.data = buffer.data.to(device)
+        self.linear_quant_params = OrderedDict(self.named_linear_quant_params())
 
 
 

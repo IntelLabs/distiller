@@ -23,6 +23,7 @@ import torch.nn as nn
 import distiller
 import warnings
 from typing import Callable, Optional
+from copy import deepcopy
 
 msglogger = logging.getLogger()
 
@@ -316,7 +317,8 @@ class Quantizer(object):
                         # Add to history of prepared submodules
                         self.modules_processed[module] = full_name, new_module
                         # To allow recreating this wrapper later on
-                        self.modules_processed_args[full_name] = (full_name, self.module_qbits_map), valid_kwargs
+                        valid_args = full_name, deepcopy(self.module_qbits_map)
+                        self.modules_processed_args[full_name] = valid_args, valid_kwargs
                         setattr(container, name, new_module)
 
                         # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping

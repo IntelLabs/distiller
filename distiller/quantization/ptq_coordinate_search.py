@@ -68,7 +68,7 @@ def _init_mode_from_str(init_mode_str):
     return _INIT_MODES[init_mode_str]
 
 
-def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None):
+def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, search_on=[]):
     """
     Searches for optimal linear quantization parameters (scale, zero_point) for a layer
     with respect to the loss function. Assumes loss_fn is of the signature `loss_fn(y, y_q)->float`
@@ -77,16 +77,20 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None):
         quantized_layer (RangeLinearQuantWrapper or RangeLinearEmbeddingWrapper): the post-quantized layer.
         loss_fn (callable): the loss function to optimize with respect to it.
         method (str or callable): the method of optimization, as will be used by scipy.optimize.minimize.
+        search_on (list): list of quant_param names to search on. Choices : 'scale' and 'zero_point'.
     Returns:
         quantized_layer after optimization
     """
     init_qp_dict = OrderedDict(quantized_layer.named_linear_quant_params())
+    init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
+                               any(b in k for b in search_on))
+
     keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
 
     def feed_forward_fn(qp_vec):
         qp_dict = quant_params_vec2dict(keys, qp_vec)
         quantized_layer.update_linear_quant_params(qp_dict)
-        y, q_y = layer(input), quantized_layer(input)
+        y, q_y = layer(*input), quantized_layer(*input)
         return loss_fn(y, q_y)
 
     _iter = count(1)
@@ -112,7 +116,7 @@ def get_input_for_layer(model, layer_name, input_for_model):
 
 
 def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_mode,
-                                   init_mode_method='Powell', sample_input=None):
+                                   init_mode_method='Powell', sample_input=None, search_on=[]):
     """
     Initializes a layer's linear quant parameters.
     This is done to set the scipy.optimize.minimize initial guess.
@@ -135,26 +139,29 @@ def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_m
         sample_input : a sample batch input for the model.
           Not to be confused with dummy_input - this input has to be an actual batch from a data loader.
           applicable only in the case of init_mode = 'L1/2/3' or callable.
+        search_on (list): list of quant_param names to search on. Choices : 'scale' and 'zero_point'.
     """
     if isinstance(init_mode, str):
         init_mode = _init_mode_from_str(init_mode)
     if isinstance(init_mode, ClipMode):
         quantizer.module_overrides_map[layer_name]['clip_acts'] = init_mode
     layer = dict(original_model.named_modules())[layer_name]
-    args, kwargs = quantizer.modules_processed_args[layer_name]
-    quantized_layer = quantizer.replacement_factory[type(layer)](deepcopy(layer), *args, **kwargs)
+    local_args, local_kwargs = quantizer.modules_processed_args[layer_name]
+    replace_fn = quantizer.replacement_factory.get(type(layer), quantizer.default_repalcement_fn)
+    quantized_layer = replace_fn(deepcopy(layer), *local_args, **local_kwargs)
     if not is_post_train_quant_wrapper(quantized_layer, False):
         return quantized_layer  # the module wasn't quantized, nothing to do here
 
     if callable(init_mode):
         input_for_layer = get_input_for_layer(original_model, layer_name, sample_input)
-        quantized_layer = optimize_for_layer(layer, quantized_layer, init_mode, input_for_layer, init_mode_method)
+        quantized_layer = optimize_for_layer(layer, quantized_layer, init_mode, input_for_layer, init_mode_method,
+                                             search_on=search_on)
 
     distiller.model_setattr(quantizer.model, layer_name, quantized_layer)
 
 
 def init_linear_quant_params(quantizer, original_model, sample_input, init_mode,
-                             init_mode_method=None):
+                             init_mode_method=None, search_on=[]):
     """
     Initializes all linear quantization parameters of the model.
     Args:
@@ -167,6 +174,7 @@ def init_linear_quant_params(quantizer, original_model, sample_input, init_mode,
           Not to be confused with dummy_input - this input has to be an actual batch from a data loader.
           Note - unlike in `init_layer_linear_quant_params`, this argument is required here.
         init_mode_method: See `init_layer_linear_qaunt_params`.
+        search_on (list): list of quant_param names to search on. Choices : 'scale' and 'zero_point'.
     """
     layers_topological_order = SummaryGraph(original_model, sample_input).layers_topological_order()
     for module_name in layers_topological_order:
@@ -178,7 +186,9 @@ def init_linear_quant_params(quantizer, original_model, sample_input, init_mode,
         msglogger.debug('Initializing layer \'%s\' using %s mode' % (module_name, module_init_mode))
         init_layer_linear_quant_params(quantizer, original_model, module_name, module_init_mode,
                                        init_mode_method=init_mode_method,
-                                       sample_input=sample_input)
+                                       sample_input=sample_input,
+                                       search_on=search_on)
+    quantizer._post_prepare_model()
 
 
 def get_default_args():
@@ -205,6 +215,11 @@ def get_default_args():
                              'minimization.')
     parser.add_argument('--opt-test-size', type=float, default=1,
                         help='Use portion of the test size.')
+    parser.add_argument('--search-for-weights', dest='save_fp_weights', action='store_true', default=False,
+                        help='Whether or not search quantization parameters for weights as well.')
+    parser.add_argument('--search-on', nargs='+', type=str, default=[],
+                        help='Which buffers to conduct the search on. Choices: \'scale\' and \'zero_point\'. '
+                             'Default: both.')
     parser.add_argument('--base-score', type=float, default=None)
     args = parser.parse_args()
     return args
@@ -212,7 +227,8 @@ def get_default_args():
 
 def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options=None, calib_eval_fn=None,
                           act_stats=None, args=None, fold_sequences=True, basinhopping=False,
-                          init_args=None, minimizer_kwargs=None):
+                          init_args=None, minimizer_kwargs=None,
+                          test_fn=None):
     """
     Searches for the optimal post-train quantization configuration (scale/zero_points)
     for a model using numerical methods, as described by scipy.optimize.minimize.
@@ -233,6 +249,7 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
         init_args (tuple): arguments for initializing the linear quantization parameters.
           Refer to `init_linear_quant_params` for more details.
         minimizer_kwargs (dict): the kwargs for scipy.optimize.minimize procedure.
+        test_fn (callable): a function to test the current performance of the model.
     """
     if fold_sequences:
         model = fold_batch_norms(model, sample_input)
@@ -259,15 +276,31 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
     msglogger.info("Baseline score: %.3f" % base_score)
     # Preparing model and init conditions:
     msglogger.info("Evaluating initial quantization score...")
+    if test_fn:
+        l_top1, l_top5, l_loss = test_fn(model)
+        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+
     quantizer = PostTrainLinearQuantizer.from_args(model, args)
+
+    if len(args.search_on) == 0:
+        args.search_on = ['scale', 'zero_point']
+    init_args = init_args or (args.init_mode, args.init_mode_method)
+
     quantizer.prepare_model(sample_input)
-    init_linear_quant_params(quantizer, original_model, sample_input, *init_args)
+    init_linear_quant_params(quantizer, original_model, sample_input, *init_args, search_on=args.search_on)
     best_data = {
         'score': eval_fn(model),
         'qp_dict': deepcopy(quantizer.linear_quant_params)
     }
     msglogger.info("Initial quantization score %.3f" % best_data['score'])
+    if test_fn:
+        l_top1, l_top5, l_loss = test_fn(quantizer.model)
+        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+
     init_qp_dict = deepcopy(quantizer.linear_quant_params)
+    # filter buffers by the choices:
+    init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
+                               any(b in k for b in args.search_on))
     keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
     _iter = count(0)
 
@@ -284,6 +317,9 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
             best_data['score'] = score
             best_data['qp_dict'] = quant_params_vec2dict(keys, qp_vec)
             msglogger.info("Saving current best quantization parameters.")
+        if test_fn:
+            l_top1, l_top5, l_loss = test_fn(quantizer.model)
+            msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
     options = options or OrderedDict()
     if args.maxiter is not None:
         options['maxiter'] = args.maxiter
@@ -361,7 +397,7 @@ if __name__ == "__main__":
         act_stats = None
     model, qp_dict = ptq_coordinate_search(model, dummy_input, eval_fn,
                                            args.method, args=args, act_stats=act_stats,
-                                           calib_eval_fn=calib_eval_fn)
+                                           calib_eval_fn=calib_eval_fn, test_fn=test_fn)
     top1, top5, loss = test_fn(model)
     msglogger.info("Test: \n\t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
                    (top1, top5, loss))
