@@ -162,15 +162,18 @@ def imagenet_get_datasets(data_dir, arch):
     """Load the ImageNet dataset.
     """
     # Inception Network accepts image of size 3, 299, 299
-    is_inception = arch in ['inception_v3', 'inceptionv3', 'inceptionv4', 'inceptionresnetv2']
-    if is_inception:
+    if distiller.models.is_inception(arch):
         resize, crop = 336, 299
     else:
         resize, crop = 256, 224
+    if arch == 'googlenet':
+        normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                         std=[0.5, 0.5, 0.5])
+    else:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
     train_dir = os.path.join(data_dir, 'train')
     test_dir = os.path.join(data_dir, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
 
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(crop),

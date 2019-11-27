@@ -155,6 +155,13 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
     return model.to(device)
 
 
+def is_inception(arch):
+    return arch in [ # Torchvision architectures
+                    'inception_v3', 'googlenet',
+                    # Cadene architectures
+                    'inceptionv3', 'inceptionv4', 'inceptionresnetv2']
+
+
 def _create_imagenet_model(arch, pretrained):
     dataset = "imagenet"
     cadene = False
@@ -163,9 +170,13 @@ def _create_imagenet_model(arch, pretrained):
         model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
     elif arch in TORCHVISION_MODEL_NAMES:
         try:
-            model = getattr(torch_models, arch)(pretrained=pretrained)
+            if is_inception(arch):
+                model = getattr(torch_models, arch)(pretrained=pretrained, transform_input=False)
+            else:
+                model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
                 patch_torchvision_mobilenet_v2(model)
+
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError
