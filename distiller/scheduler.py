@@ -34,13 +34,13 @@ class CompressionScheduler(object):
     """Responsible for scheduling pruning and masking parameters.
 
     """
-    def __init__(self, model, device=torch.device("cuda")):
+    def __init__(self, model, zeros_mask_dict=None, device=torch.device("cuda")):
         self.model = model
         self.device = device
         self.policies = {}
         self.sched_metadata = {}
         # Create the masker objects and place them in a dictionary indexed by the parameter name
-        self.zeros_mask_dict = create_model_masks_dict(model)
+        self.zeros_mask_dict = zeros_mask_dict or create_model_masks_dict(model)
 
     @property
     def quantization_policy(self):
@@ -224,7 +224,6 @@ class CompressionScheduler(object):
             if name not in masks_dict:
                 masks_dict[name] = None
         state = {'masks_dict': masks_dict}
-
         self.load_state_dict(state, normalize_dataparallel_keys)
 
     @staticmethod
@@ -258,7 +257,6 @@ class ParameterMasker(object):
     def apply_mask(self, parameter):
         """Apply a mask on the weights tensor (parameter)."""
         if self.mask is None:
-            msglogger.debug('No mask for parameter {0}'.format(self.param_name))
             return
         if self.use_double_copies:
             self.unmasked_copy = parameter.clone().detach()

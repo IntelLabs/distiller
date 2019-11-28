@@ -296,3 +296,7 @@ def test_load_checkpoint_without_model():
         assert model.arch == "resnet20_cifar"
         assert model.dataset == "cifar10"
         os.remove(temp_checkpoint)
+
+
+if __name__ == '__main__':
+    test_load_gpu_model_on_cpu_with_thinning()

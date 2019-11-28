@@ -25,8 +25,6 @@ The model trains on binary information about whether or not a user interacted wi
 
 ## Setup
 
-### Steps to configure machine
-
 * Install `unzip` and `curl`
 
   ```bash
@@ -41,14 +39,21 @@ The model trains on binary information about whether or not a user interacted wi
   pip install -e .
   ```
 
-* Download and verify data
+* Obtain the ml-20m dataset
 
   ```bash
   cd <distiller-repo-root>/examples/ncf
+  
   # Creates ml-20.zip
-  source ../download_dataset.sh
+  source download_dataset.sh
+  
   # Confirms the MD5 checksum of ml-20.zip
-  source ../verify_dataset.sh
+  source verify_dataset.sh
+  
+  # Extracts the dataset into a sub-directory named 'ml-20m'
+  # During the last step the script might appear to hang,
+  # This is normal, it finishes after a few minutes
+  source extract_dataset.sh
   ```
 
 ## Running the Sample
