@@ -672,6 +672,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             except AttributeError:
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
 
+            op_type = 'conv' if param.dim() == 4 else 'fc'
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
             # channels from the input.  Then we perform the MSE regression to generate
