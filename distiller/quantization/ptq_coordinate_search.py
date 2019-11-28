@@ -216,7 +216,7 @@ def get_default_args():
                              'minimization.')
     parser.add_argument('--opt-test-size', type=float, default=1,
                         help='Use portion of the test size.')
-    parser.add_argument('--opt-eval-single-batch', dest='eval_single_batch', action='store_true', default=False,
+    parser.add_argument('--opt-eval-memoize-dataloader', dest='memoize_dataloader', action='store_true', default=False,
                         help='Stores the input batch in memory to optimize performance.')
     parser.add_argument('--search-for-weights', dest='save_fp_weights', action='store_true', default=False,
                         help='Whether or not search quantization parameters for weights as well.')
@@ -367,17 +367,16 @@ if __name__ == "__main__":
     device = next(model.parameters()).device
     eval_counter = count(0)
 
-    if args.eval_single_batch:
+    if args.memoize_dataloader:
         memoized_data_loader = []
         for images, targets in eval_data_loader:
             batch = images.to(device), targets.to(device)
             memoized_data_loader.append(batch)
-            break
     else:
         memoized_data_loader = None
 
     def eval_fn(model):
-        if args.eval_single_batch:
+        if args.memoize_dataloader:
             losses = 0
             for images, targets in memoized_data_loader:
                 outputs = model(images)
