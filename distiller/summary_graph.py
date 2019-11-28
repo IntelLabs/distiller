@@ -72,6 +72,10 @@ class SummaryGraph(object):
 
     def __init__(self, model, dummy_input, apply_scope_name_workarounds=True):
         self._src_model = model
+        self._named_modules = OrderedDict(model.named_modules())
+        self._adj_map = None
+        self._layers_topological_order = None
+        self._top_level_ops = set()
         model_clone = distiller.make_non_parallel_copy(model)
 
         # Switch all instances of torch.nn.ModuleList in the model to our DistillerModuleList
@@ -82,23 +86,15 @@ class SummaryGraph(object):
             
             device = distiller.model_device(model_clone)
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
+            self.dummy_input = dummy_input
             trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
 
-            # As of PyTorch 1.1.0, ONNX trace optimization has two issues that result in incorrect scope names
+            # As of PyTorch 1.3.0, ONNX trace optimization has an issue that results in incorrect scope names
             # of nodes in the trace graph.
             # These can make it impossible, in some cases, to derive the connectivity of the model using the original
             # module names. So we try to detect these cases and apply workarounds
 
-            # Issue #1:
-            #   Gemm ops (aka "Linear" / "addmm" / "FC") get the scope name of the last non-Gemm node
-            #   that came before them.
-            #   Note that if the node prior to the Gemm node isn't the result of a dedicated module call,
-            #   then this issue doesn't occur. For simplicity we just track all Gemms.
-            # TODO: This should be fixed in PyTorch 1.2.0, revisit when it's released
-            aten_addmm_nodes_scope_names = []
-            onnx_gemm_count = 0
-
-            # Issue #2:
+            # The issue is:
             #   Dropout ops are removed by ONNX trace optimization. However, the op BEFORE the original dropout op
             #   gets the scope name of the dropout op
             pre_dropout_nodes_scope_names = OrderedDict()
@@ -113,8 +109,6 @@ class SummaryGraph(object):
                         pre_dropout_nodes_scope_names[node.scopeName()] = prev_non_dropout_op.scopeName()
                 else:
                     prev_non_dropout_op = node
-                    if kind == 'aten::addmm':
-                        aten_addmm_nodes_scope_names.append(node.scopeName())
 
             # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
             # composing a GEMM operation; etc.
@@ -135,12 +129,6 @@ class SummaryGraph(object):
                 new_op = self.__create_op(node)
 
                 if apply_scope_name_workarounds:
-                    # Here we apply the workaround to the Gemm nodes scope name issue mentioned above
-                    if new_op['type'] == 'Gemm':
-                        new_op['orig-name'] = aten_addmm_nodes_scope_names[onnx_gemm_count]
-                        new_op['name'] = new_op['orig-name']
-                        onnx_gemm_count += 1
-
                     # Here we apply the workaround to the issue of dropout op scope name overriding previous op's
                     # scope name
                     if new_op['name'] in pre_dropout_nodes_scope_names:
@@ -185,7 +173,9 @@ class SummaryGraph(object):
                 # so we "unroll" them.
                 same_module_cnt = len(self.module_ops_map[module_name])
                 if same_module_cnt:
-                    new_op['name'] += "__" + str(same_module_cnt)
+                    # TODO: Was this meant to be applied only to 'top_level_ops'? Also, it's not
+                    #       applied to the first module that had the same name
+                    new_op['name'] += "_%s_%d" % (new_op['type'], same_module_cnt)
                 self.module_ops_map[module_name].append(new_op['name'])
 
                 # Finally we register the new op in the ops collection
@@ -195,11 +185,11 @@ class SummaryGraph(object):
 
                 for input_ in node.inputs():
                     self.__add_input(new_op, input_)
-                    self.edges.append(SummaryGraph.Edge(input_.uniqueName(), new_op['name']))
+                    self.edges.append(SummaryGraph.Edge(input_.debugName(), new_op['name']))
 
                 for output in node.outputs():
                     self.__add_output(new_op, output)
-                    self.edges.append(SummaryGraph.Edge(new_op['name'], output.uniqueName()))
+                    self.edges.append(SummaryGraph.Edge(new_op['name'], output.debugName()))
 
                 new_op['attrs'] = OrderedDict([(attr_name, node[attr_name]) for attr_name in node.attributeNames()])
 
@@ -266,16 +256,16 @@ class SummaryGraph(object):
             op['outputs'].append(param['id'])
 
     def __add_param(self, n):
-        if n.uniqueName() not in self.params:
+        if n.debugName() not in self.params:
             param = self.__tensor_desc(n)
-            self.params[n.uniqueName()] = param
+            self.params[n.debugName()] = param
         else:
-            param = self.params[n.uniqueName()]
+            param = self.params[n.debugName()]
         return param
 
     def __tensor_desc(self, n):
         tensor = OrderedDict()
-        tensor['id'] = n.uniqueName()
+        tensor['id'] = n.debugName()
         try:
             # try parsing the FM tensor type.  For example: Float(1, 64, 8, 8)
             s = str(n.node())
@@ -318,8 +308,14 @@ class SummaryGraph(object):
             elif op['type'] == 'Gemm':
                 conv_out = op['outputs'][0]
                 conv_in = op['inputs'][0]
-                n_ifm = self.param_shape(conv_in)[1]
-                n_ofm = self.param_shape(conv_out)[1]
+                try:
+                    n_ifm = self.param_shape(conv_in)[1]
+                    n_ofm = self.param_shape(conv_out)[1]
+                except IndexError:
+                    msglogger.error("An input to a Convolutional layer is missing shape information.")
+                    msglogger.error("For details see https://github.com/NervanaSystems/distiller/issues/360")
+                    n_ifm = n_ofm = 0
+
                 # MACs = #IFM * #OFM
                 op['attrs']['MACs'] = n_ofm * n_ifm
 
@@ -506,6 +502,13 @@ class SummaryGraph(object):
                 self._src_model, normalized_layer_name)
             yield sgraph_layer_name, param_name, param
 
+    def _dedicated_module_check(self, n, dedicated_modules_only=False):
+        if not dedicated_modules_only:
+            return True
+        module_name = self.ops[n]['module-name']
+        module = self._named_modules[module_name]
+        return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
+
     def adjacency_map(self, dedicated_modules_only=False):
         """Returns a mapping from each op in the graph to its immediate predecessors and successors.
 
@@ -519,34 +522,106 @@ class SummaryGraph(object):
               associated with a dedicated module within the underlying model. Examples of this will be
               functional calls, such as "F.relu()", and tensor operations, such as "t3 = t1 + t2".
         """
+        if self._adj_map and not dedicated_modules_only:
+            return self._adj_map
         adj_map = OrderedDict()
-        named_modules = OrderedDict(self._src_model.named_modules())
 
         for op_name, op in self.ops.items():
-            def dedicated_module_check(n):
-                if not dedicated_modules_only:
-                    return True
-                module_name = self.ops[n]['module-name']
-                module = named_modules[module_name]
-                return len(self.module_ops_map[module_name]) == 1 and not distiller.has_children(module)
 
             def op_meta(n):
                 return OpSimpleMetadata(distiller.denormalize_module_name(self._src_model, n), self.ops[n]['type'])
 
-            if not dedicated_module_check(op_name):
+            if not self._dedicated_module_check(op_name, dedicated_modules_only):
                 continue
 
             entry = AdjacentsEntry(op_meta(op_name))
             # Find the immediate preceding and succeeding modules. Depth of 1 gets us the
             # input and output tensors, depth of 2 gets the actual modules
             entry.predecessors = [op_meta(n) for n in self.predecessors(op, 2, denorm_names=False)
-                                  if dedicated_module_check(n)]
+                                  if self._dedicated_module_check(n, dedicated_modules_only)]
             entry.successors = [op_meta(n) for n in self.successors(op, 2, denorm_names=False)
-                                if dedicated_module_check(n)]
+                                if self._dedicated_module_check(n, dedicated_modules_only)]
 
             adj_map[entry.op_meta.name] = entry
-
+        self._adj_map = adj_map
         return adj_map
+
+    def layers_topological_order(self, recurrent=False):
+        """
+        Prepares an ordered list of layers to quantize sequentially. This list has all the layers ordered by their
+        topological order in the graph.
+        Args:
+            recurrent (bool): indication on whether the model might have recurrent connections.
+        """
+        if self._layers_topological_order:
+            return self._layers_topological_order
+        adj_map = self.adjacency_map()
+        ranked_ops = OrderedDict([(k, _OpRank(v, 0)) for k, v in adj_map.items()])
+
+        def _recurrent_ancestor(ranked_ops_dict, dest_op_name, src_op_name):
+            def _is_descendant(parent_op_name, dest_op_name):
+                successors_names = [op.name for op in adj_map[parent_op_name].successors]
+                if dest_op_name in successors_names:
+                    return True
+                for succ_name in successors_names:
+                    if _is_descendant(succ_name, dest_op_name):
+                        return True
+                return False
+
+            return _is_descendant(dest_op_name, src_op_name) and \
+                   (0 < ranked_ops_dict[dest_op_name].rank < ranked_ops_dict[src_op_name].rank)
+
+        def rank_op(ranked_ops_dict, op_name, rank):
+            ranked_ops_dict[op_name].rank = rank
+            for child_op in adj_map[op_name].successors:
+                # In recurrent models: if a successor is also an ancestor - we don't increment its rank.
+                if not recurrent or not _recurrent_ancestor(ranked_ops_dict, child_op.name, op_name):
+                    rank_op(ranked_ops_dict, child_op.name, ranked_ops_dict[op_name].rank + 1)
+
+        roots = [k for k, v in adj_map.items() if len(v.predecessors) == 0]
+        for root_op_name in roots:
+            rank_op(ranked_ops, root_op_name, 0)
+
+        # Take only the modules from the original model
+        module_dict = dict(self._src_model.named_modules())
+        ret = sorted([k for k in ranked_ops.keys() if k in module_dict],
+                     key=lambda k: ranked_ops[k].rank)
+        # Check that only the actual roots have a rank of 0
+        assert {k for k in ret if ranked_ops[k].rank == 0} <= set(roots)
+        self._layers_topological_order = ret
+        return ret
+
+    def top_level_ops(self):
+        if self._top_level_ops:
+            return self._top_level_ops
+        for op_name in self.ops:
+            if not self.predecessors(op_name, 1):
+                self._top_level_ops.add(op_name)
+        return self._top_level_ops
+
+    def missing_modules(self):
+        """
+        Returns a list of ops that aren't registered as modules.
+        """
+        return [op_name for op_name in self.adjacency_map()
+                if not self._dedicated_module_check(op_name, True)]
+
+
+class _OpRank:
+    def __init__(self, adj_entry, rank=None):
+        self.adj_entry = adj_entry
+        self._rank = rank or 0
+
+    @property
+    def rank(self):
+        return self._rank
+
+    @rank.setter
+    def rank(self, val):
+        self._rank = max(val, self._rank)
+
+    def __repr__(self):
+        return '_OpRank(\'%s\' | %d)' % (self.adj_entry.op_meta.name, self.rank)
 
 
 class OpSimpleMetadata(object):

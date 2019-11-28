@@ -1,0 +1,75 @@
+# Specifying quantization settings for layer INPUTS
+# -------------------------------------------------
+#
+# This configuration file demonstrates how to override the default behavior of PostTrainLinearQuantizer
+# with regards to quantizing inputs of layers.
+#
+# THIS APPLIES ONLY TO PostTraingLinearQuantizer
+#
+# 1. By default, settings for quantizing activations are applied to OUTPUTs of layers
+#
+# 2. When the output of a layer is quantized, the quantization settings (aka metadata) are attached to
+#    the tensor.
+# 
+# 3. Certain layers expect quantized inputs. That is - they expect input tensors that have quantization
+#    metadata attached.
+# 
+# 4. But, there are cases where this metadata will not be available, such as:
+#     4.1 "Root" inputs of the model (which are not the output of any layer)
+#     4.2 When two quantized layers are separated by one or more non-quantized operations. 
+#         This can happen if the user explicitly requested that these operations not be quantized, or if
+#         they are operations that can't be detected by the quantizer.
+# 
+# 5. In these cases, the default behavior of the quantizer is to quantize the layer inputs according
+#    to the settings that were provided for the layer's outputs (see item 1).
+#    This behavior is controlled by the 'inputs_quant_auto_fallback' parameter. By default it is set
+#    to True.
+#
+# 6. One can override this default behaviour and explicitly set settings for inputs. Below we show a
+#    couple of examples for this.
+#    Note that when the input tensor does have quantization metadata attached, specifying explicit
+#    settings isn't allowed, and an error will be raised. This is done in order to maintain maximum
+#    consistency with quantization settings flowing through the model.
+
+quantizers:
+  post_train_quantizer:
+    class: PostTrainLinearQuantizer
+    bits_activations: 8
+    bits_parameters: 8
+    bits_accum: 32
+    mode: ASYMMETRIC_UNSIGNED
+    # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
+    model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
+    per_channel_wts: True
+    clip_acts: AVG
+
+    # If this is set, when a quantized input is required but the tensor doesn't contain quantization metadata,
+    # the input will be quantized according to the module's output settings
+    inputs_quant_auto_fallback: False
+
+    overrides:
+      conv1:
+        # The input to the first layer in the model will never have quantization metadata (item 4.1 above)
+        # Since layers could have multiple inputs, we specify the index of the required input as a key
+        input_overrides:
+          0:
+            # Shorthand to take the quantization settings of the output (ignores any other settings)
+            from_output: True
+
+      fc:
+        # Here we show an example of mixing output overrides and input overrides
+        
+        # We don't clip the output of the last layer
+        clip_acts: NONE
+
+        # In ResNet, the FC layer has a view op before, which kills the quantization metadata (item 4.2 above).
+        # So we override.
+        # But here we don't want to take the settings from the output, where we just set clip_acts to None.
+        # So we specify clip_acts explicitly.
+        input_overrides:
+          0:
+            # Example of setting the actual value. Applicable only if 'from_outputs' isn't set.
+            # The following keys are supported: 'bits_activations', 'mode', 'clip_acts', 'clip_n_stds'
+            # Any key not explicitly set will default to the output setting
+            clip_acts: AVG
+

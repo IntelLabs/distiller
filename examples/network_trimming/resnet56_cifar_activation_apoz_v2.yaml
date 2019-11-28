@@ -3,16 +3,16 @@
 # Compare this to examples/pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml - the pruning time is
 # much longer due to the callbacks required for collecting the activation statistics (this can be improved by disabling
 # of the detailed records collection, for example).
-# This provides 62.7% compute compression (x1.6) while increasing the Top1.
+# This provides 53.92% compute compression (x1.85).
 #
 # Baseline results:
 #     Top1: 92.850    Top5: 99.780    Loss: 0.364
 #     Total MACs: 125,747,840
-#
+#     Total parameters: 851504
 # Results:
 #     Top1: 92.590    Top5: 99.630    Loss: 1.537
 #     Total MACs: 67,797,632
-#
+#     Total parameters: 570704 (67.02%)
 #
 # time python3 compress_classifier.py -a=resnet56_cifar -p=50 ../../../data.cifar10 --epochs=70 --lr=0.1 --compress=../network_trimming/resnet56_cifar_activation_apoz_v2.yaml --resume-from=checkpoint.resnet56_cifar_baseline.pth.tar --reset-optimizer --act-stats=valid
 #

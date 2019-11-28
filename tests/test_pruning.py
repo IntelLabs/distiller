@@ -18,6 +18,8 @@ import numpy as np
 import logging
 import math
 import torch
+from functools import partial
+
 import distiller
 import common
 import pytest
@@ -121,6 +123,7 @@ def test_ranked_filter_pruning(parallel):
                                                    is_parallel=parallel)
     test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
+
 # todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
@@ -142,7 +145,6 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.
     """
     logger.info("executing: %s (invoked by %s)" % (inspect.currentframe().f_code.co_name,
                                                    inspect.currentframe().f_back.f_code.co_name))
-
 
     model, zeros_mask_dict = common.setup_test(config.arch, config.dataset, is_parallel)
 
@@ -289,7 +291,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     zeros_mask_dict[pair[1] + ".weight"].mask = mask
     zeros_mask_dict[pair[1] + ".weight"].apply_mask(conv2_p)
     all_channels = set([ch for ch in range(num_channels)])
-    nnz_channels = set(distiller.find_nonzero_channels_list(conv2_p, pair[1] + ".weight"))
+    nnz_channels = set(distiller.non_zero_channels(conv2_p))
     channels_removed = all_channels - nnz_channels
     logger.info("Channels removed {}".format(channels_removed))
 
@@ -412,18 +414,6 @@ def test_mobilenet_conv_fc_interface(is_parallel=parallel, model=None, zeros_mas
                            zeros_mask_dict=zeros_mask_dict)
 
 
-def test_threshold_mask():
-    # Create a 4-D tensor of 1s
-    a = torch.ones(3, 64, 32, 32)
-    # Change one element
-    a[1, 4, 17, 31] = 0.2
-    # Create and apply a mask
-    mask = distiller.threshold_mask(a, threshold=0.3)
-    assert np.sum(distiller.to_np(mask)) == (distiller.volume(a) - 1)
-    assert mask[1, 4, 17, 31] == 0
-    assert common.almost_equal(distiller.sparsity(mask), 1/distiller.volume(a))
-
-
 def test_magnitude_pruning():
     # Create a 4-D tensor of 1s
     a = torch.ones(3, 64, 32, 32)
@@ -457,6 +447,20 @@ def test_magnitude_pruning():
     assert common.almost_equal(distiller.sparsity(b), 1/distiller.volume(a))
 
 
+def test_row_pruning():
+    param = torch.tensor([[1., 2., 3.],
+                          [4., 5., 6.],
+                          [7., 8., 9.]])
+    from distiller.pruning import L1RankedStructureParameterPruner
+
+    masker = distiller.scheduler.ParameterMasker("debug name")
+    zeros_mask_dict = {"some name": masker}
+    L1RankedStructureParameterPruner.rank_and_prune_channels(0.5, param, "some name", zeros_mask_dict)
+    print(distiller.sparsity_rows(masker.mask))
+    assert math.isclose(distiller.sparsity_rows(masker.mask), 1/3)
+    pass
+
+
 if __name__ == '__main__':
     for is_parallel in [True, False]:
         test_ranked_filter_pruning(is_parallel)
@@ -477,3 +481,4 @@ if __name__ == '__main__':
         arbitrary_channel_pruning(mobilenet_imagenet(is_parallel),
                                   channels_to_remove=[0, 2],
                                   is_parallel=is_parallel)
+    test_row_pruning()

@@ -41,7 +41,7 @@ agent_params.algorithm.act_for_full_episodes = True
 # Environment #
 ###############
 env_params = GymVectorEnvironment()
-env_params.level = '../automated_deep_compression/ADC.py:DistillerWrapperEnvironment'
+env_params.level = './environment.py:DistillerWrapperEnvironment'
 
 
 vis_params = VisualizationParameters()

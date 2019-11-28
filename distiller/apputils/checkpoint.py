@@ -68,7 +68,7 @@ def save_checkpoint(epoch, arch, model, optimizer=None, scheduler=None,
         checkpoint['dataset'] = model.dataset
         if not arch:
             checkpoint['arch'] = model.arch
-    except NameError:
+    except AttributeError:
         pass
 
     if optimizer is not None:
@@ -178,10 +178,11 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
         try:
             if model.arch != checkpoint["arch"]:
                 raise ValueError("The model architecture does not match the checkpoint architecture")
-        except (NameError, KeyError):
+        except (AttributeError, KeyError):
             # One of the values is missing so we can't perform the comparison
             pass
 
+    chkpt_file = os.path.expanduser(chkpt_file)
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
     assert optimizer == None, "argument optimizer is deprecated and must be set to None"
@@ -198,8 +199,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
     if not model:
         model = _create_model_from_ckpt()
         if not model:
-            raise ValueError("You didn't provide a model, and the checkpoint doesn't contain"
-                             "enough information to create one")
+            raise ValueError("You didn't provide a model, and the checkpoint %s doesn't contain "
+                             "enough information to create one", chkpt_file)
 
     checkpoint_epoch = checkpoint.get('epoch', None)
     start_epoch = checkpoint_epoch + 1 if checkpoint_epoch is not None else 0

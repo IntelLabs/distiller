@@ -7,6 +7,7 @@ encoder.rnn_layers.0.cells.0.fc_gate_x:
       avg_max: 2.8138245348501125
       mean: -0.0016106524300209288
       std: 0.8805053743938167
+      b: 0.6866011405925363
       shape: (1, 1024)
   output:
     min: -33.63774490356445
@@ -15,6 +16,7 @@ encoder.rnn_layers.0.cells.0.fc_gate_x:
     avg_max: 18.377735952944196
     mean: -1.2778008344058638
     std: 5.574481019638121
+    b: 4.439704778263645
     shape: (1, 4096)
 encoder.rnn_layers.0.cells.0.fc_gate_h:
   inputs:
@@ -25,6 +27,7 @@ encoder.rnn_layers.0.cells.0.fc_gate_h:
       avg_max: 0.8228753872990404
       mean: -0.002536592865063468
       std: 0.23544047089016987
+      b: 0.09098815764509137
       shape: (1, 1024)
   output:
     min: -22.65224838256836
@@ -33,6 +36,7 @@ encoder.rnn_layers.0.cells.0.fc_gate_h:
     avg_max: 6.881520398276833
     mean: -2.373206253470364
     std: 2.8913670592601197
+    b: 2.250662151870849
     shape: (1, 4096)
 encoder.rnn_layers.0.cells.0.eltwiseadd_gate:
   inputs:
@@ -43,6 +47,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_gate:
       avg_max: 18.377735952944196
       mean: -1.2778008344058638
       std: 5.574481019638121
+      b: 4.439704778263645
       shape: (1, 4096)
     1:
       min: -22.65224838256836
@@ -51,6 +56,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_gate:
       avg_max: 6.881520398276833
       mean: -2.373206253470364
       std: 2.8913670592601197
+      b: 2.250662151870849
       shape: (1, 4096)
   output:
     min: -40.20295333862305
@@ -59,6 +65,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_gate:
     avg_max: 18.852929802167523
     mean: -3.6510070722635595
     std: 6.424404119623572
+    b: 5.151854954224653
     shape: (1, 4096)
 encoder.rnn_layers.0.cells.0.act_f:
   inputs:
@@ -69,6 +76,7 @@ encoder.rnn_layers.0.cells.0.act_f:
       avg_max: 11.772601394017986
       mean: -7.432837164007311
       std: 5.768370101504384
+      b: 4.524102567588817
       shape: (1, 1024)
   output:
     min: 3.4680012470380246e-18
@@ -77,6 +85,7 @@ encoder.rnn_layers.0.cells.0.act_f:
     avg_max: 0.9997981336035177
     mean: 0.11436928112791814
     std: 0.2739924793333765
+    b: 0.17960153096657158
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.act_i:
   inputs:
@@ -87,6 +96,7 @@ encoder.rnn_layers.0.cells.0.act_i:
       avg_max: 15.238747643933712
       mean: -3.533190907395537
       std: 5.892242776130438
+      b: 4.720861847081462
       shape: (1, 1024)
   output:
     min: 4.37388120446097e-15
@@ -95,6 +105,7 @@ encoder.rnn_layers.0.cells.0.act_i:
     avg_max: 0.9999727739693318
     mean: 0.27593418032485884
     std: 0.3954827759906979
+    b: 0.3464240996079812
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.act_o:
   inputs:
@@ -105,6 +116,7 @@ encoder.rnn_layers.0.cells.0.act_o:
       avg_max: 14.524603366545767
       mean: -3.567072719363816
       std: 5.69751302438932
+      b: 4.504203562788745
       shape: (1, 1024)
   output:
     min: 7.870648145337088e-16
@@ -113,6 +125,7 @@ encoder.rnn_layers.0.cells.0.act_o:
     avg_max: 0.9999628556888489
     mean: 0.2618299175561274
     std: 0.3833761347669008
+    b: 0.3292445638791598
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.act_g:
   inputs:
@@ -123,6 +136,7 @@ encoder.rnn_layers.0.cells.0.act_g:
       avg_max: 18.48774343457505
       mean: -0.0709275224609481
       std: 6.116932441002841
+      b: 4.936153843000304
       shape: (1, 1024)
   output:
     min: -1.0
@@ -131,6 +145,7 @@ encoder.rnn_layers.0.cells.0.act_g:
     avg_max: 0.9999999999947166
     mean: -0.007298258008836419
     std: 0.9385271485476292
+    b: 0.917864403999836
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -141,6 +156,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9997981336035177
       mean: 0.11436928112791814
       std: 0.2739924793333765
+      b: 0.17960153096657158
       shape: (1, 1024)
     1:
       min: -38.982444763183594
@@ -149,6 +165,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
       avg_max: 1.6211083284579975
       mean: -0.00908752453454041
       std: 0.5260199992435526
+      b: 0.28379768503898656
       shape: (1, 1024)
   output:
     min: -38.97710418701172
@@ -157,6 +174,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
     avg_max: 1.0867458244325479
     mean: -0.0052387909689317535
     std: 0.24397997338840743
+    b: 0.040725299804158094
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
   inputs:
@@ -167,6 +185,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999727739693318
       mean: 0.27593418032485884
       std: 0.3954827759906979
+      b: 0.3464240996079812
       shape: (1, 1024)
     1:
       min: -1.0
@@ -175,6 +194,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999999999947166
       mean: -0.007298258008836419
       std: 0.9385271485476292
+      b: 0.917864403999836
       shape: (1, 1024)
   output:
     min: -1.0
@@ -183,6 +203,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
     avg_max: 0.9998500162423687
     mean: -0.004381999838699326
     std: 0.4680802328708717
+    b: 0.2654821227074416
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.eltwiseadd_cell:
   inputs:
@@ -193,6 +214,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_cell:
       avg_max: 1.0867458244325479
       mean: -0.0052387909689317535
       std: 0.24397997338840743
+      b: 0.040725299804158094
       shape: (1, 1024)
     1:
       min: -1.0
@@ -201,6 +223,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_cell:
       avg_max: 0.9998500162423687
       mean: -0.004381999838699326
       std: 0.4680802328708717
+      b: 0.2654821227074416
       shape: (1, 1024)
   output:
     min: -39.97100830078125
@@ -209,6 +232,7 @@ encoder.rnn_layers.0.cells.0.eltwiseadd_cell:
     avg_max: 1.6904500271956118
     mean: -0.009620790795830529
     std: 0.5374170427844072
+    b: 0.294500598101108
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.act_h:
   inputs:
@@ -219,6 +243,7 @@ encoder.rnn_layers.0.cells.0.act_h:
       avg_max: 1.6904500271956118
       mean: -0.009620790795830529
       std: 0.5374170427844072
+      b: 0.294500598101108
       shape: (1, 1024)
   output:
     min: -1.0
@@ -227,6 +252,7 @@ encoder.rnn_layers.0.cells.0.act_h:
     avg_max: 0.9111029639984748
     mean: -0.0042562744052456435
     std: 0.3862437789687602
+    b: 0.23299700498688
     shape: (1, 1024)
 encoder.rnn_layers.0.cells.0.eltwisemult_hidden:
   inputs:
@@ -237,6 +263,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_hidden:
       avg_max: 0.9999628556888489
       mean: 0.2618299175561274
       std: 0.3833761347669008
+      b: 0.3292445638791598
       shape: (1, 1024)
     1:
       min: -1.0
@@ -245,6 +272,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_hidden:
       avg_max: 0.9111029639984748
       mean: -0.0042562744052456435
       std: 0.3862437789687602
+      b: 0.23299700498688
       shape: (1, 1024)
   output:
     min: -1.0
@@ -253,6 +281,7 @@ encoder.rnn_layers.0.cells.0.eltwisemult_hidden:
     avg_max: 0.8561479863309971
     mean: -0.0026583670083781055
     std: 0.24113962918670837
+    b: 0.09507561210187652
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.fc_gate_x:
   inputs:
@@ -263,6 +292,7 @@ encoder.rnn_layers.0.cells_reverse.0.fc_gate_x:
       avg_max: 2.8138245348501405
       mean: -0.0016106524300209281
       std: 0.8805050697722259
+      b: 0.6866011405925253
       shape: (1, 1024)
   output:
     min: -33.94660949707031
@@ -271,6 +301,7 @@ encoder.rnn_layers.0.cells_reverse.0.fc_gate_x:
     avg_max: 18.700496405858367
     mean: -0.4969901222221274
     std: 5.666540069661909
+    b: 4.608289882615895
     shape: (1, 4096)
 encoder.rnn_layers.0.cells_reverse.0.fc_gate_h:
   inputs:
@@ -281,6 +312,7 @@ encoder.rnn_layers.0.cells_reverse.0.fc_gate_h:
       avg_max: 0.9217871793855027
       mean: -0.0008159191441113994
       std: 0.2933630896077876
+      b: 0.140212070574075
       shape: (1, 1024)
   output:
     min: -26.57025146484375
@@ -289,6 +321,7 @@ encoder.rnn_layers.0.cells_reverse.0.fc_gate_h:
     avg_max: 13.256404327800057
     mean: -1.6347749916045144
     std: 3.3098913033147026
+    b: 2.551923321663966
     shape: (1, 4096)
 encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_gate:
   inputs:
@@ -299,6 +332,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_gate:
       avg_max: 18.700496405858367
       mean: -0.4969901222221274
       std: 5.666540069661909
+      b: 4.608289882615895
       shape: (1, 4096)
     1:
       min: -26.57025146484375
@@ -307,6 +341,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_gate:
       avg_max: 13.256404327800057
       mean: -1.6347749916045144
       std: 3.3098913033147026
+      b: 2.551923321663966
       shape: (1, 4096)
   output:
     min: -38.69415283203125
@@ -315,6 +350,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_gate:
     avg_max: 21.477238427920927
     mean: -2.131765110762214
     std: 6.632126340207978
+    b: 5.37469070170134
     shape: (1, 4096)
 encoder.rnn_layers.0.cells_reverse.0.act_f:
   inputs:
@@ -325,6 +361,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_f:
       avg_max: 17.50440279642364
       mean: -3.8737916625820072
       std: 6.84193347529921
+      b: 5.51798325095842
       shape: (1, 1024)
   output:
     min: 2.5389102872982082e-17
@@ -333,6 +370,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_f:
     avg_max: 0.999999346159746
     mean: 0.2890327369231582
     std: 0.4023833394248511
+    b: 0.3566244444111821
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.act_i:
   inputs:
@@ -343,6 +381,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_i:
       avg_max: 16.691689617168617
       mean: -3.073931181881033
       std: 6.2677184148953256
+      b: 5.060755877760605
       shape: (1, 1024)
   output:
     min: 2.3756509732875972e-17
@@ -351,6 +390,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_i:
     avg_max: 0.9999988585396135
     mean: 0.3108025884336769
     std: 0.4110379687299371
+    b: 0.3706470294060169
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.act_o:
   inputs:
@@ -361,6 +401,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_o:
       avg_max: 17.492547388038638
       mean: -1.5878526072804218
       std: 6.0648371330715545
+      b: 4.911654308863885
       shape: (1, 1024)
   output:
     min: 1.5679886799044933e-17
@@ -369,6 +410,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_o:
     avg_max: 0.9999994433218858
     mean: 0.39423968600374154
     std: 0.4279581642861166
+    b: 0.402148790720451
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.act_g:
   inputs:
@@ -379,6 +421,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_g:
       avg_max: 20.84152177737822
       mean: 0.008514990976159644
       std: 6.647000615879316
+      b: 5.393258296043739
       shape: (1, 1024)
   output:
     min: -1.0
@@ -387,6 +430,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_g:
     avg_max: 1.0
     mean: 0.0014180161330502351
     std: 0.9442339332189296
+    b: 0.9252437063664418
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_forget:
   inputs:
@@ -397,6 +441,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_forget:
       avg_max: 0.999999346159746
       mean: 0.2890327369231582
       std: 0.4023833394248511
+      b: 0.3566244444111821
       shape: (1, 1024)
     1:
       min: -29.373083114624023
@@ -405,6 +450,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_forget:
       avg_max: 3.9063054220693965
       mean: -0.0008279334693150963
       std: 0.6366862423327254
+      b: 0.38663300925836047
       shape: (1, 1024)
   output:
     min: -29.373075485229492
@@ -413,6 +459,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_forget:
     avg_max: 3.729673293131146
     mean: 0.00015181826198886874
     std: 0.3949363630374722
+    b: 0.13394309130835125
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_input:
   inputs:
@@ -423,6 +470,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_input:
       avg_max: 0.9999988585396135
       mean: 0.3108025884336769
       std: 0.4110379687299371
+      b: 0.3706470294060169
       shape: (1, 1024)
     1:
       min: -1.0
@@ -431,6 +479,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_input:
       avg_max: 1.0
       mean: 0.0014180161330502351
       std: 0.9442339332189296
+      b: 0.9252437063664418
       shape: (1, 1024)
   output:
     min: -1.0
@@ -439,6 +488,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_cell_input:
     avg_max: 0.9999928301513564
     mean: -0.0005279613764160218
     std: 0.5003141965724145
+    b: 0.29767097203335213
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_cell:
   inputs:
@@ -449,6 +499,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_cell:
       avg_max: 3.729673293131146
       mean: 0.00015181826198886874
       std: 0.3949363630374722
+      b: 0.13394309130835125
       shape: (1, 1024)
     1:
       min: -1.0
@@ -457,6 +508,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_cell:
       avg_max: 0.9999928301513564
       mean: -0.0005279613764160218
       std: 0.5003141965724145
+      b: 0.29767097203335213
       shape: (1, 1024)
   output:
     min: -29.373083114624023
@@ -465,6 +517,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwiseadd_cell:
     avg_max: 4.100828251393332
     mean: -0.00037614313566861415
     std: 0.6483412291978414
+    b: 0.4005083799864954
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.act_h:
   inputs:
@@ -475,6 +528,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_h:
       avg_max: 4.100828251393332
       mean: -0.00037614313566861415
       std: 0.6483412291978414
+      b: 0.4005083799864954
       shape: (1, 1024)
   output:
     min: -1.0
@@ -483,6 +537,7 @@ encoder.rnn_layers.0.cells_reverse.0.act_h:
     avg_max: 0.9818776522137024
     mean: -0.0013970042477792044
     std: 0.45158473029410123
+    b: 0.30759742446588034
     shape: (1, 1024)
 encoder.rnn_layers.0.cells_reverse.0.eltwisemult_hidden:
   inputs:
@@ -493,6 +548,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_hidden:
       avg_max: 0.9999994433218858
       mean: 0.39423968600374154
       std: 0.4279581642861166
+      b: 0.402148790720451
       shape: (1, 1024)
     1:
       min: -1.0
@@ -501,6 +557,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_hidden:
       avg_max: 0.9818776522137024
       mean: -0.0013970042477792044
       std: 0.45158473029410123
+      b: 0.30759742446588034
       shape: (1, 1024)
   output:
     min: -1.0
@@ -509,6 +566,7 @@ encoder.rnn_layers.0.cells_reverse.0.eltwisemult_hidden:
     avg_max: 0.9564541215110065
     mean: -0.0005957838928230832
     std: 0.2985633225360773
+    b: 0.1449251490997063
     shape: (1, 1024)
 encoder.rnn_layers.0.dropout:
   output:
@@ -518,6 +576,7 @@ encoder.rnn_layers.0.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 encoder.rnn_layers.1.cells.0.fc_gate_x:
   inputs:
@@ -528,6 +587,7 @@ encoder.rnn_layers.1.cells.0.fc_gate_x:
       avg_max: 0.3723408187603086
       mean: -0.0006261473494000447
       std: 0.1684595854192406
+      b: 0.046348249174828215
       shape: (128, 2048)
   output:
     min: -28.018692016601562
@@ -536,6 +596,7 @@ encoder.rnn_layers.1.cells.0.fc_gate_x:
     avg_max: 4.8616450890998655
     mean: -0.5998025477032523
     std: 2.1475245530098204
+    b: 1.30492351677527
     shape: (128, 4096)
 encoder.rnn_layers.1.cells.0.fc_gate_h:
   inputs:
@@ -546,6 +607,7 @@ encoder.rnn_layers.1.cells.0.fc_gate_h:
       avg_max: 0.9067187918312595
       mean: -0.00016366511202441184
       std: 0.17426053388600266
+      b: 0.08171782312204447
       shape: (128, 1024)
   output:
     min: -22.963897705078125
@@ -554,6 +616,7 @@ encoder.rnn_layers.1.cells.0.fc_gate_h:
     avg_max: 8.383283630046785
     mean: -0.9507504072732051
     std: 1.9114254594378783
+    b: 1.4288094437429024
     shape: (128, 4096)
 encoder.rnn_layers.1.cells.0.eltwiseadd_gate:
   inputs:
@@ -564,6 +627,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_gate:
       avg_max: 4.8616450890998655
       mean: -0.5998025477032523
       std: 2.1475245530098204
+      b: 1.30492351677527
       shape: (128, 4096)
     1:
       min: -22.963897705078125
@@ -572,6 +636,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_gate:
       avg_max: 8.383283630046785
       mean: -0.9507504072732051
       std: 1.9114254594378783
+      b: 1.4288094437429024
       shape: (128, 4096)
   output:
     min: -31.574262619018555
@@ -580,6 +645,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_gate:
     avg_max: 10.518839543297785
     mean: -1.5505529552098096
     std: 3.1590192373764134
+    b: 2.308331574302921
     shape: (128, 4096)
 encoder.rnn_layers.1.cells.0.act_f:
   inputs:
@@ -590,6 +656,7 @@ encoder.rnn_layers.1.cells.0.act_f:
       avg_max: 8.090042744440224
       mean: -3.3116955970157718
       std: 3.4230677646590277
+      b: 2.4293571345891474
       shape: (128, 1024)
   output:
     min: 1.9385273957893065e-14
@@ -598,6 +665,7 @@ encoder.rnn_layers.1.cells.0.act_f:
     avg_max: 0.9984393432169701
     mean: 0.16464387024575694
     std: 0.2689671071958494
+    b: 0.19436692710657527
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.act_i:
   inputs:
@@ -608,6 +676,7 @@ encoder.rnn_layers.1.cells.0.act_i:
       avg_max: 6.228059029819189
       mean: -1.7129896603174661
       std: 2.7638664904974917
+      b: 2.0058580389625518
       shape: (128, 1024)
   output:
     min: 2.1981662367068222e-13
@@ -616,6 +685,7 @@ encoder.rnn_layers.1.cells.0.act_i:
     avg_max: 0.9786340831643511
     mean: 0.2868795179297321
     std: 0.27602027714229127
+    b: 0.22691229005787997
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.act_o:
   inputs:
@@ -626,6 +696,7 @@ encoder.rnn_layers.1.cells.0.act_o:
       avg_max: 9.042313837365008
       mean: -1.2052700564898609
       std: 2.6057113237143055
+      b: 1.8401764845288056
       shape: (128, 1024)
   output:
     min: 6.9000694914722605e-12
@@ -634,6 +705,7 @@ encoder.rnn_layers.1.cells.0.act_o:
     avg_max: 0.9974105607476547
     mean: 0.33604429936415675
     std: 0.2886479601419748
+    b: 0.24216563336267813
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.act_g:
   inputs:
@@ -644,6 +716,7 @@ encoder.rnn_layers.1.cells.0.act_g:
       avg_max: 8.65820987619275
       mean: 0.027743494574744162
       std: 2.8342722477735816
+      b: 1.8500435286986996
       shape: (128, 1024)
   output:
     min: -1.0
@@ -652,6 +725,7 @@ encoder.rnn_layers.1.cells.0.act_g:
     avg_max: 0.9996711071705672
     mean: 0.015988719393334825
     std: 0.7484585498246807
+    b: 0.6760022391875584
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -662,6 +736,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9984393432169701
       mean: 0.16464387024575694
       std: 0.2689671071958494
+      b: 0.19436692710657527
       shape: (128, 1024)
     1:
       min: -86.69337463378906
@@ -670,6 +745,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
       avg_max: 12.752722294005268
       mean: -0.023152882641702514
       std: 1.2572998992641964
+      b: 0.3008873190551628
       shape: (128, 1024)
   output:
     min: -86.67153930664062
@@ -678,6 +754,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
     avg_max: 12.574206966781782
     mean: -0.030583657865831754
     std: 1.2066110910522718
+    b: 0.1395411149794506
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
   inputs:
@@ -688,6 +765,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
       avg_max: 0.9786340831643511
       mean: 0.2868795179297321
       std: 0.27602027714229127
+      b: 0.22691229005787997
       shape: (128, 1024)
     1:
       min: -1.0
@@ -696,6 +774,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
       avg_max: 0.9996711071705672
       mean: 0.015988719393334825
       std: 0.7484585498246807
+      b: 0.6760022391875584
       shape: (128, 1024)
   output:
     min: -1.0
@@ -704,6 +783,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
     avg_max: 0.9683758158411752
     mean: 0.006315402761504094
     std: 0.3088953017599018
+    b: 0.18894667950535882
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.eltwiseadd_cell:
   inputs:
@@ -714,6 +794,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_cell:
       avg_max: 12.574206966781782
       mean: -0.030583657865831754
       std: 1.2066110910522718
+      b: 0.1395411149794506
       shape: (128, 1024)
     1:
       min: -1.0
@@ -722,6 +803,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_cell:
       avg_max: 0.9683758158411752
       mean: 0.006315402761504094
       std: 0.3088953017599018
+      b: 0.18894667950535882
       shape: (128, 1024)
   output:
     min: -87.62094116210938
@@ -730,6 +812,7 @@ encoder.rnn_layers.1.cells.0.eltwiseadd_cell:
     avg_max: 13.23383954467387
     mean: -0.024268255073244073
     std: 1.2882582959130635
+    b: 0.30631777404138666
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.act_h:
   inputs:
@@ -740,6 +823,7 @@ encoder.rnn_layers.1.cells.0.act_h:
       avg_max: 13.23383954467387
       mean: -0.024268255073244073
       std: 1.2882582959130635
+      b: 0.30631777404138666
       shape: (128, 1024)
   output:
     min: -1.0
@@ -748,6 +832,7 @@ encoder.rnn_layers.1.cells.0.act_h:
     avg_max: 0.982027827093264
     mean: 0.005185764388532731
     std: 0.3119488266195677
+    b: 0.20768493218909959
     shape: (128, 1024)
 encoder.rnn_layers.1.cells.0.eltwisemult_hidden:
   inputs:
@@ -758,6 +843,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_hidden:
       avg_max: 0.9974105607476547
       mean: 0.33604429936415675
       std: 0.2886479601419748
+      b: 0.24216563336267813
       shape: (128, 1024)
     1:
       min: -1.0
@@ -766,6 +852,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_hidden:
       avg_max: 0.982027827093264
       mean: 0.005185764388532731
       std: 0.3119488266195677
+      b: 0.20768493218909959
       shape: (128, 1024)
   output:
     min: -0.9999995231628418
@@ -774,6 +861,7 @@ encoder.rnn_layers.1.cells.0.eltwisemult_hidden:
     avg_max: 0.9199835463058242
     mean: -0.00017594442323635664
     std: 0.17510466702537447
+    b: 0.0827674181820404
     shape: (128, 1024)
 encoder.rnn_layers.1.dropout:
   output:
@@ -783,6 +871,7 @@ encoder.rnn_layers.1.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 encoder.rnn_layers.2.cells.0.fc_gate_x:
   inputs:
@@ -793,6 +882,7 @@ encoder.rnn_layers.2.cells.0.fc_gate_x:
       avg_max: 0.9199835463058242
       mean: -0.00017594442323635664
       std: 0.17510466702537447
+      b: 0.0827674181820404
       shape: (128, 1024)
   output:
     min: -17.669666290283203
@@ -801,6 +891,7 @@ encoder.rnn_layers.2.cells.0.fc_gate_x:
     avg_max: 5.579422310161379
     mean: -0.7621265583790381
     std: 1.6214516118322957
+    b: 1.2066256898628278
     shape: (128, 4096)
 encoder.rnn_layers.2.cells.0.fc_gate_h:
   inputs:
@@ -811,6 +902,7 @@ encoder.rnn_layers.2.cells.0.fc_gate_h:
       avg_max: 0.8692965302824718
       mean: -0.002193973255493973
       std: 0.13664756692926694
+      b: 0.054064400482378906
       shape: (128, 1024)
   output:
     min: -12.899184226989746
@@ -819,6 +911,7 @@ encoder.rnn_layers.2.cells.0.fc_gate_h:
     avg_max: 6.135640713992537
     mean: -0.7798955419852971
     std: 1.2988276201978577
+    b: 1.0101514969362784
     shape: (128, 4096)
 encoder.rnn_layers.2.cells.0.eltwiseadd_gate:
   inputs:
@@ -829,6 +922,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_gate:
       avg_max: 5.579422310161379
       mean: -0.7621265583790381
       std: 1.6214516118322957
+      b: 1.2066256898628278
       shape: (128, 4096)
     1:
       min: -12.899184226989746
@@ -837,6 +931,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_gate:
       avg_max: 6.135640713992537
       mean: -0.7798955419852971
       std: 1.2988276201978577
+      b: 1.0101514969362784
       shape: (128, 4096)
   output:
     min: -22.86528968811035
@@ -845,6 +940,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_gate:
     avg_max: 10.091681053441096
     mean: -1.5420221014644224
     std: 2.4497739415101045
+    b: 1.9066353796312498
     shape: (128, 4096)
 encoder.rnn_layers.2.cells.0.act_f:
   inputs:
@@ -855,6 +951,7 @@ encoder.rnn_layers.2.cells.0.act_f:
       avg_max: 9.76669416798307
       mean: -1.7373663354206654
       std: 2.701828662299363
+      b: 2.0874998922182675
       shape: (128, 1024)
   output:
     min: 1.1741696503975163e-10
@@ -863,6 +960,7 @@ encoder.rnn_layers.2.cells.0.act_f:
     avg_max: 0.9971977971010819
     mean: 0.2779621332383798
     std: 0.3120235028974232
+    b: 0.2603461732650365
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.act_i:
   inputs:
@@ -873,6 +971,7 @@ encoder.rnn_layers.2.cells.0.act_i:
       avg_max: 5.007397494993483
       mean: -2.482964531553934
       std: 2.096762127403773
+      b: 1.577551453372244
       shape: (128, 1024)
   output:
     min: 3.632128597885753e-09
@@ -881,6 +980,7 @@ encoder.rnn_layers.2.cells.0.act_i:
     avg_max: 0.9815354767928449
     mean: 0.17026146355457997
     std: 0.22359512877822252
+    b: 0.16413162317818702
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.act_o:
   inputs:
@@ -891,6 +991,7 @@ encoder.rnn_layers.2.cells.0.act_o:
       avg_max: 6.900344703221481
       mean: -1.9338501979173957
       std: 2.188371648150393
+      b: 1.6447856127549068
       shape: (128, 1024)
   output:
     min: 1.0016504292664763e-09
@@ -899,6 +1000,7 @@ encoder.rnn_layers.2.cells.0.act_o:
     avg_max: 0.996341593846912
     mean: 0.2302334359294881
     std: 0.2644176532615949
+    b: 0.20757872787548
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.act_g:
   inputs:
@@ -909,6 +1011,7 @@ encoder.rnn_layers.2.cells.0.act_g:
       avg_max: 6.198857292499591
       mean: -0.013907334995555003
       std: 2.0268158859398273
+      b: 1.5166460454830637
       shape: (128, 1024)
   output:
     min: -1.0
@@ -917,6 +1020,7 @@ encoder.rnn_layers.2.cells.0.act_g:
     avg_max: 0.999913128430412
     mean: 0.006783831941798703
     std: 0.7667732969711837
+    b: 0.7053634235156199
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -927,6 +1031,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9971977971010819
       mean: 0.2779621332383798
       std: 0.3120235028974232
+      b: 0.2603461732650365
       shape: (128, 1024)
     1:
       min: -70.65399169921875
@@ -935,6 +1040,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
       avg_max: 11.433578196754656
       mean: -0.007533524133234033
       std: 0.9619221798317081
+      b: 0.2497865464606052
       shape: (128, 1024)
   output:
     min: -70.47572326660156
@@ -943,6 +1049,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
     avg_max: 11.29573609329911
     mean: -0.0077121059270617645
     std: 0.9119806954490677
+    b: 0.13775959665708915
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
   inputs:
@@ -953,6 +1060,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
       avg_max: 0.9815354767928449
       mean: 0.17026146355457997
       std: 0.22359512877822252
+      b: 0.16413162317818702
       shape: (128, 1024)
     1:
       min: -1.0
@@ -961,6 +1069,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
       avg_max: 0.999913128430412
       mean: 0.006783831941798703
       std: 0.7667732969711837
+      b: 0.7053634235156199
       shape: (128, 1024)
   output:
     min: -1.0
@@ -969,6 +1078,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
     avg_max: 0.9338277108983972
     mean: 0.00031330419493738533
     std: 0.23285220882823307
+    b: 0.12565061154356547
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.eltwiseadd_cell:
   inputs:
@@ -979,6 +1089,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_cell:
       avg_max: 11.29573609329911
       mean: -0.0077121059270617645
       std: 0.9119806954490677
+      b: 0.13775959665708915
       shape: (128, 1024)
     1:
       min: -1.0
@@ -987,6 +1098,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_cell:
       avg_max: 0.9338277108983972
       mean: 0.00031330419493738533
       std: 0.23285220882823307
+      b: 0.12565061154356547
       shape: (128, 1024)
   output:
     min: -71.34825897216797
@@ -995,6 +1107,7 @@ encoder.rnn_layers.2.cells.0.eltwiseadd_cell:
     avg_max: 11.882522354690009
     mean: -0.007398801722887531
     std: 0.9852414934516581
+    b: 0.2546569724510982
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.act_h:
   inputs:
@@ -1005,6 +1118,7 @@ encoder.rnn_layers.2.cells.0.act_h:
       avg_max: 11.882522354690009
       mean: -0.007398801722887531
       std: 0.9852414934516581
+      b: 0.2546569724510982
       shape: (128, 1024)
   output:
     min: -1.0
@@ -1013,6 +1127,7 @@ encoder.rnn_layers.2.cells.0.act_h:
     avg_max: 0.9643497033340547
     mean: -0.0026311075007701672
     std: 0.2839022589840224
+    b: 0.17143513807314364
     shape: (128, 1024)
 encoder.rnn_layers.2.cells.0.eltwisemult_hidden:
   inputs:
@@ -1023,6 +1138,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_hidden:
       avg_max: 0.996341593846912
       mean: 0.2302334359294881
       std: 0.2644176532615949
+      b: 0.20757872787548
       shape: (128, 1024)
     1:
       min: -1.0
@@ -1031,6 +1147,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_hidden:
       avg_max: 0.9643497033340547
       mean: -0.0026311075007701672
       std: 0.2839022589840224
+      b: 0.17143513807314364
       shape: (128, 1024)
   output:
     min: -0.9999260902404785
@@ -1039,6 +1156,7 @@ encoder.rnn_layers.2.cells.0.eltwisemult_hidden:
     avg_max: 0.8823925270396857
     mean: -0.002203096514809122
     std: 0.1377186248199642
+    b: 0.05484113178447183
     shape: (128, 1024)
 encoder.rnn_layers.2.dropout:
   output:
@@ -1048,6 +1166,7 @@ encoder.rnn_layers.2.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 encoder.rnn_layers.3.cells.0.fc_gate_x:
   inputs:
@@ -1058,6 +1177,7 @@ encoder.rnn_layers.3.cells.0.fc_gate_x:
       avg_max: 1.4346018574915211
       mean: -0.0023790409310782876
       std: 0.23082689970193895
+      b: 0.12216927285224903
       shape: (128, 1024)
   output:
     min: -18.958541870117188
@@ -1066,6 +1186,7 @@ encoder.rnn_layers.3.cells.0.fc_gate_x:
     avg_max: 7.386176010906286
     mean: -0.7425925570313029
     std: 1.9741718173439569
+    b: 1.4889423477169665
     shape: (128, 4096)
 encoder.rnn_layers.3.cells.0.fc_gate_h:
   inputs:
@@ -1076,6 +1197,7 @@ encoder.rnn_layers.3.cells.0.fc_gate_h:
       avg_max: 0.9680624933584159
       mean: -5.464283497081485e-05
       std: 0.1605789723297388
+      b: 0.056299100504511694
       shape: (128, 1024)
   output:
     min: -17.731414794921875
@@ -1084,6 +1206,7 @@ encoder.rnn_layers.3.cells.0.fc_gate_h:
     avg_max: 8.483382081558762
     mean: -1.0937484681389607
     std: 1.8863347454511785
+    b: 1.4338658784393215
     shape: (128, 4096)
 encoder.rnn_layers.3.cells.0.eltwiseadd_gate:
   inputs:
@@ -1094,6 +1217,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_gate:
       avg_max: 7.386176010906286
       mean: -0.7425925570313029
       std: 1.9741718173439569
+      b: 1.4889423477169665
       shape: (128, 4096)
     1:
       min: -17.731414794921875
@@ -1102,6 +1226,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_gate:
       avg_max: 8.483382081558762
       mean: -1.0937484681389607
       std: 1.8863347454511785
+      b: 1.4338658784393215
       shape: (128, 4096)
   output:
     min: -25.56599998474121
@@ -1110,6 +1235,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_gate:
     avg_max: 13.726210550973875
     mean: -1.8363410236118098
     std: 3.220885522048646
+    b: 2.500927935644017
     shape: (128, 4096)
 encoder.rnn_layers.3.cells.0.act_f:
   inputs:
@@ -1120,6 +1246,7 @@ encoder.rnn_layers.3.cells.0.act_f:
       avg_max: 11.459924239973608
       mean: -1.7886736150289273
       std: 3.611997766132868
+      b: 2.852256792237028
       shape: (128, 1024)
   output:
     min: 7.885464850532209e-12
@@ -1128,6 +1255,7 @@ encoder.rnn_layers.3.cells.0.act_f:
     avg_max: 0.9981180747150038
     mean: 0.3085659271068626
     std: 0.362517692693201
+    b: 0.3166746377811603
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.act_i:
   inputs:
@@ -1138,6 +1266,7 @@ encoder.rnn_layers.3.cells.0.act_i:
       avg_max: 5.387517666390012
       mean: -3.4113261673007766
       std: 2.452103517547047
+      b: 1.8651447216136345
       shape: (128, 1024)
   output:
     min: 3.070241560987341e-10
@@ -1146,6 +1275,7 @@ encoder.rnn_layers.3.cells.0.act_i:
     avg_max: 0.9767627610722911
     mean: 0.1199813902886455
     std: 0.20597901242826788
+    b: 0.13689427367376142
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.act_o:
   inputs:
@@ -1156,6 +1286,7 @@ encoder.rnn_layers.3.cells.0.act_o:
       avg_max: 12.915865638912122
       mean: -2.1100439747307944
       std: 2.7725332585946427
+      b: 2.0674156388580402
       shape: (128, 1024)
   output:
     min: 3.422208905146107e-10
@@ -1164,6 +1295,7 @@ encoder.rnn_layers.3.cells.0.act_o:
     avg_max: 0.9998594416467933
     mean: 0.23564658800694233
     std: 0.2900290182410238
+    b: 0.23153820739729833
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.act_g:
   inputs:
@@ -1174,6 +1306,7 @@ encoder.rnn_layers.3.cells.0.act_g:
       avg_max: 10.109944212490001
       mean: -0.035320331854928055
       std: 2.991404617719586
+      b: 2.2730739073332047
       shape: (128, 1024)
   output:
     min: -1.0
@@ -1182,6 +1315,7 @@ encoder.rnn_layers.3.cells.0.act_g:
     avg_max: 0.9999893591374617
     mean: -0.017447813011902232
     std: 0.8383612744760685
+    b: 0.7895965214810386
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -1192,6 +1326,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9981180747150038
       mean: 0.3085659271068626
       std: 0.362517692693201
+      b: 0.3166746377811603
       shape: (128, 1024)
     1:
       min: -72.4426498413086
@@ -1200,6 +1335,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_forget:
       avg_max: 12.621639567200226
       mean: 0.001298973259466056
       std: 1.3620516853160491
+      b: 0.3307023400703073
       shape: (128, 1024)
   output:
     min: -72.35834503173828
@@ -1208,6 +1344,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_forget:
     avg_max: 12.483070900776225
     mean: -0.0005504995357517113
     std: 1.3219009414904979
+    b: 0.24167430174629564
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.eltwisemult_cell_input:
   inputs:
@@ -1218,6 +1355,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_input:
       avg_max: 0.9767627610722911
       mean: 0.1199813902886455
       std: 0.20597901242826788
+      b: 0.13689427367376142
       shape: (128, 1024)
     1:
       min: -1.0
@@ -1226,6 +1364,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999893591374617
       mean: -0.017447813011902232
       std: 0.8383612744760685
+      b: 0.7895965214810386
       shape: (128, 1024)
   output:
     min: -1.0
@@ -1234,6 +1373,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_cell_input:
     avg_max: 0.9557934822118774
     mean: 0.0013386550747985504
     std: 0.21654626606567212
+    b: 0.1011717223897744
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.eltwiseadd_cell:
   inputs:
@@ -1244,6 +1384,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_cell:
       avg_max: 12.483070900776225
       mean: -0.0005504995357517113
       std: 1.3219009414904979
+      b: 0.24167430174629564
       shape: (128, 1024)
     1:
       min: -1.0
@@ -1252,6 +1393,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_cell:
       avg_max: 0.9557934822118774
       mean: 0.0013386550747985504
       std: 0.21654626606567212
+      b: 0.1011717223897744
       shape: (128, 1024)
   output:
     min: -73.15592956542969
@@ -1260,6 +1402,7 @@ encoder.rnn_layers.3.cells.0.eltwiseadd_cell:
     avg_max: 12.986537455179008
     mean: 0.0007881555251539649
     std: 1.3934345367324847
+    b: 0.33818189893126244
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.act_h:
   inputs:
@@ -1270,6 +1413,7 @@ encoder.rnn_layers.3.cells.0.act_h:
       avg_max: 12.986537455179008
       mean: 0.0007881555251539649
       std: 1.3934345367324847
+      b: 0.33818189893126244
       shape: (128, 1024)
   output:
     min: -1.0
@@ -1278,6 +1422,7 @@ encoder.rnn_layers.3.cells.0.act_h:
     avg_max: 0.9954337507019633
     mean: 0.005215724385428704
     std: 0.3152480532527837
+    b: 0.17376577470793259
     shape: (128, 1024)
 encoder.rnn_layers.3.cells.0.eltwisemult_hidden:
   inputs:
@@ -1288,6 +1433,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_hidden:
       avg_max: 0.9998594416467933
       mean: 0.23564658800694233
       std: 0.2900290182410238
+      b: 0.23153820739729833
       shape: (128, 1024)
     1:
       min: -1.0
@@ -1296,6 +1442,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_hidden:
       avg_max: 0.9954337507019633
       mean: 0.005215724385428704
       std: 0.3152480532527837
+      b: 0.17376577470793259
       shape: (128, 1024)
   output:
     min: -0.9999996423721313
@@ -1304,6 +1451,7 @@ encoder.rnn_layers.3.cells.0.eltwisemult_hidden:
     avg_max: 0.981412514344157
     mean: -8.919282888996098e-05
     std: 0.16194114228528503
+    b: 0.05719050604400012
     shape: (128, 1024)
 encoder.rnn_layers.3.dropout:
   output:
@@ -1313,6 +1461,7 @@ encoder.rnn_layers.3.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 encoder.dropout:
   inputs:
@@ -1323,6 +1472,7 @@ encoder.dropout:
       avg_max: 1.2545068023933308
       mean: -0.0010675477744067996
       std: 0.19403692465489641
+      b: 0.08413264895271927
       shape: (128, 67, 2048)
   output:
     min: -1.999041199684143
@@ -1331,16 +1481,18 @@ encoder.dropout:
     avg_max: 1.2545068023933308
     mean: -0.0010675477744067996
     std: 0.19403692465489641
+    b: 0.08413264895271927
     shape: (128, 67, 2048)
 encoder.embedder:
   inputs:
     0:
-      min: 0
-      max: 32103
-      avg_min: 3.2019918366436153
-      avg_max: 24950.48025676814
-      mean: 2937.1528870343564
-      std: 6014.0608835026405
+      min: 0.0
+      max: 32103.0
+      avg_min: 3.201991836643651
+      avg_max: 24950.480256547948
+      mean: 2937.152918147278
+      std: 6014.049883398042
+      b: 4064.187827708714
       shape: (128, 67)
   output:
     min: -5.349642276763916
@@ -1349,6 +1501,7 @@ encoder.embedder:
     avg_max: 2.8868405888984556
     mean: 0.0012734194185268903
     std: 0.8584338496588495
+    b: 0.6693653134823229
     shape: (128, 67, 1024)
 encoder.eltwiseadd_residuals.0:
   inputs:
@@ -1359,6 +1512,7 @@ encoder.eltwiseadd_residuals.0:
       avg_max: 0.9888223583499591
       mean: -0.0022379238847255083
       std: 0.13743977474031957
+      b: 0.05472927090401451
       shape: (128, 67, 1024)
     1:
       min: -0.9999995231628418
@@ -1367,6 +1521,7 @@ encoder.eltwiseadd_residuals.0:
       avg_max: 0.995096003015836
       mean: -0.0001647915998243358
       std: 0.17545655249766362
+      b: 0.082812680862844
       shape: (128, 67, 1024)
   output:
     min: -1.999041199684143
@@ -1375,6 +1530,7 @@ encoder.eltwiseadd_residuals.0:
     avg_max: 1.7707290103038151
     mean: -0.0024027154916742197
     std: 0.2309446271021139
+    b: 0.12214652976642053
     shape: (128, 67, 1024)
 encoder.eltwiseadd_residuals.1:
   inputs:
@@ -1385,6 +1541,7 @@ encoder.eltwiseadd_residuals.1:
       avg_max: 0.9982590352495511
       mean: -4.938640427099017e-05
       std: 0.16142380765711173
+      b: 0.05695545502627889
       shape: (128, 67, 1024)
     1:
       min: -1.999041199684143
@@ -1393,6 +1550,7 @@ encoder.eltwiseadd_residuals.1:
       avg_max: 1.7707290103038151
       mean: -0.0024027154916742197
       std: 0.2309446271021139
+      b: 0.12214652976642053
       shape: (128, 67, 1024)
   output:
     min: -2.9931235313415527
@@ -1401,6 +1559,7 @@ encoder.eltwiseadd_residuals.1:
     avg_max: 2.5017193754514055
     mean: -0.0024521019076928496
     std: 0.2936707415080642
+    b: 0.1581717822700739
     shape: (128, 67, 1024)
 decoder.att_rnn.rnn.cells.0.fc_gate_x:
   inputs:
@@ -1411,6 +1570,7 @@ decoder.att_rnn.rnn.cells.0.fc_gate_x:
       avg_max: 2.8718470222494563
       mean: 0.0012989030032717187
       std: 0.8618320366411912
+      b: 0.6747593729013805
       shape: (1280, 1024)
   output:
     min: -32.593318939208984
@@ -1419,6 +1579,7 @@ decoder.att_rnn.rnn.cells.0.fc_gate_x:
     avg_max: 18.39185942424816
     mean: -0.319708395848218
     std: 5.248436831320663
+    b: 4.172536984186494
     shape: (1280, 4096)
 decoder.att_rnn.rnn.cells.0.fc_gate_h:
   inputs:
@@ -1429,6 +1590,7 @@ decoder.att_rnn.rnn.cells.0.fc_gate_h:
       avg_max: 0.9817781538775797
       mean: 0.007541471822687429
       std: 0.3220154108800773
+      b: 0.1654869589093926
       shape: (1280, 1024)
   output:
     min: -35.26850891113281
@@ -1437,6 +1599,7 @@ decoder.att_rnn.rnn.cells.0.fc_gate_h:
     avg_max: 22.16190616622404
     mean: -1.9407802034043842
     std: 4.835737332097758
+    b: 3.6179673783564827
     shape: (1280, 4096)
 decoder.att_rnn.rnn.cells.0.eltwiseadd_gate:
   inputs:
@@ -1447,6 +1610,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_gate:
       avg_max: 18.39185942424816
       mean: -0.319708395848218
       std: 5.248436831320663
+      b: 4.172536984186494
       shape: (1280, 4096)
     1:
       min: -35.26850891113281
@@ -1455,6 +1619,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_gate:
       avg_max: 22.16190616622404
       mean: -1.9407802034043842
       std: 4.835737332097758
+      b: 3.6179673783564827
       shape: (1280, 4096)
   output:
     min: -45.18857192993164
@@ -1463,6 +1628,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_gate:
     avg_max: 27.033264856660004
     mean: -2.260488603289206
     std: 7.086690069945273
+    b: 5.629252473959749
     shape: (1280, 4096)
 decoder.att_rnn.rnn.cells.0.act_f:
   inputs:
@@ -1473,6 +1639,7 @@ decoder.att_rnn.rnn.cells.0.act_f:
       avg_max: 24.47041631977212
       mean: -5.428667449415389
       std: 7.5857557123719195
+      b: 5.942447403307717
       shape: (1280, 1024)
   output:
     min: 5.720600170657743e-19
@@ -1481,6 +1648,7 @@ decoder.att_rnn.rnn.cells.0.act_f:
     avg_max: 0.9999987296174087
     mean: 0.22353376293282823
     std: 0.37551881742884263
+    b: 0.3097487535536952
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.act_i:
   inputs:
@@ -1491,6 +1659,7 @@ decoder.att_rnn.rnn.cells.0.act_i:
       avg_max: 17.757313247745003
       mean: -2.6210182911726867
       std: 6.095373006020184
+      b: 4.84681096920807
       shape: (1280, 1024)
   output:
     min: 3.5364804280239927e-19
@@ -1499,6 +1668,7 @@ decoder.att_rnn.rnn.cells.0.act_i:
     avg_max: 0.9999995308980515
     mean: 0.330330826534649
     std: 0.4106618580468271
+    b: 0.373719283670522
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.act_o:
   inputs:
@@ -1509,6 +1679,7 @@ decoder.att_rnn.rnn.cells.0.act_o:
       avg_max: 22.38339533752272
       mean: -1.0162639051926945
       std: 6.201834056672583
+      b: 4.915137376678117
       shape: (1280, 1024)
   output:
     min: 1.5979450257881012e-17
@@ -1517,6 +1688,7 @@ decoder.att_rnn.rnn.cells.0.act_o:
     avg_max: 0.9999999956133669
     mean: 0.4198552611838568
     std: 0.4295806405099903
+    b: 0.4058276877309498
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.act_g:
   inputs:
@@ -1527,6 +1699,7 @@ decoder.att_rnn.rnn.cells.0.act_g:
       avg_max: 25.075750009129578
       mean: 0.023995243424084333
       std: 7.12668924216872
+      b: 5.679371305931813
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -1535,6 +1708,7 @@ decoder.att_rnn.rnn.cells.0.act_g:
     avg_max: 0.999999995680337
     mean: -0.002128829708629359
     std: 0.9478563806555594
+    b: 0.9298617161056972
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -1545,6 +1719,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9999987296174087
       mean: 0.22353376293282823
       std: 0.37551881742884263
+      b: 0.3097487535536952
       shape: (1280, 1024)
     1:
       min: -45.964332580566406
@@ -1553,6 +1728,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_forget:
       avg_max: 30.634137733129954
       mean: 0.06729932622641525
       std: 1.6449935154656605
+      b: 0.557591549851251
       shape: (1280, 1024)
   output:
     min: -45.9624137878418
@@ -1561,6 +1737,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_forget:
     avg_max: 30.575408138686335
     mean: 0.06604976536836245
     std: 1.5455946584670446
+    b: 0.2958711958458917
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.eltwisemult_cell_input:
   inputs:
@@ -1571,6 +1748,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999995308980515
       mean: 0.330330826534649
       std: 0.4106618580468271
+      b: 0.373719283670522
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -1579,6 +1757,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_input:
       avg_max: 0.999999995680337
       mean: -0.002128829708629359
       std: 0.9478563806555594
+      b: 0.9298617161056972
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -1587,6 +1766,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_cell_input:
     avg_max: 0.9999969378950895
     mean: 0.0027081930132716804
     std: 0.510135969194079
+    b: 0.31562757913985934
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.eltwiseadd_cell:
   inputs:
@@ -1597,6 +1777,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_cell:
       avg_max: 30.575408138686335
       mean: 0.06604976536836245
       std: 1.5455946584670446
+      b: 0.2958711958458917
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -1605,6 +1786,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_cell:
       avg_max: 0.9999969378950895
       mean: 0.0027081930132716804
       std: 0.510135969194079
+      b: 0.31562757913985934
       shape: (1280, 1024)
   output:
     min: -46.92375183105469
@@ -1613,6 +1795,7 @@ decoder.att_rnn.rnn.cells.0.eltwiseadd_cell:
     avg_max: 31.416855715031076
     mean: 0.06875795865061662
     std: 1.676732644640398
+    b: 0.5653925294956461
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.act_h:
   inputs:
@@ -1623,6 +1806,7 @@ decoder.att_rnn.rnn.cells.0.act_h:
       avg_max: 31.416855715031076
       mean: 0.06875795865061662
       std: 1.676732644640398
+      b: 0.5653925294956461
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -1631,6 +1815,7 @@ decoder.att_rnn.rnn.cells.0.act_h:
     avg_max: 0.9959949824247473
     mean: 0.0061799199947633445
     std: 0.47477836896857967
+    b: 0.3310784636421155
     shape: (1280, 1024)
 decoder.att_rnn.rnn.cells.0.eltwisemult_hidden:
   inputs:
@@ -1641,6 +1826,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_hidden:
       avg_max: 0.9999999956133669
       mean: 0.4198552611838568
       std: 0.4295806405099903
+      b: 0.4058276877309498
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -1649,6 +1835,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_hidden:
       avg_max: 0.9959949824247473
       mean: 0.0061799199947633445
       std: 0.47477836896857967
+      b: 0.3310784636421155
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -1657,6 +1844,7 @@ decoder.att_rnn.rnn.cells.0.eltwisemult_hidden:
     avg_max: 0.9952872082423628
     mean: 0.007966578123805529
     std: 0.32187307320175484
+    b: 0.16622043455835803
     shape: (1280, 1024)
 decoder.att_rnn.rnn.dropout:
   output:
@@ -1666,6 +1854,7 @@ decoder.att_rnn.rnn.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 decoder.att_rnn.attn.linear_q:
   inputs:
@@ -1676,6 +1865,7 @@ decoder.att_rnn.attn.linear_q:
       avg_max: 0.9952872082423628
       mean: 0.007966578123805529
       std: 0.32187307320175484
+      b: 0.16622043455835803
       shape: (1280, 1, 1024)
   output:
     min: -28.324504852294922
@@ -1684,6 +1874,7 @@ decoder.att_rnn.attn.linear_q:
     avg_max: 16.370824370223502
     mean: 0.07139282220419639
     std: 5.614923564767698
+    b: 4.3945239412650645
     shape: (1280, 1, 1024)
 decoder.att_rnn.attn.linear_k:
   inputs:
@@ -1694,6 +1885,7 @@ decoder.att_rnn.attn.linear_k:
       avg_max: 2.571398892563376
       mean: -0.002407128676685295
       std: 0.3183030856867703
+      b: 0.17229868868428674
       shape: (1280, 67, 1024)
   output:
     min: -27.933134078979492
@@ -1702,6 +1894,7 @@ decoder.att_rnn.attn.linear_k:
     avg_max: 21.645756855439604
     mean: 0.11102438071386868
     std: 4.714025089771699
+    b: 3.3774262215314326
     shape: (1280, 67, 1024)
 decoder.att_rnn.attn.dropout:
   inputs:
@@ -1712,6 +1905,7 @@ decoder.att_rnn.attn.dropout:
       avg_max: 0.39005828052340624
       mean: 0.013619308356258466
       std: 0.05484342060778131
+      b: 0.01973839232938762
       shape: (1280, 1, 67)
   output:
     min: 0.0
@@ -1720,6 +1914,7 @@ decoder.att_rnn.attn.dropout:
     avg_max: 0.39005828052340624
     mean: 0.013619308356258466
     std: 0.05484342060778131
+    b: 0.01973839232938762
     shape: (1280, 1, 67)
 decoder.att_rnn.attn.eltwiseadd_qk:
   inputs:
@@ -1730,6 +1925,7 @@ decoder.att_rnn.attn.eltwiseadd_qk:
       avg_max: 16.370824370223502
       mean: 0.07139282138405703
       std: 5.614948532126775
+      b: 4.394523893313473
       shape: (1280, 1, 67, 1024)
     1:
       min: -27.933134078979492
@@ -1738,6 +1934,7 @@ decoder.att_rnn.attn.eltwiseadd_qk:
       avg_max: 21.645756855439604
       mean: 0.11102438071386868
       std: 4.714025089771699
+      b: 3.3774262215314326
       shape: (1280, 1, 67, 1024)
   output:
     min: -42.6893310546875
@@ -1746,6 +1943,7 @@ decoder.att_rnn.attn.eltwiseadd_qk:
     avg_max: 26.724065986376143
     mean: 0.18241720259650032
     std: 6.144074303575077
+    b: 4.8617969220943795
     shape: (1280, 1, 67, 1024)
 decoder.att_rnn.attn.eltwiseadd_norm_bias:
   inputs:
@@ -1756,6 +1954,7 @@ decoder.att_rnn.attn.eltwiseadd_norm_bias:
       avg_max: 26.724065986376143
       mean: 0.18241720259650032
       std: 6.144074303575077
+      b: 4.8617969220943795
       shape: (1280, 1, 67, 1024)
     1:
       min: -1.159269094467163
@@ -1764,6 +1963,7 @@ decoder.att_rnn.attn.eltwiseadd_norm_bias:
       avg_max: 1.030885934829712
       mean: 0.01333538442850113
       std: 0.3476333932113675
+      b: 0.2746787667274475
       shape: (1024)
   output:
     min: -42.8883171081543
@@ -1772,6 +1972,7 @@ decoder.att_rnn.attn.eltwiseadd_norm_bias:
     avg_max: 26.855665168333605
     mean: 0.19575258549512087
     std: 6.287847745163477
+    b: 5.012542623348454
     shape: (1280, 1, 67, 1024)
 decoder.att_rnn.attn.eltwisemul_norm_scaler:
   inputs:
@@ -1782,6 +1983,7 @@ decoder.att_rnn.attn.eltwisemul_norm_scaler:
       avg_max: 0.09800389409065247
       mean: 0.00032652184017933905
       std: 0.031248209015367
+      b: 0.027989715337753296
       shape: (1024)
     1:
       min: 1.2628638744354248
@@ -1790,6 +1992,7 @@ decoder.att_rnn.attn.eltwisemul_norm_scaler:
       avg_max: 1.2628638744354248
       mean: 1.2628638744354248
       std: .nan
+      b: 0.0
       shape: (1)
   output:
     min: -0.2077881544828415
@@ -1798,6 +2001,7 @@ decoder.att_rnn.attn.eltwisemul_norm_scaler:
     avg_max: 0.12376558035612106
     mean: 0.0004123526159673929
     std: 0.03946245597745369
+    b: 0.03534720093011856
     shape: (1024)
 decoder.att_rnn.attn.tanh:
   inputs:
@@ -1808,6 +2012,7 @@ decoder.att_rnn.attn.tanh:
       avg_max: 26.855665168333605
       mean: 0.19575258549512087
       std: 6.287847745163477
+      b: 5.012542623348454
       shape: (1280, 1, 67, 1024)
   output:
     min: -1.0
@@ -1816,6 +2021,7 @@ decoder.att_rnn.attn.tanh:
     avg_max: 0.999999995680337
     mean: 0.03299323406470721
     std: 0.9384829454472874
+    b: 0.9170371813385669
     shape: (1280, 1, 67, 1024)
 decoder.att_rnn.attn.matmul_score:
   inputs:
@@ -1826,6 +2032,7 @@ decoder.att_rnn.attn.matmul_score:
       avg_max: 0.999999995680337
       mean: 0.03299323406470721
       std: 0.9384829454472874
+      b: 0.9170371813385669
       shape: (1280, 1, 67, 1024)
     1:
       min: -0.2077881544828415
@@ -1834,6 +2041,7 @@ decoder.att_rnn.attn.matmul_score:
       avg_max: 0.12376558035612106
       mean: 0.0004123526159673929
       std: 0.03946245597745369
+      b: 0.03534720093011856
       shape: (1024)
   output:
     min: -5.075064182281494
@@ -1842,6 +2050,7 @@ decoder.att_rnn.attn.matmul_score:
     avg_max: 12.197041146406967
     mean: 7.974570217477471
     std: 2.9091675582996563
+    b: 2.208857783708679
     shape: (1280, 1, 67)
 decoder.att_rnn.attn.softmax_att:
   inputs:
@@ -1852,6 +2061,7 @@ decoder.att_rnn.attn.softmax_att:
       avg_max: 12.163362407550382
       mean: -24693.233116322437
       std: 31749.93291331495
+      b: 30775.105422665023
       shape: (1280, 1, 67)
   output:
     min: 0.0
@@ -1860,6 +2070,7 @@ decoder.att_rnn.attn.softmax_att:
     avg_max: 0.39005828052340624
     mean: 0.013619308356258466
     std: 0.05484342060778131
+    b: 0.01973839232938762
     shape: (1280, 1, 67)
 decoder.att_rnn.attn.context_matmul:
   inputs:
@@ -1870,6 +2081,7 @@ decoder.att_rnn.attn.context_matmul:
       avg_max: 0.39005828052340624
       mean: 0.013619308356258466
       std: 0.05484342060778131
+      b: 0.01973839232938762
       shape: (1280, 1, 67)
     1:
       min: -2.9931235313415527
@@ -1878,6 +2090,7 @@ decoder.att_rnn.attn.context_matmul:
       avg_max: 2.571398892563376
       mean: -0.002407128676685295
       std: 0.3183030856867703
+      b: 0.17229868868428674
       shape: (1280, 67, 1024)
   output:
     min: -2.748584032058716
@@ -1886,6 +2099,7 @@ decoder.att_rnn.attn.context_matmul:
     avg_max: 0.9287193868937127
     mean: 0.0004324376445557447
     std: 0.16600608798290178
+    b: 0.09215169849313716
     shape: (1280, 1, 1024)
 decoder.att_rnn.dropout:
   inputs:
@@ -1896,6 +2110,7 @@ decoder.att_rnn.dropout:
       avg_max: 0.9952872082423628
       mean: 0.007966578123805529
       std: 0.32187307320175484
+      b: 0.16622043455835803
       shape: (1280, 1, 1024)
   output:
     min: -1.0
@@ -1904,6 +2119,7 @@ decoder.att_rnn.dropout:
     avg_max: 0.9952872082423628
     mean: 0.007966578123805529
     std: 0.32187307320175484
+    b: 0.16622043455835803
     shape: (1280, 1, 1024)
 decoder.rnn_layers.0.cells.0.fc_gate_x:
   inputs:
@@ -1914,6 +2130,7 @@ decoder.rnn_layers.0.cells.0.fc_gate_x:
       avg_max: 1.1144092399752523
       mean: 0.004199507878490362
       std: 0.2561140031003674
+      b: 0.12828497891262
       shape: (1280, 2048)
   output:
     min: -31.11646270751953
@@ -1922,6 +2139,7 @@ decoder.rnn_layers.0.cells.0.fc_gate_x:
     avg_max: 10.85241473739067
     mean: -1.1740948434960983
     std: 3.0091560830798434
+    b: 2.3389595296945487
     shape: (1280, 4096)
 decoder.rnn_layers.0.cells.0.fc_gate_h:
   inputs:
@@ -1932,6 +2150,7 @@ decoder.rnn_layers.0.cells.0.fc_gate_h:
       avg_max: 0.7587759274110363
       mean: -0.0010008882399605407
       std: 0.1321120655297924
+      b: 0.05292223636950414
       shape: (1280, 1024)
   output:
     min: -16.805160522460938
@@ -1940,6 +2159,7 @@ decoder.rnn_layers.0.cells.0.fc_gate_h:
     avg_max: 5.603913084911495
     mean: -0.49282410457060527
     std: 1.2749332466602463
+    b: 0.9300034851840387
     shape: (1280, 4096)
 decoder.rnn_layers.0.cells.0.eltwiseadd_gate:
   inputs:
@@ -1950,6 +2170,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_gate:
       avg_max: 10.85241473739067
       mean: -1.1740948434960983
       std: 3.0091560830798434
+      b: 2.3389595296945487
       shape: (1280, 4096)
     1:
       min: -16.805160522460938
@@ -1958,6 +2179,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_gate:
       avg_max: 5.603913084911495
       mean: -0.49282410457060527
       std: 1.2749332466602463
+      b: 0.9300034851840387
       shape: (1280, 4096)
   output:
     min: -33.57273864746094
@@ -1966,6 +2188,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_gate:
     avg_max: 12.499767167380655
     mean: -1.6669189450446138
     std: 3.6505088399213936
+    b: 2.8570796875471483
     shape: (1280, 4096)
 decoder.rnn_layers.0.cells.0.act_f:
   inputs:
@@ -1976,6 +2199,7 @@ decoder.rnn_layers.0.cells.0.act_f:
       avg_max: 11.013900484127936
       mean: -2.6897614965278116
       std: 4.286025676313951
+      b: 3.335799002647403
       shape: (1280, 1024)
   output:
     min: 3.4783092882741465e-14
@@ -1984,6 +2208,7 @@ decoder.rnn_layers.0.cells.0.act_f:
     avg_max: 0.9996802927737837
     mean: 0.2552954440455087
     std: 0.35829928323219956
+    b: 0.30173072499338094
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.act_i:
   inputs:
@@ -1994,6 +2219,7 @@ decoder.rnn_layers.0.cells.0.act_i:
       avg_max: 9.380031768927397
       mean: -2.4518663697698173
       std: 3.0217416033646693
+      b: 2.323332796873674
       shape: (1280, 1024)
   output:
     min: 1.005313792824293e-13
@@ -2002,6 +2228,7 @@ decoder.rnn_layers.0.cells.0.act_i:
     avg_max: 0.9996398801214232
     mean: 0.22650649123144959
     std: 0.3026139789025641
+    b: 0.2427336303287007
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.act_o:
   inputs:
@@ -2012,6 +2239,7 @@ decoder.rnn_layers.0.cells.0.act_o:
       avg_max: 8.524241487095862
       mean: -1.5604653776026836
       std: 3.2415928306767676
+      b: 2.538264309288409
       shape: (1280, 1024)
   output:
     min: 1.3685174955063717e-12
@@ -2020,6 +2248,7 @@ decoder.rnn_layers.0.cells.0.act_o:
     avg_max: 0.9978680859455905
     mean: 0.3295869104145614
     std: 0.34560961994352346
+    b: 0.30255046387234413
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.act_g:
   inputs:
@@ -2030,6 +2259,7 @@ decoder.rnn_layers.0.cells.0.act_g:
       avg_max: 11.46917405824984
       mean: 0.03441744941392035
       std: 3.2752884250043954
+      b: 2.518169113558331
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2038,6 +2268,7 @@ decoder.rnn_layers.0.cells.0.act_g:
     avg_max: 0.9999999514456561
     mean: 0.009212502904665593
     std: 0.8613827573443271
+    b: 0.8191404633977437
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -2048,6 +2279,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9996802927737837
       mean: 0.2552954440455087
       std: 0.35829928323219956
+      b: 0.30173072499338094
       shape: (1280, 1024)
     1:
       min: -50.77605438232422
@@ -2056,6 +2288,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
       avg_max: 11.783769438574792
       mean: -0.013233005671694572
       std: 0.9262749365617192
+      b: 0.3140615258407732
       shape: (1280, 1024)
   output:
     min: -50.32355880737305
@@ -2064,6 +2297,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_forget:
     avg_max: 11.075782726721808
     mean: -0.010043481503626429
     std: 0.8084092966416248
+    b: 0.13408823390229707
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
   inputs:
@@ -2074,6 +2308,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
       avg_max: 0.9996398801214232
       mean: 0.22650649123144959
       std: 0.3026139789025641
+      b: 0.2427336303287007
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2082,6 +2317,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999999514456561
       mean: 0.009212502904665593
       std: 0.8613827573443271
+      b: 0.8191404633977437
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2090,6 +2326,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_cell_input:
     avg_max: 0.9981463519374972
     mean: -0.0036360137033707263
     std: 0.3448696757960219
+    b: 0.19587422205825833
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.eltwiseadd_cell:
   inputs:
@@ -2100,6 +2337,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_cell:
       avg_max: 11.075782726721808
       mean: -0.010043481503626429
       std: 0.8084092966416248
+      b: 0.13408823390229707
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2108,6 +2346,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_cell:
       avg_max: 0.9981463519374972
       mean: -0.0036360137033707263
       std: 0.3448696757960219
+      b: 0.19587422205825833
       shape: (1280, 1024)
   output:
     min: -51.32215881347656
@@ -2116,6 +2355,7 @@ decoder.rnn_layers.0.cells.0.eltwiseadd_cell:
     avg_max: 11.741759218124862
     mean: -0.013679495197402003
     std: 0.9252576031128981
+    b: 0.31603610831197754
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.act_h:
   inputs:
@@ -2126,6 +2366,7 @@ decoder.rnn_layers.0.cells.0.act_h:
       avg_max: 11.741759218124862
       mean: -0.013679495197402003
       std: 0.9252576031128981
+      b: 0.31603610831197754
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2134,6 +2375,7 @@ decoder.rnn_layers.0.cells.0.act_h:
     avg_max: 0.9928096467189585
     mean: -0.005522266373139992
     std: 0.3470194696164207
+    b: 0.2231224861121579
     shape: (1280, 1024)
 decoder.rnn_layers.0.cells.0.eltwisemult_hidden:
   inputs:
@@ -2144,6 +2386,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_hidden:
       avg_max: 0.9978680859455905
       mean: 0.3295869104145614
       std: 0.34560961994352346
+      b: 0.30255046387234413
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2152,6 +2395,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_hidden:
       avg_max: 0.9928096467189585
       mean: -0.005522266373139992
       std: 0.3470194696164207
+      b: 0.2231224861121579
       shape: (1280, 1024)
   output:
     min: -0.9999914765357971
@@ -2160,6 +2404,7 @@ decoder.rnn_layers.0.cells.0.eltwisemult_hidden:
     avg_max: 0.7594633606377601
     mean: -0.0010860526439966734
     std: 0.13179261237432402
+    b: 0.05422022580535392
     shape: (1280, 1024)
 decoder.rnn_layers.0.dropout:
   output:
@@ -2169,6 +2414,7 @@ decoder.rnn_layers.0.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 decoder.rnn_layers.1.cells.0.fc_gate_x:
   inputs:
@@ -2179,6 +2425,7 @@ decoder.rnn_layers.1.cells.0.fc_gate_x:
       avg_max: 0.996185907755004
       mean: -0.00032680749604648707
       std: 0.14988080842341334
+      b: 0.07311449136082718
       shape: (1280, 2048)
   output:
     min: -22.17432403564453
@@ -2187,6 +2434,7 @@ decoder.rnn_layers.1.cells.0.fc_gate_x:
     avg_max: 7.5104381103194156
     mean: -0.8090552802835963
     std: 2.096109569488443
+    b: 1.5889325456338008
     shape: (1280, 4096)
 decoder.rnn_layers.1.cells.0.fc_gate_h:
   inputs:
@@ -2197,6 +2445,7 @@ decoder.rnn_layers.1.cells.0.fc_gate_h:
       avg_max: 0.7355864281399854
       mean: 0.00030723568868500604
       std: 0.13119853605881615
+      b: 0.06826835323013587
       shape: (1280, 1024)
   output:
     min: -10.816532135009766
@@ -2205,6 +2454,7 @@ decoder.rnn_layers.1.cells.0.fc_gate_h:
     avg_max: 4.048953114064886
     mean: -0.47011378199029547
     std: 0.9846700195969109
+    b: 0.7533953878651847
     shape: (1280, 4096)
 decoder.rnn_layers.1.cells.0.eltwiseadd_gate:
   inputs:
@@ -2215,6 +2465,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_gate:
       avg_max: 7.5104381103194156
       mean: -0.8090552802835963
       std: 2.096109569488443
+      b: 1.5889325456338008
       shape: (1280, 4096)
     1:
       min: -10.816532135009766
@@ -2223,6 +2474,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_gate:
       avg_max: 4.048953114064886
       mean: -0.47011378199029547
       std: 0.9846700195969109
+      b: 0.7533953878651847
       shape: (1280, 4096)
   output:
     min: -24.22309684753418
@@ -2231,6 +2483,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_gate:
     avg_max: 8.619773781969311
     mean: -1.2791690607754058
     std: 2.5821871111713826
+    b: 2.007004778170852
     shape: (1280, 4096)
 decoder.rnn_layers.1.cells.0.act_f:
   inputs:
@@ -2241,6 +2494,7 @@ decoder.rnn_layers.1.cells.0.act_f:
       avg_max: 6.821592486440458
       mean: -2.6714931534247466
       std: 2.5443121998813525
+      b: 1.9007043993205144
       shape: (1280, 1024)
   output:
     min: 3.020248634522105e-11
@@ -2249,6 +2503,7 @@ decoder.rnn_layers.1.cells.0.act_f:
     avg_max: 0.9935724002256816
     mean: 0.1752624285941042
     std: 0.25292423787376883
+    b: 0.18595207231014632
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.act_i:
   inputs:
@@ -2259,6 +2514,7 @@ decoder.rnn_layers.1.cells.0.act_i:
       avg_max: 6.599652247616419
       mean: -1.3425940824358642
       std: 2.214069210841872
+      b: 1.694840380080627
       shape: (1280, 1024)
   output:
     min: 1.6614134512593637e-09
@@ -2267,6 +2523,7 @@ decoder.rnn_layers.1.cells.0.act_i:
     avg_max: 0.994309761283102
     mean: 0.3069548572800805
     std: 0.29030061738546137
+    b: 0.24375973142097485
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.act_o:
   inputs:
@@ -2277,6 +2534,7 @@ decoder.rnn_layers.1.cells.0.act_o:
       avg_max: 7.602936600299369
       mean: -1.092906504534604
       std: 2.4894375831577364
+      b: 1.934165755215657
       shape: (1280, 1024)
   output:
     min: 1.0446175036094019e-09
@@ -2285,6 +2543,7 @@ decoder.rnn_layers.1.cells.0.act_o:
     avg_max: 0.9977307225211285
     mean: 0.3514365402500282
     std: 0.32005181986355885
+    b: 0.2781929248169561
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.act_g:
   inputs:
@@ -2295,6 +2554,7 @@ decoder.rnn_layers.1.cells.0.act_g:
       avg_max: 7.799964112378239
       mean: -0.009682508857590904
       std: 2.3471144877832884
+      b: 1.7941640214303936
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2303,6 +2563,7 @@ decoder.rnn_layers.1.cells.0.act_g:
     avg_max: 0.9999866421637916
     mean: -0.007454321779905927
     std: 0.8034238800947899
+    b: 0.7480113414231311
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -2313,6 +2574,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9935724002256816
       mean: 0.1752624285941042
       std: 0.25292423787376883
+      b: 0.18595207231014632
       shape: (1280, 1024)
     1:
       min: -50.93753433227539
@@ -2321,6 +2583,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
       avg_max: 2.858599665124761
       mean: -0.008311334580423152
       std: 0.4794455076286656
+      b: 0.28920617523822856
       shape: (1280, 1024)
   output:
     min: -50.889991760253906
@@ -2329,6 +2592,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_forget:
     avg_max: 2.3347478714216994
     mean: -0.0015736418809647336
     std: 0.25571878953430177
+    b: 0.0655673016457859
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
   inputs:
@@ -2339,6 +2603,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
       avg_max: 0.994309761283102
       mean: 0.3069548572800805
       std: 0.29030061738546137
+      b: 0.24375973142097485
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2347,6 +2612,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
       avg_max: 0.9999866421637916
       mean: -0.007454321779905927
       std: 0.8034238800947899
+      b: 0.7480113414231311
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2355,6 +2621,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_cell_input:
     avg_max: 0.9891012119108362
     mean: -0.006563609112533941
     std: 0.3551230793477708
+    b: 0.23654065306267028
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.eltwiseadd_cell:
   inputs:
@@ -2365,6 +2632,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_cell:
       avg_max: 2.3347478714216994
       mean: -0.0015736418809647336
       std: 0.25571878953430177
+      b: 0.0655673016457859
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2373,6 +2641,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_cell:
       avg_max: 0.9891012119108362
       mean: -0.006563609112533941
       std: 0.3551230793477708
+      b: 0.23654065306267028
       shape: (1280, 1024)
   output:
     min: -51.780860900878906
@@ -2381,6 +2650,7 @@ decoder.rnn_layers.1.cells.0.eltwiseadd_cell:
     avg_max: 2.8984877801343285
     mean: -0.008137250974908283
     std: 0.4813941324820594
+    b: 0.29027094568094497
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.act_h:
   inputs:
@@ -2391,6 +2661,7 @@ decoder.rnn_layers.1.cells.0.act_h:
       avg_max: 2.8984877801343285
       mean: -0.008137250974908283
       std: 0.4813941324820594
+      b: 0.29027094568094497
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2399,6 +2670,7 @@ decoder.rnn_layers.1.cells.0.act_h:
     avg_max: 0.9670456421509231
     mean: -0.0057490570247533766
     std: 0.345665687214933
+    b: 0.2453265073677798
     shape: (1280, 1024)
 decoder.rnn_layers.1.cells.0.eltwisemult_hidden:
   inputs:
@@ -2409,6 +2681,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_hidden:
       avg_max: 0.9977307225211285
       mean: 0.3514365402500282
       std: 0.32005181986355885
+      b: 0.2781929248169561
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2417,6 +2690,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_hidden:
       avg_max: 0.9670456421509231
       mean: -0.0057490570247533766
       std: 0.345665687214933
+      b: 0.2453265073677798
       shape: (1280, 1024)
   output:
     min: -0.9998709559440613
@@ -2425,6 +2699,7 @@ decoder.rnn_layers.1.cells.0.eltwisemult_hidden:
     avg_max: 0.743544528524527
     mean: 0.00032440792050908126
     std: 0.1314242965426167
+    b: 0.069381494656875
     shape: (1280, 1024)
 decoder.rnn_layers.1.dropout:
   output:
@@ -2434,6 +2709,7 @@ decoder.rnn_layers.1.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 decoder.rnn_layers.2.cells.0.fc_gate_x:
   inputs:
@@ -2444,6 +2720,7 @@ decoder.rnn_layers.2.cells.0.fc_gate_x:
       avg_max: 1.1189356212870456
       mean: -0.00016460354038312733
       std: 0.1760178086847606
+      b: 0.09911453349494868
       shape: (1280, 2048)
   output:
     min: -24.67524528503418
@@ -2452,6 +2729,7 @@ decoder.rnn_layers.2.cells.0.fc_gate_x:
     avg_max: 8.328183968147563
     mean: -0.8204240057408129
     std: 2.453284969094989
+    b: 1.8982749567942672
     shape: (1280, 4096)
 decoder.rnn_layers.2.cells.0.fc_gate_h:
   inputs:
@@ -2462,6 +2740,7 @@ decoder.rnn_layers.2.cells.0.fc_gate_h:
       avg_max: 0.8058140833056374
       mean: -0.0030742165989599258
       std: 0.16821435780985747
+      b: 0.08427371087201521
       shape: (1280, 1024)
   output:
     min: -18.816926956176758
@@ -2470,6 +2749,7 @@ decoder.rnn_layers.2.cells.0.fc_gate_h:
     avg_max: 5.89386603040307
     mean: -0.7366783961109576
     std: 1.5059158176081058
+    b: 1.1217902419607277
     shape: (1280, 4096)
 decoder.rnn_layers.2.cells.0.eltwiseadd_gate:
   inputs:
@@ -2480,6 +2760,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_gate:
       avg_max: 8.328183968147563
       mean: -0.8204240057408129
       std: 2.453284969094989
+      b: 1.8982749567942672
       shape: (1280, 4096)
     1:
       min: -18.816926956176758
@@ -2488,6 +2769,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_gate:
       avg_max: 5.89386603040307
       mean: -0.7366783961109576
       std: 1.5059158176081058
+      b: 1.1217902419607277
       shape: (1280, 4096)
   output:
     min: -29.283180236816406
@@ -2496,6 +2778,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_gate:
     avg_max: 10.381155111280712
     mean: -1.557102406895562
     std: 3.2988025400040257
+    b: 2.5843769489379405
     shape: (1280, 4096)
 decoder.rnn_layers.2.cells.0.act_f:
   inputs:
@@ -2506,6 +2789,7 @@ decoder.rnn_layers.2.cells.0.act_f:
       avg_max: 7.526722565527717
       mean: -3.6089404096094384
       std: 3.0091061671078934
+      b: 2.2975884913058753
       shape: (1280, 1024)
   output:
     min: 1.9163568843773293e-13
@@ -2514,6 +2798,7 @@ decoder.rnn_layers.2.cells.0.act_f:
     avg_max: 0.9962542612231184
     mean: 0.13819005828811198
     std: 0.24204215179724617
+    b: 0.16834504561645278
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.act_i:
   inputs:
@@ -2524,6 +2809,7 @@ decoder.rnn_layers.2.cells.0.act_i:
       avg_max: 7.826490100581997
       mean: -0.91120249788078
       std: 2.6741725568824375
+      b: 2.0841160098488456
       shape: (1280, 1024)
   output:
     min: 3.0161959735375277e-11
@@ -2532,6 +2818,7 @@ decoder.rnn_layers.2.cells.0.act_i:
     avg_max: 0.9983030597815357
     mean: 0.38171999553281244
     std: 0.3367532650457234
+    b: 0.29790418672092767
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.act_o:
   inputs:
@@ -2542,6 +2829,7 @@ decoder.rnn_layers.2.cells.0.act_o:
       avg_max: 8.086509210607966
       mean: -1.6018465338798051
       std: 2.822778696064494
+      b: 2.2109367526649093
       shape: (1280, 1024)
   output:
     min: 7.879931950005581e-12
@@ -2550,6 +2838,7 @@ decoder.rnn_layers.2.cells.0.act_o:
     avg_max: 0.9988285692890035
     mean: 0.30748807730969463
     std: 0.3263006812590941
+    b: 0.280720940274134
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.act_g:
   inputs:
@@ -2560,6 +2849,7 @@ decoder.rnn_layers.2.cells.0.act_g:
       avg_max: 10.15937283199823
       mean: -0.10642016830597752
       std: 3.5525409631159355
+      b: 2.81734556696388
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2568,6 +2858,7 @@ decoder.rnn_layers.2.cells.0.act_g:
     avg_max: 0.999999153747988
     mean: -0.0269237342450161
     std: 0.879016886211502
+    b: 0.8402174213294229
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
   inputs:
@@ -2578,6 +2869,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
       avg_max: 0.9962542612231184
       mean: 0.13819005828811198
       std: 0.24204215179724617
+      b: 0.16834504561645278
       shape: (1280, 1024)
     1:
       min: -50.77392578125
@@ -2586,6 +2878,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
       avg_max: 3.778732706154328
       mean: -0.010375739289892385
       std: 0.6429531313365376
+      b: 0.39789132222146045
       shape: (1280, 1024)
   output:
     min: -49.94257354736328
@@ -2594,6 +2887,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_forget:
     avg_max: 3.1268611868780627
     mean: -0.00047371524729856
     std: 0.358745687372424
+    b: 0.07846207401772116
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
   inputs:
@@ -2604,6 +2898,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
       avg_max: 0.9983030597815357
       mean: 0.38171999553281244
       std: 0.3367532650457234
+      b: 0.29790418672092767
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2612,6 +2907,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
       avg_max: 0.999999153747988
       mean: -0.0269237342450161
       std: 0.879016886211502
+      b: 0.8402174213294229
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2620,6 +2916,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_cell_input:
     avg_max: 0.9960211656066814
     mean: -0.01004450515169632
     std: 0.4632697182775279
+    b: 0.3311674565244253
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.eltwiseadd_cell:
   inputs:
@@ -2630,6 +2927,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_cell:
       avg_max: 3.1268611868780627
       mean: -0.00047371524729856
       std: 0.358745687372424
+      b: 0.07846207401772116
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2638,6 +2936,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_cell:
       avg_max: 0.9960211656066814
       mean: -0.01004450515169632
       std: 0.4632697182775279
+      b: 0.3311674565244253
       shape: (1280, 1024)
   output:
     min: -50.93840026855469
@@ -2646,6 +2945,7 @@ decoder.rnn_layers.2.cells.0.eltwiseadd_cell:
     avg_max: 3.8555672365293057
     mean: -0.010518220426035512
     std: 0.6487821329571182
+    b: 0.4016652262947534
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.act_h:
   inputs:
@@ -2656,6 +2956,7 @@ decoder.rnn_layers.2.cells.0.act_h:
       avg_max: 3.8555672365293057
       mean: -0.010518220426035512
       std: 0.6487821329571182
+      b: 0.4016652262947534
       shape: (1280, 1024)
   output:
     min: -1.0
@@ -2664,6 +2965,7 @@ decoder.rnn_layers.2.cells.0.act_h:
     avg_max: 0.9829632449016149
     mean: -0.008678492148203425
     std: 0.4269098495511477
+    b: 0.32061298486222056
     shape: (1280, 1024)
 decoder.rnn_layers.2.cells.0.eltwisemult_hidden:
   inputs:
@@ -2674,6 +2976,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_hidden:
       avg_max: 0.9988285692890035
       mean: 0.30748807730969463
       std: 0.3263006812590941
+      b: 0.280720940274134
       shape: (1280, 1024)
     1:
       min: -1.0
@@ -2682,6 +2985,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_hidden:
       avg_max: 0.9829632449016149
       mean: -0.008678492148203425
       std: 0.4269098495511477
+      b: 0.32061298486222056
       shape: (1280, 1024)
   output:
     min: -0.9999999403953552
@@ -2690,6 +2994,7 @@ decoder.rnn_layers.2.cells.0.eltwisemult_hidden:
     avg_max: 0.8186234360665419
     mean: -0.0031441434696200784
     std: 0.1694763855118817
+    b: 0.08618559386330027
     shape: (1280, 1024)
 decoder.rnn_layers.2.dropout:
   output:
@@ -2699,6 +3004,7 @@ decoder.rnn_layers.2.dropout:
     avg_max: 0
     mean: 0
     std: 0
+    b: 0
     shape: 
 decoder.classifier.classifier:
   inputs:
@@ -2709,6 +3015,7 @@ decoder.classifier.classifier:
       avg_max: 1.2828886617770356
       mean: -0.003905788197230935
       std: 0.2593071699498008
+      b: 0.1599949207617327
       shape: (1280, 1, 1024)
   output:
     min: -19.020658493041992
@@ -2717,6 +3024,7 @@ decoder.classifier.classifier:
     avg_max: 8.032180467616302
     mean: -3.873352058817827
     std: 1.696852165054472
+    b: 1.3471277234594476
     shape: (1280, 1, 32317)
 decoder.dropout:
   inputs:
@@ -2727,6 +3035,7 @@ decoder.dropout:
       avg_max: 0.9094174789020626
       mean: 0.002039626916454153
       std: 0.22761719307769354
+      b: 0.10798135079575982
       shape: (1280, 1, 1024)
   output:
     min: -1.9940483570098877
@@ -2735,6 +3044,7 @@ decoder.dropout:
     avg_max: 0.9094174789020626
     mean: 0.002039626916454153
     std: 0.22761719307769354
+    b: 0.10798135079575982
     shape: (1280, 1, 1024)
 decoder.eltwiseadd_residuals.0:
   inputs:
@@ -2745,6 +3055,7 @@ decoder.eltwiseadd_residuals.0:
       avg_max: 0.743544528524527
       mean: 0.00032440792050908126
       std: 0.1314242965426167
+      b: 0.069381494656875
       shape: (1280, 1, 1024)
     1:
       min: -0.9999914765357971
@@ -2753,6 +3064,7 @@ decoder.eltwiseadd_residuals.0:
       avg_max: 0.7594633606377601
       mean: -0.0010860526439966734
       std: 0.13179261237432402
+      b: 0.05422022580535392
       shape: (1280, 1, 1024)
   output:
     min: -1.9940483570098877
@@ -2761,6 +3073,7 @@ decoder.eltwiseadd_residuals.0:
     avg_max: 0.9735018678260661
     mean: -0.0007616447304464125
     std: 0.1854876875589218
+    b: 0.10607970475815659
     shape: (1280, 1, 1024)
 decoder.eltwiseadd_residuals.1:
   inputs:
@@ -2771,6 +3084,7 @@ decoder.eltwiseadd_residuals.1:
       avg_max: 0.8186234360665419
       mean: -0.0031441434696200784
       std: 0.1694763855118817
+      b: 0.08618559386330027
       shape: (1280, 1, 1024)
     1:
       min: -1.9940483570098877
@@ -2779,6 +3093,7 @@ decoder.eltwiseadd_residuals.1:
       avg_max: 0.9735018678260661
       mean: -0.0007616447304464125
       std: 0.1854876875589218
+      b: 0.10607970475815659
       shape: (1280, 1, 1024)
   output:
     min: -2.9619157314300537
@@ -2787,6 +3102,7 @@ decoder.eltwiseadd_residuals.1:
     avg_max: 1.2828886617770356
     mean: -0.003905788197230935
     std: 0.2593071699498008
+    b: 0.1599949207617327
     shape: (1280, 1, 1024)
 decoder.attention_concats.0:
   inputs:
@@ -2797,6 +3113,7 @@ decoder.attention_concats.0:
       avg_max: 0.9952872082423628
       mean: 0.007966578123805529
       std: 0.32187307320175484
+      b: 0.16622043455835803
       shape: (1280, 1, 1024)
     1:
       min: -2.748584032058716
@@ -2805,6 +3122,7 @@ decoder.attention_concats.0:
       avg_max: 0.9287193868937127
       mean: 0.0004324376445557447
       std: 0.16600608798290178
+      b: 0.09215169849313716
       shape: (1280, 1, 1024)
   output:
     min: -2.748584032058716
@@ -2813,6 +3131,7 @@ decoder.attention_concats.0:
     avg_max: 1.1144092399752523
     mean: 0.004199507878490362
     std: 0.2561140031003674
+    b: 0.12828497891262
     shape: (1280, 1, 2048)
 decoder.attention_concats.1:
   inputs:
@@ -2823,6 +3142,7 @@ decoder.attention_concats.1:
       avg_max: 0.7594633606377601
       mean: -0.0010860526439966734
       std: 0.13179261237432402
+      b: 0.05422022580535392
       shape: (1280, 1, 1024)
     1:
       min: -2.748584032058716
@@ -2831,6 +3151,7 @@ decoder.attention_concats.1:
       avg_max: 0.9287193868937127
       mean: 0.0004324376445557447
       std: 0.16600608798290178
+      b: 0.09215169849313716
       shape: (1280, 1, 1024)
   output:
     min: -2.748584032058716
@@ -2839,6 +3160,7 @@ decoder.attention_concats.1:
     avg_max: 0.996185907755004
     mean: -0.00032680749604648707
     std: 0.14988080842341334
+    b: 0.07311449136082718
     shape: (1280, 1, 2048)
 decoder.attention_concats.2:
   inputs:
@@ -2849,6 +3171,7 @@ decoder.attention_concats.2:
       avg_max: 0.9735018678260661
       mean: -0.0007616447304464125
       std: 0.1854876875589218
+      b: 0.10607970475815659
       shape: (1280, 1, 1024)
     1:
       min: -2.748584032058716
@@ -2857,6 +3180,7 @@ decoder.attention_concats.2:
       avg_max: 0.9287193868937127
       mean: 0.0004324376445557447
       std: 0.16600608798290178
+      b: 0.09215169849313716
       shape: (1280, 1, 1024)
   output:
     min: -2.748584032058716
@@ -2865,4 +3189,5 @@ decoder.attention_concats.2:
     avg_max: 1.1189356212870456
     mean: -0.00016460354038312733
     std: 0.1760178086847606
+    b: 0.09911453349494868
     shape: (1280, 1, 2048)

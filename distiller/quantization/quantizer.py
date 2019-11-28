@@ -37,12 +37,14 @@ def has_bias(module):
 
 def hack_float_backup_parameter(module, name, num_bits):
     try:
-        data = dict(module.named_parameters())[name].data
+        param = dict(module.named_parameters())[name]
+        param_id = id(param)
     except KeyError:
         raise ValueError('Module has no Parameter named ' + name)
-    module.register_parameter(FP_BKP_PREFIX + name, nn.Parameter(data))
+    module.register_parameter(FP_BKP_PREFIX + name, param)
+    assert id(getattr(module, FP_BKP_PREFIX + name)) == param_id
     delattr(module, name)
-    module.register_buffer(name, torch.zeros_like(data))
+    module.register_buffer(name, torch.zeros_like(param))
 
     first = False
     if not hasattr(module, 'repr_mod'):
@@ -100,6 +102,10 @@ class Quantizer(object):
                 3.1 Gradients calculated with respect to q_weights
                 3.2 We also back-prop through the 'quantize' operation from step 1
             4. Update fp_weights with gradients calculated in step 3.2
+        Note:
+            The `overrides` dictionary assumes the keys are *not* the module names in the
+            `nn.DataParallel` case - i.e. without the `module.` prefix. e.g.:
+            module.conv1 -> OrderedDict([('conv1', OrderedDict(...))])
     """
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
@@ -147,7 +153,7 @@ class Quantizer(object):
             regex_overrides_str = '|'.join(['(^{0}$)'.format(pattern) for pattern in patterns])
             regex_overrides = re.compile(regex_overrides_str)
 
-        self.module_qbits_map = {}
+        self.module_qbits_map = {}  # type: OrderedDict[str, QBits]
         self.module_overrides_map = {}
         for module_full_name, module in model.named_modules():
             # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
@@ -171,7 +177,9 @@ class Quantizer(object):
         # Mapping from module type to function generating a replacement module suited for quantization
         # To be populated by child classes
         # Unspecified layer types return None by default.
-        self.replacement_factory = defaultdict(lambda: None)
+        self.replacement_factory = OrderedDict([(nn.Identity, None)])
+        self.default_repalcement_fn = None
+        self.replacement_blacklist = []
         # Pointer to parameters quantization function, triggered during training process
         # To be populated by child classes
         self.param_quantization_fn = None
@@ -224,6 +232,8 @@ class Quantizer(object):
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
 
+        model_device = distiller.model_device(self.model)
+
         self._pre_prepare_model(dummy_input)
 
         self._pre_process_container(self.model)
@@ -248,6 +258,12 @@ class Quantizer(object):
 
         self._post_prepare_model()
         self.model.is_quantized = True
+
+        # Re-transfer model to the device it was on, in case the quantizer created new parameters/buffers
+        self.model.to(model_device)
+
+        distiller.assign_layer_fq_names(self.model)
+
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
 
     def update_optimizer(self, new_optimizer=None):
@@ -255,9 +271,8 @@ class Quantizer(object):
         if new_optimizer is not None:
             self.optimizer = new_optimizer
         if self.optimizer:
-            optimizer_type = type(self.optimizer)
-            new_optimizer = optimizer_type(self._get_updated_optimizer_params_groups(), **self.optimizer.defaults)
-            self.optimizer.__setstate__({'param_groups': new_optimizer.param_groups})
+            for pg in self._get_new_optimizer_params_groups():
+                self.optimizer.add_param_group(pg)
 
     def _pre_prepare_model(self, dummy_input):
         pass
@@ -274,6 +289,9 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
+            if isinstance(module, tuple(self.replacement_blacklist)):
+                replace_msg(full_name)
+                continue
             if module in self.modules_processed:
                 previous_name, previous_wrapper = self.modules_processed[module]
                 warnings.warn("Module '{0}' references to same module as '{1}'."
@@ -286,15 +304,15 @@ class Quantizer(object):
                     replace_msg(full_name)
                 continue
             current_qbits = self.module_qbits_map[full_name]
-            if current_qbits.acts is None and current_qbits.wts is None:
-                if self.module_overrides_map[full_name]:
-                    raise ValueError("Adding overrides while not quantizing is not allowed.")
+            # TODO - Review necessity of the block below
+            if current_qbits.acts is None and current_qbits.wts is None and not self.module_overrides_map[full_name]:
                 # We indicate this module wasn't replaced by a wrapper
                 replace_msg(full_name)
                 self.modules_processed[module] = full_name, None
             else:
                 # We use a type hint comment to let IDEs know replace_fn is a function
-                replace_fn = self.replacement_factory[type(module)]  # type: Optional[Callable]
+                replace_fn = self.replacement_factory.get(type(module),
+                                                          self.default_repalcement_fn)  # type: Optional[Callable]
                 # If the replacement function wasn't specified - continue without replacing this module.
                 if replace_fn is not None:
                     valid_kwargs, invalid_kwargs = distiller.filter_kwargs(self.module_overrides_map[full_name],
@@ -304,34 +322,38 @@ class Quantizer(object):
                                             as override arguments for %s. Allowed kwargs: %s"""
                                         % (type(self), list(invalid_kwargs), type(module), list(valid_kwargs)))
                     new_module = replace_fn(module, full_name, self.module_qbits_map, **valid_kwargs)
-                    replace_msg(full_name, (module, new_module))
-                    # Add to history of prepared submodules
-                    self.modules_processed[module] = full_name, new_module
-                    setattr(container, name, new_module)
+                    if new_module != module:
+                        replace_msg(full_name, (module, new_module))
+                        # Add to history of prepared submodules
+                        self.modules_processed[module] = full_name, new_module
+                        setattr(container, name, new_module)
 
-                    # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
-                    if not distiller.has_children(module) and distiller.has_children(new_module):
-                        for sub_module_name, sub_module in new_module.named_modules():
-                            self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module), current_qbits)
-                        self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                        # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping
+                        if not distiller.has_children(module) and distiller.has_children(new_module):
+                            for sub_module_name, sub_module in new_module.named_modules():
+                                self._add_qbits_entry(full_name + '.' + sub_module_name, type(sub_module),
+                                                      current_qbits)
+                            self.module_qbits_map[full_name] = QBits(acts=current_qbits.acts, wts=None, bias=None)
+                    else:
+                        replace_msg(full_name)
+                        self.modules_processed[module] = full_name, None
 
             if distiller.has_children(module):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
 
-    def _get_updated_optimizer_params_groups(self):
+    def _get_new_optimizer_params_groups(self):
         """
-        Returns a list of model parameter groups and optimizer hyper-parameter overrides,
-        as expected by the __init__ function of torch.optim.Optimizer.
-        This is called after all model changes were made in prepare_model, in case an Optimizer instance was
-        passed to __init__.
+        If the quantizer adds new trainable parameters to the model, this function should return a list of one
+        or more parameter groups pertaining. Each parameter group is expected to be a dict in the format
+        expected by torch.optim.Optimizer.
+        For details, See https://pytorch.org/docs/stable/optim.html#per-parameter-options
 
         Subclasses which add parameters to the model should override as needed.
 
         :return: List of parameter groups
         """
-        # Default implementation - just return all model parameters as one group
-        return [{'params': self.model.parameters()}]
+        return list()
 
     def _post_prepare_model(self):
         pass
