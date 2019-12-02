@@ -23,7 +23,6 @@ import distiller
 from distiller.data_loggers import *
 import distiller.apputils as apputils
 import distiller.pruning
-import distiller.quantization
 import distiller.models
 from distiller.model_transforms import fold_batch_norms
 
@@ -60,6 +59,7 @@ def get_transform(train):
 
 def patch_fastrcnn(model):
     """
+    TODO - complete quantization example
     Partial patch for torchvision's FastRCNN models to allow quantization, by replacing all FrozenBatchNorm2d
     with regular nn.BatchNorm2d-s.
     Args:
