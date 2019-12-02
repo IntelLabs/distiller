@@ -73,7 +73,7 @@ def main():
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
-    init_knowledge_distillation(app.args,  app.model, app.compression_scheduler)
+    init_knowledge_distillation(app.args, app.model, app.compression_scheduler)
     app.run_training_loop()
     # Finally run results on the test set
     return app.test()
@@ -98,7 +98,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                                 os.path.join(msglogger.logdir, args.export_onnx),
                                                 args.dataset, add_softmax=True, verbose=False)
         do_exit = True
-    elif args.qe_calibration:
+    elif args.qe_calibration and not (args.evaluate and args.quantize_eval):
         classifier.acts_quant_stats_collection(model, criterion, pylogger, args)
         do_exit = True
     elif args.activation_histograms:
@@ -111,9 +111,9 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         do_exit = True
     elif args.evaluate:
         test_loader = load_test_data(args)
-        activations_collectors = classifier.create_activation_stats_collectors(model, *args.activation_stats)
-        classifier.evaluate_model(model, criterion, test_loader, pylogger, activations_collectors,
-                                  args, compression_scheduler)
+        classifier.evaluate_model(test_loader, model, criterion, pylogger,
+            classifier.create_activation_stats_collectors(model, *args.activation_stats),
+            args, scheduler=compression_scheduler)
         do_exit = True
     elif args.thinnify:
         assert args.resumed_checkpoint_path is not None, \
@@ -158,7 +158,7 @@ def early_exit_init(args):
 class ClassifierCompressorSampleApp(classifier.ClassifierCompressor):
     def __init__(self, args, script_dir):
         super().__init__(args, script_dir)
-        early_exit_init(args)
+        early_exit_init(self.args)
         # Save the randomly-initialized model before training (useful for lottery-ticket method)
         if args.save_untrained_model:
             ckpt_name = '_'.join((self.args.name or "", "untrained"))

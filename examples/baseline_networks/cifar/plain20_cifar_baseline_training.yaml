@@ -31,7 +31,7 @@
 # time python3  compress_classifier.py --arch=plain20_cifar ../../../data.cifar -p=50 --lr=0.1 --epochs=180 --batch=128 --compress=../baseline_networks/cifar/plain20_cifar_baseline_training.yaml --gpu=0 -j=1 --deterministic
 #
 # Results:
-#   Top1 = 90.18 - which is 0.3% lower than ower goal.
+#   Top1 = 90.18 - which is 0.3% lower than owr goal.
 #   *For better results, with much shorter training, see the explanation after the tables below.
 #
 # Parameters:

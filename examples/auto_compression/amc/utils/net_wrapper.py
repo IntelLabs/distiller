@@ -26,7 +26,7 @@ from distiller import normalize_module_name, SummaryGraph
 
 __all__ = ["NetworkWrapper"]
 msglogger = logging.getLogger()
-
+ALMOST_ONE = 0.9999
 
 class NetworkWrapper(object):
     def __init__(self, model, app_args, services, modules_list, pruning_pattern):

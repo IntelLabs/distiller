@@ -74,9 +74,9 @@ class _RankedStructureParameterPruner(_ParameterPruner):
             model = meta['model']
         except TypeError:
             model = None
-        return self.prune_to_target_sparsity(param, param_name, zeros_mask_dict, fraction_to_prune, model)
+        return self._set_param_mask_by_sparsity_target(param, param_name, zeros_mask_dict, fraction_to_prune, model)
 
-    def prune_to_target_sparsity(self, param, param_name, zeros_mask_dict, target_sparsity, model):
+    def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model):
         if not self.is_supported(param_name):
             return
 
@@ -127,12 +127,10 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
     def prune_group(self, fraction_to_prune, param, param_name, zeros_mask_dict, model=None, binary_map=None):
         if fraction_to_prune == 0:
             return
-        if self.group_type in ['3D', 'Filters']:
+        if self.group_type in ('3D', 'Filters'):
             group_pruning_fn = partial(self.rank_and_prune_filters, noise=self.noise)
-        elif self.group_type == 'Channels':
+        elif self.group_type in ('Channels', 'Rows'):
             group_pruning_fn = partial(self.rank_and_prune_channels, noise=self.noise)
-        elif self.group_type == 'Rows':
-            group_pruning_fn = self.rank_and_prune_rows
         elif self.group_type == 'Blocks':
             group_pruning_fn = partial(self.rank_and_prune_blocks, block_shape=self.block_shape)
 
@@ -149,8 +147,6 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
         if binary_map is None:
             bottomk_channels, channel_mags = distiller.norms.rank_channels(param, group_size, magnitude_fn,
                                                                            fraction_to_prune, rounding_fn, noise)
-            # bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(
-            #     magnitude_fn, fraction_to_prune, param, group_size, rounding_fn, noise)
             if bottomk_channels is None:
                 # Empty list means that fraction_to_prune is too low to prune anything
                 return
@@ -183,43 +179,6 @@ class LpRankedStructureParameterPruner(_RankedStructureParameterPruner):
 
         if zeros_mask_dict is not None:
             mask, _ = distiller.thresholding.expand_binary_map(param, 'Filters', binary_map)
-            zeros_mask_dict[param_name].mask = mask
-            msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f",
-                           magnitude_fn, param_name,
-                           distiller.sparsity(mask),
-                           fraction_to_prune)
-        return binary_map
-
-    @staticmethod
-    def rank_and_prune_rows(fraction_to_prune, param, param_name,
-                            zeros_mask_dict, model=None, binary_map=None,
-                            magnitude_fn=distiller.norms.l1_norm, group_size=1):
-        """Prune the rows of a matrix, based on ranked L1-norms of the matrix rows.
-
-        PyTorch stores the weights matrices in a transposed format.  I.e. before performing GEMM, a matrix is
-        transposed.  This is because the output is computed as follows:
-            y = x(W^T) + b ; where W^T is the transpose of W
-
-        Removing input_channels from W^T, is removing rows of W^T, which is removing columns of W.
-
-        To deal with this rotation, we can either transpose the matrix and then proceed to compute the masks
-        as usual, or we can treat columns as rows, and rows as columns :-(.
-        We choose the latter, because transposing very large matrices can be detrimental to performance.  Note
-        that computing mean L1-norm of columns is also not optimal, because consecutive column elements are far
-        away from each other in memory, and this means poor use of caches and system memory.
-        """
-        if binary_map is None:
-            bottomk_cols, cols_mags = distiller.norms.rank_cols(param, group_size, magnitude_fn, fraction_to_prune,
-                                                                rounding_fn=math.floor, noise=None)
-            if bottomk_cols is None:
-                # Empty list means that fraction_to_prune is too low to prune anything
-                msglogger.info("Too few cols - can't prune %.1f%% cols", 100 * fraction_to_prune)
-                return
-            threshold = bottomk_cols[-1]
-            binary_map = cols_mags.gt(threshold).type(param.data.type())
-
-        if zeros_mask_dict is not None:
-            mask, _ = distiller.thresholding.expand_binary_map(param, 'Cols', binary_map)
             zeros_mask_dict[param_name].mask = mask
             msglogger.info("%sRankedStructureParameterPruner - param: %s pruned=%.3f goal=%.3f",
                            magnitude_fn, param_name,
@@ -687,14 +646,8 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
                                 noise=0):
         assert binary_map is None
         if binary_map is None:
-            op_type = 'conv' if param.dim() == 4 else 'fc'
-            if op_type == 'conv':
-                bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_channels(
-                    magnitude_fn, fraction_to_prune, param, group_size, rounding_fn, noise)
-
-            else:
-                bottomk_channels, channel_mags = LpRankedStructureParameterPruner.rank_cols(
-                     magnitude_fn, fraction_to_prune, param)
+            bottomk_channels, channel_mags = distiller.norms.rank_channels(param, group_size, magnitude_fn,
+                                                                           fraction_to_prune, rounding_fn, noise)
 
             # Todo: this little piece of code can be refactored
             if bottomk_channels is None:
@@ -703,7 +656,6 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
 
             threshold = bottomk_channels[-1]
             binary_map = channel_mags.gt(threshold)
-
 
             # These are the indices of channels we want to keep
             indices = binary_map.nonzero().squeeze()
@@ -720,6 +672,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             except AttributeError:
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
 
+            op_type = 'conv' if param.dim() == 4 else 'fc'
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
             # channels from the input.  Then we perform the MSE regression to generate
@@ -757,8 +710,8 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
         if zeros_mask_dict is not None:
             binary_map = binary_map.type(param.type())
             if op_type == 'conv':
-                zeros_mask_dict[param_name].mask = _ = distiller.thresholding.expand_binary_map(param,
-                                                                                                'Channels', binary_map)
+                zeros_mask_dict[param_name].mask, _ = distiller.thresholding.expand_binary_map(param,
+                                                                                               'Channels', binary_map)
                 msglogger.info("FMReconstructionChannelPruner - param: %s pruned=%.3f goal=%.3f (%d/%d)",
                                param_name,
                                distiller.sparsity_ch(zeros_mask_dict[param_name].mask),

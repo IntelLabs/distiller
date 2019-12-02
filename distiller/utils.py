@@ -21,6 +21,7 @@ with some random helper functions.
 """
 import argparse
 from collections import OrderedDict
+import contextlib
 from copy import deepcopy
 import logging
 import operator
@@ -516,6 +517,8 @@ def log_activation_statistics(epoch, phase, loggers, collector):
     """Log information about the sparsity of the activations"""
     if collector is None:
         return
+    if loggers is None:
+        return
     for logger in loggers:
         logger.log_activation_statistic(phase, collector.stat_name, collector.value(), epoch)
 
@@ -644,6 +647,15 @@ def make_non_parallel_copy(model):
     return new_model
 
 
+@contextlib.contextmanager
+def get_nonparallel_clone_model(model):
+    clone_model = make_non_parallel_copy(model)
+    try:
+        yield clone_model
+    finally:
+        del clone_model
+
+
 def set_seed(seed):
     """Seed the PRNG for the CPU, Cuda, numpy and Python"""
     torch.manual_seed(seed)
@@ -740,34 +752,5 @@ def convert_tensors_recursively_to(val, *args, **kwargs):
     return val
 
 
-# TODO: Is this needed?
-def model_setattr(model, attr_name, val, register=False):
-    """
-    Sets attribute of a model, through the entire hierarchy.
-    Args:
-        model (nn.Module): the model.
-        attr_name (str): the attribute name as shown by model.named_<parameters/modules/buffers>()
-        val: the value of the attribute
-        register (bool): if True - register_buffer(val) if val is a torch.Tensor and
-          register_parameter(val) if it's an nn.Parameter.
-    """
-    def split_name(name):
-        if '.' in name:
-            return name.rsplit('.', 1)
-        else:
-            return '', name
-    modules_dict = OrderedDict(model.named_modules())
-    lowest_depth_container_name, lowest_depth_attr_name = split_name(attr_name)
-    while lowest_depth_container_name and lowest_depth_container_name not in modules_dict:
-        container_name, attr = split_name(lowest_depth_container_name)
-        lowest_depth_container_name = container_name
-        lowest_depth_attr_name = '%s%s' % (attr, lowest_depth_attr_name)
-    lowest_depth_container = modules_dict[lowest_depth_container_name]  # type: nn.Module
-
-    if register and torch.is_tensor(val):
-        if isinstance(val, nn.Parameter):
-            lowest_depth_container.register_parameter(lowest_depth_attr_name, val)
-        else:
-            lowest_depth_container.register_buffer(lowest_depth_attr_name, val)
-    else:
-        setattr(lowest_depth_container, lowest_depth_attr_name, val)
+def param_name_2_module_name(param_name):
+    return '.'.join(param_name.split('.')[:-1])
