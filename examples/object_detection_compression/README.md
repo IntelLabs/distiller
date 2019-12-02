@@ -40,10 +40,10 @@ This also promises that the pruning masks remain identical on all the nodes.
  Example Multi GPU Command Line -  
  
     python -m torch.distributed.launch --nproc_per_node=4 --use_env compress_detector.py --data-path /path/to/dataset.COCO \
-     --compress maskrcnn.scheduler_agp.yaml --pretrained --world-size 4 --batch-size 4 --epochs 80
+     --compress maskrcnn.scheduler_agp.yaml --pretrained --world-size 4 --batch-size 2 --epochs 80
 
 Since the dataset is large and FasterRCNN models are compute heavy, we strongly recommend
-running the script on a Multi GPU environment. Keep in mind that the multi-GPU case is also 
+running the script on a Multi GPU environment. 
 
 The default model is `torchvision.models.detection.maskrcnn_resnet50_fpn`, you can specify 
 any model that is part of `torchvision.models.detection` using
