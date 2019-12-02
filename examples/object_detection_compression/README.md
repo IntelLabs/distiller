@@ -35,11 +35,11 @@ This also promises that the pruning masks remain identical on all the nodes.
  
  Example Single GPU Command Line - 
  
-    python train.py --data-path /path/to/dataset.COCO --pretrained --compress maskrcnn.scheduler_agp.non_parallel.yaml
+    python compress_detector.py --data-path /path/to/dataset.COCO --pretrained --compress maskrcnn.scheduler_agp.non_parallel.yaml
 
  Example Multi GPU Command Line -  
  
-    python -m torch.distributed.launch --nproc_per_node=4 --use_env train.py --data-path /path/to/dataset.COCO \
+    python -m torch.distributed.launch --nproc_per_node=4 --use_env compress_detector.py --data-path /path/to/dataset.COCO \
      --compress maskrcnn.scheduler_agp.yaml --pretrained --world-size 4 --batch-size 4 --epochs 80
 
 Since the dataset is large and FasterRCNN models are compute heavy, we strongly recommend
