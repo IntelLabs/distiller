@@ -1,3 +1,7 @@
+# This code is originally from:
+#   https://github.com/pytorch/vision/tree/v0.4.2/references/detection
+# (old commit)
+# It contains code to support compression (distiller)
 import math
 import sys
 import time
@@ -8,7 +12,6 @@ import torchvision.models.detection.mask_rcnn
 from coco_utils import get_coco_api_from_dataset
 from coco_eval import CocoEvaluator
 import utils
-import distiller
 
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, compression_scheduler=None):

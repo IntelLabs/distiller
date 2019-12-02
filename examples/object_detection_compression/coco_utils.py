@@ -1,3 +1,5 @@
+# This code is originally from:
+#   https://github.com/pytorch/vision/tree/v0.4.2/references/detection
 import copy
 import os
 from PIL import Image

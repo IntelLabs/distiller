@@ -1,3 +1,6 @@
+# This code is originally from:
+#   https://github.com/pytorch/vision/tree/v0.4.2/references/detection/train.py
+# It contains code to support compression (distiller)
 r"""PyTorch Detection Training.
 
 To run in a multi-gpu environment, use the distributed launcher::
