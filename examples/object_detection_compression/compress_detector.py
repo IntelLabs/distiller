@@ -280,7 +280,7 @@ def create_activation_stats_collectors(model, *phases):
 
 
 def add_distiller_compression_args(parser):
-    SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
+    SUMMARY_CHOICES = ['sparsity', 'model', 'modules']
     distiller_parser = parser.add_argument_group('Distiller related arguemnts')
     distiller_parser.add_argument('--summary', type=lambda s: s.lower(), choices=SUMMARY_CHOICES, action='append',
                         help='print a summary of the model, and exit - options: | '.join(SUMMARY_CHOICES))
