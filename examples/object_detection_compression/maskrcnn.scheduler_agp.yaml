@@ -1,0 +1,267 @@
+#
+# Command line:
+# python -m torch.distributed.launch --nproc_per_node=$NGPU --use_env compress_detector.py --data-path $DATASET_COCO \
+#     --compress maskrcnn.scheduler_agp.yaml --world-size $NGPU
+#
+#Parameters:
+#+----+--------------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+#|    | Name                                                   | Shape              |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
+#|----+--------------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------|
+#|  0 | module.backbone.body.conv1.weight                      | (64, 3, 7, 7)      |          9408 |           9408 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.12322 | -0.00050 |    0.07605 |
+#|  1 | module.backbone.body.layer1.0.conv1.weight             | (64, 64, 1, 1)     |          4096 |           1024 |    0.00000 |    0.00000 |  3.12500 | 75.00000 |  7.81250 |   75.00000 | 0.06810 | -0.00616 |    0.02771 |
+#|  2 | module.backbone.body.layer1.0.conv2.weight             | (64, 64, 3, 3)     |         36864 |           9216 |    0.00000 |    0.00000 |  7.81250 | 32.93457 |  6.25000 |   75.00000 | 0.02777 |  0.00070 |    0.01135 |
+#|  3 | module.backbone.body.layer1.0.conv3.weight             | (256, 64, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 |  6.25000 | 75.00000 | 12.10938 |   75.00000 | 0.03366 |  0.00035 |    0.01453 |
+#|  4 | module.backbone.body.layer1.0.downsample.0.weight      | (256, 64, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 |  1.56250 | 75.00000 | 13.28125 |   75.00000 | 0.05548 | -0.00382 |    0.02256 |
+#|  5 | module.backbone.body.layer1.1.conv1.weight             | (64, 256, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 | 11.71875 | 75.00000 |  6.25000 |   75.00000 | 0.02841 |  0.00126 |    0.01292 |
+#|  6 | module.backbone.body.layer1.1.conv2.weight             | (64, 64, 3, 3)     |         36864 |           9216 |    0.00000 |    0.00000 |  6.25000 | 26.46484 |  0.00000 |   75.00000 | 0.02650 |  0.00022 |    0.01178 |
+#|  7 | module.backbone.body.layer1.1.conv3.weight             | (256, 64, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 |  0.00000 | 75.00000 |  3.51562 |   75.00000 | 0.03090 |  0.00000 |    0.01370 |
+#|  8 | module.backbone.body.layer1.2.conv1.weight             | (64, 256, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 |  7.03125 | 75.00000 |  0.00000 |   75.00000 | 0.02725 |  0.00012 |    0.01270 |
+#|  9 | module.backbone.body.layer1.2.conv2.weight             | (64, 64, 3, 3)     |         36864 |           9216 |    0.00000 |    0.00000 |  0.00000 | 21.19141 |  0.00000 |   75.00000 | 0.02828 | -0.00049 |    0.01323 |
+#| 10 | module.backbone.body.layer1.2.conv3.weight             | (256, 64, 1, 1)    |         16384 |           4096 |    0.00000 |    0.00000 |  0.00000 | 75.00000 |  1.17188 |   75.00000 | 0.02999 | -0.00228 |    0.01325 |
+#| 11 | module.backbone.body.layer2.0.conv1.weight             | (128, 256, 1, 1)   |         32768 |           8192 |    0.00000 |    0.00000 |  3.90625 | 75.00000 |  0.00000 |   75.00000 | 0.04454 |  0.00213 |    0.01983 |
+#| 12 | module.backbone.body.layer2.0.conv2.weight             | (128, 128, 3, 3)   |        147456 |          36864 |    0.00000 |    0.00000 |  0.00000 | 28.43018 |  0.00000 |   75.00000 | 0.02019 |  0.00093 |    0.00941 |
+#| 13 | module.backbone.body.layer2.0.conv3.weight             | (512, 128, 1, 1)   |         65536 |          16384 |    0.00000 |    0.00000 |  0.00000 | 75.00000 | 28.90625 |   75.00000 | 0.03100 |  0.00207 |    0.01292 |
+#| 14 | module.backbone.body.layer2.0.downsample.0.weight      | (512, 256, 1, 1)   |        131072 |          19661 |    0.00000 |    0.00000 |  0.00000 | 84.99985 | 15.62500 |   84.99985 | 0.01999 |  0.00119 |    0.00595 |
+#| 15 | module.backbone.body.layer2.1.conv1.weight             | (128, 512, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 | 17.57812 | 84.99908 |  0.00000 |   84.99908 | 0.01914 |  0.00124 |    0.00620 |
+#| 16 | module.backbone.body.layer2.1.conv2.weight             | (128, 128, 3, 3)   |        147456 |          22119 |    0.00000 |    0.00000 |  0.00000 | 53.41187 |  0.00000 |   84.99959 | 0.01481 |  0.00072 |    0.00531 |
+#| 17 | module.backbone.body.layer2.1.conv3.weight             | (512, 128, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  0.00000 | 84.99908 | 38.28125 |   84.99908 | 0.02156 |  0.00029 |    0.00685 |
+#| 18 | module.backbone.body.layer2.2.conv1.weight             | (128, 512, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  4.29688 | 84.99908 |  0.00000 |   84.99908 | 0.01961 |  0.00100 |    0.00688 |
+#| 19 | module.backbone.body.layer2.2.conv2.weight             | (128, 128, 3, 3)   |        147456 |          22119 |    0.00000 |    0.00000 |  0.00000 | 41.84570 |  0.00000 |   84.99959 | 0.01564 |  0.00037 |    0.00562 |
+#| 20 | module.backbone.body.layer2.2.conv3.weight             | (512, 128, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  0.00000 | 84.99908 |  6.44531 |   84.99908 | 0.02155 |  0.00039 |    0.00747 |
+#| 21 | module.backbone.body.layer2.3.conv1.weight             | (128, 512, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  4.10156 | 84.99908 |  0.00000 |   84.99908 | 0.02108 |  0.00067 |    0.00752 |
+#| 22 | module.backbone.body.layer2.3.conv2.weight             | (128, 128, 3, 3)   |        147456 |          22119 |    0.00000 |    0.00000 |  0.00000 | 36.71265 |  0.00000 |   84.99959 | 0.01695 |  0.00009 |    0.00623 |
+#| 23 | module.backbone.body.layer2.3.conv3.weight             | (512, 128, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  0.00000 | 84.99908 | 24.80469 |   84.99908 | 0.02311 | -0.00029 |    0.00796 |
+#| 24 | module.backbone.body.layer3.0.conv1.weight             | (256, 512, 1, 1)   |        131072 |          19661 |    0.00000 |    0.00000 |  0.19531 | 84.99985 |  0.00000 |   84.99985 | 0.02292 |  0.00031 |    0.00801 |
+#| 25 | module.backbone.body.layer3.0.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 47.98279 |  0.00000 |   84.99993 | 0.01155 |  0.00032 |    0.00421 |
+#| 26 | module.backbone.body.layer3.0.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  6.34766 |   84.99985 | 0.01704 |  0.00087 |    0.00601 |
+#| 27 | module.backbone.body.layer3.0.downsample.0.weight      | (1024, 512, 1, 1)  |        524288 |          78644 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  4.39453 |   84.99985 | 0.01072 |  0.00059 |    0.00370 |
+#| 28 | module.backbone.body.layer3.1.conv1.weight             | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  9.08203 | 84.99985 |  0.00000 |   84.99985 | 0.01141 |  0.00051 |    0.00392 |
+#| 29 | module.backbone.body.layer3.1.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 46.10596 |  0.00000 |   84.99993 | 0.00989 |  0.00000 |    0.00357 |
+#| 30 | module.backbone.body.layer3.1.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  1.36719 |   84.99985 | 0.01376 | -0.00064 |    0.00485 |
+#| 31 | module.backbone.body.layer3.2.conv1.weight             | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  2.24609 | 84.99985 |  0.00000 |   84.99985 | 0.01204 |  0.00033 |    0.00413 |
+#| 32 | module.backbone.body.layer3.2.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 37.43591 |  0.00000 |   84.99993 | 0.01000 | -0.00007 |    0.00365 |
+#| 33 | module.backbone.body.layer3.2.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  1.85547 |   84.99985 | 0.01354 | -0.00039 |    0.00477 |
+#| 34 | module.backbone.body.layer3.3.conv1.weight             | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.97656 | 84.99985 |  0.00000 |   84.99985 | 0.01287 |  0.00016 |    0.00452 |
+#| 35 | module.backbone.body.layer3.3.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 36.71875 |  0.00000 |   84.99993 | 0.01004 |  0.00000 |    0.00368 |
+#| 36 | module.backbone.body.layer3.3.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  6.64062 |   84.99985 | 0.01315 | -0.00024 |    0.00462 |
+#| 37 | module.backbone.body.layer3.4.conv1.weight             | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.29297 | 84.99985 |  0.00000 |   84.99985 | 0.01321 |  0.00005 |    0.00468 |
+#| 38 | module.backbone.body.layer3.4.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 38.03711 |  0.00000 |   84.99993 | 0.01016 | -0.00003 |    0.00370 |
+#| 39 | module.backbone.body.layer3.4.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  8.00781 |   84.99985 | 0.01311 | -0.00017 |    0.00457 |
+#| 40 | module.backbone.body.layer3.5.conv1.weight             | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.29297 | 84.99985 |  0.00000 |   84.99985 | 0.01289 |  0.00021 |    0.00455 |
+#| 41 | module.backbone.body.layer3.5.conv2.weight             | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 40.31677 |  0.00000 |   84.99993 | 0.00959 |  0.00013 |    0.00349 |
+#| 42 | module.backbone.body.layer3.5.conv3.weight             | (1024, 256, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  5.76172 |   84.99985 | 0.01286 | -0.00098 |    0.00458 |
+#| 43 | module.backbone.body.layer4.0.conv1.weight             | (512, 1024, 1, 1)  |        524288 |          52429 |    0.00000 |    0.00000 |  0.00000 | 89.99996 |  0.00000 |   89.99996 | 0.01248 |  0.00061 |    0.00369 |
+#| 44 | module.backbone.body.layer4.0.conv2.weight             | (512, 512, 3, 3)   |       2359296 |         235930 |    0.00000 |    0.00000 |  0.00000 | 57.85141 |  0.00000 |   89.99998 | 0.00621 |  0.00005 |    0.00189 |
+#| 45 | module.backbone.body.layer4.0.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |         104858 |    0.00000 |    0.00000 |  0.00000 | 89.99996 |  0.29297 |   89.99996 | 0.00865 |  0.00026 |    0.00259 |
+#| 46 | module.backbone.body.layer4.0.downsample.0.weight      | (2048, 1024, 1, 1) |       2097152 |         209716 |    0.00000 |    0.00000 |  0.00000 | 89.99996 |  0.04883 |   89.99996 | 0.00611 | -0.00007 |    0.00184 |
+#| 47 | module.backbone.body.layer4.1.conv1.weight             | (512, 2048, 1, 1)  |       1048576 |         104858 |    0.00000 |    0.00000 |  0.24414 | 89.99996 |  0.00000 |   89.99996 | 0.00817 |  0.00041 |    0.00238 |
+#| 48 | module.backbone.body.layer4.1.conv2.weight             | (512, 512, 3, 3)   |       2359296 |         235930 |    0.00000 |    0.00000 |  0.00000 | 57.28302 |  0.00000 |   89.99998 | 0.00649 |  0.00001 |    0.00196 |
+#| 49 | module.backbone.body.layer4.1.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |         104858 |    0.00000 |    0.00000 |  0.00000 | 89.99996 |  0.24414 |   89.99996 | 0.00867 | -0.00013 |    0.00259 |
+#| 50 | module.backbone.body.layer4.2.conv1.weight             | (512, 2048, 1, 1)  |       1048576 |         104858 |    0.00000 |    0.00000 |  0.04883 | 89.99996 |  0.00000 |   89.99996 | 0.00876 |  0.00056 |    0.00259 |
+#| 51 | module.backbone.body.layer4.2.conv2.weight             | (512, 512, 3, 3)   |       2359296 |         235930 |    0.00000 |    0.00000 |  0.00000 | 59.87663 |  0.00000 |   89.99998 | 0.00634 |  0.00001 |    0.00189 |
+#| 52 | module.backbone.body.layer4.2.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |         157287 |    0.00000 |    0.00000 |  0.00000 | 84.99994 |  0.04883 |   84.99994 | 0.00883 | -0.00022 |    0.00311 |
+#| 53 | module.backbone.fpn.inner_blocks.0.weight              | (256, 256, 1, 1)   |         65536 |           9831 |    0.00000 |    0.00000 |  9.37500 | 84.99908 |  0.00000 |   84.99908 | 0.00920 |  0.00016 |    0.00340 |
+#| 54 | module.backbone.fpn.inner_blocks.1.weight              | (256, 512, 1, 1)   |        131072 |          19661 |    0.00000 |    0.00000 |  0.58594 | 84.99985 |  0.00000 |   84.99985 | 0.01087 |  0.00008 |    0.00403 |
+#| 55 | module.backbone.fpn.inner_blocks.2.weight              | (256, 1024, 1, 1)  |        262144 |          39322 |    0.00000 |    0.00000 |  0.09766 | 84.99985 |  0.00000 |   84.99985 | 0.00976 | -0.00003 |    0.00358 |
+#| 56 | module.backbone.fpn.inner_blocks.3.weight              | (256, 2048, 1, 1)  |        524288 |          78644 |    0.00000 |    0.00000 |  0.00000 | 84.99985 |  0.00000 |   84.99985 | 0.01260 | -0.00003 |    0.00470 |
+#| 57 | module.backbone.fpn.layer_blocks.0.weight              | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 43.46161 |  0.00000 |   84.99993 | 0.00841 | -0.00003 |    0.00318 |
+#| 58 | module.backbone.fpn.layer_blocks.1.weight              | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 50.99182 |  0.00000 |   84.99993 | 0.00608 | -0.00001 |    0.00230 |
+#| 59 | module.backbone.fpn.layer_blocks.2.weight              | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 50.06256 |  0.00000 |   84.99993 | 0.00655 | -0.00001 |    0.00248 |
+#| 60 | module.backbone.fpn.layer_blocks.3.weight              | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 49.36371 |  0.00000 |   84.99993 | 0.00635 | -0.00003 |    0.00240 |
+#| 61 | module.rpn.head.conv.weight                            | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 41.99219 |  0.00000 |   84.99993 | 0.00580 |  0.00014 |    0.00215 |
+#| 62 | module.rpn.head.cls_logits.weight                      | (3, 256, 1, 1)     |           768 |            768 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.15008 | -0.01621 |    0.11047 |
+#| 63 | module.rpn.head.bbox_pred.weight                       | (12, 256, 1, 1)    |          3072 |           3072 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03009 | -0.00090 |    0.01457 |
+#| 64 | module.roi_heads.box_head.fc6.weight                   | (1024, 12544)      |      12845056 |        1926759 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |   85.00000 | 0.00312 |  0.00001 |    0.00115 |
+#| 65 | module.roi_heads.box_head.fc7.weight                   | (1024, 1024)       |       1048576 |         157287 |    1.66016 |    0.00000 |  0.00000 |  1.66016 |  0.00000 |   84.99994 | 0.01011 | -0.00015 |    0.00357 |
+#| 66 | module.roi_heads.box_predictor.cls_score.weight        | (91, 1024)         |         93184 |          93184 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03252 | -0.00000 |    0.02113 |
+#| 67 | module.roi_heads.box_predictor.bbox_pred.weight        | (364, 1024)        |        372736 |         372736 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01165 |  0.00011 |    0.00589 |
+#| 68 | module.roi_heads.mask_head.mask_fcn1.weight            | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 40.37628 |  0.00000 |   84.99993 | 0.00778 | -0.00003 |    0.00290 |
+#| 69 | module.roi_heads.mask_head.mask_fcn2.weight            | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 45.38727 |  0.00000 |   84.99993 | 0.00810 | -0.00004 |    0.00294 |
+#| 70 | module.roi_heads.mask_head.mask_fcn3.weight            | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.00000 | 50.18463 |  1.95312 |   84.99993 | 0.00791 | -0.00003 |    0.00282 |
+#| 71 | module.roi_heads.mask_head.mask_fcn4.weight            | (256, 256, 3, 3)   |        589824 |          88474 |    0.00000 |    0.00000 |  0.78125 | 61.83777 | 19.92188 |   84.99993 | 0.00762 |  0.00054 |    0.00259 |
+#| 72 | module.roi_heads.mask_predictor.conv5_mask.weight      | (256, 256, 2, 2)   |        262144 |          39322 |    0.00000 |    0.00000 |  7.81250 | 76.00861 | 19.53125 |   84.99985 | 0.01107 |  0.00141 |    0.00371 |
+#| 73 | module.roi_heads.mask_predictor.mask_fcn_logits.weight | (91, 256, 1, 1)    |         23296 |          23296 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.04107 | -0.00201 |    0.02535 |
+#| 74 | Total sparsity:                                        | -                  |      44395200 |        6437593 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |   85.49935 | 0.00000 |  0.00000 |    0.00000 |
+#+----+--------------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+#Total sparsity: 85.50
+#Results:
+# Baseline:
+  #IoU metric: bbox
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.379
+  # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.592
+  # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.410
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.215
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.414
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.495
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.312
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.494
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.518
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.321
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.559
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.660
+  #IoU metric: segm
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.346
+  # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.561
+  # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.367
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.156
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.373
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.509
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.294
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.454
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.474
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.269
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.515
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.631
+
+#Post Pruning:
+  #IoU metric: bbox
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.352
+  # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.558
+  # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.376
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.188
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.389
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.460
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.302
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.481
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.504
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.300
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.546
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.646
+  #IoU metric: segm
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.320
+  # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.525
+  # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.338
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.134
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.346
+  # Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.482
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.284
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.439
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.459
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.250
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.499
+  # Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.618
+
+version: 1
+
+pruners:
+
+  fc_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.85
+    weights: [
+      module.roi_heads.box_head.fc6.weight,
+      module.roi_heads.box_head.fc7.weight
+    ]
+
+  agp_pruner_75:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.75
+    weights: [
+      module.backbone.body.layer1.0.conv1.weight,
+      module.backbone.body.layer1.0.conv2.weight,
+      module.backbone.body.layer1.0.conv3.weight,
+      module.backbone.body.layer1.0.downsample.0.weight,
+      module.backbone.body.layer1.1.conv1.weight,
+      module.backbone.body.layer1.1.conv2.weight,
+      module.backbone.body.layer1.1.conv3.weight,
+      module.backbone.body.layer1.2.conv1.weight,
+      module.backbone.body.layer1.2.conv2.weight,
+      module.backbone.body.layer1.2.conv3.weight,
+      module.backbone.body.layer2.0.conv1.weight,
+      module.backbone.body.layer2.0.conv2.weight,
+      module.backbone.body.layer2.0.conv3.weight,]
+
+  agp_pruner_85:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.85
+    weights: [
+      module.backbone.body.layer2.0.downsample.0.weight,
+      module.backbone.body.layer2.1.conv1.weight,
+      module.backbone.body.layer2.1.conv2.weight,
+      module.backbone.body.layer2.1.conv3.weight,
+      module.backbone.body.layer2.2.conv1.weight,
+      module.backbone.body.layer2.2.conv2.weight,
+      module.backbone.body.layer2.2.conv3.weight,
+      module.backbone.body.layer2.3.conv1.weight,
+      module.backbone.body.layer2.3.conv2.weight,
+      module.backbone.body.layer2.3.conv3.weight,
+      module.backbone.body.layer3.0.conv1.weight,
+      module.backbone.body.layer3.0.conv2.weight,
+      module.backbone.body.layer3.0.conv3.weight,
+      module.backbone.body.layer3.0.downsample.0.weight,
+      module.backbone.body.layer3.1.conv1.weight,
+      module.backbone.body.layer3.1.conv2.weight,
+      module.backbone.body.layer3.1.conv3.weight,
+      module.backbone.body.layer3.2.conv1.weight,
+      module.backbone.body.layer3.2.conv2.weight,
+      module.backbone.body.layer3.2.conv3.weight,
+      module.backbone.body.layer3.3.conv1.weight,
+      module.backbone.body.layer3.3.conv2.weight,
+      module.backbone.body.layer3.3.conv3.weight,
+      module.backbone.body.layer3.4.conv1.weight,
+      module.backbone.body.layer3.4.conv2.weight,
+      module.backbone.body.layer3.4.conv3.weight,
+      module.backbone.body.layer3.5.conv1.weight,
+      module.backbone.body.layer3.5.conv2.weight,
+      module.backbone.body.layer3.5.conv3.weight,
+      module.backbone.body.layer4.2.conv3.weight,
+      module.backbone.fpn.inner_blocks.0.weight,
+      module.backbone.fpn.inner_blocks.1.weight,
+      module.backbone.fpn.inner_blocks.2.weight,
+      module.backbone.fpn.inner_blocks.3.weight,
+      module.backbone.fpn.layer_blocks.0.weight,
+      module.backbone.fpn.layer_blocks.1.weight,
+      module.backbone.fpn.layer_blocks.2.weight,
+      module.backbone.fpn.layer_blocks.3.weight,
+      module.rpn.head.conv.weight,
+      module.roi_heads.mask_head.mask_fcn1.weight,
+      module.roi_heads.mask_head.mask_fcn2.weight,
+      module.roi_heads.mask_head.mask_fcn3.weight,
+      module.roi_heads.mask_head.mask_fcn4.weight,
+      module.roi_heads.mask_predictor.conv5_mask.weight,
+    ]
+
+  agp_pruner_90:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.90
+    weights: [
+    module.backbone.body.layer4.0.conv1.weight,
+    module.backbone.body.layer4.0.conv2.weight,
+    module.backbone.body.layer4.0.conv3.weight,
+    module.backbone.body.layer4.0.downsample.0.weight,
+    module.backbone.body.layer4.1.conv1.weight,
+    module.backbone.body.layer4.1.conv2.weight,
+    module.backbone.body.layer4.1.conv3.weight,
+    module.backbone.body.layer4.2.conv1.weight,
+    module.backbone.body.layer4.2.conv2.weight,
+    ]
+
+
+policies:
+  - pruner:
+     instance_name : agp_pruner_75
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1
+
+  - pruner:
+     instance_name : agp_pruner_85
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1
+
+  - pruner:
+      instance_name : fc_pruner
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 3
+
+  - pruner:
+      instance_name : agp_pruner_90
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1

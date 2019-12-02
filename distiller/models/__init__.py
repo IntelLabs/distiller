@@ -20,13 +20,15 @@ import copy
 from functools import partial
 import torch
 import torchvision.models as torch_models
+from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
+from torchvision.ops.misc import FrozenBatchNorm2d
 import torch.nn as nn
 from . import cifar10 as cifar10_models
 from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
 
-from distiller.utils import set_model_input_shape_attr
+from distiller.utils import set_model_input_shape_attr, model_setattr
 from distiller.modules import Mean, EltwiseAdd
 
 import logging
