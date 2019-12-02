@@ -145,9 +145,10 @@ def main(args):
     patch_fastrcnn(model)
     model.to(device)
 
-    if args.summary and utils.is_main_process():
-        for summary in args.summary:
-            distiller.model_summary(model, summary, args.dataset)
+    if args.summary:
+        if utils.is_main_process():
+            for summary in args.summary:
+                distiller.model_summary(model, summary, args.dataset)
         return
 
     model_without_ddp = model
