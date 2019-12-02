@@ -43,7 +43,14 @@ This also promises that the pruning masks remain identical on all the nodes.
      --compress maskrcnn.scheduler_agp.yaml --pretrained --world-size 4 --batch-size 2 --epochs 80
 
 Since the dataset is large and FasterRCNN models are compute heavy, we strongly recommend
-running the script on a Multi GPU environment. 
+running the script on a Multi GPU environment. Keep in mind that the multi-GPU case is 
+running on multiple processes via `torch.distributed.launch`, and ending one of the processes
+might break all of them and leave them in an undefined state (In that case you'll have to end 
+them manually). Also, even though the multi-GPU distributes the memory over all the GPUs, the 
+model is quite memory intensive, so using a large batch size is guaranteed to yield OOM on the GPU. 
+Our GPUs are TITAN X (Pascal) with 12GB memory, and a batch size of 3 is the most we could run without 
+memory errors. 
+
 
 The default model is `torchvision.models.detection.maskrcnn_resnet50_fpn`, you can specify 
 any model that is part of `torchvision.models.detection` using
