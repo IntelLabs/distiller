@@ -16,6 +16,7 @@
 
 from functools import partial, reduce
 import operator
+import typing
 import xlsxwriter
 import yaml
 import os
@@ -40,6 +41,7 @@ __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
            'collect_quant_stats', 'collect_histograms',
            'collector_context', 'collectors_context']
 
+TensorType = typing.TypeVar('TensorType')
 
 class ActivationStatsCollector(object):
     """Collect model activation statistics information.
@@ -133,7 +135,7 @@ class ActivationStatsCollector(object):
     def save(self, fname):
         raise NotImplementedError
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Handle new activations ('output' argument).
 
         This is invoked from the forward-pass callback of module 'module'.
@@ -201,20 +203,26 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     This Collector computes the mean of some statistic of the activation.  It is rather
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
+
+    inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
-    def __init__(self, model, stat_name, summary_fn, classes=[torch.nn.ReLU,
-                                                              torch.nn.ReLU6,
-                                                              torch.nn.LeakyReLU]):
+    def __init__(self, model, stat_name, summary_fn,
+                 classes=[torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU],
+                 in_or_out='out',
+                 inputs_consolidate_func:typing.Callable[[typing.Sequence[TensorType]], TensorType]=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
+        self.output_flag = (in_or_out == 'out')
+        self.inputs_func = inputs_consolidate_func
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Record the activation sparsity of 'module'
 
         This is a callback from the forward() of 'module'.
         """
+        feature_map = output if self.output_flag else self.inputs_func(inputs)
         try:
-            getattr(module, self.stat_name).add(self.summary_fn(output.data), output.data.numel())
+            getattr(module, self.stat_name).add(self.summary_fn(feature_map.data), feature_map.data.numel())
         except RuntimeError as e:
             if "The expanded size of the tensor" in e.args[0]:
                 raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
@@ -290,7 +298,7 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                                        torch.nn.LeakyReLU]):
         super(RecordsActivationStatsCollector, self).__init__(model, "statistics_records", classes)
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Record the activation sparsity of 'module'
 
         This is a callback from the forward() of 'module'.
