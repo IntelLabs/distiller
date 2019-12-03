@@ -125,7 +125,10 @@ class ClassifierCompressor(object):
 
     def train_validate_with_scheduling(self, epoch, validate=True, verbose=True):
         if self.compression_scheduler:
-            self.compression_scheduler.on_epoch_begin(epoch)
+            self.compression_scheduler.on_epoch_begin(epoch,
+                                                      dummy_input=distiller.get_dummy_input(
+                                                          input_shape=self.model.input_shape),
+                                                      optimizer=self.optimizer)
 
         top1, top5, loss = self.train_one_epoch(epoch, verbose)
         if validate:

@@ -81,7 +81,7 @@ class WRPNQuantizer(Quantizer):
         1. This class does not take care of layer widening as described in the paper
         2. The paper defines special handling for 1-bit weights which isn't supported here yet
     """
-    def __init__(self, model, optimizer,
+    def __init__(self, model, optimizer=None,
                  bits_activations=32, bits_weights=32, bits_bias=None,
                  overrides=None):
         super(WRPNQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
@@ -140,7 +140,7 @@ class DorefaQuantizer(Quantizer):
     Notes:
         1. Gradients quantization not supported yet
     """
-    def __init__(self, model, optimizer,
+    def __init__(self, model, optimizer=None,
                  bits_activations=32, bits_weights=32, bits_bias=None,
                  overrides=None):
         super(DorefaQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
@@ -170,7 +170,7 @@ class PACTQuantizer(Quantizer):
         act_clip_decay (float): L2 penalty applied to the clipping values, referred to as "lambda_alpha" in the paper.
             If None then the optimizer's default weight decay value is used (default: None)
     """
-    def __init__(self, model, optimizer,
+    def __init__(self, model, optimizer=None,
                  bits_activations=32, bits_weights=32, bits_bias=None,
                  overrides=None, act_clip_init_val=8.0, act_clip_decay=None):
         super(PACTQuantizer, self).__init__(model, optimizer=optimizer, bits_activations=bits_activations,
@@ -183,6 +183,9 @@ class PACTQuantizer(Quantizer):
                 return module
             return LearnedClippedLinearQuantization(bits_acts, act_clip_init_val, dequantize=True,
                                                     inplace=module.inplace)
+
+        self.model.quantizer_metadata.update({'act_clip_init_val': act_clip_init_val,
+                                              'act_clip_delay': act_clip_decay})
 
         self.param_quantization_fn = dorefa_quantize_param
 

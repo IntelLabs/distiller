@@ -44,7 +44,7 @@ class CompressionScheduler(object):
 
     @property
     def quantization_policy(self):
-        for policy in self.policies.values():
+        for policy in self.sched_metadata:
             # There can only be a single quantization policy, and we want direct access to it
             # so we can expose the said quantizer outside for operations.
             if isinstance(policy, QuantizationPolicy):
@@ -79,7 +79,7 @@ class CompressionScheduler(object):
         for policy in self.policies.get(epoch, list()):
             meta = self.sched_metadata[policy]
             meta['current_epoch'] = epoch
-            policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta,
+            policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta, optimizer=optimizer,
                                   **kwargs)
 
     def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
