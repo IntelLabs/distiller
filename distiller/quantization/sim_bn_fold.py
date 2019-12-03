@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torchvision.ops.misc import FrozenBatchNorm2d
 
 __all__ = ['SimulatedFoldedBatchNorm']
 
@@ -28,13 +29,20 @@ class SimulatedFoldedBatchNorm(nn.Module):
         Wrapper for simulated folding of BatchNorm into convolution / linear layers during training
         Args:
             param_module (nn.Linear or nn.Conv1d or nn.Conv2d or nn.Conv3d): the wrapped parameter module
-            bn (nn.BatchNorm1d or nn.BatchNorm2d or nn.BatchNorm3d): batch normalization module
+            bn (nn.BatchNorm1d or nn.BatchNorm2d or nn.BatchNorm3d or FrozenBatchNorm2d): batch normalization module
             freeze_bn_delay (int): number of steps before freezing the batch-norm running stats
             param_quantization_fn (function): function to be used for weight/bias quantization
         Note:
             The quantized version was implemented according to https://arxiv.org/pdf/1806.08342.pdf Section 3.2.2.
         """
-        SimulatedFoldedBatchNorm.verify_module_types(param_module, bn)
+        if isinstance(bn, FrozenBatchNorm2d):
+            if not isinstance(param_module, nn.Conv2d):
+                error_msg = "Can't fold sequence of {} --> {}. ".format(
+                    param_module.__class__.__name__, bn.__class__.__name__
+                )
+                raise TypeError(error_msg + ' FrozenBatchNorm2d must follow a nn.Conv2d.')
+        else:
+            SimulatedFoldedBatchNorm.verify_module_types(param_module, bn)
         if not bn.track_running_stats:
             raise ValueError("Simulated BN folding is only supported for BatchNorm which tracks running stats")
         super(SimulatedFoldedBatchNorm, self).__init__()
@@ -56,6 +64,10 @@ class SimulatedFoldedBatchNorm(nn.Module):
         else:
             self.param_forward_fn = self._conv_layer_forward
             self.param_module_type = "conv3d"
+        if isinstance(bn, FrozenBatchNorm2d):
+            # This torchvision op is frozen from the beginning, so we fuse it
+            # directly into the linear layer.
+            self.freeze()
 
     @staticmethod
     def verify_module_types(param_module, bn):
