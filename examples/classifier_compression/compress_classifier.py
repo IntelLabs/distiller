@@ -99,7 +99,7 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
                                                 args.dataset, add_softmax=True, verbose=False)
         do_exit = True
     elif args.qe_calibration and not (args.evaluate and args.quantize_eval):
-        classifier.acts_quant_stats_collection(model, criterion, pylogger, args)
+        classifier.acts_quant_stats_collection(model, criterion, pylogger, args, save_to_file=True)
         do_exit = True
     elif args.activation_histograms:
         classifier.acts_histogram_collection(model, criterion, pylogger, args)
