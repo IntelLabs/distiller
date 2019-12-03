@@ -1,0 +1,210 @@
+#
+# Command line:
+# python compress_detector.py --data-path $DATASET_COCO \
+#     --compress maskrcnn.scheduler_agp.non_parallel.yaml
+#
+#Parameters:
+#+----+-------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+#|    | Name                                            | Shape              |   NNZ (dense) |   NNZ (sparse) |   Cols (%) |   Rows (%) |   Ch (%) |   2D (%) |   3D (%) |   Fine (%) |     Std |     Mean |   Abs-Mean |
+#|----+-------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------|
+#|  0 | backbone.body.conv1.weight                      | (64, 3, 7, 7)      |          9408 |           9408 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.12322 | -0.00050 |    0.07605 |
+#|  1 | backbone.body.layer1.0.conv1.weight             | (64, 64, 1, 1)     |          4096 |           4096 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.07083 | -0.00439 |    0.04032 |
+#|  2 | backbone.body.layer1.0.conv2.weight             | (64, 64, 3, 3)     |         36864 |          36864 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02915 |  0.00079 |    0.01717 |
+#|  3 | backbone.body.layer1.0.conv3.weight             | (256, 64, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03527 |  0.00042 |    0.02105 |
+#|  4 | backbone.body.layer1.0.downsample.0.weight      | (256, 64, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.05750 | -0.00342 |    0.03227 |
+#|  5 | backbone.body.layer1.1.conv1.weight             | (64, 256, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03062 |  0.00135 |    0.02029 |
+#|  6 | backbone.body.layer1.1.conv2.weight             | (64, 64, 3, 3)     |         36864 |          36864 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02881 |  0.00005 |    0.01964 |
+#|  7 | backbone.body.layer1.1.conv3.weight             | (256, 64, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03254 | -0.00019 |    0.02029 |
+#|  8 | backbone.body.layer1.2.conv1.weight             | (64, 256, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03008 |  0.00012 |    0.02169 |
+#|  9 | backbone.body.layer1.2.conv2.weight             | (64, 64, 3, 3)     |         36864 |          36864 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03178 | -0.00085 |    0.02378 |
+#| 10 | backbone.body.layer1.2.conv3.weight             | (256, 64, 1, 1)    |         16384 |          16384 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03109 | -0.00255 |    0.01857 |
+#| 11 | backbone.body.layer2.0.conv1.weight             | (128, 256, 1, 1)   |         32768 |          32768 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03542 | -0.00152 |    0.02484 |
+#| 12 | backbone.body.layer2.0.conv2.weight             | (128, 128, 3, 3)   |        147456 |         147456 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02229 | -0.00054 |    0.01661 |
+#| 13 | backbone.body.layer2.0.conv3.weight             | (512, 128, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02808 | -0.00013 |    0.01740 |
+#| 14 | backbone.body.layer2.0.downsample.0.weight      | (512, 256, 1, 1)   |        131072 |         131072 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02311 | -0.00035 |    0.01352 |
+#| 15 | backbone.body.layer2.1.conv1.weight             | (128, 512, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01666 | -0.00007 |    0.01004 |
+#| 16 | backbone.body.layer2.1.conv2.weight             | (128, 128, 3, 3)   |        147456 |         147456 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01934 | -0.00004 |    0.01239 |
+#| 17 | backbone.body.layer2.1.conv3.weight             | (512, 128, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02206 | -0.00121 |    0.01247 |
+#| 18 | backbone.body.layer2.2.conv1.weight             | (128, 512, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02332 | -0.00078 |    0.01618 |
+#| 19 | backbone.body.layer2.2.conv2.weight             | (128, 128, 3, 3)   |        147456 |         147456 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02159 | -0.00033 |    0.01536 |
+#| 20 | backbone.body.layer2.2.conv3.weight             | (512, 128, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02617 | -0.00047 |    0.01840 |
+#| 21 | backbone.body.layer2.3.conv1.weight             | (128, 512, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02432 | -0.00098 |    0.01803 |
+#| 22 | backbone.body.layer2.3.conv2.weight             | (128, 128, 3, 3)   |        147456 |         147456 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02241 | -0.00074 |    0.01691 |
+#| 23 | backbone.body.layer2.3.conv3.weight             | (512, 128, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02432 | -0.00120 |    0.01681 |
+#| 24 | backbone.body.layer3.0.conv1.weight             | (256, 512, 1, 1)   |        131072 |         131072 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03077 | -0.00127 |    0.02202 |
+#| 25 | backbone.body.layer3.0.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01736 | -0.00041 |    0.01279 |
+#| 26 | backbone.body.layer3.0.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02338 | -0.00042 |    0.01660 |
+#| 27 | backbone.body.layer3.0.downsample.0.weight      | (1024, 512, 1, 1)  |        524288 |         524288 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01615 |  0.00004 |    0.01106 |
+#| 28 | backbone.body.layer3.1.conv1.weight             | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01521 | -0.00055 |    0.01063 |
+#| 29 | backbone.body.layer3.1.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01510 | -0.00031 |    0.01102 |
+#| 30 | backbone.body.layer3.1.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02036 | -0.00109 |    0.01457 |
+#| 31 | backbone.body.layer3.2.conv1.weight             | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01575 | -0.00052 |    0.01125 |
+#| 32 | backbone.body.layer3.2.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01500 | -0.00071 |    0.01127 |
+#| 33 | backbone.body.layer3.2.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01908 | -0.00077 |    0.01393 |
+#| 34 | backbone.body.layer3.3.conv1.weight             | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01734 | -0.00077 |    0.01283 |
+#| 35 | backbone.body.layer3.3.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01493 | -0.00077 |    0.01142 |
+#| 36 | backbone.body.layer3.3.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01821 | -0.00117 |    0.01341 |
+#| 37 | backbone.body.layer3.4.conv1.weight             | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01811 | -0.00101 |    0.01362 |
+#| 38 | backbone.body.layer3.4.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01487 | -0.00094 |    0.01141 |
+#| 39 | backbone.body.layer3.4.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01815 | -0.00160 |    0.01334 |
+#| 40 | backbone.body.layer3.5.conv1.weight             | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01970 | -0.00096 |    0.01498 |
+#| 41 | backbone.body.layer3.5.conv2.weight             | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01524 | -0.00090 |    0.01170 |
+#| 42 | backbone.body.layer3.5.conv3.weight             | (1024, 256, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01923 | -0.00231 |    0.01438 |
+#| 43 | backbone.body.layer4.0.conv1.weight             | (512, 1024, 1, 1)  |        524288 |         524288 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02380 | -0.00136 |    0.01837 |
+#| 44 | backbone.body.layer4.0.conv2.weight             | (512, 512, 3, 3)   |       2359296 |        2359296 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01255 | -0.00051 |    0.00981 |
+#| 45 | backbone.body.layer4.0.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01529 | -0.00061 |    0.01172 |
+#| 46 | backbone.body.layer4.0.downsample.0.weight      | (2048, 1024, 1, 1) |       2097152 |        2097152 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.00994 | -0.00007 |    0.00750 |
+#| 47 | backbone.body.layer4.1.conv1.weight             | (512, 2048, 1, 1)  |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01472 | -0.00092 |    0.01143 |
+#| 48 | backbone.body.layer4.1.conv2.weight             | (512, 512, 3, 3)   |       2359296 |        2359296 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01230 | -0.00084 |    0.00971 |
+#| 49 | backbone.body.layer4.1.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01495 | -0.00011 |    0.01149 |
+#| 50 | backbone.body.layer4.2.conv1.weight             | (512, 2048, 1, 1)  |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01813 | -0.00050 |    0.01413 |
+#| 51 | backbone.body.layer4.2.conv2.weight             | (512, 512, 3, 3)   |       2359296 |        2359296 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01104 | -0.00066 |    0.00874 |
+#| 52 | backbone.body.layer4.2.conv3.weight             | (2048, 512, 1, 1)  |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01417 | -0.00003 |    0.01062 |
+#| 53 | backbone.fpn.inner_blocks.0.weight              | (256, 256, 1, 1)   |         65536 |          65536 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.03602 |  0.00015 |    0.03119 |
+#| 54 | backbone.fpn.inner_blocks.1.weight              | (256, 512, 1, 1)   |        131072 |         131072 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02552 | -0.00001 |    0.02209 |
+#| 55 | backbone.fpn.inner_blocks.2.weight              | (256, 1024, 1, 1)  |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01804 | -0.00005 |    0.01563 |
+#| 56 | backbone.fpn.inner_blocks.3.weight              | (256, 2048, 1, 1)  |        524288 |         524288 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01276 |  0.00001 |    0.01105 |
+#| 57 | backbone.fpn.layer_blocks.0.weight              | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01202 | -0.00001 |    0.01041 |
+#| 58 | backbone.fpn.layer_blocks.1.weight              | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01204 | -0.00000 |    0.01043 |
+#| 59 | backbone.fpn.layer_blocks.2.weight              | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01204 | -0.00001 |    0.01043 |
+#| 60 | backbone.fpn.layer_blocks.3.weight              | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01202 |  0.00001 |    0.01041 |
+#| 61 | rpn.head.conv.weight                            | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.00999 | -0.00001 |    0.00797 |
+#| 62 | rpn.head.cls_logits.weight                      | (3, 256, 1, 1)     |           768 |            768 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.00978 |  0.00015 |    0.00772 |
+#| 63 | rpn.head.bbox_pred.weight                       | (12, 256, 1, 1)    |          3072 |           3072 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.00982 | -0.00034 |    0.00786 |
+#| 64 | roi_heads.box_head.fc6.weight                   | (1024, 12544)      |      12845056 |       12845053 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00002 | 0.00515 | -0.00000 |    0.00446 |
+#| 65 | roi_heads.box_head.fc7.weight                   | (1024, 1024)       |       1048576 |        1048576 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01805 | -0.00003 |    0.01563 |
+#| 66 | roi_heads.box_predictor.cls_score.weight        | (91, 1024)         |         93184 |          93184 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01806 |  0.00009 |    0.01564 |
+#| 67 | roi_heads.box_predictor.bbox_pred.weight        | (364, 1024)        |        372736 |         372736 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.01805 |  0.00001 |    0.01563 |
+#| 68 | roi_heads.mask_head.mask_fcn1.weight            | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02944 |  0.00004 |    0.02350 |
+#| 69 | roi_heads.mask_head.mask_fcn2.weight            | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02947 | -0.00004 |    0.02351 |
+#| 70 | roi_heads.mask_head.mask_fcn3.weight            | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02949 |  0.00004 |    0.02352 |
+#| 71 | roi_heads.mask_head.mask_fcn4.weight            | (256, 256, 3, 3)   |        589824 |         589824 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.02949 |  0.00000 |    0.02354 |
+#| 72 | roi_heads.mask_predictor.conv5_mask.weight      | (256, 256, 2, 2)   |        262144 |         262144 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.04420 | -0.00003 |    0.03524 |
+#| 73 | roi_heads.mask_predictor.mask_fcn_logits.weight | (91, 256, 1, 1)    |         23296 |          23296 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00000 | 0.14817 |  0.00125 |    0.11834 |
+#| 74 | Total sparsity:                                 | -                  |      44395200 |       44395197 |    0.00000 |    0.00000 |  0.00000 |  0.00000 |  0.00000 |    0.00001 | 0.00000 |  0.00000 |    0.00000 |
+#+----+-------------------------------------------------+--------------------+---------------+----------------+------------+------------+----------+----------+----------+------------+---------+----------+------------+
+
+version: 1
+
+pruners:
+
+  fc_pruner:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.85
+    weights: [
+      roi_heads.box_head.fc6.weight,
+      roi_heads.box_head.fc7.weight
+    ]
+
+  agp_pruner_75:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.75
+    weights: [
+      backbone.body.layer1.0.conv1.weight,
+      backbone.body.layer1.0.conv2.weight,
+      backbone.body.layer1.0.conv3.weight,
+      backbone.body.layer1.0.downsample.0.weight,
+      backbone.body.layer1.1.conv1.weight,
+      backbone.body.layer1.1.conv2.weight,
+      backbone.body.layer1.1.conv3.weight,
+      backbone.body.layer1.2.conv1.weight,
+      backbone.body.layer1.2.conv2.weight,
+      backbone.body.layer1.2.conv3.weight,
+      backbone.body.layer2.0.conv1.weight,
+      backbone.body.layer2.0.conv2.weight,
+      backbone.body.layer2.0.conv3.weight,]
+
+  agp_pruner_85:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.85
+    weights: [
+      backbone.body.layer2.0.downsample.0.weight,
+      backbone.body.layer2.1.conv1.weight,
+      backbone.body.layer2.1.conv2.weight,
+      backbone.body.layer2.1.conv3.weight,
+      backbone.body.layer2.2.conv1.weight,
+      backbone.body.layer2.2.conv2.weight,
+      backbone.body.layer2.2.conv3.weight,
+      backbone.body.layer2.3.conv1.weight,
+      backbone.body.layer2.3.conv2.weight,
+      backbone.body.layer2.3.conv3.weight,
+      backbone.body.layer3.0.conv1.weight,
+      backbone.body.layer3.0.conv2.weight,
+      backbone.body.layer3.0.conv3.weight,
+      backbone.body.layer3.0.downsample.0.weight,
+      backbone.body.layer3.1.conv1.weight,
+      backbone.body.layer3.1.conv2.weight,
+      backbone.body.layer3.1.conv3.weight,
+      backbone.body.layer3.2.conv1.weight,
+      backbone.body.layer3.2.conv2.weight,
+      backbone.body.layer3.2.conv3.weight,
+      backbone.body.layer3.3.conv1.weight,
+      backbone.body.layer3.3.conv2.weight,
+      backbone.body.layer3.3.conv3.weight,
+      backbone.body.layer3.4.conv1.weight,
+      backbone.body.layer3.4.conv2.weight,
+      backbone.body.layer3.4.conv3.weight,
+      backbone.body.layer3.5.conv1.weight,
+      backbone.body.layer3.5.conv2.weight,
+      backbone.body.layer3.5.conv3.weight,
+      backbone.body.layer4.2.conv3.weight,
+      backbone.fpn.inner_blocks.0.weight,
+      backbone.fpn.inner_blocks.1.weight,
+      backbone.fpn.inner_blocks.2.weight,
+      backbone.fpn.inner_blocks.3.weight,
+      backbone.fpn.layer_blocks.0.weight,
+      backbone.fpn.layer_blocks.1.weight,
+      backbone.fpn.layer_blocks.2.weight,
+      backbone.fpn.layer_blocks.3.weight,
+      rpn.head.conv.weight,
+      roi_heads.mask_head.mask_fcn1.weight,
+      roi_heads.mask_head.mask_fcn2.weight,
+      roi_heads.mask_head.mask_fcn3.weight,
+      roi_heads.mask_head.mask_fcn4.weight,
+      roi_heads.mask_predictor.conv5_mask.weight,
+    ]
+
+  agp_pruner_90:
+    class: AutomatedGradualPruner
+    initial_sparsity : 0.01
+    final_sparsity: 0.90
+    weights: [
+    backbone.body.layer4.0.conv1.weight,
+    backbone.body.layer4.0.conv2.weight,
+    backbone.body.layer4.0.conv3.weight,
+    backbone.body.layer4.0.downsample.0.weight,
+    backbone.body.layer4.1.conv1.weight,
+    backbone.body.layer4.1.conv2.weight,
+    backbone.body.layer4.1.conv3.weight,
+    backbone.body.layer4.2.conv1.weight,
+    backbone.body.layer4.2.conv2.weight,
+    ]
+
+
+policies:
+  - pruner:
+     instance_name : agp_pruner_75
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1
+
+  - pruner:
+     instance_name : agp_pruner_85
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1
+
+  - pruner:
+      instance_name : fc_pruner
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 3
+
+  - pruner:
+      instance_name : agp_pruner_90
+    starting_epoch: 0
+    ending_epoch: 45
+    frequency: 1
