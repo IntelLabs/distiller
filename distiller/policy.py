@@ -322,10 +322,13 @@ class QuantizationPolicy(ScheduledTrainingPolicy):
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
         if not model.is_quantized:
             dummy_input = kwargs.get("dummy_input", None)
-            device = next(model.parameters()).device
+            try:
+                optimizer = kwargs['optimizer']
+            except KeyError:
+                raise TypeError("QuantizationPolicy.on_epoch_begin requires 'optimizer' argument")
             self.quantizer.prepare_model(dummy_input)
-            self.quantizer.model.to(device)
-        self.quantizer.quantize_params()
+            self.quantizer.update_optimizer(optimizer)
+            self.quantizer.quantize_params()
 
     def on_minibatch_end(self, model, epoch, minibatch_id, minibatches_per_epoch, zeros_mask_dict, optimizer):
         # After parameters update, quantize the parameters again

@@ -152,6 +152,26 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
             # Initialize the dest_optimizer with a dummy learning rate,
             # this is required to support SGD.__init__()
             dest_optimizer = cls(model.parameters(), lr=1)
+
+            if compression_scheduler:
+                # If the compression scheduler contains a LR policy, we need to update that LR scheduler
+                # to use the optimizer that we'll be loading here
+                lr_policies = [policy for policy in compression_scheduler.sched_metadata if
+                               isinstance(policy, distiller.LRPolicy)]
+                lr_schedulers = [policy.lr_scheduler for policy in lr_policies if
+                                 isinstance(policy.lr_scheduler, torch.optim.lr_scheduler._LRScheduler)]
+                if lr_schedulers:
+                    # Create dummy scheduler so optimizer will be monkey-patched
+                    dummy_lr_sched = torch.optim.lr_scheduler.StepLR(dest_optimizer, 10)
+                    dest_optimizer._step_count = start_epoch
+                    # Then replace the optimizer in the LR scheduler/s
+                    for lrs in lr_schedulers:
+                        lrs.optimizer = dest_optimizer
+
+                # resumed_qat_policy = compression_scheduler.quantization_policy
+                # if resumed_qat_policy is not None:
+                #     resumed_qat_policy.quantizer.update_optimizer(dest_optimizer)
+
             dest_optimizer.load_state_dict(src_state_dict)
             msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
                             type=type(dest_optimizer)))
@@ -208,15 +228,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
     normalize_dataparallel_keys = False
     if 'compression_sched' in checkpoint:
         compression_scheduler = compression_scheduler or distiller.CompressionScheduler(model)
-        try:
-            compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
-        except KeyError as e:
-            # A very common source of this KeyError is loading a GPU model on the CPU.
-            # We rename all of the DataParallel keys because DataParallel does not execute on the CPU.
-            normalize_dataparallel_keys = True
-            compression_scheduler.load_state_dict(checkpoint['compression_sched'], normalize_dataparallel_keys)
-        msglogger.info("Loaded compression schedule from checkpoint (epoch {})".format(
-            checkpoint_epoch))
+        normalize_dataparallel_keys = _load_compression_scheduler()
     else:
         msglogger.info("Warning: compression schedule data does not exist in the checkpoint")
 
@@ -229,11 +241,21 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
     if 'quantizer_metadata' in checkpoint:
         msglogger.info('Loaded quantizer metadata from the checkpoint')
         qmd = checkpoint['quantizer_metadata']
-        quantizer = qmd['type'](model, **qmd['params'])
-        # The optimizer is included in the quantizer_metadata checkpoint if
-        # it was defined in the previous session.
-        # If not - just use the current optimizer.
-        optimizer = quantizer.optimizer or optimizer
+        quantizer = None
+        if compression_scheduler is not None and compression_scheduler.quantization_policy is not None:
+            quantizer = compression_scheduler.quantization_policy.quantizer
+        if quantizer is not None:
+            assert model == quantizer.model
+            scheduled_qmd = model.quantizer_metadata
+            if scheduled_qmd['type'] != qmd['type']:
+                raise ValueError(
+                    'Scheduler contains quantizer of type {}, but trying to resume quantizer of type {}'.format(
+                        scheduled_qmd['type'], qmd['type']))
+            if scheduled_qmd['params'] != qmd['params']:
+                raise ValueError('Quantizer in scheduler initialized with different arguments compared to '
+                                 'quantizer in checkpoint')
+        else:
+            quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model(qmd['dummy_input'])
 
     if normalize_dataparallel_keys:

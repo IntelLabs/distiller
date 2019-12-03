@@ -76,9 +76,9 @@ class Quantizer(object):
 
     Args:
         model (torch.nn.Module): The model to be quantized
-        optimizer (torch.optim.Optimizer): An optimizer instance, required in cases where the quantizer is going
-            to perform changes to existing model parameters and/or add new ones.
-            Specifically, when train_with_fp_copy is True, this cannot be None.
+        optimizer (torch.optim.Optimizer): Deprecated argument
+            For quantizers that do quantization-aware training, please call 'quantizer.update_optimizer()'
+            AFTER calling 'quantizer.prepare_model()'
         bits_activations/weights/bias (int): Default number of bits to use when quantizing each tensor type.
             Value of None means do not quantize.
         overrides (OrderedDict): Dictionary mapping regular expressions of layer name patterns to dictionary with
@@ -110,13 +110,12 @@ class Quantizer(object):
     def __init__(self, model, optimizer=None,
                  bits_activations=None, bits_weights=None, bits_bias=None,
                  overrides=None, train_with_fp_copy=False):
+        if optimizer is not None:
+            warnings.warn('optimizer argument is deprecated')
         if overrides is None:
             overrides = OrderedDict()
         if not isinstance(overrides, OrderedDict):
             raise TypeError('overrides must be an instance of collections.OrderedDict or None')
-
-        if train_with_fp_copy and optimizer is None:
-            raise ValueError('optimizer cannot be None when train_with_fp_copy is True')
 
         self.adjacency_map = None  # To be populated during prepare_model()
 
@@ -124,7 +123,6 @@ class Quantizer(object):
         self.overrides = overrides
 
         self.model = model
-        self.optimizer = optimizer
         self.model.is_quantized = False  # A flag to prevent from transforming the model twice.
 
         # Stash some quantizer data in the model so we can re-apply the quantizer on a resuming model
@@ -132,8 +130,8 @@ class Quantizer(object):
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_weights': bits_weights,
                                                     'bits_bias': bits_bias,
-                                                    'overrides': copy.deepcopy(overrides),
-                                                    'optimizer': optimizer}}
+                                                    'overrides': copy.deepcopy(overrides)}
+                                         }
 
         for k, v in self.overrides.items():
             if any(old_bits_key in v.keys() for old_bits_key in ['acts', 'wts', 'bias']):
@@ -254,8 +252,6 @@ class Quantizer(object):
                 msglogger.info(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
-        self.update_optimizer()
-
         self._post_prepare_model()
         self.model.is_quantized = True
 
@@ -265,14 +261,6 @@ class Quantizer(object):
         distiller.assign_layer_fq_names(self.model)
 
         msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
-
-    def update_optimizer(self, new_optimizer=None):
-        # If an optimizer was passed, assume we need to update it
-        if new_optimizer is not None:
-            self.optimizer = new_optimizer
-        if self.optimizer:
-            for pg in self._get_new_optimizer_params_groups():
-                self.optimizer.add_param_group(pg)
 
     def _pre_prepare_model(self, dummy_input):
         pass
@@ -342,6 +330,21 @@ class Quantizer(object):
                 # For container we call recursively
                 self._pre_process_container(module, full_name + '.')
 
+    def _post_prepare_model(self):
+        pass
+
+    def update_optimizer(self, optimizer):
+        if not self.model.is_quantized:
+            raise RuntimeError('Must call prepare_model() before update_optimizer()')
+        # In case this is called after a LR scheduler was initialize, we take care to set the 'initial_lr'
+        # parameter in the new groups (it's not in the optimizer's "root" defaults set)
+        pg0_initial_lr = optimizer.param_groups[0].get('initial_lr', None)
+        for pg in self._get_new_optimizer_params_groups():
+            if pg0_initial_lr is not None:
+                initial_lr = pg.get('lr', pg0_initial_lr)
+                pg.setdefault('initial_lr', initial_lr)
+            optimizer.add_param_group(pg)
+
     def _get_new_optimizer_params_groups(self):
         """
         If the quantizer adds new trainable parameters to the model, this function should return a list of one
@@ -354,9 +357,6 @@ class Quantizer(object):
         :return: List of parameter groups
         """
         return list()
-
-    def _post_prepare_model(self):
-        pass
 
     def quantize_params(self):
         """
