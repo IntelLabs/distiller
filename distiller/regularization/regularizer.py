@@ -16,12 +16,13 @@
 
 EPSILON = 1e-8
 
+
 class _Regularizer(object):
     def __init__(self, name, model, reg_regims, threshold_criteria):
         """Regularization base class.
 
         Args:
-            reg_regims: regularization regiment.  A dictionary of
+            reg_regims (dict[str,tuple[float, str]]): regularization regiment.  A dictionary of
                         reg_regims[<param-name>] = [ lambda, structure-type]
         """
         self.name = name
@@ -34,3 +35,6 @@ class _Regularizer(object):
 
     def threshold(self, param, param_name, zeros_mask_dict):
         raise NotImplementedError
+
+    def on_epoch_begin(self, *args, **kwargs):
+        pass

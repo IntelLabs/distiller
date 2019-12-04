@@ -27,6 +27,7 @@ import torch.optim.lr_scheduler
 from collections import namedtuple, OrderedDict
 import logging
 import distiller
+from distiller.regularization import _Regularizer
 
 
 __all__ = ['PruningPolicy', 'RegularizationPolicy', 'QuantizationPolicy', 'LRPolicy', 'ScheduledTrainingPolicy',
@@ -260,12 +261,17 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
 
     """
     def __init__(self, regularizer, keep_mask=False):
+        """
+        Args:
+            regularizer (_Regularizer): the regularization to apply on policy actions.
+        """
         super(RegularizationPolicy, self).__init__()
         self.regularizer = regularizer
         self.keep_mask = keep_mask
         self.is_last_epoch = False
 
     def on_epoch_begin(self, model, zeros_mask_dict, meta, **kwargs):
+        self.regularizer.on_epoch_begin(epoch=meta['current_epoch'])
         self.is_last_epoch = meta['current_epoch'] == (meta['ending_epoch'] - 1)
 
     def before_backward_pass(self, model, epoch, minibatch_id, minibatches_per_epoch, loss,
