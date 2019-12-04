@@ -94,8 +94,6 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, sear
         y, q_y = layer(*input), quantized_layer(*input)
         return loss_fn(y, q_y)
 
-    _iter = count(1)
-
     result = opt.minimize(feed_forward_fn, init_qp_vec, method=method)  # type: opt.OptimizeResult
     qp_dict = quant_params_vec2dict(keys, result.x)
     quantized_layer.update_linear_quant_params(qp_dict)
@@ -214,7 +212,7 @@ def get_default_args():
     parser.add_argument('--opt-init-method', dest='init_mode_method',
                         help='If --opt-init-mode was specified as L1/L2/L3, this specifies the method of '
                              'minimization.')
-    parser.add_argument('--opt-test-size', type=float, default=1,
+    parser.add_argument('--opt-val-size', type=float, default=1,
                         help='Use portion of the test size.')
     parser.add_argument('--opt-eval-memoize-dataloader', dest='memoize_dataloader', action='store_true', default=False,
                         help='Stores the input batch in memory to optimize performance.')
@@ -351,7 +349,7 @@ if __name__ == "__main__":
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     args = deepcopy(cc.args)
-    args.effective_test_size = args.opt_test_size
+    args.effective_valid_size = args.opt_test_size
     eval_data_loader = classifier.load_data(args, load_train=False, load_val=False, fixed_subset=True)
 
     # quant calibration dataloader:
@@ -418,7 +416,7 @@ if __name__ == "__main__":
                                            args.method, args=args, act_stats=act_stats,
                                            calib_eval_fn=calib_eval_fn, test_fn=test_fn)
     top1, top5, loss = test_fn(model)
-    msglogger.info("Test: \n\t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
-                   (top1, top5, loss))
+    msglogger.info("Arch: %s \tTest: \n\t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
+                   (args.arch, top1, top5, loss))
     distiller.yaml_ordered_save('%s.quant_params_dict.yaml' % args.arch, qp_dict)
 
