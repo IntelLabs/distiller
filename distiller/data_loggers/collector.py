@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import contextlib
 from functools import partial, reduce
 import operator
 import typing
@@ -241,11 +242,10 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
             setattr(module, self.stat_name, WeightedAverageValueMeter())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
+                getattr(module, self.stat_name).name = module.distiller_name
             else:
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name,
-                                                                 module.__class__.__name__,
-                                                                 str(id(module))))
+                getattr(module, self.stat_name).name = '_'.join((
+                    module.__class__.__name__, str(id(module))))
 
     def _reset_counter(self, module):
         if hasattr(module, self.stat_name):
@@ -259,28 +259,28 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
             activation_stats[getattr(module, self.stat_name).name] = mean
 
     def save(self, fname):
-        """Save the records to an Excel workbook, with one worksheet per layer.
-        """
-        fname = ".".join([fname, 'xlsx'])
-        try:
+        if not fname.endswith('.xlsx'):
+            fname = '.'.join([fname, 'xlsx'])
+        with contextlib.suppress(OSError):
             os.remove(fname)
-        except OSError:
-            pass
 
-        records_dict = self.value()
-        with xlsxwriter.Workbook(fname) as workbook:
+        def _add_worksheet(workbook, tab_name, record):
             try:
-                worksheet = workbook.add_worksheet(self.stat_name)
+                worksheet = workbook.add_worksheet(tab_name)
             except xlsxwriter.exceptions.InvalidWorksheetName:
                 worksheet = workbook.add_worksheet()
 
             col_names = []
-            for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
+            for col, (module_name, module_summary_data) in enumerate(record.items()):
                 if not isinstance(module_summary_data, list):
                     module_summary_data = [module_summary_data]
                 worksheet.write_column(1, col, module_summary_data)
                 col_names.append(module_name)
             worksheet.write_row(0, 0, col_names)
+
+        with xlsxwriter.Workbook(fname) as workbook:
+            _add_worksheet(workbook, self.stat_name, self.value())
+
         return fname
 
 
