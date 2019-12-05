@@ -349,8 +349,8 @@ if __name__ == "__main__":
     args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
     cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
     args = deepcopy(cc.args)
-    args.effective_valid_size = args.opt_test_size
-    eval_data_loader = classifier.load_data(args, load_train=False, load_val=False, fixed_subset=True)
+    args.effective_valid_size = args.opt_val_size
+    eval_data_loader = classifier.load_data(args, load_train=False, load_test=False, fixed_subset=True)
 
     # quant calibration dataloader:
     args.effective_test_size = args.qe_calib_portion
@@ -416,7 +416,7 @@ if __name__ == "__main__":
                                            args.method, args=args, act_stats=act_stats,
                                            calib_eval_fn=calib_eval_fn, test_fn=test_fn)
     top1, top5, loss = test_fn(model)
-    msglogger.info("Arch: %s \tTest: \n\t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
+    msglogger.info("Arch: %s \tTest: \t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
                    (args.arch, top1, top5, loss))
     distiller.yaml_ordered_save('%s.quant_params_dict.yaml' % args.arch, qp_dict)
 
