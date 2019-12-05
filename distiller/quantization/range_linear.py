@@ -312,6 +312,13 @@ class RangeLinearQuantWrapper(nn.Module):
         self.output_quant_settings = QuantSettings(num_bits_acts, mode, clip_acts, clip_n_stds, clip_half_range, False)
         self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
                                                   ClipMode.NONE, None, False, False)
+
+        self.preset_act_stats = False
+        self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
+
+        if num_bits_acts is None:
+            return
+
         if self.requires_quantized_inputs:
             self.inputs_quant_settings_overrides = OrderedDict()
             for k, v in input_overrides.items():
@@ -320,13 +327,12 @@ class RangeLinearQuantWrapper(nn.Module):
                     quant_settings = deepcopy(self.output_quant_settings)
                     quant_settings.clip_half_range = False
                 else:
-                    quant_settings = QuantSettings(v.pop('bits_activations', self.output_quant_settings.num_bits),
-                                                   verify_quant_mode(
-                                                       v.pop('mode', self.output_quant_settings.quant_mode)),
-                                                   verify_clip_mode(
-                                                       v.pop('clip_acts', self.output_quant_settings.clip_mode)),
-                                                   v.pop('clip_n_stds', self.output_quant_settings.clip_n_stds),
-                                                   False, False)
+                    quant_settings = QuantSettings(
+                        v.pop('bits_activations', self.output_quant_settings.num_bits),
+                        verify_quant_mode(v.pop('mode', self.output_quant_settings.quant_mode)),
+                        verify_clip_mode(v.pop('clip_acts', self.output_quant_settings.clip_mode)),
+                        v.pop('clip_n_stds', self.output_quant_settings.clip_n_stds),
+                        False, False)
                     if v:
                         # Poor man's input checking on input overrides dict
                         raise ValueError('Input overrides dict contains unsupported keys:', list(v.keys()))
@@ -369,10 +375,8 @@ class RangeLinearQuantWrapper(nn.Module):
         else:
             self.preset_act_stats = False
 
-        self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
-
     def named_acts_quant_params(self):
-        if self.preset_act_stats:
+        if self.output_quant_settings.num_bits is not None and self.preset_act_stats:
             # Output scale buffers are saved in the model only when stats are used
             yield 'output_scale', self.output_scale
             yield 'output_zero_point', self.output_zero_point
@@ -380,6 +384,13 @@ class RangeLinearQuantWrapper(nn.Module):
     def forward(self, *inputs):
         if self.training:
             raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
+
+        if self.output_quant_settings.num_bits is None:
+            # Pass through
+            out = self.wrapped_module(*inputs)
+            if self.clip_half_range:
+                out = f.relu(out)
+            return out
 
         device = inputs[0].device
         for buffer_name, buffer in self._buffers.items():
@@ -498,6 +509,8 @@ class RangeLinearQuantWrapper(nn.Module):
         raise NotImplementedError
 
     def extra_repr(self):
+        if self.output_quant_settings.num_bits is None:
+            return 'output_quant_settings=Not_Quantized'
         tmpstr = 'output_quant_settings={0}'.format(self.output_quant_settings)
         tmpstr += '\naccum_quant_settings={0}'.format(self.accum_quant_settings)
         tmpstr += '\nrequires_quantized_inputs={0}'.format(self.requires_quantized_inputs)
@@ -574,6 +587,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
 
+        self.fake_quant_params = self.output_quant_settings.num_bits is None
+
         self.wts_quant_settings = QuantSettings(num_bits_params, mode, ClipMode.NONE, None, False, per_channel_wts)
 
         self.params_min_q_val, self.params_max_q_val = get_quantized_range(
@@ -591,20 +606,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.params_min_q_val,
                               self.params_max_q_val, inplace=True)
 
-        self.has_bias = hasattr(wrapped_module, 'bias') and wrapped_module.bias is not None
-        device = self.w_scale.device
-
-        if self.preset_act_stats:
-            t = torch.zeros_like(self.w_scale)
-            if self.wts_quant_settings.per_channel:
-                t = t.squeeze(dim=-1)
-            self.register_buffer('accum_scale', t)
-        else:
-            self.accum_scale = torch.ones(1).to(device)
-
         # Quantize bias
         self.has_bias = hasattr(wrapped_module, 'bias') and wrapped_module.bias is not None
-        if self.has_bias and not self.preset_act_stats:
+        if self.has_bias and (self.fake_quant_params or not self.preset_act_stats):
             b_scale, b_zero_point = _get_quant_params_from_tensor(wrapped_module.bias,
                                                                   self.wts_quant_settings.num_bits,
                                                                   self.wts_quant_settings.quant_mode)
@@ -612,8 +616,25 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             self.register_buffer('b_zero_point', b_zero_point)
             base_b_q = linear_quantize_clamp(wrapped_module.bias.data, self.b_scale, self.b_zero_point,
                                              self.params_min_q_val, self.params_max_q_val)
-            # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
-            self.register_buffer('base_b_q', base_b_q)
+            if not self.preset_act_stats:
+                # Dynamic ranges - save in auxiliary buffer,
+                # requantize each time based on dynamic input scale factor
+                self.register_buffer('base_b_q', base_b_q)
+
+        if self.fake_quant_params:
+            linear_dequantize(wrapped_module.weight.data, self.w_scale, self.w_zero_point, inplace=True)
+            if self.has_bias:
+                wrapped_module.bias = torch.nn.Parameter(linear_dequantize(base_b_q, self.b_scale, self.b_zero_point))
+            return
+
+        device = self.w_scale.device
+        if self.preset_act_stats:
+            t = torch.zeros_like(self.w_scale)
+            if self.wts_quant_settings.per_channel:
+                t = t.squeeze(dim=-1)
+            self.register_buffer('accum_scale', t)
+        else:
+            self.accum_scale = torch.ones(1).to(device)
 
         # A flag indicating that the simulated quantized weights are pre-shifted. for faster performance.
         # In the first forward pass - `w_zero_point` is added into the weights, to allow faster inference,
@@ -623,7 +644,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
-        if self.is_simulated_quant_weight_shifted:
+        if not self.fake_quant_params and self.is_simulated_quant_weight_shifted:
             # We want to return the weights to their integer representation:
             self.wrapped_module.weight.data -= self.w_zero_point
             self.is_simulated_quant_weight_shifted.fill_(False) # i.e. is_simulated_quant_weight_shifted = False
