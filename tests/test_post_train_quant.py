@@ -743,3 +743,64 @@ def test_acts_quant_params_rnn(rnn_model):
     quantizer.update_acts_quant_params(new_config)
     assert model.rnn.rnn.cells[0].act_o.output_scale == 4
     assert model.embedding.w_scale == 59.0
+
+
+###############################################################################
+# Test wrappers with weights-only quantization
+###############################################################################
+@pytest.fixture(params=[False, True], ids=['perch_off', 'perch_on'])
+def per_channel(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True], ids=['no_bias', 'with_bias'])
+def bias(request):
+    return request.param
+
+
+def _fake_quant_tensor(tensor, n_bits, mode, per_channel):
+    q_min, q_max = q_utils.get_quantized_range(n_bits, mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+    scale, zp = _get_quant_params_from_tensor(tensor, n_bits, mode, per_channel=per_channel)
+    q_utils.linear_quantize_clamp(tensor, scale, zp, q_min, q_max, inplace=True)
+    q_utils.linear_dequantize(tensor, scale, zp, inplace=True)
+
+
+def _test_wts_only_quant(layer, x, per_channel, bias, num_bits):
+    layer.weight.data = torch.rand_like(layer.weight)
+    if bias:
+        layer.bias.data = torch.rand_like(layer.bias)
+    mode = LinearQuantMode.ASYMMETRIC_UNSIGNED
+
+    layer_ptq = RangeLinearQuantParamLayerWrapper(deepcopy(layer), None, num_bits, mode=mode, per_channel_wts=per_channel)
+    layer_ptq.eval()
+
+    layer_manual_q = deepcopy(layer)
+    _fake_quant_tensor(layer_manual_q.weight.data, num_bits, mode, per_channel)
+    assert torch.equal(layer_ptq.wrapped_module.weight, layer_manual_q.weight)
+    if bias:
+        _fake_quant_tensor(layer_manual_q.bias.data, num_bits, mode, False)
+        assert torch.equal(layer_ptq.wrapped_module.bias, layer_manual_q.bias)
+
+    y_ptq = layer_ptq(x)
+    y_manual_q = layer_manual_q(x)
+
+    assert torch.equal(y_ptq, y_manual_q)
+
+
+def test_conv_layer_wrapper_params_only(per_channel, bias):
+    distiller.set_deterministic()
+    in_ch = 3
+    layer = torch.nn.Conv2d(in_ch, 10, 3, bias=bias)
+    x = torch.rand(5, in_ch, 5, 5)
+
+    _test_wts_only_quant(layer, x, per_channel, bias, 8)
+
+
+def test_linear_layer_wrapper_params_only(per_channel, bias):
+    distiller.set_deterministic()
+    in_features = 50
+    layer = torch.nn.Linear(in_features, 30, bias=bias)
+
+    x = torch.rand(5, in_features)
+
+    _test_wts_only_quant(layer, x, per_channel, bias)

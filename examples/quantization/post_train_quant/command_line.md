@@ -16,8 +16,8 @@ Post-training quantization can either be configured straight from the command-li
 |--------------------------|-----------|---------------------------------------------------------------------------------------|---------|
 | `--quantize-eval`        | `--qe`    | Apply linear quantization to model before evaluation                                  | Off     |
 | `--qe-mode`              | `--qem`   | Linear quantization mode. Choices: "sym", "asym_u", "asym_s"                          | "sym"   |
-| `--qe-bits-acts`         | `--qeba`  | # of bits for quantization of activations                                             | 8       |
-| `--qe-bits-wts`          | `--qebw`  | # of bits for quantization of weights                                                 | 8       |
+| `--qe-bits-acts`         | `--qeba`  | # of bits for quantization of activations. Use 0 to not quantize activations          | 8       |
+| `--qe-bits-wts`          | `--qebw`  | # of bits for quantization of weights. Use 0 to not quantize weights                  | 8       |
 | `--qe-bits-accum`        | N/A       | # of bits for quantization of the accumulator                                         | 32      |
 | `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std"                        | "none"  |
 | `--qe-clip-n-stds`       | N/A       | When qe-clip-acts is set to 'n_std', this is the number of standard deviations to use | None    |
