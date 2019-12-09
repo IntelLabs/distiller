@@ -4,7 +4,7 @@ and show different configurations of quantization to achieve the highest accurac
 
 Note that this folder contains only code required to run evaluation. All training code was removed. A link to a pre-trained model is provided below.
 
-## Summary of Quantization Results
+## Summary of Post-Training Quantization Results
 
 | Precision | Mode       | Per-Channel | Clip Activations                                              | Bleu Score |
 |-----------|------------|-------------|---------------------------------------------------------------|------------|
