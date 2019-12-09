@@ -5,7 +5,7 @@ This is Distiller's main example application for compressing image classificatio
 - [Image Classifiers Compression](#image-classifiers-compression)
   - [Usage](#usage)
   - [Compression Methods](#compression-methods)
-    - [Sparsity - Pruning and regularization](#sparsity---pruning-and-regularization)
+    - [Sparsity - Pruning and Regularization](#sparsity---pruning-and-regularization)
     - [Quantization](#quantization)
     - [Knowledge Distillation](#knowledge-distillation)
     - [Early-exit](#early-exit)
@@ -20,7 +20,7 @@ Please see the [docs](https://nervanasystems.github.io/distiller/usage.html) for
 
 **Follow the links for more details on each method and experiment results.**
 
-### Sparsity - Pruning and regularization
+### Sparsity - Pruning and Regularization
 
 A non-exhaustive list of the methods implemented:
 
