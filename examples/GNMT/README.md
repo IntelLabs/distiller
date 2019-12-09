@@ -4,7 +4,18 @@ and show different configurations of quantization to achieve the highest accurac
 
 Note that this folder contains only code required to run evaluation. All training code was removed. A link to a pre-trained model is provided below.
 
-**For a summary on the quantization results see [below](#results).**
+## Summary of Quantization Results
+
+| Precision | Mode       | Per-Channel | Clip Activations                                              | Bleu Score |
+|-----------|------------|-------------|---------------------------------------------------------------|------------|
+| FP32      | N/A        | N/A         | N/A                                                           | 22.16      |
+| INT8      | Symmetric  | No          | No                                                            | 18.05      |
+| INT8      | Asymmetric | No          | No                                                            | 18.52      |
+| INT8      | Asymmetric | Yes         | AVG in all layers                                             | 9.63       |
+| INT8      | Asymmetric | Yes         | AVG in all layers except attention block                      | 16.94      |
+| INT8      | Asymmetric | Yes         | AVG in all layers except attention block and final classifier | 21.49      |
+
+For details on how the model is being quantized, see [below](#what-is-quantized).
 
 ## Running the Example
 
@@ -60,17 +71,6 @@ The following operations do not have a quantized implementation. The operations 
   y = x / norm(x)
   quant_dequant(y)
   ```
-
-### Results
-
-| Precision | Mode       | Per-Channel | Clip Activations                                              | Bleu Score |
-|-----------|------------|-------------|---------------------------------------------------------------|------------|
-| FP32      | N/A        | N/A         | N/A                                                           | 22.16      |
-| INT8      | Symmetric  | No          | No                                                            | 18.05      |
-| INT8      | Asymmetric | No          | No                                                            | 18.52      |
-| INT8      | Asymmetric | Yes         | AVG in all layers                                             | 9.63       |
-| INT8      | Asymmetric | Yes         | AVG in all layers except attention block                      | 16.94      |
-| INT8      | Asymmetric | Yes         | AVG in all layers except attention block and final classifier | 21.49      |
 
 ## Dataset / Environment
 
