@@ -18,7 +18,7 @@ Please see the [docs](https://nervanasystems.github.io/distiller/usage.html) for
 
 ## Compression Methods
 
-The following compression methods are implemented for image classifiers: (follow the links for more details on each method and experiment results)
+**Follow the links for more details on each method and experiment results.**
 
 ### Sparsity - Pruning and regularization
 
