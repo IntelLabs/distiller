@@ -183,8 +183,8 @@ If you do not use CUDA 10.1 in your environment, please refer to [PyTorch websit
 
 Distiller comes with sample applications and tutorials covering a range of model types:
 
-| Model Type | Sparsity | Post-train quant | Quant-aware training | Auto Compression (AMC) |
-|------------|:--------:|:----------------:|:--------------------:|:----------------------:|
+| Model Type | Sparsity | Post-training quantization | Quantization-aware training | Auto Compression (AMC) |
+|------------|:--------:|:--------------------------:|:---------------------------:|:----------------------:|
 | [Image classification](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression) | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | [Word-level language model](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model)| :white_check_mark: | :white_check_mark: | | |
 | [Translation (GNMT)](https://github.com/NervanaSystems/distiller/tree/master/examples/GNMT) | | :white_check_mark: | | |
