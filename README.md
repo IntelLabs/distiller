@@ -52,19 +52,21 @@ If updating from an earlier revision of the code, please make sure to follow the
     - [Using venv](#using-venv)
     - [Activate the environment](#activate-the-environment)
   - [Install the package](#install-the-package)
+  - [Required PyTorch Version](#required-pytorch-version)
 - [Getting Started](#getting-started)
-  - [Example invocations of the sample application](#example-invocations-of-the-sample-application)
+  - [Basic Usage Examples](#basic-usage-examples)
     - [Training-only](#training-only)
     - [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
     - [Post-training quantization](#post-training-quantization)
   - [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
-- [Set up the classification datasets](#set-up-the-classification-datasets)
 - [Running the tests](#running-the-tests)
 - [Generating the HTML documentation site](#generating-the-html-documentation-site)
 - [Built With](#built-with)
 - [Versioning](#versioning)
 - [License](#license)
 - [Community](#community)
+  - [Github projects using Distiller:](#github-projects-using-distiller)
+  - [Research papers citing Distiller:](#research-papers-citing-distiller)
 - [Acknowledgments](#acknowledgments)
 - [Disclaimer](#disclaimer)
 
@@ -179,25 +181,30 @@ If you do not use CUDA 10.1 in your environment, please refer to [PyTorch websit
 
 ## Getting Started
 
-You can jump head-first into some limited examples of network compression, to get a feeling for the library without too much investment on your part.  
+Distiller comes with sample applications and tutorials covering a range of model types:
 
-Distiller comes with a sample application for compressing image classification DNNs, ```compress_classifier.py``` located at ```distiller/examples/classifier_compression```.
+| Model Type | Sparsity | Post-train quant | Quant-aware training | Auto Compression (AMC) |
+|------------|:--------:|:----------------:|:--------------------:|:----------------------:|
+| [Image classification](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression) | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| [Word-level language model](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model)| :white_check_mark: | :white_check_mark: | | |
+| [Translation (GNMT)](https://github.com/NervanaSystems/distiller/tree/master/examples/GNMT) | | :white_check_mark: | | |
+| [Recommendation System (NCF)](https://github.com/NervanaSystems/distiller/tree/master/examples/ncf) | |  :white_check_mark: | | |
+| [Object Detection](https://github.com/NervanaSystems/distiller/tree/master/examples/object_detection_compression) |  :white_check_mark: | | | |
 
-We'll show you how to use it for some simple use-cases, and will point you to some ready-to-go Jupyter notebooks.
+Head to the [examples](https://github.com/NervanaSystems/distiller/tree/master/examples) directory for more details.
 
-For more details, there are some other resources you can refer to:
+Other resources to refer to, beyond the examples:
 + [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
 + [Usage](https://nervanasystems.github.io/distiller/usage.html)
 + [Preparing a model for quantization](https://nervanasystems.github.io/distiller/prepare_model_quant.html)
-+ [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
 + [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
-+ [Tutorial: Post-Training Quantization of a Language Model](https://nervanasystems.github.io/distiller/tutorial-lang_model_quant.html)
-+ [Tutorial: Post-Training Quantization of GNMT (translation model)](https://nervanasystems.github.io/distiller/tutorial-gnmt_quant.html)
-+ [Post-training quantization command line examples](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md)
 
-### Example invocations of the sample application
+### Basic Usage Examples
+
+The following are simple examples using Distiller's image classifcation sample, showing some of Distiller's capabilities.
+
 + [Training-only](#training-only)
 + [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
 + [Post-training quantization](#post-training-quantization)
@@ -216,7 +223,6 @@ $ python3 compress_classifier.py --arch simplenet_cifar ../../../data.cifar10 -p
 
 You can use a TensorBoard backend to view the training progress (in the diagram below we show a couple of training sessions with different LR values).  For compression sessions, we've added tracing of activation and parameter sparsity levels, and regularization loss.
 <center> <img src="imgs/simplenet_training.png"></center>
-
 
 #### Getting parameter statistics of a sparsified model
 We've included in the git repository a few checkpoints of a ResNet20 model that we've trained with 32-bit floats.  Let's load the checkpoint of a model that we've trained with channel-wise Group Lasso regularization.<br>
@@ -256,34 +262,6 @@ After installing and running the server, take a look at the [notebook](https://g
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
 <center> <img src="imgs/resnet18-sensitivity.png"></center>
-
-## Set up the classification datasets
-The sample application for compressing image classification DNNs, ```compress_classifier.py``` located at ```distiller/examples/classifier_compression```, uses both [CIFAR10](https://www.cs.toronto.edu/~kriz/cifar.html) and [ImageNet](http://www.image-net.org/) image datasets.<br>
-
-The ```compress_classifier.py``` application will download the CIFAR10 automatically the first time you try to use it (thanks to TorchVision).  The example invocations used  throughout Distiller's documentation assume that you have downloaded the images to directory ```distiller/../data.cifar10```, but you can place the images anywhere you want (you tell ```compress_classifier.py``` where the dataset is located - or where you want the application to download the dataset to - using a command-line parameter).
-
-ImageNet needs to be [downloaded](http://image-net.org/download) manually, due to copyright issues.  Facebook has created a [set of scripts](https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset) to help download and extract the dataset.
-
-Again, the Distiller documentation assumes the following directory structure for the datasets, but this is just a suggestion:
-```
-distiller
-  examples
-    classifier_compression
-data.imagenet/
-    train/
-    val/
-data.cifar10/
-    cifar-10-batches-py/
-        batches.meta
-        data_batch_1
-        data_batch_2
-        data_batch_3
-        data_batch_4
-        data_batch_5
-        readme.html
-        test_batch
-```
-
 
 ## Running the tests
 We are currently light-weight on test and this is an area where contributions will be much appreciated.<br>
