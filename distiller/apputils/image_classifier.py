@@ -28,6 +28,7 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
+from torch.autograd import set_detect_anomaly
 import parser
 from functools import partial
 import argparse
@@ -506,6 +507,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         optimizer.step()
         compression_scheduler.on_minibatch_end(epoch)
     """
+    # set_detect_anomaly(True)
     def _log_training_progress():
         # Log some statistics
         errs = OrderedDict()
@@ -617,8 +619,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
             _log_training_progress()
 
         end = time.time()
-    #return acc_stats
+    # return acc_stats
     # NOTE: this breaks previous behavior, which returned a history of (top1, top5) values
+    # set_detect_anomaly(False)
+    if not np.isfinite(losses[OVERALL_LOSS_KEY].mean):
+        raise ValueError('Fuck my life dude')
     return classerr.value(1), classerr.value(5), losses[OVERALL_LOSS_KEY]
 
 
