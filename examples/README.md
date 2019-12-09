@@ -2,9 +2,9 @@
 
 Distiller comes with sample applications and tutorials covering a range of model types:
 
-| Model Type | Sparsity | Post-train quant | Quant-aware training | Auto Compression (AMC) | In Directory |
-|------------|:--------:|:----------------:|:--------------------:|:----------------------:|--------------|
-| **Image classification** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | [classifier_compression](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression) |
+| Model Type | Sparsity | Post-train quant | Quant-aware training | Auto Compression (AMC) | In Directories |
+|------------|:--------:|:----------------:|:--------------------:|:----------------------:|----------------|
+| **Image classification** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | [classifier_compression](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression), [amc](https://github.com/NervanaSystems/distiller/tree/master/examples/auto_compression/amc) |
 | **Word-level language model** | :white_check_mark: | :white_check_mark: | | |[word_language_model](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model) |
 | **Translation (GNMT)** | | :white_check_mark: | | | [GNMT](https://github.com/NervanaSystems/distiller/tree/master/examples/GNMT) |
 | **Recommendation System (NCF)** | |  :white_check_mark: | | | [ncf](https://github.com/NervanaSystems/distiller/tree/master/examples/ncf) |
