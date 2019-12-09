@@ -8,8 +8,8 @@ This is Distiller's main example application for compressing image classificatio
     - [Sparsity - Pruning and Regularization](#sparsity---pruning-and-regularization)
     - [Quantization](#quantization)
     - [Knowledge Distillation](#knowledge-distillation)
-    - [Early-exit](#early-exit)
-  - [Models and Datasets Supported](#models-and-datasets-supported)
+  - [Models Supported](#models-supported)
+  - [Datasets Supported](#datasets-supported)
   - [Re-usable Image Classification Code](#re-usable-image-classification-code)
 
 ## Usage
@@ -24,33 +24,59 @@ Please see the [docs](https://nervanasystems.github.io/distiller/usage.html) for
 
 A non-exhaustive list of the methods implemented:
 
-* [AGP](https://github.com/NervanaSystems/distiller/tree/master/examples/agp-pruning)
-* [DropFilter](https://github.com/NervanaSystems/distiller/tree/master/examples/drop_filter)
-* [Lottery-Ticket Hypothesis](https://github.com/NervanaSystems/distiller/tree/master/examples/lottery_ticket)
-* [Network Surgery](https://github.com/NervanaSystems/distiller/tree/master/examples/network_surgery)
-* [Network Trimming](https://github.com/NervanaSystems/distiller/tree/master/examples/network_trimming)
-* [Hybrids](https://github.com/NervanaSystems/distiller/tree/master/examples/hybrid): These are examples where multiple pruning strategies are combined.
+- [AGP](https://github.com/NervanaSystems/distiller/tree/master/examples/agp-pruning)
+- [DropFilter](https://github.com/NervanaSystems/distiller/tree/master/examples/drop_filter)
+- [Lottery-Ticket Hypothesis](https://github.com/NervanaSystems/distiller/tree/master/examples/lottery_ticket)
+- [Network Surgery](https://github.com/NervanaSystems/distiller/tree/master/examples/network_surgery)
+- [Network Trimming](https://github.com/NervanaSystems/distiller/tree/master/examples/network_trimming)
+- [Hybrids](https://github.com/NervanaSystems/distiller/tree/master/examples/hybrid): These are examples where multiple pruning strategies are combined.
 
 ### Quantization
 
-* [Post-training quantization](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/post_train_quant/command_line.md) based on the TensorFlow quantization scheme (originally GEMMLOWP) with additional capabilities.
-* [Quantization-aware training](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/quant_aware_train): TensorFlow scheme, DoReFa, PACT
+- [Post-training quantization](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/post_train_quant/command_line.md) based on the TensorFlow quantization scheme (originally GEMMLOWP) with additional capabilities.
+- [Quantization-aware training](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/quant_aware_train): TensorFlow scheme, DoReFa, PACT
 
 ### Knowledge Distillation
 
 See details in the [docs](https://nervanasystems.github.io/distiller/schedule.html#knowledge-distillation), and these YAML schedules training ResNet on CIFAR-10 with knowledge distillation: [FP32](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/fp32_baselines/preact_resnet_cifar_base_fp32.yaml) ; [DoReFa](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/quant_aware_train/preact_resnet_cifar_dorefa.yaml).
 
-### Early-exit
-
-See details in the [docs](https://nervanasystems.github.io/distiller/algo_earlyexit.html).
-
-## Models and Datasets Supported
+## Models Supported
 
 The sample app integrates with [TorchVision](https://pytorch.org/docs/master/torchvision/models.html#classification) and [Cadene's pre-trained models](https://github.com/Cadene/pretrained-models.pytorch). Barring specific issues, any model from these two repositories can be specified from the command line and used.
 
 We've implemented additional models, which can be found [here](https://github.com/NervanaSystems/distiller/tree/master/distiller/models).
 
+## Datasets Supported
+
 The application supports ImageNet, CIFAR-10 and MNIST.
+
+The `compress_classifier.py` application will download the CIFAR-10 and MNIST datasets automatically the first time you try to use them (thanks to TorchVision).  The example invocations used  throughout Distiller's documentation assume that you have downloaded the images to directory `distiller/../data.cifar10`, but you can place the images anywhere you want (you tell `compress_classifier.py` where the dataset is located - or where you want the application to download the dataset to - using a command-line parameter).
+
+ImageNet needs to be [downloaded](http://image-net.org/download) manually, due to copyright issues.  Facebook has created a [set of scripts](https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset) to help download and extract the dataset.
+
+Again, the Distiller documentation assumes the following directory structure for the datasets, but this is just a suggestion:
+```
+distiller
+  examples
+    classifier_compression
+data.imagenet/
+    train/
+    val/
+data.cifar10/
+    cifar-10-batches-py/
+        batches.meta
+        data_batch_1
+        data_batch_2
+        data_batch_3
+        data_batch_4
+        data_batch_5
+        readme.html
+        test_batch
+data.mnist/
+    MNIST/
+        processed/
+        raw/
+```
 
 ## Re-usable Image Classification Code
 
