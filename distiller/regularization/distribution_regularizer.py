@@ -151,7 +151,7 @@ class ProbDist:
             os.mkdir(save_dir)
         filename = os.path.join(save_dir, '%s.distribution.png' % p_name)
         b, d = self.bins.detach().cpu().numpy(), self.distribution.detach().cpu().numpy()
-        plt.bar(b, d)
+        plt.plot(b, d)
         plt.title('%s Distribution.' % p_name)
         # extent = full_extent(ax).transformed(fig.dpi_scale_trans.inverted())
         plt.savefig(filename)
