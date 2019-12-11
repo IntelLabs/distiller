@@ -147,6 +147,8 @@ class ProbDist:
         self.bins = bins  # type: torch.Tensor
 
     def savefig(self, p_name, save_dir='./plots/'):
+        if not os.path.isdir(save_dir):
+            os.mkdir(save_dir)
         filename = os.path.join(save_dir, '%s.distribution.png' % p_name)
         b, d = self.bins.detach().cpu().numpy(), self.distribution.detach().cpu().numpy()
         plt.bar(b, d)
