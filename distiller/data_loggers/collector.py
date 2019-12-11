@@ -527,7 +527,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             """
             Updates the 'b' parameter of Laplace Distribution.
             """
-            curr_abs_dists = (values - mean).abs()
+            curr_abs_dists = (values - mean).abs_()
             return update_running_mean(curr_abs_dists, previous_b, total_values_so_far)
 
         def update_record(record, tensor):
@@ -566,9 +566,10 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 record['shape'] = distiller.size2str(tensor)
 
         if self.inplace_runtime_check and any([id(input) == id(output) for input in inputs]):
-            raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
-                               'You can either disable this check or make sure no in-place operations occur. '
-                               'See QuantCalibrationStatsCollector class documentation for more info.')
+            if not isinstance(module, torch.nn.modules.dropout._DropoutNd):
+                raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
+                                   'You can either disable this check or make sure no in-place operations occur. '
+                                   'See QuantCalibrationStatsCollector class documentation for more info.')
 
         module.batch_idx += 1
 

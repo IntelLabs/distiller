@@ -16,8 +16,8 @@ Post-training quantization can either be configured straight from the command-li
 |--------------------------|-----------|---------------------------------------------------------------------------------------|---------|
 | `--quantize-eval`        | `--qe`    | Apply linear quantization to model before evaluation                                  | Off     |
 | `--qe-mode`              | `--qem`   | Linear quantization mode. Choices: "sym", "asym_u", "asym_s"                          | "sym"   |
-| `--qe-bits-acts`         | `--qeba`  | # of bits for quantization of activations                                             | 8       |
-| `--qe-bits-wts`          | `--qebw`  | # of bits for quantization of weights                                                 | 8       |
+| `--qe-bits-acts`         | `--qeba`  | # of bits for quantization of activations. Use 0 to not quantize activations          | 8       |
+| `--qe-bits-wts`          | `--qebw`  | # of bits for quantization of weights. Use 0 to not quantize weights                  | 8       |
 | `--qe-bits-accum`        | N/A       | # of bits for quantization of the accumulator                                         | 32      |
 | `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std"                        | "none"  |
 | `--qe-clip-n-stds`       | N/A       | When qe-clip-acts is set to 'n_std', this is the number of standard deviations to use | None    |
@@ -75,16 +75,16 @@ This table summarizes the settings and results for each run. The command lines f
 
 |    | Mode       | # Bits Acts | # Bits Weights | Per-Channel | Clip Acts             | Top-1 Accuracy |
 |----|------------|-------------|----------------|-------------|-----------------------|----------------|
-| 1  | FP32       | 32          | 32             | N/A         |                       | 76.13%         |
-| 2  | Symmetric  | 8           | 8              | No          | none                  | 74.978%        |
-| 3  | Symmetric  | 8           | 8              | Yes         | none                  | 75.296%        |
-| 4  | Symmetric  | 8           | 8              | Yes         | avg                   | 72.636% (See Note 1 below) |
-| 5  | Symmetric  | 8           | 8              | Yes         | avg (exc. last layer) | 75.86%         |
-| 6  | Asymmetric | 8           | 8              | No          | none                  | 75.328%        |
-| 7  | Asymmetric | 8           | 8              | Yes         | avg (exc. last layer) | 75.86%         |
-| 8  | Symmetric  | 6           | 6              | No          | none                  | 22.882% (See Note 2 below) |
-| 9  | Asymmetric | 6           | 6              | No          | none                  | 62.212%        |
-| 10 | Asymmetric | 6           | 6              | Yes         | avg (exc. last layer) | 74.36%         |
+| 1  | FP32       | 32          | 32             | N/A         |                       | 76.130%        |
+| 2  | Symmetric  | 8           | 8              | No          | none                  | 74.782%        |
+| 3  | Symmetric  | 8           | 8              | Yes         | none                  | 75.138%        |
+| 4  | Symmetric  | 8           | 8              | Yes         | avg                   | 72.318% (See Note 1 below) |
+| 5  | Symmetric  | 8           | 8              | Yes         | avg (exc. last layer) | 75.824%        |
+| 6  | Asymmetric | 8           | 8              | No          | none                  | 75.292%        |
+| 7  | Asymmetric | 8           | 8              | Yes         | avg (exc. last layer) | 75.986%        |
+| 8  | Symmetric  | 6           | 6              | No          | none                  | 32.690% (See Note 2 below) |
+| 9  | Asymmetric | 6           | 6              | No          | none                  | 62.230%        |
+| 10 | Asymmetric | 6           | 6              | Yes         | avg (exc. last layer) | 74.494%        |
 
 Command lines:
 
