@@ -880,6 +880,10 @@ def acts_quant_stats_collection(model, criterion, loggers, args, test_loader=Non
     if test_loader is None:
         tmp_args = copy.deepcopy(args)
         tmp_args.effective_test_size = tmp_args.qe_calibration
+        # Batch size 256 causes out-of-memory errors on some models (due to extra space taken by
+        # stats calculations). Limiting to 128 for now.
+        # TODO: Come up with "smarter" limitation?
+        tmp_args.batch_size = min(128, tmp_args.batch_size)
         test_loader = load_data(tmp_args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
