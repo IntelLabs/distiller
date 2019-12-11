@@ -32,6 +32,7 @@ from distiller.modules import EltwiseAdd
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
+           'wide_resnet50_2', 'wide_resnet101_2',
            'DistillerBottleneck']
 
 
@@ -207,4 +208,27 @@ def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
     kwargs['groups'] = 32
     kwargs['width_per_group'] = 8
     return _resnet('resnext101_32x8d', DistillerBottleneck, [3, 4, 23, 3],
+                   pretrained, progress, **kwargs)
+
+def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
+    """Constructs a Wide ResNet-50-2 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['width_per_group'] = 64 * 2
+    return _resnet('wide_resnet50_2', DistillerBottleneck, [3, 4, 6, 3],
+                   pretrained, progress, **kwargs)
+
+
+def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
+    """Constructs a Wide ResNet-101-2 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['width_per_group'] = 64 * 2
+    return _resnet('wide_resnet101_2', DistillerBottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
