@@ -803,4 +803,4 @@ def test_linear_layer_wrapper_params_only(per_channel, bias):
 
     x = torch.rand(5, in_features)
 
-    _test_wts_only_quant(layer, x, per_channel, bias)
+    _test_wts_only_quant(layer, x, per_channel, bias, 8)
