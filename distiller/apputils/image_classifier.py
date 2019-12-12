@@ -444,7 +444,7 @@ def create_activation_stats_collectors(model, *phases):
 
     genCollectors = lambda: missingdict({
         "sparsity_ifm":      SummaryActivationStatsCollector(model, "sparsity_ifm",
-            lambda t: 100 * distiller.utils.sparsity(t), in_or_out='in', classes=None),
+            lambda t: 100 * distiller.utils.sparsity(t), classes=None, output_flag=False),
         "sparsity_ofm":      SummaryActivationStatsCollector(model, "sparsity_ofm",
             lambda t: 100 * distiller.utils.sparsity(t)),
         "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",

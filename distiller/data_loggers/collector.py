@@ -205,15 +205,16 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
 
+    output_flag - When True collect on OFM, otherwise, IFMs
     inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
     def __init__(self, model, stat_name, summary_fn,
                  classes=[torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU],
-                 in_or_out='out',
+                 output_flag=True,
                  inputs_consolidate_func:typing.Callable[[typing.Sequence[TensorType]], TensorType]=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
-        self.output_flag = (in_or_out == 'out')
+        self.output_flag = output_flag
         self.inputs_func = inputs_consolidate_func
 
     def _activation_stats_cb(self, module, inputs, output):
