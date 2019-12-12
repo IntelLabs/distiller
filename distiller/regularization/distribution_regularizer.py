@@ -197,7 +197,7 @@ def MLPDL(tensor, n_bins, temperature=1.0, n_centers=255, waist=1.0):
         b = centers[1] - centers[0]
         x = BB - CC
         y = torch.exp(-torch.abs(CC / (waist*b)))
-        x = torch.cos(np.pi * x / b).abs()
+        x = torch.exp(-temperature * x.abs() / b) * torch.cos(np.pi * x / b).abs()
         x = x * y
         x = x.sum(dim=1)
         x_dist = x / x.sum()
