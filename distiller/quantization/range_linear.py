@@ -302,8 +302,7 @@ class RangeLinearQuantWrapper(nn.Module):
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC,
                  clip_acts=ClipMode.NONE, activation_stats=None, clip_n_stds=None, clip_half_range=False,
                  scale_approx_mult_bits=None,
-                 input_overrides=None, requires_quantized_inputs=True, inputs_quant_auto_fallback=False,
-                 requires_grad=False):
+                 input_overrides=None, requires_quantized_inputs=True, inputs_quant_auto_fallback=False):
         super(RangeLinearQuantWrapper, self).__init__()
 
         input_overrides = input_overrides or OrderedDict()
@@ -379,28 +378,10 @@ class RangeLinearQuantWrapper(nn.Module):
                                                           clip_n_stds, clip_half_range, scale_approx_mult_bits)
             if not isinstance(scale, torch.Tensor):
                 scale, zp = torch.tensor(scale), torch.tensor(zp)
-            scale.requires_grad_(requires_grad)
-            zp.requires_grad_(requires_grad)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
         else:
             self.preset_act_stats = False
-
-    @property
-    def requires_grad(self):
-        named_linear_quant_params = list(self.named_linear_quant_params())
-        if not named_linear_quant_params:
-            return False
-        return all(quant_param.requires_grad for name, quant_param in named_linear_quant_params)
-
-    @requires_grad.setter
-    def requires_grad(self, val):
-        named_linear_quant_params = list(self.named_linear_quant_params())
-        if not named_linear_quant_params:
-            raise ValueError('No buffers in "%s" class that may acquire gradients.' %
-                             self.__class__.__name__)
-        for name, buffer in named_linear_quant_params:
-            buffer.requires_grad_(val)
 
     def named_linear_quant_params(self):
         if self.output_quant_settings.num_bits is not None and self.preset_act_stats:
@@ -423,8 +404,8 @@ class RangeLinearQuantWrapper(nn.Module):
             self.set_linear_quant_param(name, val)
 
     def forward(self, *inputs):
-        # if self.training:
-        #     raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
+        if self.training:
+            raise RuntimeError(self.__class__.__name__ + " can only be used in eval mode")
 
         if self.output_quant_settings.num_bits is None:
             # Pass through
@@ -619,14 +600,13 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
                  clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
                  input_overrides=None, inputs_quant_auto_fallback=False,
-                 requires_grad=False, save_fp_weights=False):
+                 save_fp_weights=False):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds, clip_half_range,
                                                                 scale_approx_mult_bits,
                                                                 input_overrides=input_overrides,
                                                                 requires_quantized_inputs=True,
-                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                                requires_grad=requires_grad)
+                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
         if not isinstance(wrapped_module, (nn.Conv2d, nn.Conv3d, nn.Linear)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Conv2D, Conv3D and Linear modules')
@@ -649,10 +629,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                                               self.wts_quant_settings.num_bits,
                                                               self.wts_quant_settings.quant_mode,
                                                               per_channel=self.wts_quant_settings.per_channel)
-        w_scale = w_scale.requires_grad_(requires_grad) if isinstance(w_scale, torch.Tensor) \
-            else torch.tensor(w_scale, requires_grad=requires_grad)
-        w_zero_point = w_zero_point.requires_grad_(requires_grad) if isinstance(w_zero_point, torch.Tensor) \
-            else torch.tensor(w_zero_point, requires_grad=requires_grad)
+        w_scale = w_scale if isinstance(w_scale, torch.Tensor) else torch.tensor(w_scale)
+        w_zero_point = w_zero_point if isinstance(w_zero_point, torch.Tensor) else torch.tensor(w_zero_point)
 
         self.register_buffer('w_scale', w_scale)
         self.register_buffer('w_zero_point', w_zero_point)
@@ -832,14 +810,13 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, activation_stats=None,
                  clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 input_overrides=None, inputs_quant_auto_fallback=False, requires_grad=False):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         super(RangeLinearQuantMatmulWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                             clip_acts, activation_stats, clip_n_stds, clip_half_range,
                                                             scale_approx_mult_bits,
                                                             input_overrides=input_overrides,
                                                             requires_quantized_inputs=True,
-                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                            requires_grad=requires_grad)
+                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
         if not isinstance(wrapped_module, (distiller.modules.Matmul, distiller.modules.BatchMatmul)):
             raise ValueError(self.__class__.__name__ + ' can wrap only Matmul modules')
@@ -877,8 +854,7 @@ class NoStatsError(NotImplementedError):
 class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 input_overrides=None, inputs_quant_auto_fallback=False,
-                 requires_grad=False):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.Concat):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.Concat modules')
 
@@ -892,8 +868,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
                                                             scale_approx_mult_bits=scale_approx_mult_bits,
                                                             input_overrides=input_overrides,
                                                             requires_quantized_inputs=True,
-                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                            requires_grad=requires_grad)
+                                                            inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
     def quantized_forward(self, *inputs_q):
         # For concatenation to make sense input scales need to match, so we re-quantize all inputs
@@ -915,8 +890,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 input_overrides=None, inputs_quant_auto_fallback=False,
-                 requires_grad=False):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.EltwiseAdd):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseAdd modules')
 
@@ -930,8 +904,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
                                                                 scale_approx_mult_bits=scale_approx_mult_bits,
                                                                 input_overrides=input_overrides,
                                                                 requires_quantized_inputs=True,
-                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                                requires_grad=requires_grad)
+                                                                inputs_quant_auto_fallback=inputs_quant_auto_fallback)
 
     def quantized_forward(self, *inputs_q):
         # Re-scale inputs to the accumulator scale
@@ -954,8 +927,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 input_overrides=None, inputs_quant_auto_fallback=False,
-                 requires_grad=False):
+                 input_overrides=None, inputs_quant_auto_fallback=False):
         if not isinstance(wrapped_module, distiller.modules.EltwiseMult):
             raise ValueError(self.__class__.__name__ + ' can only wrap distiller.modules.EltwiseMult modules')
 
@@ -969,8 +941,7 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
                                                                  scale_approx_mult_bits=scale_approx_mult_bits,
                                                                  input_overrides=input_overrides,
                                                                  requires_quantized_inputs=True,
-                                                                 inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                                 requires_grad=requires_grad)
+                                                                 inputs_quant_auto_fallback=inputs_quant_auto_fallback)
         self.accum_scale = 1
 
     def quantized_forward(self, *inputs_q):
@@ -1036,8 +1007,7 @@ class FP16Wrapper(FPWrapper):
 
 
 class RangeLinearEmbeddingWrapper(nn.Module):
-    def __init__(self, wrapped_module, num_bits, mode=LinearQuantMode.SYMMETRIC, stats=None,
-                 requires_grad=False):
+    def __init__(self, wrapped_module, num_bits, mode=LinearQuantMode.SYMMETRIC, stats=None):
         if not isinstance(wrapped_module, nn.Embedding):
             raise ValueError(self.__class__.__name__ + ' can only wrap torch.nn.Embedding modules')
 
@@ -1052,9 +1022,6 @@ class RangeLinearEmbeddingWrapper(nn.Module):
             w_scale, w_zero_point = _get_quant_params_from_stats_dict(stats['output'], num_bits, mode)
 
         device = wrapped_module.weight.device
-
-        w_scale.requires_grad_(requires_grad)
-        w_zero_point.requires_grad_(requires_grad)
         self.register_buffer('w_scale', w_scale.to(device))
         self.register_buffer('w_zero_point', w_zero_point.to(device))
         linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.min_q_val,
@@ -1090,13 +1057,12 @@ class RangeLinearEmbeddingWrapper(nn.Module):
 class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 fpq_module=None, requires_grad=False):
+                 fpq_module=None):
         super(RangeLinearFakeQuantWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                           clip_acts=clip_acts, activation_stats=activation_stats,
                                                           clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                                           scale_approx_mult_bits=scale_approx_mult_bits,
-                                                          requires_quantized_inputs=False,
-                                                          requires_grad=requires_grad)
+                                                          requires_quantized_inputs=False)
         self.fpq_module = str(fpq_module) if fpq_module else None
         self.dtype = torch.float
         if self.fpq_module:
@@ -1406,11 +1372,6 @@ class PostTrainLinearQuantizer(Quantizer):
         """
         for k, v in new_config.items():
             self.set_linear_quant_param(k, v)
-
-    def set_requires_grad_linear_quant_params(self, val=True):
-        for module in self.model.modules():
-            if is_post_train_quant_wrapper(module, include_fpwrapper=False):
-                module.requires_grad = val
 
     @classmethod
     def from_args(cls, model, args):

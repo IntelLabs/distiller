@@ -142,8 +142,8 @@ def test_conv_layer_wrapper(conv_input, conv_weights, mode, clip_acts, per_chann
     conv_input = attach_quant_metadata(conv_input, 8, mode, stats=input_stats, clip_mode=clip_acts,
                                        per_channel=False, num_stds=None, scale_approx_mult_bits=None)
 
-    # with pytest.raises(RuntimeError):
-    #     model(conv_input)
+    with pytest.raises(RuntimeError):
+        model(conv_input)
 
     model.eval()
 
@@ -687,7 +687,7 @@ def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
     model = LinearBNSplitAct(act1_type, act2_type)
     stats = gen_stats_for_model(model)
     stats['bn']['output'] = bn_out_stats
-    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats), save_fp_weights=True)
     quantizer.prepare_model(torch.randn(10, 10))
     # get quant params:
     expected_quant_params_keys = {
