@@ -40,6 +40,8 @@ msglogger = logging.getLogger()
 def model_device(model):
     """Determine the device the model is allocated on."""
     # Source: https://discuss.pytorch.org/t/how-to-check-if-model-is-on-cuda/180
+    if isinstance(model, nn.DataParallel):
+        return model.src_device_obj
     try:
         return str(next(model.parameters()).device)
     except StopIteration:

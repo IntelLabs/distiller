@@ -1617,14 +1617,12 @@ class PostTrainLinearQuantizer(Quantizer):
             self._clip_stats(self.model_activation_stats[name]['output'], -sat_val, sat_val)
 
     def _post_prepare_model(self):
-        if isinstance(self.model, nn.DataParallel):
-            # We restore the buffers to the master-GPU of the modules:
-            device = self.model.src_device_obj
-            m = self.model.module
-            for param in m.parameters():
-                param.data = param.data.to(device)
-            for buffer in m.buffers():
-                buffer.data = buffer.data.to(device)
+        m = self.model
+        device = distiller.model_device(m)
+        for param in m.parameters():
+            param.data = param.data.to(device)
+        for buffer in m.buffers():
+            buffer.data = buffer.data.to(device)
         self.linear_quant_params = OrderedDict(self.named_linear_quant_params())
 
 
