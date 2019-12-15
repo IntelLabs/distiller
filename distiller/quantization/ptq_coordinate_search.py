@@ -82,6 +82,7 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, sear
     Returns:
         quantized_layer after optimization
     """
+    layer.eval(), quantized_layer.eval()
     init_qp_dict = OrderedDict(quantized_layer.named_linear_quant_params())
     init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
                                any(b in k for b in search_on))
@@ -359,7 +360,7 @@ if __name__ == "__main__":
     msglogger = logging.getLogger(__name__)
     msglogger.setLevel(logging.INFO)
     model = create_model(args.pretrained, args.dataset, args.arch,
-                         parallel=not args.load_serialized, device_ids=args.gpus)
+                         parallel=not args.load_serialized, device_ids=args.gpus).eval()
     device = next(model.parameters()).device
     eval_counter = count(0)
 
