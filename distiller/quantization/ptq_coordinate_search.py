@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, \
-    RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, is_post_train_quant_wrapper
+    RangeLinearQuantWrapper, RangeLinearEmbeddingWrapper, is_post_train_quant_wrapper, LinearQuantMode
 from functools import partial
 from distiller.summary_graph import SummaryGraph
 from distiller.model_transforms import fold_batch_norms
@@ -218,11 +218,11 @@ def get_default_args():
                         help='Stores the input batch in memory to optimize performance.')
     parser.add_argument('--search-for-weights', dest='save_fp_weights', action='store_true', default=False,
                         help='Whether or not search quantization parameters for weights as well.')
-    parser.add_argument('--search-on', nargs='+', type=str, default=[],
-                        help='Which buffers to conduct the search on. Choices: \'scale\' and \'zero_point\'. '
-                             'Default: both.')
     parser.add_argument('--base-score', type=float, default=None)
     args = parser.parse_args()
+    args.search_on = ['scale']
+    if args.qe_mode in [LinearQuantMode.ASYMMETRIC_SIGNED, LinearQuantMode.ASYMMETRIC_UNSIGNED]:
+        args.search_on.append('zero_point')
     return args
 
 
