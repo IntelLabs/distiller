@@ -705,6 +705,8 @@ def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
     quantizer.set_linear_quant_param('linear.output_scale', 30.)
     assert model.linear.output_zero_point == 2.
     assert model.linear.output_scale == 30.
+    assert model.linear.force_readjust == True
+    assert model.act1.force_readjust == True
     expected_quant_param_linear_dict = {
         'output_zero_point': torch.tensor(2.),
         'output_scale': 30.,
@@ -719,6 +721,8 @@ def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
     quantizer.update_linear_quant_params(new_config)
     assert model.linear.output_zero_point == 4
     assert model.act2.output_scale == 50
+    assert model.linear.force_readjust == True
+    assert model.act1.force_readjust == True
 
 
 class DummyWordLangModel(nn.Module):
@@ -747,6 +751,8 @@ def test_acts_quant_params_rnn(rnn_model):
     quantizer.update_linear_quant_params(new_config)
     assert model.rnn.rnn.cells[0].act_o.output_scale == 4
     assert model.embedding.w_scale == 59.0
+    assert model.rnn.rnn.cells[0].act_o.force_readjust == True
+    assert model.rnn.rnn.cells[0].act_f.force_readjust == True
 
 
 ###############################################################################

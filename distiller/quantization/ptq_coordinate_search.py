@@ -216,8 +216,6 @@ def get_default_args():
                         help='Use portion of the test size.')
     parser.add_argument('--opt-eval-memoize-dataloader', dest='memoize_dataloader', action='store_true', default=False,
                         help='Stores the input batch in memory to optimize performance.')
-    parser.add_argument('--search-for-weights', dest='save_fp_weights', action='store_true', default=False,
-                        help='Whether or not search quantization parameters for weights as well.')
     parser.add_argument('--base-score', type=float, default=None)
     args = parser.parse_args()
     args.search_on = ['scale']

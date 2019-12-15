@@ -263,6 +263,8 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
+    group.add_argument('--qe-save-fp-weights', action='store_true',
+                       help='Allow weights requantization.')
 
     stats_group = group.add_mutually_exclusive_group()
     stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
@@ -319,6 +321,7 @@ class RangeLinearQuantWrapper(nn.Module):
 
         self.preset_act_stats = False
         self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
+        self.register_buffer('force_readjust', torch.tensor(False))
 
         # Activations not quantized - stop here
         if num_bits_acts is None:
@@ -393,6 +396,7 @@ class RangeLinearQuantWrapper(nn.Module):
         if name not in dict(self.named_linear_quant_params()):
             raise ValueError('%s is not a quantization parameter.' % name)
         getattr(self, name).data.fill_(val)
+        self.force_readjust.fill_(True)
 
     def update_linear_quant_params(self, new_config):
         """
@@ -652,6 +656,10 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                 # requantize each time based on dynamic input scale factor
                 self.register_buffer('base_b_q', base_b_q)
 
+        # allow requantizing the bias:
+        if self.has_bias and self.preset_act_stats:
+            self.register_buffer('fp_bias', self.wrapped_module.bias.data.clone().detach())
+
         # Activations not quantized - de-quant parameters and return
         if self.fake_quant_params:
             linear_dequantize(wrapped_module.weight.data, self.w_scale, self.w_zero_point, inplace=True)
@@ -662,7 +670,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # Activations are quantized - setup accumulator quantization parameters
         device = self.w_scale.device
         if self.preset_act_stats:
-            t = torch.zeros_like(self.w_scale)
+            t = torch.empty_like(self.w_scale)
             if self.wts_quant_settings.per_channel:
                 t = t.squeeze(dim=-1)
             self.register_buffer('accum_scale', t)
@@ -674,7 +682,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # and all subsequent calls are done with these shifted weights.
         # Upon calling `self.state_dict()` - we restore the actual quantized weights.
         # i.e. is_simulated_quant_weight_shifted = False
-        self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(0, dtype=torch.uint8, device=device))
+        self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(False, device=device))
 
     def named_linear_quant_params(self):
         if self.save_fp_weights:
@@ -686,7 +694,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         if name in ['w_scale', 'w_zero_point']:
             if self.save_fp_weights:
                 super().set_linear_quant_param(name, val)
-                self.wrapped_module.weight.data.fill_(self.wrapped_module.float_weight.data)
+                self.wrapped_module.weight.data.copy_(self.wrapped_module.float_weight.data)
                 linear_quantize_clamp(self.wrapped_module.weight.data, self.w_scale, self.w_zero_point,
                                       self.params_min_q_val,
                                       self.params_max_q_val, inplace=True)
@@ -716,12 +724,15 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             return accum_scale
 
         if self.preset_act_stats:
-            if self.num_forwards == 0:
-                self.accum_scale += get_accum_scale(input_q)
+            if self.num_forwards == 0 or self.force_readjust:
+                self.accum_scale.copy_(get_accum_scale(input_q))
                 if self.has_bias:
                     # Requantize bias to accumulator scale "permanently"
-                    linear_quantize_clamp(self.wrapped_module.bias.data, self.accum_scale.squeeze(), 0,
-                                          self.accum_min_q_val, self.accum_max_q_val, inplace=True)
+                    self.wrapped_module.bias.data.copy_(
+                        linear_quantize_clamp(self.fp_bias, self.accum_scale.squeeze(), 0,
+                                              self.accum_min_q_val, self.accum_max_q_val)
+                    )
+                self.force_readjust.fill_(False)
         else:
             self.accum_scale = get_accum_scale(input_q)
             if self.has_bias:
@@ -1355,6 +1366,12 @@ class PostTrainLinearQuantizer(Quantizer):
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff
 
+    def force_readjust_wrappers(self):
+        def _force_readjust(module):
+            if isinstance(module, RangeLinearQuantWrapper):
+                module.force_readjust.fill_(True)
+        self.model.apply(_force_readjust)
+
     def set_linear_quant_param(self, name, val):
         """
         Sets the the quant parameter by module_name.quant_param_name.
@@ -1363,6 +1380,7 @@ class PostTrainLinearQuantizer(Quantizer):
              val (int or float or torch.Tensor): the new value.
         """
         self.linear_quant_params[name].data.fill_(val)
+        self.force_readjust_wrappers()
 
     def update_linear_quant_params(self, new_config):
         """
@@ -1409,7 +1427,7 @@ class PostTrainLinearQuantizer(Quantizer):
                        scale_approx_mult_bits=args.qe_scale_approx_bits,
                        overrides=overrides,
                        inputs_quant_auto_fallback=True,
-                       save_fp_weights=args.save_fp_weights)
+                       save_fp_weights=args.qe_save_fp_weights)
 
     def save_per_layer_parameters(self, save_dir=''):
         defaults = OrderedDict(self.model.quantizer_metadata['params'])
