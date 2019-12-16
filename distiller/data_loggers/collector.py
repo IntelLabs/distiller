@@ -212,7 +212,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
 
-    collector_direction - enum type: IN for IFMs, OUT for IFM
+    collector_direction - enum type: IN for IFMs, OUT for OFM
     inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
     def __init__(self, model, stat_name, summary_fn,
