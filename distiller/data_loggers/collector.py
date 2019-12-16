@@ -18,6 +18,7 @@ import contextlib
 from functools import partial, reduce
 import operator
 import xlsxwriter
+import enum
 import yaml
 import os
 from sys import float_info
@@ -38,8 +39,16 @@ msglogger = logging.getLogger()
 
 __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
            'QuantCalibrationStatsCollector', 'ActivationHistogramsCollector',
+           'CollectorDirection',
            'collect_quant_stats', 'collect_histograms',
            'collector_context', 'collectors_context']
+
+class CollectorDirection(enum.Enum):
+    OUT = 0
+    OFM = 0
+    IN = 1
+    IFM = 1
+    IFMS = 1
 
 
 class ActivationStatsCollector(object):
@@ -203,15 +212,16 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
 
-    output_flag - When True collect on OFM, otherwise, IFMs
+    collector_direction - enum type: IN for IFMs, OUT for IFM
     inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
     def __init__(self, model, stat_name, summary_fn,
                  classes=[torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU],
-                 output_flag=True, inputs_consolidate_func=torch.cat):
+                 collector_direction=CollectorDirection.OUT,
+                 inputs_consolidate_func=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
-        self.output_flag = output_flag
+        self.collector_direction = collector_direction
         self.inputs_func = inputs_consolidate_func
 
     def _activation_stats_cb(self, module, inputs, output):
@@ -219,7 +229,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
         This is a callback from the forward() of 'module'.
         """
-        feature_map = output if self.output_flag else self.inputs_func(inputs)
+        feature_map = output if self.collector_direction == CollectorDirection.OUT else self.inputs_func(inputs)
         try:
             getattr(module, self.stat_name).add(self.summary_fn(feature_map.data), feature_map.data.numel())
         except RuntimeError as e:
