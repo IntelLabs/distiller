@@ -17,7 +17,6 @@
 import contextlib
 from functools import partial, reduce
 import operator
-import typing
 import xlsxwriter
 import yaml
 import os
@@ -42,7 +41,6 @@ __all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
            'collect_quant_stats', 'collect_histograms',
            'collector_context', 'collectors_context']
 
-TensorType = typing.TypeVar('TensorType')
 
 class ActivationStatsCollector(object):
     """Collect model activation statistics information.
@@ -210,8 +208,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     """
     def __init__(self, model, stat_name, summary_fn,
                  classes=[torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU],
-                 output_flag=True,
-                 inputs_consolidate_func:typing.Callable[[typing.Sequence[TensorType]], TensorType]=torch.cat):
+                 output_flag=True, inputs_consolidate_func=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
         self.output_flag = output_flag
