@@ -267,6 +267,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
             activation_stats[getattr(module, self.stat_name).name] = mean
 
     def save(self, fname):
+        """Save the stats to an Excel workbook"""
         if not fname.endswith('.xlsx'):
             fname = '.'.join([fname, 'xlsx'])
         with contextlib.suppress(OSError):
