@@ -82,7 +82,6 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, sear
     Returns:
         quantized_layer after optimization
     """
-    layer.eval(), quantized_layer.eval()
     init_qp_dict = OrderedDict(quantized_layer.named_linear_quant_params())
     init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
                                any(b in k for b in search_on))
@@ -158,6 +157,7 @@ def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_m
                                              search_on=search_on)
 
     distiller.model_setattr(quantizer.model, layer_name, quantized_layer)
+    quantizer.model.eval()
 
 
 def init_linear_quant_params(quantizer, original_model, sample_input, init_mode,
@@ -189,6 +189,7 @@ def init_linear_quant_params(quantizer, original_model, sample_input, init_mode,
                                        sample_input=sample_input,
                                        search_on=search_on)
     quantizer._post_prepare_model()
+    quantizer.model.eval()
 
 
 def get_default_args():
@@ -261,7 +262,7 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
         args = updated_args
     original_model = deepcopy(model)
     calib_eval_fn = calib_eval_fn or eval_fn
-    if not act_stats:
+    if not act_stats and not args.qe_config_file:
         msglogger.info('Collecting stats for model...')
         model_temp = distiller.utils.make_non_parallel_copy(model)
         act_stats = collect_quant_stats(model_temp, calib_eval_fn)
