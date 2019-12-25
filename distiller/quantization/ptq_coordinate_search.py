@@ -37,14 +37,36 @@ import scipy.optimize as opt
 import numpy as np
 
 
-def quant_params_dict2vec(p_dict):
+def quant_params_dict2vec(p_dict, quant_mode=LinearQuantMode.SYMMETRIC, search_clipping=False):
     keys, vals = zip(*p_dict.items())  # unzip the list of tuples
-    vals = np.array([val.item() for val in vals])
+    if search_clipping:
+        if quant_mode == LinearQuantMode.SYMMETRIC:
+            vals = np.array([val[1].item() for val in vals])  # only take the max_val
+        else:
+            vals = np.concatenate([(v1.item(), v2.item()) for v1, v2 in vals])  # stack the clipping values
+    else:
+        vals = np.array([val.item() for val in vals])
+
     return keys, vals
 
 
-def quant_params_vec2dict(keys, vals):
-    return OrderedDict(zip(keys, (val.item() for val in vals)))
+def quant_params_vec2dict(keys, vals, quant_mode=LinearQuantMode.SYMMETRIC, search_clipping=False):
+    if not search_clipping or quant_mode == LinearQuantMode.SYMMETRIC:
+        return OrderedDict(zip(keys, (val.item() for val in vals)))
+    else:
+        # In this case - we have N keys but 2N values. for that we reshape
+        # the array to match the size: keys:N, vals: Nx2
+        vals = vals.reshape(-1, 2)
+        return OrderedDict(zip(keys, vals))
+
+
+def _check_qp_vec(keys, qp_vec, quant_mode=LinearQuantMode.SYMMETRIC, search_clipping=False):
+    if quant_mode == LinearQuantMode.SYMMETRIC:
+        return all(qp_vec > 0)
+    if not search_clipping:
+        idxs_scales = np.array(['scale' in key for key in keys])
+        qp_vec_scales = qp_vec[idxs_scales]
+        return all(qp_vec_scales > 0)
 
 
 def lp_loss(x, y, p):
@@ -82,11 +104,15 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, sear
     Returns:
         quantized_layer after optimization
     """
-    init_qp_dict = OrderedDict(quantized_layer.named_linear_quant_params())
+    search_clipping = 'clipping' in search_on
+    quant_mode = quantized_layer.output_quant_settings.quant_mode
+    params_gen = quantized_layer.named_linear_quant_params() if not search_clipping\
+        else quantized_layer.named_clipping()
+    init_qp_dict = OrderedDict(params_gen)
     init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
                                any(b in k for b in search_on))
 
-    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
+    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict, quant_mode, search_clipping)
 
     def feed_forward_fn(qp_vec):
         qp_dict = quant_params_vec2dict(keys, qp_vec)
@@ -219,10 +245,15 @@ def get_default_args():
     parser.add_argument('--opt-eval-memoize-dataloader', dest='memoize_dataloader', action='store_true', default=False,
                         help='Stores the input batch in memory to optimize performance.')
     parser.add_argument('--base-score', type=float, default=None)
+    parser.add_argument('--opt-search-clipping', action='store_true',
+                        help='Search on clipping values instead of scale/zero_point.')
     args = parser.parse_args()
-    args.search_on = ['scale']
-    if args.qe_mode in [LinearQuantMode.ASYMMETRIC_SIGNED, LinearQuantMode.ASYMMETRIC_UNSIGNED]:
-        args.search_on.append('zero_point')
+    if not args.opt_search_clipping:
+        args.search_on = ['scale']
+        if args.qe_mode in [LinearQuantMode.ASYMMETRIC_SIGNED, LinearQuantMode.ASYMMETRIC_UNSIGNED]:
+            args.search_on.append('zero_point')
+    else:
+        args.search_on = ['clipping']
     return args
 
 
@@ -297,16 +328,19 @@ def ptq_coordinate_search(model, sample_input, eval_fn, method='Powell', options
     if test_fn:
         l_top1, l_top5, l_loss = test_fn(quantizer.model)
         msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
-
-    init_qp_dict = deepcopy(quantizer.linear_quant_params)
+    yield_clipping_params = args.opt_search_clipping
+    quant_mode = quantizer.mode
+    init_qp_dict = OrderedDict(quantizer.named_linear_quant_params(yield_clipping_params))
     # filter buffers by the choices:
     init_qp_dict = OrderedDict((k, v) for k, v in init_qp_dict.items() if
                                any(b in k for b in args.search_on))
-    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict)
+    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict, quant_mode, yield_clipping_params)
     _iter = count(0)
 
     def feed_forward_fn(qp_vec):
-        qp_dict = quant_params_vec2dict(keys, qp_vec)
+        if not _check_qp_vec(keys, qp_vec, quant_mode, yield_clipping_params):
+            return 1e6
+        qp_dict = quant_params_vec2dict(keys, qp_vec, quant_mode, yield_clipping_params)
         quantizer.update_linear_quant_params(qp_dict)
         return eval_fn(quantizer.model)
 

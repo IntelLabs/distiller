@@ -788,3 +788,9 @@ def model_setattr(model, attr_name, val, register=False):
 
 def param_name_2_module_name(param_name):
     return '.'.join(param_name.split('.')[:-1])
+
+
+def is_scalar(val):
+    result = isinstance(val, torch.Tensor) and val.dim() == 0
+    result |= np.isscalar(val)
+    return result

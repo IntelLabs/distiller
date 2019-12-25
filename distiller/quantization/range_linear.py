@@ -16,6 +16,7 @@
 
 import torch.nn as nn
 import torch.nn.functional as f
+import numpy as np
 import argparse
 from enum import Enum
 from collections import OrderedDict, namedtuple
@@ -190,10 +191,11 @@ def _get_clipping_values(scale, zp, num_bits, mode):
     Returns:
         min, max : tuple[float, float]
     """
+    device = scale.device if isinstance(scale, torch.Tensor) else 'cpu'
     if mode == LinearQuantMode.ASYMMETRIC_UNSIGNED:
-        t = torch.tensor([0, 2**num_bits-1])
+        t = torch.tensor([0, 2**num_bits-1], device=device)
     else:
-        t = torch.tensor([-2**(num_bits-1), 2**(num_bits-1)-1])
+        t = torch.tensor([-2**(num_bits-1), 2**(num_bits-1)-1], device=device)
     sat_min, sat_max = linear_dequantize(t, scale, zp)  # type: torch.Tensor
     return sat_min, sat_max
 
@@ -300,6 +302,19 @@ def add_post_train_quant_args(argparser):
 
 class UnsatisfiedRequirements(Exception):
     pass
+
+
+def _check_clipping_val(val, quant_settings=None):
+    if isinstance(val, float):
+        if quant_settings.quant_mode == LinearQuantMode.SYMMETRIC:
+            return -val, val
+        raise ValueError('For asymmetric quantization, setting clipping values only allowed '
+                         'using both min/max values.')
+    if isinstance(val, (tuple, list, np.ndarray, torch.Tensor)):
+        assert all(distiller.is_scalar(v) for v in val), 'Elements of the clipping value must be scalar-like.'
+        assert len(val) == 2, 'Clipping value must have 2 elements.'
+        return tuple(val)
+    raise TypeError('Clipping value should be a scalar or an iterable of these')
 
 
 class RangeLinearQuantWrapper(nn.Module):
@@ -417,9 +432,12 @@ class RangeLinearQuantWrapper(nn.Module):
             yield 'output_zero_point', self.output_zero_point
 
     def set_linear_quant_param(self, name, val):
-        if name not in dict(self.named_linear_quant_params()):
+        if name in dict(self.named_clipping()):
+            setattr(self, name, val)
+        elif name not in dict(self.named_linear_quant_params()):
             raise ValueError('%s is not a quantization parameter.' % name)
-        getattr(self, name).data.fill_(val)
+        else:
+            getattr(self, name).data.fill_(val)
         self.force_readjust.fill_(True)
 
     def _check_requirements_output_clipping(self):
@@ -441,11 +459,11 @@ class RangeLinearQuantWrapper(nn.Module):
     def output_clipping(self, val):
         """
         Args:
-            val (tuple[float, float] or tuple[torch.Tensor, torch.Tensor]): the value to set
+            val (float or tuple[float, float] or tuple[torch.Tensor, torch.Tensor]): the value to set
         """
         self._check_requirements_output_clipping()
         bits = self.output_quant_settings.num_bits
-        val_min, val_max = val
+        val_min, val_max = _check_clipping_val(val, self.output_quant_settings)
         if self.output_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC:
             # in symmetric quantization - we only need one value
             scale, zp = symmetric_linear_quantization_params(bits, val_max)
@@ -762,7 +780,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             else:
                 raise UnsatisfiedRequirements('Cannot re-quantize the weights. Please specify \'save_fp_weights\' in '
                                               'the %s constructor to enable re-quantizing the weights.' %
-                                 self.__class__.__name__)
+                                              self.__class__.__name__)
         else:
             super().set_linear_quant_param(name, val)
 
@@ -784,7 +802,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
     def weight_clipping(self, val):
         self._check_requirements_weights_clipping()
         bits = self.wts_quant_settings.num_bits
-        val_min, val_max = val
+        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings)
         if self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC:
             # in symmetric quantization - we only need one value
             scale, zp = symmetric_linear_quantization_params(bits, val_max)
@@ -1185,7 +1203,7 @@ class RangeLinearEmbeddingWrapper(nn.Module):
     def weight_clipping(self, val):
         self._check_requirements_weights_clipping()
         bits = self.wts_quant_settings.num_bits
-        val_min, val_max = val
+        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings)
         if self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC:
             # in symmetric quantization - we only need one value
             scale, zp = symmetric_linear_quantization_params(bits, val_max)
