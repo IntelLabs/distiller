@@ -105,6 +105,8 @@ This table summarizes the settings and results for each run. The command lines f
 | 9  | Asymmetric | 6           | 6              | No          | none                  | 62.230%        |
 | 10 | Asymmetric | 6           | 6              | Yes         | avg (exc. last layer) | 74.494%        |
 
+(Note that it's possible to define symmetric/asymmetric mode separately for weights and activations using `--qe-mode-wts` and `--qe-mode-acts`, respectively. For brevity and simplicity here we use a monolithic setting via the `--qe-mode` flag)
+
 Command lines:
 
 |    | Command Line |
