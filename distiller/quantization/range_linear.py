@@ -59,6 +59,9 @@ class LinearQuantMode(Enum):
 
 
 class ModuleQuantMode(namedtuple('ModuleQuantMode', ['activations', 'weights'])):
+    """
+    Named tuple for configuring the LinearQuantMode of both weights and activations of a module
+    """
     def __new__(cls, activations, weights):
         if not isinstance(activations, LinearQuantMode) or not isinstance(weights, LinearQuantMode):
             raise ValueError('ModuleQuantMode must receive LinearQuantMode values')
