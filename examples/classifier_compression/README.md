@@ -33,12 +33,12 @@ A non-exhaustive list of the methods implemented:
 
 ### Quantization
 
-- [Post-training quantization](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/post_train_quant/command_line.md) based on the TensorFlow quantization scheme (originally GEMMLOWP) with additional capabilities.
+- [Post-training quantization](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/post_train_quant/command_line.md) based on the TensorFlow quantization scheme (originally GEMMLOWP) with additional capabilities.
 - [Quantization-aware training](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/quant_aware_train): TensorFlow scheme, DoReFa, PACT
 
 ### Knowledge Distillation
 
-See details in the [docs](https://nervanasystems.github.io/distiller/schedule.html#knowledge-distillation), and these YAML schedules training ResNet on CIFAR-10 with knowledge distillation: [FP32](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/fp32_baselines/preact_resnet_cifar_base_fp32.yaml) ; [DoReFa](https://github.com/NervanaSystems/distiller/blob/update_readmes/examples/quantization/quant_aware_train/preact_resnet_cifar_dorefa.yaml).
+See details in the [docs](https://nervanasystems.github.io/distiller/schedule.html#knowledge-distillation), and these YAML schedules training ResNet on CIFAR-10 with knowledge distillation: [FP32](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/fp32_baselines/preact_resnet_cifar_base_fp32.yaml) ; [DoReFa](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/quant_aware_train/preact_resnet_cifar_dorefa.yaml).
 
 ## Models Supported
 
@@ -80,6 +80,6 @@ data.mnist/
 
 ## Re-usable Image Classification Code
 
-We borrow the main flow code from PyTorch's ImageNet classification training sample application ([see here](https://github.com/pytorch/examples/tree/master/imagenet)). Much of the flow was refactored into a class called `ClassifierCompressor`, which can be re-used to build different scripts that perform image classifiers compression. Its implementation can be found in [`distiller/apputils/image_classifier.py`](https://github.com/NervanaSystems/distiller/blob/update_readmes/distiller/apputils/image_classifier.py).  
+We borrow the main flow code from PyTorch's ImageNet classification training sample application ([see here](https://github.com/pytorch/examples/tree/master/imagenet)). Much of the flow was refactored into a class called `ClassifierCompressor`, which can be re-used to build different scripts that perform image classifiers compression. Its implementation can be found in [`distiller/apputils/image_classifier.py`](https://github.com/NervanaSystems/distiller/tree/master/distiller/apputils/image_classifier.py).  
 
 The [AMC auto-compression](https://github.com/NervanaSystems/distiller/tree/master/examples/auto_compression/amc) sample is another application that uses this building block.
