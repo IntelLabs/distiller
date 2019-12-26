@@ -58,6 +58,13 @@ class LinearQuantMode(Enum):
     ASYMMETRIC_SIGNED = 3
 
 
+class ModuleQuantMode(namedtuple('ModuleQuantMode', ['activations', 'weights'])):
+    def __new__(cls, activations, weights):
+        if not isinstance(activations, LinearQuantMode) or not isinstance(weights, LinearQuantMode):
+            raise ValueError('ModuleQuantMode must receive LinearQuantMode values')
+        return super(ModuleQuantMode, cls).__new__(cls, activations, weights)
+
+
 class ClipMode(Enum):
     # No clipping - absolute min/max values will be used
     NONE = 0
@@ -85,7 +92,15 @@ def _verify_enum_value(val, enum_cls):
 
 
 def verify_quant_mode(mode):
-    return _verify_enum_value(mode, LinearQuantMode)
+    if isinstance(mode, ModuleQuantMode):
+        return mode
+
+    if isinstance(mode, dict):
+        acts = _verify_enum_value(mode['activations'], LinearQuantMode)
+        wts = _verify_enum_value(mode['weights'], LinearQuantMode)
+    else:
+        acts = wts = _verify_enum_value(mode, LinearQuantMode)
+    return ModuleQuantMode(acts, wts)
 
 
 def verify_clip_mode(mode):
@@ -218,21 +233,28 @@ def linear_dequantize_with_metadata(t, inplace=False):
 
 
 def add_post_train_quant_args(argparser):
-    str_to_quant_mode_map = {'sym': LinearQuantMode.SYMMETRIC,
-                             'asym_s': LinearQuantMode.ASYMMETRIC_SIGNED,
-                             'asym_u': LinearQuantMode.ASYMMETRIC_UNSIGNED}
+    str_to_quant_mode_map = OrderedDict([
+        ('sym', LinearQuantMode.SYMMETRIC),
+        ('asym_s', LinearQuantMode.ASYMMETRIC_SIGNED),
+        ('asym_u', LinearQuantMode.ASYMMETRIC_UNSIGNED)
+    ])
 
-    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD,
-                            'gauss': ClipMode.GAUSS, 'laplace': ClipMode.LAPLACE}
+    str_to_clip_mode_map = OrderedDict([
+        ('none', ClipMode.NONE), ('avg', ClipMode.AVG), ('n_std', ClipMode.N_STD),
+        ('gauss', ClipMode.GAUSS), ('laplace', ClipMode.LAPLACE)
+    ])
 
-    def from_dict(d, val_str):
+    def from_dict(val_str, d, optional):
+        if not val_str and optional:
+            return None
         try:
             return d[val_str]
         except KeyError:
             raise argparse.ArgumentTypeError('Must be one of {0} (received {1})'.format(list(d.keys()), val_str))
 
-    linear_quant_mode_str = partial(from_dict, str_to_quant_mode_map)
-    clip_mode_str = partial(from_dict, str_to_clip_mode_map)
+    linear_quant_mode_str = partial(from_dict, d=str_to_quant_mode_map, optional=False)
+    linear_quant_mode_str_optional = partial(from_dict, d=str_to_quant_mode_map, optional=True)
+    clip_mode_str = partial(from_dict, d=str_to_clip_mode_map, optional=False)
 
     group = argparser.add_argument_group('Arguments controlling quantization at evaluation time '
                                          '("post-training quantization")')
@@ -240,7 +262,14 @@ def add_post_train_quant_args(argparser):
                        help='Apply linear quantization to model before evaluation. Applicable only if '
                             '--evaluate is also set')
     group.add_argument('--qe-mode', '--qem', type=linear_quant_mode_str, default='sym',
-                       help='Linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
+                       help='Default linear quantization mode (for weights and activations). '
+                            'Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
+    group.add_argument('--qe-mode-acts', '--qema', type=linear_quant_mode_str_optional, default=None,
+                       help='Linear quantization mode for activations. Overrides --qe-mode`. '
+                            'Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
+    group.add_argument('--qe-mode-wts', '--qemw', type=linear_quant_mode_str_optional, default=None,
+                       help='Linear quantization mode for Weights. Overrides --qe-mode`. '
+                            'Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
     group.add_argument('--qe-bits-acts', '--qeba', type=int, default=8, metavar='NUM_BITS',
                        help='Number of bits for quantization of activations. Use 0 to not quantize activations. '
                             'Default value is 8')
@@ -269,7 +298,7 @@ def add_post_train_quant_args(argparser):
     stats_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
                        metavar='PORTION_OF_TEST_SET', default=None,
                        help='Run the model in evaluation mode on the specified portion of the test dataset and '
-                            'collect statistics. Ignores all other \'qe--*\' arguments')
+                            'collect statistics')
     stats_group.add_argument('--qe-config-file', type=str, metavar='PATH',
                        help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
                             'all other --qe* arguments are ignored)')
@@ -283,7 +312,7 @@ class RangeLinearQuantWrapper(nn.Module):
         wrapped_module (torch.nn.Module): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
-        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
+        mode (ModuleQuantMode / LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
         clip_acts (ClipMode): Activations clipping mode to use
         activation_stats (dict): Dict containing activation stats, used for static calculation of quantization
             parameters. Dict should be in the format exported by distiller.data_loggers.QuantCalibrationStatsCollector.
@@ -305,13 +334,16 @@ class RangeLinearQuantWrapper(nn.Module):
 
         input_overrides = input_overrides or OrderedDict()
 
+        mode = verify_quant_mode(mode)
+        self.mode = mode
         self.wrapped_module = wrapped_module
         self.clip_half_range = clip_half_range
         self.scale_approx_mult_bits = scale_approx_mult_bits
         self.requires_quantized_inputs = requires_quantized_inputs
         self.inputs_quant_auto_fallback = inputs_quant_auto_fallback
 
-        self.output_quant_settings = QuantSettings(num_bits_acts, mode, clip_acts, clip_n_stds, clip_half_range, False)
+        self.output_quant_settings = QuantSettings(num_bits_acts, mode.activations, clip_acts, clip_n_stds,
+                                                   clip_half_range, False)
         self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
                                                   ClipMode.NONE, None, False, False)
 
@@ -349,7 +381,7 @@ class RangeLinearQuantWrapper(nn.Module):
         #  so other than inspecting the contents there's not much to do with it)
         self._dequant_out = True
 
-        signed = mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
+        signed = mode.activations != LinearQuantMode.ASYMMETRIC_UNSIGNED
         self.acts_min_q_val, self.acts_max_q_val = get_quantized_range(num_bits_acts, signed=signed)
         # The accumulator is always signed
         self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True)
@@ -372,8 +404,9 @@ class RangeLinearQuantWrapper(nn.Module):
             else:
                 self.inputs_quant_metadata_fallback = None
 
-            scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode, clip_acts,
-                                                          clip_n_stds, clip_half_range, scale_approx_mult_bits)
+            scale, zp = _get_quant_params_from_stats_dict(activation_stats['output'], num_bits_acts, mode.activations,
+                                                          clip_acts, clip_n_stds, clip_half_range,
+                                                          scale_approx_mult_bits)
             self.register_buffer('output_scale', scale)
             self.register_buffer('output_zero_point', zp)
         else:
@@ -569,7 +602,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_params (int): Number of bits used for parameters (weights and bias) quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
-        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
+        mode (ModuleQuantMode / LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
         clip_acts (ClipNode): See RangeLinearQuantWrapper
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
@@ -595,7 +628,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # If activations are not quantized, we do fake quantization of the parameters, that is - quant and de-quant
         self.fake_quant_params = self.output_quant_settings.num_bits is None
 
-        self.wts_quant_settings = QuantSettings(num_bits_params, mode, ClipMode.NONE, None, False, per_channel_wts)
+        self.wts_quant_settings = QuantSettings(num_bits_params, self.mode.weights, ClipMode.NONE, None, False,
+                                                per_channel_wts)
 
         self.params_min_q_val, self.params_max_q_val = get_quantized_range(
             self.wts_quant_settings.num_bits,
@@ -696,7 +730,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
         # dealing solely with integer values, the results are the same either way.
 
-        if self.output_quant_settings.quant_mode != LinearQuantMode.SYMMETRIC and not self.is_simulated_quant_weight_shifted:
+        if self.wts_quant_settings.quant_mode != LinearQuantMode.SYMMETRIC and \
+                not self.is_simulated_quant_weight_shifted:
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
@@ -755,7 +790,7 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         wrapped_module (distiller.modules.Matmul or distiller.modules.BatchMatmul): Module to be wrapped
         num_bits_acts (int): Number of bits used for inputs and output quantization
         num_bits_accum (int): Number of bits allocated for the accumulator of intermediate integer results
-        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
+        mode (ModuleQuantMode / LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed/unsigned)
         clip_acts (ClipNode): See RangeLinearQuantWrapper
         activation_stats (dict): See RangeLinearQuantWrapper
         clip_n_stds (int): See RangeLinearQuantWrapper
@@ -967,13 +1002,16 @@ class RangeLinearEmbeddingWrapper(nn.Module):
 
         super(RangeLinearEmbeddingWrapper, self).__init__()
 
+        mode = verify_quant_mode(mode)
+        self.mode = mode
+
         self.min_q_val, self.max_q_val = get_quantized_range(num_bits,
-                                                             signed=mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+                                                             signed=mode.weights != LinearQuantMode.ASYMMETRIC_UNSIGNED)
 
         if stats is None:
-            w_scale, w_zero_point = _get_quant_params_from_tensor(wrapped_module.weight, num_bits, self.mode)
+            w_scale, w_zero_point = _get_quant_params_from_tensor(wrapped_module.weight, num_bits, mode.weights)
         else:
-            w_scale, w_zero_point = _get_quant_params_from_stats_dict(stats['output'], num_bits, mode)
+            w_scale, w_zero_point = _get_quant_params_from_stats_dict(stats['output'], num_bits, mode.weights)
 
         device = wrapped_module.weight.device
 
@@ -1057,7 +1095,7 @@ class PostTrainLinearQuantizer(Quantizer):
       * distiller.modules.EltwiseMult
       * distiller.modules.Matmul
       * distiller.modules.BatchMatmul
-    An existing module will need likely need to be modified to use the 'distiller.modules.*' modules. This needs to
+    An existing module will likely need to be modified to use the 'distiller.modules.*' modules. This needs to
     be done BEFORE creating the quantizer. See the docs for more details:
     https://nervanasystems.github.io/distiller/prepare_model_quant.html
 
@@ -1068,7 +1106,7 @@ class PostTrainLinearQuantizer(Quantizer):
         model (torch.nn.Module): Model to be quantized
         bits_activations/parameters/accum (int): Number of bits to be used when quantizing each tensor type
         overrides (:obj:`OrderedDict`, optional): Overrides the layers quantization settings.
-        mode (LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
+        mode (ModuleQuantMode / LinearQuantMode): Quantization mode to use (symmetric / asymmetric-signed / unsigned)
         clip_acts (ClipMode): Activations clipping mode to use
         per_channel_wts (bool): Enable quantization of weights using separate quantization parameters per
             output channel
@@ -1129,11 +1167,12 @@ class PostTrainLinearQuantizer(Quantizer):
                               "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
                               "supported when statistics are used.\nEND WARNING\n")
 
+        mode_dict = {'activations': _enum_to_str(mode.activations), 'weights': _enum_to_str(mode.weights)}
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_parameters': bits_parameters,
                                                     'bits_accum': bits_accum,
-                                                    'mode': str(mode).split('.')[1],
+                                                    'mode': mode_dict,
                                                     'clip_acts': _enum_to_str(clip_acts),
                                                     'clip_n_stds': clip_n_stds,
                                                     'clip_half_range': clip_half_range,
@@ -1329,11 +1368,14 @@ class PostTrainLinearQuantizer(Quantizer):
                 [(layer, OrderedDict([('clip_acts', 'NONE')]))
                  for layer in args.qe_no_clip_layers]
             )
+            mode_acts = args.qe_mode_acts or args.qe_mode
+            mode_wts = args.qe_mode_wts or args.qe_mode
+            mode = ModuleQuantMode(mode_acts, mode_wts)
             return cls(model,
                        bits_activations=args.qe_bits_acts,
                        bits_parameters=args.qe_bits_wts,
                        bits_accum=args.qe_bits_accum,
-                       mode=args.qe_mode,
+                       mode=mode,
                        clip_acts=args.qe_clip_acts,
                        per_channel_wts=args.qe_per_channel,
                        model_activation_stats=(None if args.qe_dynamic else args.qe_stats_file),
@@ -1659,7 +1701,8 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
 
         mode = verify_quant_mode(mode)
 
-        self.model.quantizer_metadata['params']['mode'] = str(mode).split('.')[1]
+        mode_dict = {'activations': _enum_to_str(mode.activations), 'weights': _enum_to_str(mode.weights)}
+        self.model.quantizer_metadata['params']['mode'] = mode_dict
         self.model.quantizer_metadata['params']['ema_decay'] = ema_decay
         self.model.quantizer_metadata['params']['per_channel_wts'] = per_channel_wts
         self.model.quantizer_metadata['params']['quantize_inputs'] = quantize_inputs

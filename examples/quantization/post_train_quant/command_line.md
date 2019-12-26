@@ -15,16 +15,19 @@ Post-training quantization can either be configured straight from the command-li
 | Long Form                | Short     | Description                                                                           | Default |
 |--------------------------|-----------|---------------------------------------------------------------------------------------|---------|
 | `--quantize-eval`        | `--qe`    | Apply linear quantization to model before evaluation                                  | Off     |
-| `--qe-mode`              | `--qem`   | Linear quantization mode. Choices: "sym", "asym_u", "asym_s"                          | "sym"   |
+| `--qe-mode`              | `--qem`   | Default linear quantization mode (for weights and activations). Choices: "sym", "asym_u", "asym_s"      | "sym"   |
+| `--qe-mode-acts`         | `--qema`  | Linear quantization mode for activations. **Overrides `--qe-mode`**. Choices: "sym", "asym_u", "asym_s" | None    |
+| `--qe-mode-wts`          | `--qemw`  | Linear quantization mode for weights. **Overrides `--qe-mode`**. Choices: "sym", "asym_u", "asym_s"     | None    |
 | `--qe-bits-acts`         | `--qeba`  | # of bits for quantization of activations. Use 0 to not quantize activations          | 8       |
 | `--qe-bits-wts`          | `--qebw`  | # of bits for quantization of weights. Use 0 to not quantize weights                  | 8       |
 | `--qe-bits-accum`        | N/A       | # of bits for quantization of the accumulator                                         | 32      |
-| `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std"                        | "none"  |
+| `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std", "gauss", "laplace"    | "none"  |
 | `--qe-clip-n-stds`       | N/A       | When qe-clip-acts is set to 'n_std', this is the number of standard deviations to use | None    |
 | `--qe-no-clip-layers`    | `--qencl` | List of layer names (space-separated) for which not to clip activations               | ''      |
 | `--qe-per-channel`       | `--qepc`  | Enable per-channel quantization of weights (per output channel)                       | Off     |
 | `--qe-scale-approx-bits` | `--qesab` | Enables scale factor approximation using integer multiply + bit shift, using this number of bits the integer multiplier | None |
 | `--qe-stats-file`        | N/A       | Use stats file for static quantization of activations. See details below              | None    |
+| `--qe-dynamic`           | N/A       | Perform dynamic quantization. See details below                                       | None    |
 | `--qe-config-file`       | N/A       | Path to YAML config file. See section above. (ignores all other --qe* arguments)      | None    |
 
 (Note that these arguments can be added to any `argparse.ArgumentParser` by calling `distiller.quantization.add_post_train_quant_args()` and passing an existing parser)
@@ -40,12 +43,28 @@ The term "net-aware" quantization, coined in [this](https://arxiv.org/abs/1811.0
 
 Distiller supports both "static" and "dynamic" post-training quantization of **activations**.
 
-* **Static Quantization:** Pre-calculated tensor statistics are used to calculate the quantization parameters.
-* **Dynamic Quantization:** Quantization parameters are re-calculated for each batch.  
-**Support for this mode is limited**. It isn't as fully featured as static quantization, and the accuracy results obtained when using it are likely not as representative of real-world results.  
-Specifically:
-    * Only convolution, FC (aka Linear) and embedding layers are supported at this time. Non-supported layers are kept in FP32, and a warning is displayed.
-    * "Net-aware" quantization, described above, isn't supported in dynamic mode. 
+#### Static Quantization
+
+Pre-calculated tensor statistics are used to calculate the quantization parameters. A preliminary step of collecting these statistics is required. This step is commonly refered to as the **calibration step**.
+
+##### Generating stats
+
+To generate stats, use the `--qe-calibration <VAL>` command line argument. `VAL` should be a numeric value in the range \[0 .. 1\], indicating how much of the test dataset should be used to collect statistics. For example, passing 0.05 will use 5% of the test set. Stats are saved in a YAML file name `acts_quantization_stats.yaml` in the run directory.  
+* In the image classification sample, if both `--qe-calibration` and `--quantize-eval` are passed, calibration will be followed by model quantization in the same run. If only the calibration argument is passed, then the script will exit after the calibration step.
+* **NOTE:** The image classification sample performs static quantization by default. That means that if a stats file isn't passed (see next section), then a calibration step will be executed prior to quantization, using 5% of the test set (equivalent to using `--qe-calibration 0.05`).
+
+##### Using previously generated stats
+
+In most cases, there is no need to re-run calibration each time we quantize a model. A previously generated stats file can be passed via `--qe-stats-file <path_to_yaml_stats_file>`. This will skip calibration step.
+
+#### Dynamic Quantization
+
+Quantization parameters are re-calculated for each batch.
+  
+**Support for this mode is limited**. It isn't as fully featured as static quantization, and the accuracy results obtained when using it are likely not as representative of real-world results. Specifically:
+
+* Only convolution, FC (aka Linear) and embedding layers are supported at this time. Non-supported layers are kept in FP32, and a warning is displayed.
+* "Net-aware" quantization, described above, isn't supported in dynamic mode. 
 
 ## Sample Invocations
 
@@ -57,7 +76,7 @@ cd <distiller_root>/examples/classifier_compression
 
 All the paths used are relative to this directory.
 
-All the examples below are using **static quantization** of activations, which means the first step is to collect activation statistics for the FP32 model. We will use the sample stats file located at:
+All the examples below are using **static quantization** of activations. As discussed above, to avoid running a calibration step each time, we'll use a pre-generated stats file located at:
 
 ```
 <dilstiller_root>/examples/quantization/post_train_quant/stats/resnet50_quant_stats.yaml
@@ -91,13 +110,13 @@ Command lines:
 |    | Command Line |
 |----|--------------|
 | 1  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate`
-| 2  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
-| 3  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-per-channel --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
-| 4  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-per-channel --qe-clip-acts avg --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
-| 5  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-per-channel --qe-clip-acts avg --qe-no-clip-layers fc --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
+| 2  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode sym --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
+| 3  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode sym --qe-per-channel --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
+| 4  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode sym --qe-per-channel --qe-clip-acts avg --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
+| 5  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode sym --qe-per-channel --qe-clip-acts avg --qe-no-clip-layers fc --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 | 6  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode asym_u --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 | 7  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-mode asym_u --qe-per-channel --qe-clip-acts avg --qe-no-clip-layers fc --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
-| 8  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
+| 8  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-mode sym --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 | 9  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-mode asym_u --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 | 10 | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-mode asym_u --qe-per-channel --qe-clip-acts avg --qe-no-clip-layers fc --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 
