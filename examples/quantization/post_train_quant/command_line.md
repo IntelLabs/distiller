@@ -32,32 +32,32 @@ Post-training quantization can either be configured straight from the command-li
 
 (Note that these arguments can be added to any `argparse.ArgumentParser` by calling `distiller.quantization.add_post_train_quant_args()` and passing an existing parser)
 
-### "Net-Aware" Quantization
+## "Net-Aware" Quantization
 
 The term "net-aware" quantization, coined in [this](https://arxiv.org/abs/1811.09886) paper from Facebook (section 3.2.2), means we can achieve better quantization by considering sequences of operations instead of just quantizing each operation independently. This isn't exactly layer fusion - in Distiller we modify activation stats prior to setting quantization parameters, in to make sure that when a module is followed by certain activation functions, only the relevant ranges are quantized. We do this for:
 
 * **ReLU** - Clip all negative values
 * **Tanh / Sigmoid** - Clip according to the (approximated) saturation values for these functions. We use [-4, 4] for tanh and [-6, 6] for sigmoid.
 
-### Static vs. Dynamic Quantization of Activations
+## Static vs. Dynamic Quantization of Activations
 
 Distiller supports both "static" and "dynamic" post-training quantization of **activations**.
 
-#### Static Quantization
+### Static Quantization
 
 Pre-calculated tensor statistics are used to calculate the quantization parameters. A preliminary step of collecting these statistics is required. This step is commonly refered to as the **calibration step**.
 
-##### Generating stats
+#### Generating stats
 
 To generate stats, use the `--qe-calibration <VAL>` command line argument. `VAL` should be a numeric value in the range \[0 .. 1\], indicating how much of the test dataset should be used to collect statistics. For example, passing 0.05 will use 5% of the test set. Stats are saved in a YAML file name `acts_quantization_stats.yaml` in the run directory.  
 * In the image classification sample, if both `--qe-calibration` and `--quantize-eval` are passed, calibration will be followed by model quantization in the same run. If only the calibration argument is passed, then the script will exit after the calibration step.
 * **NOTE:** The image classification sample performs static quantization by default. That means that if a stats file isn't passed (see next section), then a calibration step will be executed prior to quantization, using 5% of the test set (equivalent to using `--qe-calibration 0.05`).
 
-##### Using previously generated stats
+#### Using previously generated stats
 
 In most cases, there is no need to re-run calibration each time we quantize a model. A previously generated stats file can be passed via `--qe-stats-file <path_to_yaml_stats_file>`. This will skip calibration step.
 
-#### Dynamic Quantization
+### Dynamic Quantization
 
 Quantization parameters are re-calculated for each batch.
   
@@ -120,11 +120,11 @@ Command lines:
 | 9  | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-mode asym_u --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 | 10 | `python compress_classifier.py -a resnet50 --pretrained <path_to_imagenet_dataset> --evaluate --quantize-eval --qe-bits-acts 6 --qe-bits-wts 6 --qe-mode asym_u --qe-per-channel --qe-clip-acts avg --qe-no-clip-layers fc --qe-stats-file ../quantization/post_train_quant/stats/resnet50_quant_stats.yaml`
 
-## Note 1: Accuracy Loss When Clipping Activations
+### Note 1: Accuracy Loss When Clipping Activations
 
 Notice the degradation in accuracy in run (4) - ~2.6% compared to per-channel without clipping. Let's recall that the output of the final layer of the model holds the "score" of each class (which, since we're using softmax, can be interpreted as the un-normalized log probability of each class). So if we clip the outputs of this layer, we're in fact "cutting-off" the highest (and lowest) scores. If the highest scores for some sample are close enough, this can result in a wrong classification of that sample.  
 We can provide Distiller with a list of layers for which not to clip activations. In this case we just want to skip the last layer, which in the case of the ResNet-50 model is called `fc`. This is what we do in run (5), and we regain most of the accuracy back.
 
-## Note 2: Under 8-bits
+### Note 2: Under 8-bits
 
 Runs (8) - (10) are examples of trying post-training quantization below 8-bits. Notice how with the most basic settings we get a massive accuracy loss of ~53%. Even with asymmetric quantization and all other optimizations enabled, we still get a non-trivial degradation of just under 2% vs. FP32. In many cases, quantizing with less than 8-bits requires quantization-aware training. However, if we allow some layers to remain in 8-bit, we can regain some of the accuracy. We can do this by using a YAML configuration file and specifying overrides. As mentioned at the top of this document, check out the `resnet18_imagenet_post_train.yaml` file located in this directory for an example of how to do this.
