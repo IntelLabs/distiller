@@ -32,6 +32,11 @@ from .q_utils import *
 from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
 import distiller.model_transforms as mt
+from . import pytorch_quant_modules as pytqm
+
+import torch.quantization
+import torch.nn.quantized as nnq
+import torch.nn.intrinsic.quantized as nniq
 
 msglogger = logging.getLogger()
 
@@ -52,6 +57,10 @@ def _enum_to_str(enum_val):
     return str(enum_val).split('.')[1]
 
 
+
+
+def _is_symmetric(mode: LinearQuantMode):
+    return mode == LinearQuantMode.SYMMETRIC
 class ModuleQuantMode(namedtuple('ModuleQuantMode', ['activations', 'weights'])):
     """
     Named tuple for configuring the LinearQuantMode of both weights and activations of a module
@@ -543,6 +552,15 @@ class RangeLinearQuantWrapper(nn.Module):
         """
         raise NotImplementedError
 
+    def to_pytorch_quant(self):
+        assert self.output_quant_settings.num_bits == 8, \
+            'Conversion to PyTorch PTQ supported only for 8-bit quantization'
+        assert self.preset_act_stats, 'Conversion to PyTorch PTQ supported only for PTQ wrappers with activation stats'
+        return self._convert_to_pytorch_quant()
+
+    def _convert_to_pytorch_quant(self):
+        raise NotImplementedError
+
     def extra_repr(self):
         if self.output_quant_settings.num_bits is None:
             return 'output_quant_settings=Not_Quantized'
@@ -754,6 +772,62 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
+    def _convert_to_pytorch_quant(self):
+        wrapped = self.wrapped_module
+        supported = (nn.Conv2d, nn.Linear)
+        # Tuple of module type and flag for relu fusing
+        mapping = {
+            (nn.Linear, False): nnq.Linear,
+            (nn.Linear, True): nniq.LinearReLU,
+            (nn.Conv2d, False): nnq.Conv2d,
+            (nn.Conv2d, True): nniq.ConvReLU2d
+        }
+        if nn.Conv3d in torch.quantization.DEFAULT_MODULE_MAPPING:
+            # Conv3D supported only from PyTorch 1.4
+            supported += nn.Conv3d,
+            mapping.update({
+                (nn.Conv3d, False): nnq.Conv3d,
+                (nn.Conv3d, True): nniq.ConvReLU3d,
+            })
+        assert isinstance(wrapped, supported), \
+            'Conversion to PyTorch PTQ supported only for {}'.format(','.join(supported))
+        assert self.wts_quant_settings.num_bits == 8, 'Conversion to PyTorch PTQ supported only for 8-bit quantization'
+        assert self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC, \
+            'Conversion to PyTorch PTQ supported only for SYMMETRIC weights quantization'
+
+        # Convert weights
+        w_scale, w_zp = distiller_qparams_to_pytorch(self.w_scale, self.w_zero_point, self.wts_quant_settings.num_bits,
+                                                     True, torch.qint8)
+        q_weight = distiller_ptq_tensor_to_pytorch(wrapped.weight.detach(), w_scale, w_zp, torch.qint8,
+                                                   self.wts_quant_settings.per_channel, 0)
+
+        # PyTorch PTQ modules expect the bias in FP32, we need to dequantize if necessary
+        # With Distiller PTQ the bias is only quantized on the first forward - we do a crude check if it has
+        # been quantized or not
+        fp_bias = wrapped.bias.clone().detach()
+        if self.has_bias:
+            bias_quantized = (fp_bias == fp_bias.int()).all()
+            if bias_quantized:
+                fp_bias = linear_dequantize(fp_bias, self.accum_scale.squeeze(), 0, True)
+
+        pytorch_cls = mapping[(type(wrapped), self.clip_half_range)]
+        if isinstance(wrapped, nn.Linear):
+            pytorch_module = pytorch_cls(wrapped.in_features, wrapped.out_features, wrapped.bias is not None)
+        else:
+            pytorch_module = pytorch_cls(wrapped.in_channels, wrapped.out_channels, wrapped.kernel_size,
+                                         wrapped.stride, wrapped.padding, wrapped.dilation, wrapped.groups,
+                                         wrapped.bias is not None, wrapped.padding_mode)
+
+        pytorch_module.set_weight_bias(q_weight, fp_bias)
+        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+        out_scale, out_zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                         self.output_quant_settings.num_bits,
+                                                         symmetric, torch.quint8)
+        pytorch_module.scale = float(out_scale)
+        pytorch_module.zero_point = int(out_zp)
+
+        return pytorch_module
+
     def extra_repr(self):
         tmpstr = 'weights_quant_settings={0}\n'.format(self.wts_quant_settings)
         tmpstr += super(RangeLinearQuantParamLayerWrapper, self).extra_repr()
@@ -828,6 +902,17 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
+    def _convert_to_pytorch_quant(self):
+        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
+        modules = [self.wrapped_module, nnq.Quantize(float(scale), int(zp), torch.quint8)]
+        if self.clip_half_range:
+            # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
+            # ReLU after quantization
+            modules.append(nnq.ReLU())
+        return modules
+
 
 class NoStatsError(NotImplementedError):
     pass
@@ -867,6 +952,19 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
         # Nothing to do here, since we already re-quantized in quantized_forward prior to the actual concatenation
         return 1., self.output_zero_point
 
+    def _convert_to_pytorch_quant(self):
+        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
+        m = pytqm.QFunctionalCat(self.wrapped_module.dim)
+        m.qfunc.scale = float(scale)
+        m.qfunc.zp = int(zp)
+        if self.clip_half_range:
+            # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
+            # ReLU after quantization
+            m = nn.Sequential(m, nnq.ReLU())
+        return m
+
 
 class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
@@ -902,6 +1000,15 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         return 1., self.output_zero_point
+
+    def _convert_to_pytorch_quant(self):
+        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
+        m = pytqm.QFunctionalAddRelu() if self.clip_half_range else pytqm.QFunctionalAdd()
+        m.qfunc.scale = float(scale)
+        m.qfunc.zp = int(zp)
+        return m
 
 
 class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
@@ -943,6 +1050,19 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
         if self.scale_approx_mult_bits is not None:
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
+
+    def _convert_to_pytorch_quant(self):
+        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
+        m = pytqm.QFunctionalMul()
+        m.qfunc.scale = float(scale)
+        m.qfunc.zp = int(zp)
+        if self.clip_half_range:
+            # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
+            # ReLU after quantization
+            m = nn.Sequential(m, nnq.ReLU())
+        return m
 
 
 class FPWrapper(nn.Module):
@@ -1065,6 +1185,33 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
 
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         return output_scale, output_zero_point
+
+    def _convert_to_pytorch_quant(self):
+        # A few PyTorch modules support quantized inputs/outputs
+        supported = {
+            nn.ReLU: nnq.ReLU(),
+            nn.ReLU6: nnq.ReLU6(),
+            nn.AvgPool2d: self.wrapped_module,
+            nn.AdaptiveAvgPool2d: self.wrapped_module,
+            nn.MaxPool2d: self.wrapped_module
+        }
+        q_module = supported.get(type(self.wrapped_module), None)
+        if q_module is None:
+            # No PyTorch quantized module - so fake it
+            symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
+            scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                     self.output_quant_settings.num_bits, symmetric, torch.quint8)
+            modules = [pytqm.ConditionalDeQuantize(),
+                       self.wrapped_module,
+                       nnq.Quantize(float(scale), int(zp), torch.quint8)]
+        else:
+            modules = [self.wrapped_module]
+        if self.clip_half_range:
+            # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
+            # ReLU after quantization
+            modules.append(nnq.ReLU())
+
+        return modules[0] if len(modules) == 1 else nn.Sequential(*modules)
 
     def extra_repr(self):
         tmpstr = super(RangeLinearFakeQuantWrapper, self).extra_repr()
