@@ -32,7 +32,7 @@ from .q_utils import *
 from .sim_bn_fold import SimulatedFoldedBatchNorm
 import distiller.modules
 import distiller.model_transforms as mt
-from . import pytorch_quant_modules as pytqm
+from . import pytorch_quant_conversion as pytqc
 
 import torch.quantization
 import torch.nn.quantized as nnq
@@ -57,10 +57,6 @@ def _enum_to_str(enum_val):
     return str(enum_val).split('.')[1]
 
 
-
-
-def _is_symmetric(mode: LinearQuantMode):
-    return mode == LinearQuantMode.SYMMETRIC
 class ModuleQuantMode(namedtuple('ModuleQuantMode', ['activations', 'weights'])):
     """
     Named tuple for configuring the LinearQuantMode of both weights and activations of a module
@@ -792,14 +788,13 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         assert isinstance(wrapped, supported), \
             'Conversion to PyTorch PTQ supported only for {}'.format(','.join(supported))
         assert self.wts_quant_settings.num_bits == 8, 'Conversion to PyTorch PTQ supported only for 8-bit quantization'
-        assert self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC, \
-            'Conversion to PyTorch PTQ supported only for SYMMETRIC weights quantization'
 
         # Convert weights
-        w_scale, w_zp = distiller_qparams_to_pytorch(self.w_scale, self.w_zero_point, self.wts_quant_settings.num_bits,
-                                                     True, torch.qint8)
-        q_weight = distiller_ptq_tensor_to_pytorch(wrapped.weight.detach(), w_scale, w_zp, torch.qint8,
-                                                   self.wts_quant_settings.per_channel, 0)
+        w_scale, w_zp = pytqc.distiller_qparams_to_pytorch(self.w_scale, self.w_zero_point,
+                                                           self.wts_quant_settings.num_bits,
+                                                           self.wts_quant_settings.quant_mode, torch.qint8)
+        q_weight = pytqc.distiller_ptq_tensor_to_pytorch(wrapped.weight.detach(), w_scale, w_zp, torch.qint8,
+                                                         self.wts_quant_settings.per_channel, 0)
 
         # PyTorch PTQ modules expect the bias in FP32, we need to dequantize if necessary
         # With Distiller PTQ the bias is only quantized on the first forward - we do a crude check if it has
@@ -819,10 +814,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                          wrapped.bias is not None, wrapped.padding_mode)
 
         pytorch_module.set_weight_bias(q_weight, fp_bias)
-        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-        out_scale, out_zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                         self.output_quant_settings.num_bits,
-                                                         symmetric, torch.quint8)
+        out_scale, out_zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                               self.output_quant_settings.num_bits,
+                                                               self.output_quant_settings.quant_mode, torch.quint8)
         pytorch_module.scale = float(out_scale)
         pytorch_module.zero_point = int(out_zp)
 
@@ -903,9 +897,9 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         return requant_scale, output_zero_point
 
     def _convert_to_pytorch_quant(self):
-        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
+        scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                       self.output_quant_settings.num_bits,
+                                                       self.output_quant_settings.quant_mode, torch.quint8)
         modules = [self.wrapped_module, nnq.Quantize(float(scale), int(zp), torch.quint8)]
         if self.clip_half_range:
             # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
@@ -953,10 +947,10 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
         return 1., self.output_zero_point
 
     def _convert_to_pytorch_quant(self):
-        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
-        m = pytqm.QFunctionalCat(self.wrapped_module.dim)
+        scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                       self.output_quant_settings.num_bits,
+                                                       self.output_quant_settings.quant_mode, torch.quint8)
+        m = pytqc.QFunctionalCat(self.wrapped_module.dim)
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
         if self.clip_half_range:
@@ -1002,10 +996,10 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
         return 1., self.output_zero_point
 
     def _convert_to_pytorch_quant(self):
-        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
-        m = pytqm.QFunctionalAddRelu() if self.clip_half_range else pytqm.QFunctionalAdd()
+        scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                       self.output_quant_settings.num_bits,
+                                                       self.output_quant_settings.quant_mode, torch.quint8)
+        m = pytqc.QFunctionalAddRelu() if self.clip_half_range else pytqc.QFunctionalAdd()
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
         return m
@@ -1052,10 +1046,10 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
         return requant_scale, output_zero_point
 
     def _convert_to_pytorch_quant(self):
-        symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-        scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                 self.output_quant_settings.num_bits, symmetric, torch.quint8)
-        m = pytqm.QFunctionalMul()
+        scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                       self.output_quant_settings.num_bits,
+                                                       self.output_quant_settings.quant_mode, torch.quint8)
+        m = pytqc.QFunctionalMul()
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
         if self.clip_half_range:
@@ -1198,11 +1192,10 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         q_module = supported.get(type(self.wrapped_module), None)
         if q_module is None:
             # No PyTorch quantized module - so fake it
-            symmetric = _is_symmetric(self.output_quant_settings.quant_mode)
-            scale, zp = distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
-                                                     self.output_quant_settings.num_bits, symmetric, torch.quint8)
-            modules = [pytqm.ConditionalDeQuantize(),
-                       self.wrapped_module,
+            scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
+                                                           self.output_quant_settings.num_bits,
+                                                           self.output_quant_settings.quant_mode, torch.quint8)
+            modules = [pytqc.ConditionalDeQuantizeWrapper(self.wrapped_module),
                        nnq.Quantize(float(scale), int(zp), torch.quint8)]
         else:
             modules = [self.wrapped_module]

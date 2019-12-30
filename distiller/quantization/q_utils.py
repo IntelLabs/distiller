@@ -282,36 +282,3 @@ class LinearQuantizeSTE(torch.autograd.Function):
     def backward(ctx, grad_output):
         # Straight-through estimator
         return grad_output, None, None, None, None
-
-
-def distiller_qparams_to_pytorch(scale, zp, num_bits, symmetric, dest_dtype):
-    assert dest_dtype in (torch.qint8, torch.quint8)
-
-    scale = scale.cpu().squeeze()
-    zp = zp.cpu().squeeze().long()
-
-    # Distiller scale is the reciprocal of PyTorch scale
-    scale_torch = 1. / scale
-
-    if symmetric:
-        # In Distiller symmetric is always signed with zero-point = 0, but in PyTorch it can be
-        # unsigned in which case we offset the zero-point to the middle of the quantized range
-        n = 2 ** num_bits
-        zp_torch = zp if dest_dtype == torch.qint8 else torch.full_like(zp, n / 2)
-    else:
-        # Distiller subtracts the zero-point when quantizing, PyTorch adds it.
-        # So we negate the zero-point calculated in Distiller
-        zp_torch = -zp
-    return scale_torch, zp_torch
-
-
-def distiller_ptq_tensor_to_pytorch(t, scale, zp, dtype, per_ch=False, ch_dim=0):
-    if dtype == torch.quint8:
-        dtype = torch.uint8
-    elif dtype == torch.qint8:
-        dtype = torch.int8
-    elif dtype == torch.qint32:
-        dtype = torch.int32
-    if per_ch:
-        return torch._make_per_channel_quantized_tensor(t.to(dtype), scale, zp, ch_dim)
-    return torch._make_per_tensor_quantized_tensor(t.to(dtype), scale, zp)
