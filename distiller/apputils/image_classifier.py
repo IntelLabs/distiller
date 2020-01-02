@@ -860,7 +860,13 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
         qe_model = copy.deepcopy(model).to(args.device)
 
     quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args_qe)
-    quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
+    dummy_input = distiller.get_dummy_input(input_shape=model.input_shape)
+    quantizer.prepare_model(dummy_input)
+
+    if args.qe_convert_pytorch:
+        msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
+        quantization.convert_distiller_ptq_model_to_pytorch(model, dummy_input=dummy_input, inplace=True)
+        msglogger.info('\nModel after conversion:\n{}'.format(model))
 
     test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 

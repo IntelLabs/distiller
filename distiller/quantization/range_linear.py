@@ -301,6 +301,7 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
+    group.add_argument('--qe-convert-pytorch', '--qept', action='store_true')
 
     stats_group = group.add_mutually_exclusive_group()
     stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
@@ -790,11 +791,11 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         assert self.wts_quant_settings.num_bits == 8, 'Conversion to PyTorch PTQ supported only for 8-bit quantization'
 
         # Convert weights
-        w_scale, w_zp = pytqc.distiller_qparams_to_pytorch(self.w_scale, self.w_zero_point,
-                                                           self.wts_quant_settings.num_bits,
-                                                           self.wts_quant_settings.quant_mode, torch.qint8)
-        q_weight = pytqc.distiller_ptq_tensor_to_pytorch(wrapped.weight.detach(), w_scale, w_zp, torch.qint8,
-                                                         self.wts_quant_settings.per_channel, 0)
+        q_weight = pytqc.distiller_quantized_tensor_to_pytorch(wrapped.weight.clone().detach(),
+                                                               self.w_scale, self.w_zero_point,
+                                                               self.wts_quant_settings.num_bits,
+                                                               self.wts_quant_settings.quant_mode, torch.qint8,
+                                                               self.wts_quant_settings.per_channel, 0)
 
         # PyTorch PTQ modules expect the bias in FP32, we need to dequantize if necessary
         # With Distiller PTQ the bias is only quantized on the first forward - we do a crude check if it has
