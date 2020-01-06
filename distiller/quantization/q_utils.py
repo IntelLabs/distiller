@@ -18,6 +18,12 @@ from enum import Enum
 import torch
 
 
+class LinearQuantMode(Enum):
+    SYMMETRIC = 1
+    ASYMMETRIC_UNSIGNED = 2
+    ASYMMETRIC_SIGNED = 3
+
+
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
     out = torch.tensor(sat_val) if is_scalar else sat_val.clone().detach()
