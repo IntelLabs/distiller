@@ -405,7 +405,7 @@ def _init_learner(args):
             optimizer = None
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
-    if optimizer is None:
+    if optimizer is None and not args.evaluate:
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                     momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.debug('Optimizer Type: %s', type(optimizer))
@@ -865,8 +865,10 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
 
     if args.qe_convert_pytorch:
         msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
-        quantization.convert_distiller_ptq_model_to_pytorch(model, dummy_input=dummy_input, inplace=True)
-        msglogger.info('\nModel after conversion:\n{}'.format(model))
+        torch.backends.quantized.engine = args.qe_pytorch_backend
+        qe_model = quantization.convert_distiller_ptq_model_to_pytorch(qe_model, dummy_input=dummy_input)
+        msglogger.debug('\nModel after conversion:\n{}'.format(qe_model))
+        args_qe.device = 'cpu'
 
     test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 

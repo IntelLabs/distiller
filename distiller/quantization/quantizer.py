@@ -245,7 +245,7 @@ class Quantizer(object):
                 self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, n_bits))
 
                 param_full_name = '.'.join([module_name, param_name])
-                msglogger.info(
+                msglogger.debug(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
         # If an optimizer was passed, assume we need to update it
@@ -260,7 +260,7 @@ class Quantizer(object):
 
         distiller.assign_layer_fq_names(self.model)
 
-        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+        msglogger.debug('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_prepare_model(self, dummy_input):
         pass

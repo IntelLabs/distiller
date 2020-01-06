@@ -301,7 +301,10 @@ def add_post_train_quant_args(argparser):
     group.add_argument('--qe-scale-approx-bits', '--qesab', type=int, metavar='NUM_BITS',
                        help='Enables scale factor approximation using integer multiply + bit shift, using '
                             'this number of bits the integer multiplier')
-    group.add_argument('--qe-convert-pytorch', '--qept', action='store_true')
+    group.add_argument('--qe-convert-pytorch', '--qept', action='store_true',
+                       help='Convert the model to PyTorch native post-train quantization modules')
+    group.add_argument('--qe-pytorch-backend', default='fbgemm', choices=['fbgemm', 'qnnpack'],
+                       help='When --qe-convert-pytorch is set, specifies the PyTorch quantization backend to use')
 
     stats_group = group.add_mutually_exclusive_group()
     stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
@@ -549,13 +552,13 @@ class RangeLinearQuantWrapper(nn.Module):
         """
         raise NotImplementedError
 
-    def to_pytorch_quant(self):
+    def to_pytorch_quant(self, reduce_range):
         assert self.output_quant_settings.num_bits == 8, \
             'Conversion to PyTorch PTQ supported only for 8-bit quantization'
         assert self.preset_act_stats, 'Conversion to PyTorch PTQ supported only for PTQ wrappers with activation stats'
-        return self._convert_to_pytorch_quant()
+        return self._convert_to_pytorch_quant(reduce_range)
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         raise NotImplementedError
 
     def extra_repr(self):
@@ -769,7 +772,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         wrapped = self.wrapped_module
         supported = (nn.Conv2d, nn.Linear)
         # Tuple of module type and flag for relu fusing
@@ -817,7 +820,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         pytorch_module.set_weight_bias(q_weight, fp_bias)
         out_scale, out_zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                                self.output_quant_settings.num_bits,
-                                                               self.output_quant_settings.quant_mode, torch.quint8)
+                                                               self.output_quant_settings.quant_mode, torch.quint8,
+                                                               reduce_range)
         pytorch_module.scale = float(out_scale)
         pytorch_module.zero_point = int(out_zp)
 
@@ -897,10 +901,11 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
-                                                       self.output_quant_settings.quant_mode, torch.quint8)
+                                                       self.output_quant_settings.quant_mode, torch.quint8,
+                                                       reduce_range)
         modules = [self.wrapped_module, nnq.Quantize(float(scale), int(zp), torch.quint8)]
         if self.clip_half_range:
             # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
@@ -947,10 +952,11 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
         # Nothing to do here, since we already re-quantized in quantized_forward prior to the actual concatenation
         return 1., self.output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
-                                                       self.output_quant_settings.quant_mode, torch.quint8)
+                                                       self.output_quant_settings.quant_mode, torch.quint8,
+                                                       reduce_range)
         m = pytqc.QFunctionalCat(self.wrapped_module.dim)
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
@@ -996,10 +1002,11 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         return 1., self.output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
-                                                       self.output_quant_settings.quant_mode, torch.quint8)
+                                                       self.output_quant_settings.quant_mode, torch.quint8,
+                                                       reduce_range)
         m = pytqc.QFunctionalAddRelu() if self.clip_half_range else pytqc.QFunctionalAdd()
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
@@ -1046,10 +1053,11 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
             requant_scale = approx_scale_as_mult_and_shift(requant_scale, self.scale_approx_mult_bits)
         return requant_scale, output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
-                                                       self.output_quant_settings.quant_mode, torch.quint8)
+                                                       self.output_quant_settings.quant_mode, torch.quint8,
+                                                       reduce_range)
         m = pytqc.QFunctionalMul()
         m.qfunc.scale = float(scale)
         m.qfunc.zp = int(zp)
@@ -1181,7 +1189,7 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
     def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
         return output_scale, output_zero_point
 
-    def _convert_to_pytorch_quant(self):
+    def _convert_to_pytorch_quant(self, reduce_range):
         # A few PyTorch modules support quantized inputs/outputs
         supported = {
             nn.ReLU: nnq.ReLU(),
@@ -1195,7 +1203,8 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
             # No PyTorch quantized module - so fake it
             scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                            self.output_quant_settings.num_bits,
-                                                           self.output_quant_settings.quant_mode, torch.quint8)
+                                                           self.output_quant_settings.quant_mode, torch.quint8,
+                                                           reduce_range)
             modules = [pytqc.ConditionalDeQuantizeWrapper(self.wrapped_module),
                        nnq.Quantize(float(scale), int(zp), torch.quint8)]
         else:
