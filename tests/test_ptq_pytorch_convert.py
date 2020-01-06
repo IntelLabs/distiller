@@ -79,8 +79,7 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
         distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                       per_channel=per_channel)
     clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
-    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
-                                                                 clamp_min, clamp_max)
+    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp, clamp_min, clamp_max)
 
     # Quantize with PyTorch
     if per_channel:
@@ -106,8 +105,7 @@ def test_quantized_tensor_conversion(tensor, num_bits, distiller_mode, torch_dty
     distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                   per_channel=per_channel)
     clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
-    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
-                                                                 clamp_min, clamp_max)
+    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp, clamp_min, clamp_max)
 
     # Convert tensor to PyTorch
     pytorch_q_t = quantization.distiller_quantized_tensor_to_pytorch(

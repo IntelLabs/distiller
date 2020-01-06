@@ -793,7 +793,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             'Conversion to PyTorch PTQ supported only for {}'.format(','.join(supported))
         assert self.wts_quant_settings.num_bits == 8, 'Conversion to PyTorch PTQ supported only for 8-bit quantization'
 
-        # Convert weights
+        # Convert weights - required by PyTorch to be signed 8-bit (torch.qint8)
         q_weight = pytqc.distiller_quantized_tensor_to_pytorch(wrapped.weight.clone().detach(),
                                                                self.w_scale, self.w_zero_point,
                                                                self.wts_quant_settings.num_bits,
@@ -818,6 +818,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                                          wrapped.bias is not None, wrapped.padding_mode)
 
         pytorch_module.set_weight_bias(q_weight, fp_bias)
+
+        # Convert activations qparams - required by PyTorch to be unsigned 8-bit (torch.quint8)
         out_scale, out_zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                                self.output_quant_settings.num_bits,
                                                                self.output_quant_settings.quant_mode, torch.quint8,
@@ -902,6 +904,7 @@ class RangeLinearQuantMatmulWrapper(RangeLinearQuantWrapper):
         return requant_scale, output_zero_point
 
     def _convert_to_pytorch_quant(self, reduce_range):
+        # Convert activations qparams - required by PyTorch to be unsigned 8-bit (torch.quint8)
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
                                                        self.output_quant_settings.quant_mode, torch.quint8,
@@ -953,6 +956,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
         return 1., self.output_zero_point
 
     def _convert_to_pytorch_quant(self, reduce_range):
+        # Convert activations qparams - required by PyTorch to be unsigned 8-bit (torch.quint8)
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
                                                        self.output_quant_settings.quant_mode, torch.quint8,
@@ -1003,6 +1007,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
         return 1., self.output_zero_point
 
     def _convert_to_pytorch_quant(self, reduce_range):
+        # Convert activations qparams - required by PyTorch to be unsigned 8-bit (torch.quint8)
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
                                                        self.output_quant_settings.quant_mode, torch.quint8,
@@ -1054,6 +1059,7 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
         return requant_scale, output_zero_point
 
     def _convert_to_pytorch_quant(self, reduce_range):
+        # Convert activations qparams - requirec by PyTorch to be unsigned 8-bit (torch.quint8)
         scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                        self.output_quant_settings.num_bits,
                                                        self.output_quant_settings.quant_mode, torch.quint8,
@@ -1201,6 +1207,7 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
         q_module = supported.get(type(self.wrapped_module), None)
         if q_module is None:
             # No PyTorch quantized module - so fake it
+            # Convert activations qparams - required by PyTorch to be unsigned 8-bit (torch.quint8)
             scale, zp = pytqc.distiller_qparams_to_pytorch(self.output_scale, self.output_zero_point,
                                                            self.output_quant_settings.num_bits,
                                                            self.output_quant_settings.quant_mode, torch.quint8,

@@ -39,6 +39,10 @@ def distiller_qparams_to_pytorch(scale, zp, num_bits, distiller_mode, dest_dtype
       * distiller.quantization.symmetric_linear_quantization_params
       * distiller.quantization.asymmetric_linear_quantization_params
 
+    The main differences between quantization parameters as calculated by Distiller and PyTorch:
+      * pytorch_scale = 1 / distiller_scale
+      * pytorch_zero_point = -distiller_zero_point
+
     Args:
         scale (torch.Tensor): Scale factor calcualted by Distiller
         zp (torch.Tensor): Zero point calcualted by Distiller
@@ -241,10 +245,12 @@ def convert_distiller_ptq_model_to_pytorch(model, dequant_output=True, dummy_inp
     input tensor enables an additional "pass" over the converted model which removes redundant dequant-quant
     operations.
 
+    NOTE: The converted model will on the CPU, and non-parallel (that is - without nn.DataParallel modules)
+
     Args:
         model (torch.nn.Module): The model to be converted
         dequant_output (bool): Flag indicating whether to de-quantize the output of the model. If set, the converted
-          model will be a torch.nn.Sequantial containing the actual model followed by a
+          model will be a torch.nn.Sequential containing the actual model followed by a
           torch.nn.quantization.DeQuantize module.
           NOTE:
               This assumes the model produces a single output. In other cases the results are unexpected.
@@ -252,6 +258,13 @@ def convert_distiller_ptq_model_to_pytorch(model, dequant_output=True, dummy_inp
           dequant-quant operations that are generated in the conversion process.
 
     """
+    # Hacky deferred import for now to workaround circular dependency
+    # TODO: Proper fix
+    from distiller.quantization import PostTrainLinearQuantizer
+    if not hasattr(model, 'quantizer_metadata') or model.quantizer_metadata['type'] != PostTrainLinearQuantizer:
+        raise ValueError('Conversion to PyTorch native quantization supported only for models quantized '
+                         'using distiller.quantization.PostTrainLinearQuantizer')
+
     # TODO: Add in-place option. Not totally straight-forward because of the output dequantization
     #       Can monkey-patch instead of creating a Sequential, then it can really be in-place
     if dummy_input is None:
