@@ -18,14 +18,13 @@ import pytest
 import torch
 import torch.testing
 
-import distiller.quantization
-import distiller.quantization.pytorch_quant_conversion as pytqc
+import distiller.quantization as quantization
 from distiller.quantization.range_linear import _get_quant_params_from_tensor
 
 
-@pytest.fixture(params=[distiller.quantization.LinearQuantMode.SYMMETRIC,
-                        distiller.quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED,
-                        distiller.quantization.LinearQuantMode.ASYMMETRIC_SIGNED],
+@pytest.fixture(params=[quantization.LinearQuantMode.SYMMETRIC,
+                        quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED,
+                        quantization.LinearQuantMode.ASYMMETRIC_SIGNED],
                 ids=['symmetric', 'asym_unsigned', 'asym_signed'])
 def distiller_mode(request):
     return request.param
@@ -60,16 +59,16 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
     if reduce_range:
         if num_bits != 8:
             return True
-        if distiller_mode == distiller.quantization.LinearQuantMode.SYMMETRIC and torch_dtype == torch.quint8:
+        if distiller_mode == quantization.LinearQuantMode.SYMMETRIC and torch_dtype == torch.quint8:
             return True
 
     # Calculate quantization parameters with Distiller for number of bits BEFORE reduce_range
-    signed = distiller_mode != distiller.quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED
+    signed = distiller_mode != quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED
     distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                   per_channel=per_channel)
 
     # Convert parameters to PyTorch
-    converted_scale, converted_zp = pytqc.distiller_qparams_to_pytorch(
+    converted_scale, converted_zp = quantization.distiller_qparams_to_pytorch(
         distiller_scale, distiller_zp, num_bits, distiller_mode, torch_dtype, reduce_range
     )
 
@@ -79,8 +78,8 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
         num_bits -= 1
         distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                       per_channel=per_channel)
-    clamp_min, clamp_max = distiller.quantization.get_quantized_range(num_bits, signed=signed)
-    distiller_q_t = distiller.quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
+    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
+    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
                                                                  clamp_min, clamp_max)
 
     # Quantize with PyTorch
@@ -90,7 +89,7 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
         pytorch_q_t = torch.quantize_per_tensor(tensor, converted_scale, converted_zp, torch_dtype)
 
     # Dequantize
-    distiller_q_dq_t = distiller.quantization.linear_dequantize(distiller_q_t, distiller_scale, distiller_zp)
+    distiller_q_dq_t = quantization.linear_dequantize(distiller_q_t, distiller_scale, distiller_zp)
     pytorch_q_dq_t = pytorch_q_t.dequantize()
 
     # Compare - allow of up to one quantized "bin" between the tensors
@@ -103,19 +102,20 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
 
 def test_quantized_tensor_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_channel):
     # Quantize tensor with Distiller
-    signed = distiller_mode != distiller.quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED
+    signed = distiller_mode != quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED
     distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                   per_channel=per_channel)
-    clamp_min, clamp_max = distiller.quantization.get_quantized_range(num_bits, signed=signed)
-    distiller_q_t = distiller.quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
+    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
+    distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp,
                                                                  clamp_min, clamp_max)
 
     # Convert tensor to PyTorch
-    pytorch_q_t = pytqc.distiller_quantized_tensor_to_pytorch(distiller_q_t, distiller_scale, distiller_zp,
-                                                              num_bits, distiller_mode, torch_dtype, per_channel, 0)
+    pytorch_q_t = quantization.distiller_quantized_tensor_to_pytorch(
+        distiller_q_t, distiller_scale, distiller_zp, num_bits, distiller_mode, torch_dtype, per_channel, 0
+    )
 
     # Dequantize both
-    distiller_q_dq_t = distiller.quantization.linear_dequantize(distiller_q_t, distiller_scale, distiller_zp)
+    distiller_q_dq_t = quantization.linear_dequantize(distiller_q_t, distiller_scale, distiller_zp)
     pytorch_q_dq_t = pytorch_q_t.dequantize()
 
     # Compare
