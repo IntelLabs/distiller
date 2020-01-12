@@ -709,9 +709,8 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
                  mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE, per_channel_wts=False, activation_stats=None,
-                 clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 input_overrides=None, inputs_quant_auto_fallback=False,
-                 save_fp_weights=False):
+                 clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None, input_overrides=None,
+                 inputs_quant_auto_fallback=False, save_fp_weights=False):
         super(RangeLinearQuantParamLayerWrapper, self).__init__(wrapped_module, num_bits_acts, num_bits_accum, mode,
                                                                 clip_acts, activation_stats, clip_n_stds, clip_half_range,
                                                                 scale_approx_mult_bits,
@@ -1254,7 +1253,13 @@ class RangeLinearEmbeddingWrapper(nn.Module):
 class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
     def __init__(self, wrapped_module, num_bits_acts, mode=LinearQuantMode.SYMMETRIC, clip_acts=ClipMode.NONE,
                  activation_stats=None, clip_n_stds=None, clip_half_range=False, scale_approx_mult_bits=None,
-                 fpq_module=None, input_overrides=None, inputs_quant_auto_fallback=False):
+                 fpq_module=None, input_overrides=None, inputs_quant_auto_fallback=False, quantize_inputs=False):
+        if isinstance(wrapped_module, (nn.ReLU, nn.ReLU6)) and clip_acts in (ClipMode.GAUSS, ClipMode.LAPLACE):
+            # In case of ReLU + Gauss/Laplace clipping, need to clip according to stats before ReLU is applied
+            clip_half_range = True
+            activation_stats['output']['mean'] = activation_stats['inputs'][0]['mean']
+            activation_stats['output']['std'] = activation_stats['inputs'][0]['std']
+            activation_stats['output']['b'] = activation_stats['inputs'][0]['b']
         super(RangeLinearFakeQuantWrapper, self).__init__(wrapped_module, num_bits_acts, mode=mode,
                                                           clip_acts=clip_acts, activation_stats=activation_stats,
                                                           clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
@@ -1263,11 +1268,15 @@ class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
                                                           inputs_quant_auto_fallback=inputs_quant_auto_fallback)
         self.fpq_module = str(fpq_module) if fpq_module else None
         self.dtype = torch.float
+        self.quantize_inputs = quantize_inputs
         if self.fpq_module:
             self.dtype = {'16': torch.half, '32': torch.float, '64': torch.double}[self.fpq_module]
             self.wrapped_module.to(self.dtype)
 
     def _prepare_input(self, idx, input):
+        if not self.quantize_inputs:
+            return input
+
         previously_quantized = hasattr(input, 'quant_metadata')
         input.quant_metadata = self._get_input_quant_metadata(idx, input)
         if previously_quantized:
@@ -1444,7 +1453,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                    clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                                    scale_approx_mult_bits=scale_approx_mult_bits,
                                                    fpq_module=fpq_module, input_overrides=input_overrides,
-                                                   inputs_quant_auto_fallback=inputs_quant_auto_fallback)
+                                                   inputs_quant_auto_fallback=inputs_quant_auto_fallback,
+                                                   quantize_inputs=False)
 
             return RangeLinearQuantParamLayerWrapper(module, qbits.acts, qbits.wts,
                                                      num_bits_accum=self.bits_accum, mode=mode, clip_acts=clip_acts,
@@ -1476,7 +1486,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                    clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                                    scale_approx_mult_bits=scale_approx_mult_bits,
                                                    fpq_module=fpq_module, input_overrides=input_overrides,
-                                                   inputs_quant_auto_fallback=inputs_quant_auto_fallback)
+                                                   inputs_quant_auto_fallback=inputs_quant_auto_fallback,
+                                                   quantize_inputs=False)
             try:
                 return wrapper_type(module, qbits.acts, mode=mode, clip_acts=clip_acts,
                                     activation_stats=activation_stats,
@@ -1501,7 +1512,7 @@ class PostTrainLinearQuantizer(Quantizer):
                                clip_acts=None, clip_n_stds=clip_n_stds, clip_half_range=clip_half_range,
                                scale_approx_mult_bits=scale_approx_mult_bits, input_overrides=None,
                                inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                               fpq_module=fpq_module, fake=True, make_identity=False):
+                               fpq_module=fpq_module, fake=True, make_identity=False, quantize_inputs=True):
             if isinstance(module, (nn.ReLU, nn.ReLU6)) and make_identity:
                 named_modules = OrderedDict(self.model.named_modules())
                 pred = self.adjacency_map[name].predecessors[0].name
@@ -1522,7 +1533,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                clip_n_stds=clip_n_stds,  clip_half_range=clip_half_range,
                                                scale_approx_mult_bits=scale_approx_mult_bits,
                                                fpq_module=fpq_module, input_overrides=input_overrides,
-                                               inputs_quant_auto_fallback=inputs_quant_auto_fallback)
+                                               inputs_quant_auto_fallback=inputs_quant_auto_fallback,
+                                               quantize_inputs=quantize_inputs)
 
         self.clip_acts = clip_acts
         self.clip_n_stds = clip_n_stds
@@ -1808,7 +1820,11 @@ class PostTrainLinearQuantizer(Quantizer):
         named_modules = OrderedDict(self.model.named_modules())
         model_stats = self.model_activation_stats
         for n, m in named_modules.items():
-            if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm) )\
+            # Don't fuse if module outputs aren't quantized:
+            qbits = self.module_qbits_map.get(n, QBits(None, None, None))
+            if qbits.acts is None:
+                continue
+            if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm))\
                     or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
                 continue
             successor = self.adjacency_map[n].successors[0]
@@ -1859,12 +1875,11 @@ class PostTrainLinearQuantizer(Quantizer):
     def _apply_fuse_relu(self):
         """Fuses ReLU layers to the linear layers before them."""
         model_overrides = self.module_overrides_map
-        qbits_map = self.module_qbits_map
         named_modules = dict(self.model.named_modules())
         for n, m in named_modules.items():
-            # Don't fuse if the module isn't quantized:
-            qbits = qbits_map.get(n, QBits(None, None, None))
-            if qbits.acts is None and qbits.wts is None:
+            # Don't fuse if module outputs aren't quantized:
+            qbits = self.module_qbits_map.get(n, QBits(None, None, None))
+            if qbits.acts is None:
                 continue
             if (distiller.has_children(m) and not isinstance(m, SimulatedFoldedBatchNorm))\
                     or n not in self.adjacency_map or len(self.adjacency_map[n].successors) != 1:
