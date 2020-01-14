@@ -29,7 +29,13 @@ def test_symmetric_qparams():
         qu.symmetric_linear_quantization_params(8, torch.tensor([-5., 10.]))
 
     # Scalar positive
-    scale, zp = qu.symmetric_linear_quantization_params(8, 4.)
+    scale, zp = qu.symmetric_linear_quantization_params(8, 4., False)
+    assert not isinstance(scale, torch.Tensor)
+    assert not isinstance(zp, torch.Tensor)
+    assert scale == 31.875
+    assert zp == 0
+
+    scale, zp = qu.symmetric_linear_quantization_params(8, 4., True)
     assert not isinstance(scale, torch.Tensor)
     assert not isinstance(zp, torch.Tensor)
     assert scale == 31.75
@@ -37,6 +43,12 @@ def test_symmetric_qparams():
 
     # Scalar positive integer
     scale, zp = qu.symmetric_linear_quantization_params(8, 4)
+    assert not isinstance(scale, torch.Tensor)
+    assert not isinstance(zp, torch.Tensor)
+    assert scale == 31.875
+    assert zp == 0
+
+    scale, zp = qu.symmetric_linear_quantization_params(8, 4, True)
     assert not isinstance(scale, torch.Tensor)
     assert not isinstance(zp, torch.Tensor)
     assert scale == 31.75
@@ -47,21 +59,37 @@ def test_symmetric_qparams():
     assert scale == 1
     assert zp == 0
 
+    scale, zp = qu.symmetric_linear_quantization_params(8, 0., True)
+    assert scale == 1
+    assert zp == 0
+
     # Tensor positives
     sat = torch.tensor([4., 10.])
     scale, zp = qu.symmetric_linear_quantization_params(8, sat)
+    assert torch.equal(scale, torch.tensor([31.875, 12.75]))
+    assert torch.equal(zp, torch.zeros_like(sat))
+
+    scale, zp = qu.symmetric_linear_quantization_params(8, sat, True)
     assert torch.equal(scale, torch.tensor([31.75, 12.7]))
     assert torch.equal(zp, torch.zeros_like(sat))
 
     # Tensor positives - integer saturation values
     sat = torch.tensor([4, 10])
     scale, zp = qu.symmetric_linear_quantization_params(8, sat)
+    assert torch.equal(scale, torch.tensor([31.875, 12.75]))
+    assert torch.equal(zp, torch.zeros_like(sat, dtype=torch.float32))
+
+    scale, zp = qu.symmetric_linear_quantization_params(8, sat, True)
     assert torch.equal(scale, torch.tensor([31.75, 12.7]))
     assert torch.equal(zp, torch.zeros_like(sat, dtype=torch.float32))
 
     # Tensor with 0
     sat = torch.tensor([4., 0.])
     scale, zp = qu.symmetric_linear_quantization_params(8, sat)
+    assert torch.equal(scale, torch.tensor([31.875, 1.]))
+    assert torch.equal(zp, torch.zeros_like(sat))
+
+    scale, zp = qu.symmetric_linear_quantization_params(8, sat, True)
     assert torch.equal(scale, torch.tensor([31.75, 1.]))
     assert torch.equal(zp, torch.zeros_like(sat))
 
@@ -241,6 +269,22 @@ def test_get_tensor_mean_n_stds_min_max():
     t_min, t_max = qu.get_tensor_mean_n_stds_min_max(test_tensor, n_stds=2)
     torch.testing.assert_allclose(t_min, torch.tensor(-95.))
     torch.testing.assert_allclose(t_max, torch.tensor(87.))
+
+
+@pytest.mark.parametrize(
+    "num_bits, signed, restrict, expected_q_min, expected_q_max",
+    [
+        (8, False, False, 0, 255),
+        (8, False, True, 0, 255),
+        (8, True, False, -128, 127),
+        (8, True, True, -127, 127),
+    ]
+)
+def test_get_quantized_range(num_bits, signed, restrict, expected_q_min, expected_q_max):
+    q_min, q_max = qu.get_quantized_range(num_bits, signed=signed, signed_restrict_qrange=restrict)
+    assert q_min == expected_q_min
+    assert q_max == expected_q_max
+
 
 # TODO - Implement testing for ACIQ clipping
 # def test_aciq_clipping():
