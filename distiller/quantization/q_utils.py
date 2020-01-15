@@ -20,8 +20,17 @@ import torch
 
 class LinearQuantMode(Enum):
     SYMMETRIC = 1
-    ASYMMETRIC_UNSIGNED = 2
-    ASYMMETRIC_SIGNED = 3
+    SYMMETRIC_RESTRICTED = 2
+    ASYMMETRIC_UNSIGNED = 3
+    ASYMMETRIC_SIGNED = 4
+
+
+def is_linear_quant_mode_symmetric(quant_mode):
+    return quant_mode in (LinearQuantMode.SYMMETRIC, LinearQuantMode.SYMMETRIC_RESTRICTED)
+
+
+def is_linear_quant_mode_asymmetric(quant_mode):
+    return not is_linear_quant_mode_symmetric(quant_mode)
 
 
 def _prep_saturation_val_tensor(sat_val):
@@ -34,14 +43,26 @@ def _prep_saturation_val_tensor(sat_val):
     return is_scalar, out
 
 
-def symmetric_linear_quantization_params(num_bits, saturation_val):
+def symmetric_linear_quantization_params(num_bits, saturation_val, restrict_qrange=False):
+    """
+    Calculate quantization parameters assuming float range of [-saturation_val, saturation_val].
+    The returned zero-point is ALWAYS set to 0.
+​
+    Setting the 'restrict_qrange' parameter limits the quantized range to N-1 bins, where N = 2 ** num_bits -1.
+    This matches the symmetric quantization mode in TensorFlow which uses signed integer and limits the quantized
+    range to [-127, 127] (when using 8-bits), as opposed to the "vanilla" case of [-128, 127].
+​
+    See: https://arxiv.org/abs/1806.08342, section 2.2
+    """
     is_scalar, sat_val = _prep_saturation_val_tensor(saturation_val)
 
     if any(sat_val < 0):
         raise ValueError('Saturation value must be >= 0')
 
-    # Leave one bit for sign
-    n = 2 ** (num_bits - 1) - 1
+    if restrict_qrange:
+        n = 2 ** (num_bits - 1) - 1
+    else:
+        n = (2 ** num_bits - 1) / 2
 
     # If float values are all 0, we just want the quantized values to be 0 as well. So overriding the saturation
     # value to 'n', so the scale becomes 1
@@ -261,10 +282,33 @@ class AciqAsymmetricClipper(AciqClipper):
         return min_val, min_val + delta
 
 
-def get_quantized_range(num_bits, signed=True):
+def get_quantized_range(num_bits, signed=True, signed_restrict_qrange=False):
+    """
+    Returns the min and max quantized values for a given number of bits and signed/unsigned mode.
+​
+    The 'signed_restrict_qrange' argument:
+      If set, the quantized range is limited to N-1 "bins", where n = 2 ** num_bits - 1.
+      This matches the symmetric quantization mode in TensorFlow which uses signed integer and limits the quantized
+      range to [-127, 127] (when using 8-bits), as opposed to the "vanilla" case of [-128, 127].
+​
+      See: https://arxiv.org/abs/1806.08342, section 2.2
+​
+      This argument is ignored if the 'signed' argument is False. It should match the 'restrict_qrange' argument of
+      'symmetric_linear_quantization_params'.
+​
+    An example for num_bits == 4:
+    * signed == False:
+        q_min = 0, q_max = 15
+    * signed == True ; signed_restrict_qrange == False:
+        q_min = -8, q_max = 7
+    * signed == True ; signed_restrict_qrange == True:
+        q_min = -7, q_max = 7
+​
+    """
     if signed:
-        n = 2 ** (num_bits - 1)
-        return -n, n - 1
+        qmax = 2 ** (num_bits - 1) - 1
+        qmin = -qmax if signed_restrict_qrange else -qmax - 1
+        return qmin, qmax
     return 0, 2 ** num_bits - 1
 
 
