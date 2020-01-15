@@ -23,9 +23,10 @@ from distiller.quantization.range_linear import _get_quant_params_from_tensor
 
 
 @pytest.fixture(params=[quantization.LinearQuantMode.SYMMETRIC,
+                        quantization.LinearQuantMode.SYMMETRIC_RESTRICTED,
                         quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED,
                         quantization.LinearQuantMode.ASYMMETRIC_SIGNED],
-                ids=['symmetric', 'asym_unsigned', 'asym_signed'])
+                ids=['symmetric', 'symmetric_restricted', 'asym_unsigned', 'asym_signed'])
 def distiller_mode(request):
     return request.param
 
@@ -59,7 +60,7 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
     if reduce_range:
         if num_bits != 8:
             return True
-        if distiller_mode == quantization.LinearQuantMode.SYMMETRIC and torch_dtype == torch.quint8:
+        if quantization.is_linear_quant_mode_symmetric(distiller_mode) and torch_dtype == torch.quint8:
             return True
 
     # Calculate quantization parameters with Distiller for number of bits BEFORE reduce_range
@@ -78,7 +79,8 @@ def test_qparams_conversion(tensor, num_bits, distiller_mode, torch_dtype, per_c
         num_bits -= 1
         distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                       per_channel=per_channel)
-    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
+    restrict = distiller_mode == quantization.LinearQuantMode.SYMMETRIC_RESTRICTED
+    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed, signed_restrict_qrange=restrict)
     distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp, clamp_min, clamp_max)
 
     # Quantize with PyTorch
@@ -104,7 +106,8 @@ def test_quantized_tensor_conversion(tensor, num_bits, distiller_mode, torch_dty
     signed = distiller_mode != quantization.LinearQuantMode.ASYMMETRIC_UNSIGNED
     distiller_scale, distiller_zp = _get_quant_params_from_tensor(tensor, num_bits, distiller_mode,
                                                                   per_channel=per_channel)
-    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed)
+    restrict = distiller_mode == quantization.LinearQuantMode.SYMMETRIC_RESTRICTED
+    clamp_min, clamp_max = quantization.get_quantized_range(num_bits, signed=signed, signed_restrict_qrange=restrict)
     distiller_q_t = quantization.linear_quantize_clamp(tensor, distiller_scale, distiller_zp, clamp_min, clamp_max)
 
     # Convert tensor to PyTorch

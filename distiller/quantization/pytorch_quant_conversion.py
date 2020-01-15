@@ -22,11 +22,11 @@ import warnings
 from copy import deepcopy
 
 import distiller
-from .q_utils import LinearQuantMode
+from .q_utils import LinearQuantMode, is_linear_quant_mode_symmetric
 
 
 def need_reduce_range(distiller_quant_mode, torch_dtype):
-    return torch.backends.quantized.engine == 'fbgemm' and not(distiller_quant_mode == LinearQuantMode.SYMMETRIC and
+    return torch.backends.quantized.engine == 'fbgemm' and not(is_linear_quant_mode_symmetric(distiller_quant_mode) and
                                                                torch_dtype == torch.quint8)
 
 
@@ -55,17 +55,18 @@ def distiller_qparams_to_pytorch(scale, zp, num_bits, distiller_mode, dest_dtype
     """
     assert dest_dtype in (torch.qint8, torch.quint8), 'Must specify one of the quantized PyTorch dtypes'
 
-    if distiller_mode == LinearQuantMode.SYMMETRIC and dest_dtype == torch.quint8:
+    distiller_symmetric = is_linear_quant_mode_symmetric(distiller_mode)
+    if distiller_symmetric and dest_dtype == torch.quint8:
         reduce_range = False
 
     distiller_asym_signed = distiller_mode == LinearQuantMode.ASYMMETRIC_SIGNED
 
     if reduce_range:
         assert num_bits == 8, 'reduce_range needed only when num_bits == 8'
-        if distiller_mode == LinearQuantMode.SYMMETRIC and dest_dtype == torch.quint8:
+        if distiller_symmetric and dest_dtype == torch.quint8:
             raise NotImplementedError('reduce_range + symmetric + quint8 not supported in PyTorch')
         num_bits = 7
-        if distiller_mode == LinearQuantMode.SYMMETRIC:
+        if distiller_symmetric:
             ratio = 63. / 127.
         else:
             ratio = 127. / 255.
@@ -81,7 +82,7 @@ def distiller_qparams_to_pytorch(scale, zp, num_bits, distiller_mode, dest_dtype
 
     n_bins_half = 2 ** (num_bits - 1)
 
-    if distiller_mode == LinearQuantMode.SYMMETRIC:
+    if distiller_symmetric:
         # In Distiller symmetric is always signed with zero-point = 0, but in PyTorch it can be
         # unsigned in which case we offset the zero-point to the middle of the quantized range
         zp_torch = zp if dest_dtype == torch.qint8 else torch.full_like(zp, n_bins_half)
