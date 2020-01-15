@@ -106,7 +106,7 @@ def verify_clip_mode(mode):
 
 
 def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None):
-    if quant_mode == LinearQuantMode.SYMMETRIC:
+    if is_linear_quant_mode_symmetric(quant_mode):
         fns = {ClipMode.NONE: get_tensor_max_abs,
                ClipMode.AVG: get_tensor_avg_max_abs,
                ClipMode.N_STD: partial(get_tensor_mean_n_stds_max_abs, n_stds=num_stds),
@@ -136,9 +136,10 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
 
     dim = 0 if clip == ClipMode.AVG or per_channel else None
     sat_fn = _get_saturation_fn(mode, clip, num_stds, num_bits)
-    if mode == LinearQuantMode.SYMMETRIC:
+    if is_linear_quant_mode_symmetric(mode):
         sat_val = sat_fn(tensor, dim)
-        scale, zp = symmetric_linear_quantization_params(num_bits, sat_val)
+        scale, zp = symmetric_linear_quantization_params(num_bits, sat_val,
+                                                         restrict_qrange=mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
     else:   # Asymmetric mode
         sat_min, sat_max = sat_fn(tensor, dim) if clip not in [ClipMode.GAUSS, ClipMode.LAPLACE] \
             else sat_fn(tensor, dim, half_range=half_range)
@@ -176,13 +177,14 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         sat_max = torch.min(sat_max, mean + num_stds * std)
     elif clip in (ClipMode.LAPLACE, ClipMode.GAUSS):
         clip = AciqClipper.AciqClippingType.Laplace if clip == ClipMode.LAPLACE else AciqClipper.AciqClippingType.Gauss
-        if mode == LinearQuantMode.SYMMETRIC:
+        if is_linear_quant_mode_symmetric(mode):
             sat_min, sat_max = AciqSymmetricClipper(num_bits, clip)(stats)
         else:
             sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip)(stats, half_range=half_range)
 
-    if mode == LinearQuantMode.SYMMETRIC:
-        scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()))
+    if is_linear_quant_mode_symmetric(mode):
+        scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()),
+                                                         restrict_qrange=mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
     else:
         signed = mode == LinearQuantMode.ASYMMETRIC_SIGNED
         scale, zp = asymmetric_linear_quantization_params(num_bits, sat_min, sat_max, signed=signed)
@@ -262,6 +264,7 @@ def linear_dequantize_with_metadata(t, inplace=False):
 def add_post_train_quant_args(argparser):
     str_to_quant_mode_map = OrderedDict([
         ('sym', LinearQuantMode.SYMMETRIC),
+        ('sym_restr', LinearQuantMode.SYMMETRIC_RESTRICTED),
         ('asym_s', LinearQuantMode.ASYMMETRIC_SIGNED),
         ('asym_u', LinearQuantMode.ASYMMETRIC_UNSIGNED)
     ])
@@ -428,9 +431,12 @@ class RangeLinearQuantWrapper(nn.Module):
         self._dequant_out = True
 
         signed = mode.activations != LinearQuantMode.ASYMMETRIC_UNSIGNED
-        self.acts_min_q_val, self.acts_max_q_val = get_quantized_range(num_bits_acts, signed=signed)
+        restrict_qrange = mode.activations == LinearQuantMode.SYMMETRIC_RESTRICTED
+        self.acts_min_q_val, self.acts_max_q_val = get_quantized_range(num_bits_acts, signed=signed,
+                                                                       signed_restrict_qrange=restrict_qrange)
         # The accumulator is always signed
-        self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True)
+        self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True,
+                                                                         signed_restrict_qrange=False)
 
         if activation_stats:
             self.preset_act_stats = True
@@ -444,7 +450,9 @@ class RangeLinearQuantWrapper(nn.Module):
                     settings.clip_n_stds, settings.clip_half_range, self.scale_approx_mult_bits
                 )
                 min_q_val, max_q_val = get_quantized_range(
-                    settings.num_bits, settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+                    settings.num_bits, settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED,
+                    settings.quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED
+                )
                 qmd = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
                 self.inputs_quant_metadata_fallback[idx] = qmd
 
@@ -599,7 +607,8 @@ class RangeLinearQuantWrapper(nn.Module):
                                                           q_settings.clip_n_stds, q_settings.clip_half_range,
                                                           self.scale_approx_mult_bits)
                 signed = q_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
-                min_q_val, max_q_val = get_quantized_range(q_settings.num_bits, signed)
+                restrict_qrange = q_settings.quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED
+                min_q_val, max_q_val = get_quantized_range(q_settings.num_bits, signed, restrict_qrange)
                 qmd = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
 
         # Make sure scale and zp are on correct device
@@ -728,7 +737,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
 
         self.params_min_q_val, self.params_max_q_val = get_quantized_range(
             self.wts_quant_settings.num_bits,
-            self.wts_quant_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+            self.wts_quant_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED,
+            self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED
+        )
         self.save_fp_weights = save_fp_weights
         # save the float weight to allow re-quantizing
         if save_fp_weights:
@@ -894,7 +905,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
         # dealing solely with integer values, the results are the same either way.
 
-        if self.wts_quant_settings.quant_mode != LinearQuantMode.SYMMETRIC and \
+        if is_linear_quant_mode_asymmetric(self.wts_quant_settings.quant_mode) and \
                 not self.is_simulated_quant_weight_shifted:
             # We "store" the w_zero_point inside our wrapped module's weights to
             # improve performance on inference.
@@ -1165,8 +1176,9 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         mode = verify_quant_mode(mode)
         self.mode = mode
 
-        self.min_q_val, self.max_q_val = get_quantized_range(num_bits,
-                                                             signed=mode.weights != LinearQuantMode.ASYMMETRIC_UNSIGNED)
+        self.min_q_val, self.max_q_val = get_quantized_range(
+            num_bits, signed=mode.weights != LinearQuantMode.ASYMMETRIC_UNSIGNED,
+            signed_restrict_qrange=mode.weights == LinearQuantMode.SYMMETRIC_RESTRICTED)
         self.save_fp_weights = save_fp_weights
         if save_fp_weights:
             wrapped_module.register_buffer('float_weight', wrapped_module.weight.clone().detach())
@@ -1339,6 +1351,9 @@ class PostTrainLinearQuantizer(Quantizer):
 
     Any leaf module not in the list above will be "fake-quantized". That is - the floating-point module will be
     executed (FP64/32/16 can be specified with the fpq_module argument), and its output will be quantized.
+
+    To completely disable quantization for any module (inc. "fake-quantization" as described above),
+    use the overrides mechanism to specify NONE for bits_activations and/or bits_weights as needed.
 
     Args:
         model (torch.nn.Module): Model to be quantized
@@ -1974,11 +1989,12 @@ class FakeLinearQuantization(nn.Module):
                                                                              current_max, self.ema_decay,
                                                                              self.iter_count)
 
-        if self.mode == LinearQuantMode.SYMMETRIC:
+        if is_linear_quant_mode_symmetric(self.mode):
             max_abs = max(abs(self.tracked_min), abs(self.tracked_max))
             actual_min, actual_max = -max_abs, max_abs
             if self.training:
-                self.scale.data, self.zero_point.data = symmetric_linear_quantization_params(self.num_bits, max_abs)
+                self.scale.data, self.zero_point.data = symmetric_linear_quantization_params(
+                    self.num_bits, max_abs, restrict_qrange=self.mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
         else:
             actual_min, actual_max = self.tracked_min, self.tracked_max
             signed = self.mode == LinearQuantMode.ASYMMETRIC_SIGNED
