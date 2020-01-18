@@ -348,7 +348,7 @@ class ActivationRankedFilterPruner(_RankedStructureParameterPruner):
             raise ValueError("Could not find a layer named %s in the model."
                              "\nMake sure to use assign_layer_fq_names()" % fq_name)
         if not hasattr(module, self.activation_rank_criterion):
-            raise ValueError("Could not find attribute \"{}\" in module %s"
+            raise ValueError("Could not find attribute \"{}\" in module {}"
                              "\nMake sure to use SummaryActivationStatsCollector(\"{}\")".
                              format(self.activation_rank_criterion, fq_name, self.activation_rank_criterion))
 
