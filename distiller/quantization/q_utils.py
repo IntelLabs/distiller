@@ -16,6 +16,8 @@
 
 from enum import Enum
 import torch
+import scipy.optimize as opt
+import numpy as np
 
 
 class LinearQuantMode(Enum):
@@ -280,6 +282,51 @@ class AciqAsymmetricClipper(AciqClipper):
         min_val = torch.max(min_val, mean - alpha)
         delta = alpha if half_range else 2 * alpha
         return min_val, min_val + delta
+
+
+def _get_lp_error(tensor, num_bits, p_val, scale, zp, signed, restrict):
+    tensor_q = linear_quantize_clamp(tensor, scale, zp, *get_quantized_range(num_bits, signed, restrict))
+    tensor_q_dq = linear_dequantize(tensor_q, scale, zp)
+    err = torch.sum(torch.abs(tensor_q_dq - tensor) ** p_val) / tensor.numel()
+    return err.item()
+
+
+def get_lp_norm_clip_values_symmetric(tensor, num_bits, p_val, restrict_qrange=False):
+    tensor = tensor.clone().detach()
+
+    def callback(clip_val):
+        clip_val = abs(clip_val)
+        scale, zp = symmetric_linear_quantization_params(num_bits, clip_val)
+        return _get_lp_error(tensor, num_bits, p_val, scale, zp, restrict_qrange)
+
+    opt_result = opt.minimize_scalar(callback, method='brent')
+    opt_val = abs(opt_result.x[0])
+    return -opt_val, opt_val
+
+
+def get_lp_norm_clip_values_asymmetric(tensor, num_bits, p_val):
+    tensor = tensor.clone().detach()
+
+    def callback(clip_vals):
+        clip_vals.sort()
+        scale, zp = asymmetric_linear_quantization_params(num_bits, *clip_vals, integral_zero_point=True)
+        return _get_lp_error(tensor, num_bits, p_val, scale, zp)
+
+    x0 = np.array(get_tensor_min_max(tensor))
+    opt_result = opt.minimize(callback, x0, method='Powell')
+    opt_val = np.sort(opt_result.x)
+    return tuple(opt_val)
+
+
+def get_lp_norm_clipping_values(tensor, dim, num_bits, p_val, quant_mode):
+    if dim is not None:
+        raise NotImplementedError('Setting dim != None not supported yet')
+    tensor = tensor.clone().detach()
+    if is_linear_quant_mode_symmetric(quant_mode):
+        return get_lp_norm_clip_values_symmetric(tensor, num_bits, p_val,
+                                                 quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
+    else:
+        return get_lp_norm_clip_values_asymmetric(tensor, num_bits, p_val)
 
 
 def get_quantized_range(num_bits, signed=True, signed_restrict_qrange=False):
