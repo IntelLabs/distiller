@@ -369,8 +369,8 @@ def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=
     init_qp_dict = OrderedDict(quantizer.named_linear_quant_params(args.search_clipping, filter=True))
     keys, init_qp_vec = quant_params_dict2vec(init_qp_dict, args.search_clipping)
 
-    iter_counter = count(0)
-    eval_counter = count(0)
+    iter_counter = count(1)
+    eval_counter = count(1)
 
     def feed_forward_fn(qp_vec):
         # if not _check_qp_vec(keys, qp_vec, quant_mode, args.search_clipping):
