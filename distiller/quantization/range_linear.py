@@ -73,9 +73,6 @@ class ClipMode(Enum):
     # ACIQ Clipping Modes -
     GAUSS = 3
     LAPLACE = 4
-    # Clipping based on minimizing LP distance between the FP32 and quantized tensors. Require the actual
-    # FP32 tensor to calculate the clipping value. P value needs to be specified separately.
-    LP_NORM = 5
 
 
 def _verify_enum_value(val, enum_cls):
@@ -108,7 +105,7 @@ def verify_clip_mode(mode):
     return _verify_enum_value(mode, ClipMode)
 
 
-def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None, p_val=None):
+def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None):
     if is_linear_quant_mode_symmetric(quant_mode):
         fns = {ClipMode.NONE: get_tensor_max_abs,
                ClipMode.AVG: get_tensor_avg_max_abs,
@@ -121,14 +118,12 @@ def _get_saturation_fn(quant_mode, clip_mode, num_stds, num_bits=None, p_val=Non
                ClipMode.N_STD: partial(get_tensor_mean_n_stds_min_max, n_stds=num_stds),
                ClipMode.GAUSS: AciqAsymmetricClipper(num_bits, AciqClipper.AciqClippingType.Gauss),
                ClipMode.LAPLACE: AciqAsymmetricClipper(num_bits, AciqClipper.AciqClippingType.Laplace)}
-    fns.update({ClipMode.LP_NORM: partial(get_lp_norm_clipping_values, num_bits=num_bits, p_val=p_val,
-                                          quant_mode=quant_mode)})
     return fns[clip_mode]
 
 
 # TODO: Move to q_utils, add tests
 def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, per_channel=False, num_stds=None,
-                                  half_range=False, scale_approx_mult_bits=None, p_val=None):
+                                  half_range=False, scale_approx_mult_bits=None):
     if per_channel and tensor.dim() not in [2, 4]:
         raise UnsatisfiedRequirements('Per channel quantization possible only with '
                                       '2D or 4D tensors (linear or conv layer weights)')
@@ -139,16 +134,13 @@ def _get_quant_params_from_tensor(tensor, num_bits, mode, clip=ClipMode.NONE, pe
         if num_stds is None:
             raise UnsatisfiedRequirements('Clip mode set top N_STD but \'num_stds\' parameter not provided')
 
-    if clip == ClipMode.LP_NORM and p_val is None:
-        if per_channel:
-            raise ValueError('LP_Norm clipping not supported with per-channel quantization')
-        if num_stds is None:
-            raise UnsatisfiedRequirements('Clip mode set top LP_Norm but \'p_val\' parameter not provided')
-
     dim = 0 if clip == ClipMode.AVG or per_channel else None
     sat_fn = _get_saturation_fn(mode, clip, num_stds, num_bits)
     if is_linear_quant_mode_symmetric(mode):
         sat_val = sat_fn(tensor, dim)
+        if isinstance(sat_val, tuple):
+            assert len(sat_val) == 2
+            sat_val = torch.max(*sat_val)
         scale, zp = symmetric_linear_quantization_params(num_bits, sat_val,
                                                          restrict_qrange=mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
     else:   # Asymmetric mode
@@ -193,8 +185,6 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         else:
             sat_min, sat_max = AciqAsymmetricClipper(num_bits, clip)(stats, half_range=half_range)
 
-    msglogger.info('In _get_quant_params_from_stats_dict ; sat_min = {:4f}, sat_max = {:4f}'.format(sat_min.item(),
-                                                                                                    sat_max.item()))
     if is_linear_quant_mode_symmetric(mode):
         scale, zp = symmetric_linear_quantization_params(num_bits, torch.max(sat_min.abs_(), sat_max.abs_()),
                                                          restrict_qrange=mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
@@ -252,8 +242,7 @@ class QuantSettings(object):
         return '(num_bits={} ; quant_mode={} ; clip_mode={} ; clip_n_stds={} ; clip_half_range={}' \
                ' ; per_channel={})'.format(self.num_bits, _enum_to_str(self.quant_mode),
                                            _enum_to_str(self.clip_mode), self.clip_n_stds, self.clip_half_range,
-                                           self.per_channel
-        )
+                                           self.per_channel)
 
 
 def linear_quantize_clamp_with_metadata(t, inplace=False):
@@ -355,11 +344,11 @@ class UnsatisfiedRequirements(Exception):
     pass
 
 
-def _check_clipping_val(val, quant_settings=None):
+def _check_clipping_val(val, quant_mode, half_range):
     if isinstance(val, float):
-        if is_linear_quant_mode_symmetric(quant_settings.quant_mode):
+        if is_linear_quant_mode_symmetric(quant_mode):
             return -val, val
-        elif quant_settings.clip_half_range:
+        elif half_range:
             return 0, val
         raise ValueError('For asymmetric quantization, setting clipping values only allowed '
                          'using both min/max values.')
@@ -406,9 +395,6 @@ class RangeLinearQuantWrapper(nn.Module):
         self.scale_approx_mult_bits = scale_approx_mult_bits
         self.inputs_quant_auto_fallback = inputs_quant_auto_fallback
 
-        if is_linear_quant_mode_symmetric(mode.activations) and self.clip_half_range:
-            num_bits_acts += 1
-
         self.output_quant_settings = QuantSettings(num_bits_acts, mode.activations, clip_acts, clip_n_stds,
                                                    clip_half_range, False)
         self.accum_quant_settings = QuantSettings(num_bits_accum, LinearQuantMode.SYMMETRIC,
@@ -417,6 +403,10 @@ class RangeLinearQuantWrapper(nn.Module):
         self.preset_act_stats = False
         self.register_buffer('num_forwards', torch.zeros(1, dtype=torch.long))
         self.register_buffer('force_readjust', torch.tensor(False))
+
+        # The accumulator is always signed
+        self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True,
+                                                                         signed_restrict_qrange=False)
 
         # Activations not quantized - stop here
         if num_bits_acts is None:
@@ -452,9 +442,6 @@ class RangeLinearQuantWrapper(nn.Module):
         restrict_qrange = mode.activations == LinearQuantMode.SYMMETRIC_RESTRICTED
         self.acts_min_q_val, self.acts_max_q_val = get_quantized_range(num_bits_acts, signed=signed,
                                                                        signed_restrict_qrange=restrict_qrange)
-        # The accumulator is always signed
-        self.accum_min_q_val, self.accum_max_q_val = get_quantized_range(num_bits_accum, signed=True,
-                                                                         signed_restrict_qrange=False)
 
         if activation_stats:
             self.preset_act_stats = True
@@ -484,13 +471,13 @@ class RangeLinearQuantWrapper(nn.Module):
             self.register_buffer('output_zero_point', zp)
         else:
             self.preset_act_stats = False
-        self.eval()
 
-    def named_linear_quant_params(self):
+    def named_linear_quant_params(self, filter=False):
         if self.output_quant_settings.num_bits is not None and self.preset_act_stats:
             # Output scale buffers are saved in the model only when stats are used
             yield 'output_scale', self.output_scale
-            yield 'output_zero_point', self.output_zero_point
+            if not filter or (is_linear_quant_mode_asymmetric(self.mode.activations) and not self.clip_half_range):
+                yield 'output_zero_point', self.output_zero_point
 
     def set_linear_quant_param(self, name, val):
         if name in dict(self.named_clipping()):
@@ -524,15 +511,18 @@ class RangeLinearQuantWrapper(nn.Module):
         """
         self._check_requirements_output_clipping()
         qset = self.output_quant_settings
+        val_min, val_max = _check_clipping_val(val, qset.quant_mode, self.clip_half_range)
         qset.clip_mode, qset.clip_half_range, qset.clip_n_stds = ClipMode.NONE, None, None
-        val_min, val_max = _check_clipping_val(val, qset)
         scale, zp = _get_quant_params_from_stats_dict({'min': val_min, 'max': val_max}, qset.num_bits, qset.quant_mode,
                                                       scale_approx_mult_bits=self.scale_approx_mult_bits)
         self.set_linear_quant_param('output_scale', scale.item())
         self.set_linear_quant_param('output_zero_point', zp.item())
 
-    def named_clipping(self):
-        yield 'output_clipping', self.output_clipping
+    def named_clipping(self, filter=False):
+        val = self.output_clipping
+        if filter and (is_linear_quant_mode_symmetric(self.mode.activations) or self.clip_half_range):
+            val = val[1]
+        yield 'output_clipping', val
 
     def update_linear_quant_params(self, new_config):
         """
@@ -746,8 +736,12 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # If activations are not quantized, we do fake quantization of the parameters, that is - quant and de-quant
         self.fake_quant_params = self.output_quant_settings.num_bits is None
 
-        self.wts_quant_settings = QuantSettings(num_bits_params, self.mode.weights, ClipMode.NONE, None, False,
-                                                per_channel_wts)
+        clip_wts_mode, clip_wts_n_stds = ClipMode.NONE, None
+        if also_clip_weights:
+            clip_wts_mode = self.output_quant_settings.clip_mode
+            clip_wts_n_stds = self.output_quant_settings.clip_n_stds
+        self.wts_quant_settings = QuantSettings(num_bits_params, self.mode.weights, clip_wts_mode, clip_wts_n_stds,
+                                                False, per_channel_wts)
 
         self.params_min_q_val, self.params_max_q_val = get_quantized_range(
             self.wts_quant_settings.num_bits,
@@ -763,7 +757,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         w_scale, w_zero_point = _get_quant_params_from_tensor(wrapped_module.weight,
                                                               self.wts_quant_settings.num_bits,
                                                               self.wts_quant_settings.quant_mode,
-                                                              per_channel=self.wts_quant_settings.per_channel)
+                                                              clip=self.wts_quant_settings.clip_mode,
+                                                              per_channel=self.wts_quant_settings.per_channel,
+                                                              num_stds=self.wts_quant_settings.clip_n_stds)
         w_scale = w_scale if isinstance(w_scale, torch.Tensor) else torch.tensor(w_scale)
         w_zero_point = w_zero_point if isinstance(w_zero_point, torch.Tensor) else torch.tensor(w_zero_point)
 
@@ -776,12 +772,12 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         self.has_bias = hasattr(wrapped_module, 'bias') and wrapped_module.bias is not None
         if self.has_bias and (self.fake_quant_params or not self.preset_act_stats):
             b_scale, b_zero_point = _get_quant_params_from_tensor(wrapped_module.bias,
-                                                                  self.wts_quant_settings.num_bits,
-                                                                  self.wts_quant_settings.quant_mode)
+                                                                  self.accum_quant_settings.num_bits,
+                                                                  self.accum_quant_settings.quant_mode)
             self.register_buffer('b_scale', b_scale)
             self.register_buffer('b_zero_point', b_zero_point)
             base_b_q = linear_quantize_clamp(wrapped_module.bias.data, self.b_scale, self.b_zero_point,
-                                             self.params_min_q_val, self.params_max_q_val)
+                                             self.accum_min_q_val, self.accum_max_q_val)
             if not self.preset_act_stats:
                 # Dynamic ranges - save in auxiliary buffer,
                 # requantize each time based on dynamic input scale factor
@@ -815,11 +811,12 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         # i.e. is_simulated_quant_weight_shifted = False
         self.register_buffer('is_simulated_quant_weight_shifted', torch.tensor(False, device=device))
 
-    def named_linear_quant_params(self):
+    def named_linear_quant_params(self, filter=False):
         if self.save_fp_weights:
             yield 'w_scale', self.w_scale
-            yield 'w_zero_point', self.w_zero_point
-        yield from super(RangeLinearQuantParamLayerWrapper, self).named_linear_quant_params()
+            if not filter or is_linear_quant_mode_asymmetric(self.mode.weights):
+                yield 'w_zero_point', self.w_zero_point
+        yield from super(RangeLinearQuantParamLayerWrapper, self).named_linear_quant_params(filter=filter)
 
     def set_linear_quant_param(self, name, val):
         if name in ['w_scale', 'w_zero_point']:
@@ -829,6 +826,9 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
                 linear_quantize_clamp(self.wrapped_module.weight.data, self.w_scale, self.w_zero_point,
                                       self.params_min_q_val,
                                       self.params_max_q_val, inplace=True)
+                if self.fake_quant_params:
+                    linear_dequantize(self.wrapped_module.weight.data, self.w_scale, self.w_zero_point, inplace=True)
+
             else:
                 raise UnsatisfiedRequirements('Cannot re-quantize the weights. Please specify \'save_fp_weights\' in '
                                               'the %s constructor to enable re-quantizing the weights.' %
@@ -854,22 +854,25 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
     def weight_clipping(self, val):
         self._check_requirements_weights_clipping()
         bits = self.wts_quant_settings.num_bits
-        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings)
+        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings.quant_mode, False)
         if is_linear_quant_mode_symmetric(self.wts_quant_settings.quant_mode):
             # in symmetric quantization - we only need one value
-            scale, zp = symmetric_linear_quantization_params(bits, val_max)
+            scale, zp = symmetric_linear_quantization_params(bits, abs(max(val_min, val_max)))
         else:
             signed = self.wts_quant_settings.quant_mode == LinearQuantMode.ASYMMETRIC_SIGNED
             scale, zp = asymmetric_linear_quantization_params(bits, val_min, val_max, signed=signed)
         self.set_linear_quant_param('w_scale', scale)
         self.set_linear_quant_param('w_zero_point', zp)
 
-    def named_clipping(self):
+    def named_clipping(self, filter=False):
         try:
-            yield from super().named_clipping()
+            yield from super().named_clipping(filter=filter)
         except UnsatisfiedRequirements as ex:
             warnings.warn(str(ex))   # probably the output isn't quantized
-        yield 'weight_clipping', self.weight_clipping
+        val = self.weight_clipping
+        if filter and is_linear_quant_mode_symmetric(self.mode.weights):
+            val = val[1]
+        yield 'weight_clipping', val
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         if not self.fake_quant_params and self.is_simulated_quant_weight_shifted:
@@ -1210,9 +1213,10 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         self.quant_metadata = TensorQuantMetadata(self.w_scale, self.w_zero_point, self.min_q_val, self.max_q_val)
         self.wrapped_module = wrapped_module
 
-    def named_linear_quant_params(self):
+    def named_linear_quant_params(self, filter=False):
         yield 'w_scale', self.w_scale
-        yield 'w_zero_point', self.w_zero_point
+        if not filter or is_linear_quant_mode_asymmetric(self.mode.weights):
+            yield 'w_zero_point', self.w_zero_point
 
     def set_linear_quant_param(self, name, val):
         if name in ['w_scale', 'w_zero_point']:
@@ -1256,7 +1260,7 @@ class RangeLinearEmbeddingWrapper(nn.Module):
     def weight_clipping(self, val):
         self._check_requirements_weights_clipping()
         bits = self.wts_quant_settings.num_bits
-        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings)
+        val_min, val_max = _check_clipping_val(val, self.wts_quant_settings.quant_mode, False)
         if is_linear_quant_mode_symmetric(self.wts_quant_settings.quant_mode):
             # in symmetric quantization - we only need one value
             scale, zp = symmetric_linear_quantization_params(bits, val_max)
@@ -1266,8 +1270,11 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         self.set_linear_quant_param('w_scale', scale)
         self.set_linear_quant_param('w_zero_point', zp)
 
-    def named_clipping(self):
-        yield 'weight_clipping', self.weight_clipping
+    def named_clipping(self, filter=False):
+        val = self.weight_clipping
+        if filter and is_linear_quant_mode_symmetric(self.mode.weights):
+            val = val[1]
+        yield 'weight_clipping', val
 
     def forward(self, input):
         out_q = self.wrapped_module(input)
@@ -1494,8 +1501,8 @@ class PostTrainLinearQuantizer(Quantizer):
                                                      scale_approx_mult_bits=scale_approx_mult_bits,
                                                      input_overrides=input_overrides,
                                                      inputs_quant_auto_fallback=inputs_quant_auto_fallback,
-                                                     save_fp_weights=save_fp_weights,
-                                                     also_clip_weights=also_clip_weights)
+                                                     save_fp_weights=self.save_fp_weights,
+                                                     also_clip_weights=self.also_clip_weights)
 
         def replace_non_param_layer(wrapper_type, module, name, qbits_map, fp16=fp16,
                                     scale_approx_mult_bits=scale_approx_mult_bits,
@@ -1572,6 +1579,8 @@ class PostTrainLinearQuantizer(Quantizer):
         self.model_activation_stats = model_activation_stats or {}
         self.bits_accum = bits_accum
         self.mode = mode
+        self.save_fp_weights = save_fp_weights
+        self.also_clip_weights = also_clip_weights
 
         self.replacement_factory[nn.Conv2d] = replace_param_layer
         self.replacement_factory[nn.Conv3d] = replace_param_layer
@@ -1604,17 +1613,17 @@ class PostTrainLinearQuantizer(Quantizer):
         # To be filled by .prepare_model()
         self.linear_quant_params = None
 
-    def named_linear_quant_params(self, yield_clipping_params=False):
+    def named_linear_quant_params(self, yield_clipping_params=False, filter=False):
         if yield_clipping_params:
-            yield from self.named_clipping()
+            yield from self.named_clipping(filter=filter)
             return
         for module_name, module in self.model.named_modules():
             if is_post_train_quant_wrapper(module, include_fpwrapper=False):
-                for buff_name, buff in module.named_linear_quant_params():
+                for buff_name, buff in module.named_linear_quant_params(filter=filter):
                     full_buff_name = "%s.%s" % (module_name, buff_name)
                     yield full_buff_name, buff
 
-    def named_clipping(self):
+    def named_clipping(self, filter=False):
         """
         Gets all the clipping parameters of the model.
         yields tuple[str, tuple[torch.Tensor, torch.Tensor]]
@@ -1622,7 +1631,7 @@ class PostTrainLinearQuantizer(Quantizer):
         for module_name, module in self.model.named_modules():
             if not is_post_train_quant_wrapper(module, include_fpwrapper=False):
                 continue
-            for clip_name, clip_val in module.named_clipping():  # type: str, tuple[torch.Tensor, torch.Tensor]
+            for clip_name, clip_val in module.named_clipping(filter=filter):  # type: str, tuple[torch.Tensor, torch.Tensor]
                 yield '%s.%s' % (module_name, clip_name), clip_val
 
     def set_clipping(self, name, val):
