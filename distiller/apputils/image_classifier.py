@@ -470,16 +470,11 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    # create flag to indicate if model is inception to use proper image size
-    if args.arch in ['inception_v3', 'inceptionv3', 'inceptionv4', 'inceptionresnetv2']:
-        is_inception = True
-    else:
-        is_inception = False
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
+    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, args.arch,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset, sequential, is_inception)
+                              fixed_subset, sequential)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -488,7 +483,7 @@ def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_
     loaders = [loaders[i] for i, flag in enumerate(flags) if flag]
     
     if len(loaders) == 1:
-        # Unpack the list for convinience
+        # Unpack the list for convenience
         loaders = loaders[0]
     return loaders
 
