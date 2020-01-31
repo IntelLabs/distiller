@@ -761,6 +761,7 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
         msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
                        score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
 
+
 def inception_training_loss(output, target, criterion, args):
     """Compute weighted loss for Inception networks as they have auxiliary classifiers
 
