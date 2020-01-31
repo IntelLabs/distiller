@@ -575,20 +575,15 @@ def train(train_loader, model, criterion, optimizer, epoch,
             output = args.kd_policy.forward(inputs)
 
         if not early_exit_mode(args):
-            # For inception_v3 and inceptionv3, we need to add losses for both classifier outputs (0.4 weight for aux classifier)
-            if len(output) == 2:  # output[1] is aux output
-                loss = criterion(output[0], target) + 0.4 * criterion(output[1], target)
-            # For googlenet, we need to add losses for main classifier as well as two aux classifiers (0.3 weight)
-            # by DEFAULT, two aux classifiers are not included in pytorch pretrained googlenet model, they are only present
-            # if googlenet is trained from scratch, if you need to fine tune aux classifiers after pruning a pretrained model
-            # then you have to explicitly enable aux classifiers when creating the model (NOT IMPLEMENTED)
-            # the following elif branch is only used if training googlenet from scratch
-            elif len(output) == 3:  # output[1] is aux2, output [2] is aux1
-                loss = criterion(output[0], target) + 0.3 * (criterion(output[1], target) + criterion(output[2], target))
+            # Handle loss calculation for inception models separately due to auxiliary outputs
+            # if user turned off auxiliary classifiers by hand, then loss should be calculated normally,
+            # so, we have this check to ensure we only call this function when output is a tuple
+            if models.is_inception(args.arch) and isinstance(output, tuple):
+                loss = inception_training_loss(output, target, criterion, args)
             else:
                 loss = criterion(output, target)
             # Measure accuracy
-            # For inception models and googlenet, we only consider accuracy of main classifier
+            # For inception models, we only consider accuracy of main classifier
             if isinstance(output, tuple):
                 classerr.add(output[0].detach(), target)
             else:
@@ -765,6 +760,43 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
     for score in perf_scores_history[:num_best_scores]:
         msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
                        score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
+
+def inception_training_loss(output, target, criterion, args):
+    """Compute weighted loss for Inception networks as they have auxiliary classifiers
+
+    Auxiliary classifiers were added to inception networks to tackle the vanishing gradient problem
+    They apply softmax to outputs of one or more intermediate inception modules and compute auxiliary
+    loss over same labels.
+    Note that auxiliary loss is purely used for training purposes, as they are disabled during inference.
+
+    GoogleNet has 2 auxiliary classifiers, hence two 3 outputs in total, output[0] is main classifier output,
+    output[1] is aux2 classifier output and output[2] is aux1 classifier output and the weights of the
+    aux losses are weighted by 0.3 according to the paper (C. Szegedy et al., "Going deeper with convolutions,"
+    2015 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Boston, MA, 2015, pp. 1-9.)
+
+    All other versions of Inception networks have only one auxiliary classifier, and the auxiliary loss
+    is weighted by 0.4 according to PyTorch documentation
+    # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
+    """
+    weighted_loss = 0
+    if args.arch == 'googlenet':
+        # DEFAULT, aux classifiers are NOT included in PyTorch Pretrained googlenet model as they are NOT trained,
+        # they are only present if network is trained from scratch. If you need to fine tune googlenet (e.g. after
+        # pruning a pretrained model), then you have to explicitly enable aux classifiers when creating the model
+        # DEFAULT, in case of pretrained model, output length is 1, so loss will be calculated in main training loop
+        # instead of here, as we enter this function only if output is a tuple (len>1)
+        # TODO: Enable user to feed some input to add aux classifiers for pretrained googlenet model
+        outputs, aux2_outputs, aux1_outputs = output    # extract all 3 outputs
+        loss0 = criterion(outputs, target)
+        loss1 = criterion(aux1_outputs, target)
+        loss2 = criterion(aux2_outputs, target)
+        weighted_loss = loss0 + 0.3*loss1 + 0.3*loss2
+    else:
+        outputs, aux_outputs = output    # extract two outputs
+        loss0 = criterion(outputs, target)
+        loss1 = criterion(aux_outputs, target)
+        weighted_loss = loss0 + 0.4*loss1
+    return weighted_loss
 
 
 def earlyexit_loss(output, target, criterion, args):

@@ -274,7 +274,7 @@ def _get_sampler(data_source, effective_size, fixed_subset=False, sequential=Fal
 def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
                      effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False,
                      sequential=False):
-    train_dataset, test_dataset = datasets_fn(data_dir) # load data according to model type
+    train_dataset, test_dataset = datasets_fn(data_dir)
 
     worker_init_fn = None
     if deterministic:
