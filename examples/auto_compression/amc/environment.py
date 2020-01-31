@@ -40,7 +40,6 @@ msglogger = logging.getLogger("examples.auto_compression.amc")
 Observation = namedtuple('Observation', ['t', 'type', 'n', 'c',  'h', 'w', 'stride', 'k', 'MACs',
                                          'Weights', 'reduced', 'rest', 'prev_a'])
 ObservationLen = len(Observation._fields)
-ALMOST_ONE = 0.9999
 
 
 def is_using_continuous_action_space(agent):
@@ -295,7 +294,7 @@ class DistillerWrapperEnvironment(gym.Env):
             info = {"accuracy": top1, "compress_ratio": normalized_macs}
             if self.amc_cfg.protocol == "mac-constrained":
                 # Sanity check (special case only for "mac-constrained")
-                assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.002 # 0.01
+                #assert self.removed_macs_pct >= 1 - self.amc_cfg.target_density - 0.002 # 0.01
                 pass
         else:
             info = {}

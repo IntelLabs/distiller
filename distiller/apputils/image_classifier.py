@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,16 +28,15 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchnet.meter as tnt
+import parser
+from functools import partial
+import argparse
 import distiller
 import distiller.apputils as apputils
 from distiller.data_loggers import *
 import distiller.quantization as quantization
 import distiller.models as models
 from distiller.models import create_model
-import parser
-from functools import partial
-import operator
-import argparse
 from distiller.utils import float_range_argparse_checker as float_range
 
 # Logger handle
@@ -76,6 +75,7 @@ class ClassifierCompressor(object):
         self.train_loader, self.val_loader, self.test_loader = (None, None, None)
         self.activations_collectors = create_activation_stats_collectors(
             self.model, *self.args.activation_stats)
+        self.performance_tracker = apputils.SparsityAccuracyTracker(self.args.num_best_scores)
     
     def load_datasets(self):
         """Load the datasets"""
@@ -155,19 +155,19 @@ class ClassifierCompressor(object):
                                             total_steps=1, log_freq=1, loggers=[self.tflogger])
         return top1, top5, vloss
 
-    def _finalize_epoch(self, epoch, perf_scores_history, top1, top5):
+    def _finalize_epoch(self, epoch, top1, top5):
         # Update the list of top scores achieved so far, and save the checkpoint
-        update_training_scores_history(perf_scores_history, self.model,
-                                       top1, top5, epoch, self.args.num_best_scores)
-        is_best = epoch == perf_scores_history[0].epoch
+        self.performance_tracker.step(self.model, epoch, top1=top1, top5=top5)
+        _log_best_scores(self.performance_tracker, msglogger)
+        best_score = self.performance_tracker.best_scores()[0]
+        is_best = epoch == best_score.epoch
         checkpoint_extras = {'current_top1': top1,
-                             'best_top1': perf_scores_history[0].top1,
-                             'best_epoch': perf_scores_history[0].epoch}
+                             'best_top1': best_score.top1,
+                             'best_epoch': best_score.epoch}
         if msglogger.logdir:
             apputils.save_checkpoint(epoch, self.args.arch, self.model, optimizer=self.optimizer,
                                      scheduler=self.compression_scheduler, extras=checkpoint_extras,
                                      is_best=is_best, name=self.args.name, dir=msglogger.logdir)
-
 
     def run_training_loop(self):
         """Run the main training loop with compression.
@@ -186,12 +186,12 @@ class ClassifierCompressor(object):
         # Load the datasets lazily
         self.load_datasets()
 
-        perf_scores_history = []       
+        self.performance_tracker.reset()
         for epoch in range(self.start_epoch, self.ending_epoch):
             msglogger.info('\n')
             top1, top5, loss = self.train_validate_with_scheduling(epoch)
-            self._finalize_epoch(epoch, perf_scores_history, top1, top5)
-        return perf_scores_history
+            self._finalize_epoch(epoch, top1, top5)
+        return self.performance_tracker.perf_scores_history
 
     def validate(self, epoch=-1):
         self.load_datasets()
@@ -443,8 +443,8 @@ def create_activation_stats_collectors(model, *phases):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
     genCollectors = lambda: missingdict({
-        "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
-                                                         lambda t: 100 * distiller.utils.sparsity(t)),
+        "sparsity_ofm":      SummaryActivationStatsCollector(model, "sparsity_ofm",
+            lambda t: 100 * distiller.utils.sparsity(t)),
         "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
@@ -532,7 +532,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                         epoch, steps_completed,
                                         steps_per_epoch, args.print_freq,
                                         loggers)
-
 
     OVERALL_LOSS_KEY = 'Overall Loss'
     OBJECTIVE_LOSS_KEY = 'Objective Loss'
@@ -944,6 +943,10 @@ def acts_quant_stats_collection(model, criterion, loggers, args, test_loader=Non
     if test_loader is None:
         tmp_args = copy.deepcopy(args)
         tmp_args.effective_test_size = tmp_args.qe_calibration
+        # Batch size 256 causes out-of-memory errors on some models (due to extra space taken by
+        # stats calculations). Limiting to 128 for now.
+        # TODO: Come up with "smarter" limitation?
+        tmp_args.batch_size = min(128, tmp_args.batch_size)
         test_loader = load_data(tmp_args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
@@ -963,3 +966,18 @@ def acts_histogram_collection(model, criterion, loggers, args):
                       loggers=loggers, args=args, activations_collectors=None)
     collect_histograms(model, test_fn, save_dir=msglogger.logdir,
                        classes=None, nbins=2048, save_hist_imgs=True)
+
+
+def _log_best_scores(performance_tracker, logger, how_many=-1):
+    """Utility to log the best scores.
+
+    This function is currently written for pruning use-cases, but can be generalized.
+    """
+    assert isinstance(performance_tracker, (apputils.SparsityAccuracyTracker))
+    if how_many < 1:
+        how_many = performance_tracker.max_len
+    how_many = min(how_many, performance_tracker.max_len)
+    best_scores = performance_tracker.best_scores(how_many)
+    for score in best_scores:
+        logger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   NNZ-Params: %d on epoch: %d]',
+                    score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)

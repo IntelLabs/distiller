@@ -255,9 +255,48 @@ For any of the methods below that require quantization-aware training, please se
 </p>
 
 <p>In <strong>symmetric</strong> mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.</p>
-<p>Using the same notations as above, we get:</p>
+<p>There's a nuance in the symmetric case with regards to the quantized range. Assuming <script type="math/tex">N_{bins}=2^n-1</script>, we can use either a "full" or "restricted" quantized range:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Full Range</th>
+<th>Restricted Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quantized Range</td>
+<td>
+<script type="math/tex">\left[-\frac{N_{bins}}{2}, \frac{N_{bins}}{2} - 1\right]</script>
+</td>
+<td>
+<script type="math/tex">\left[-\left(\frac{N_{bins}}{2} - 1\right), \frac{N_{bins}}{2} - 1\right]</script>
+</td>
+</tr>
+<tr>
+<td>8-bit example</td>
+<td>
+<script type="math/tex">[-128, 127]</script> <br> (As shown in image above)</td>
+<td>
+<script type="math/tex">[-127,127]</script>
+</td>
+</tr>
+<tr>
+<td>Scale Factor</td>
+<td>
+<script type="math/tex">q_x = \frac{(2^n-1)/2}{\max(abs(x_f))}</script>
+</td>
+<td>
+<script type="math/tex"> q_x = \frac{2^{n-1}-1}{\max(abs(x_f))}</script>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The restricted range is less accurate on-paper, and is usually used when specific HW considerations require it. Implementations of quantization "in the wild" that use a full range include PyTorch's native quantization (from v1.3 onwards) and ONNX. Implementations that use a restricted range include TensorFlow, NVIDIA TensorRT and Intel DNNL (aka MKL-DNN). Distiller can emulate both modes.</p>
+<p>Using the same notations as above, we get (regardless of full/restricted range):</p>
 <p>
-<script type="math/tex; mode=display">x_q = round\left (x_f \underbrace{\frac{2^{n-1} - 1}{\max|x_f|}}_{q_x} \right) = round(q_x x_f)</script>
+<script type="math/tex; mode=display">x_q = round(q_x x_f)</script>
 </p>
 <p>Again, let's see how a <strong>convolution</strong> or <strong>fully-connected (FC)</strong> layer is quantized, this time in symmetric mode:</p>
 <p>
@@ -285,6 +324,8 @@ For any of the methods below that require quantization-aware training, please se
 <ul>
 <li>Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.</li>
 <li>Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.</li>
+<li>ACIQ - Analytical calculation of clipping values assuming either a Gaussian or Laplace distribution. As proposed in <a href="https://arxiv.org/abs/1810.05723">Post training 4-bit quantization of convolutional
+networks for rapid-deployment</a>.</li>
 </ul>
 </li>
 <li>
@@ -300,19 +341,21 @@ For any of the methods below that require quantization-aware training, please se
 <h4 id="post-training">Post-Training</h4>
 <p>For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py"><code>range_linear.py</code></a>.</p>
 <ul>
-<li>The operations currently supported are:<ul>
-<li>Convolution</li>
-<li>Fully connected</li>
-<li>Element-wise addition</li>
-<li>Element-wise multiplication</li>
-<li>Concatenation</li>
-<li>Embedding</li>
+<li>The following operations have dedicated implementations which consider quantization:<ul>
+<li><code>torch.nn.Conv2d/Conv3d</code></li>
+<li><code>torch.nn.Linear</code></li>
+<li><code>torch.nn.Embedding</code></li>
+<li><code>distiller.modules.Concat</code></li>
+<li><code>distiller.modules.EltwiseAdd</code></li>
+<li><code>distiller.modules.EltwiseMult</code></li>
+<li><code>distiller.modules.Matmul</code></li>
+<li><code>distiller.modules.BatchMatmul</code></li>
 </ul>
 </li>
-<li>All other layers are unaffected and are executed using their original FP32 implementation.</li>
+<li>Any existing module will likely need to be modified to use the <code>distiller.modules.*</code> modules. See <a href="prepare_model_quant.html">here</a> for details on how to prepare a model for quantization.</li>
 <li>To automatically transform an existing model to a quantized model using this method, use the <code>PostTrainLinearQuantizer</code> class. For details on ways to invoke the quantizer see <a href="schedule.html#post-training-quantization">here</a>.</li>
-<li>The transform performed by the Quantizer only works on sub-classes of <code>torch.nn.Module</code>. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the <code>torch</code> namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/modules">here</a>. It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified <a href="https://github.com/NervanaSystems/distiller/blob/master/distiller/models/imagenet/resnet.py">ResNet implementation</a>.</li>
-<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that <a href="schedule.html#collecting-statistics-for-quantization">here</a>.</li>
+<li>When using <code>PostTrainLinearQuantizer</code>, by default, any operation not in the list above is "fake"-quantized, meaning it is executed in FP32 and its output is quantized. Quantization for specific layers (or groups of layers) can be disabled using Distiller's override mechanism (see example <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml">here</a>).</li>
+<li>For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantization of activations requires that statistics be collected beforehand. See details on how to do that <a href="schedule.html#collecting-statistics-for-quantization">here</a>.</li>
 <li>The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.</li>
 </ul>
 <h4 id="quantization-aware-training">Quantization-Aware Training</h4>
@@ -339,7 +382,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 <script type="math/tex; mode=display">w_q = 2 quantize_k \left( f(w_f) \right) - 1</script>
 </p>
 <p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>DorefaQuantizer</code> class to transform an existing model to a model suitable for training with quantization using DoReFa.</p>
-<h3 id="notes">Notes:</h3>
+<h3 id="notes">Notes</h3>
 <ul>
 <li>Gradients quantization as proposed in the paper is not supported yet.</li>
 <li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>
@@ -360,7 +403,7 @@ Note that the current implementation of <code>QuantAwareTrainRangeLinearQuantize
 </p>
 <p>Note that <script type="math/tex">k-1</script> bits are used to quantize weights, leaving one bit for sign.</p>
 <p>This method requires training the model with quantization-aware training, as discussed <a href="quantization.html#quantization-aware-training">here</a>. Use the <code>WRPNQuantizer</code> class to transform an existing model to a model suitable for training with quantization using WRPN.</p>
-<h3 id="notes_1">Notes:</h3>
+<h3 id="notes_1">Notes</h3>
 <ul>
 <li>The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of <code>WRPNQuantizer</code> at the moment. To experiment with this, modify your model implementation to have wider layers.</li>
 <li>The paper defines special handling for binary weights which isn't supported in Distiller yet.</li>

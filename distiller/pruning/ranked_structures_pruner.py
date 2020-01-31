@@ -348,7 +348,7 @@ class ActivationRankedFilterPruner(_RankedStructureParameterPruner):
             raise ValueError("Could not find a layer named %s in the model."
                              "\nMake sure to use assign_layer_fq_names()" % fq_name)
         if not hasattr(module, self.activation_rank_criterion):
-            raise ValueError("Could not find attribute \"{}\" in module %s"
+            raise ValueError("Could not find attribute \"{}\" in module {}"
                              "\nMake sure to use SummaryActivationStatsCollector(\"{}\")".
                              format(self.activation_rank_criterion, fq_name, self.activation_rank_criterion))
 
@@ -672,6 +672,7 @@ class FMReconstructionChannelPruner(_RankedStructureParameterPruner):
             except AttributeError:
                 raise ValueError("To use FMReconstructionChannelPruner you must first collect input statistics")
 
+            op_type = 'conv' if param.dim() == 4 else 'fc'
             # We need to remove the chosen weights channels.  Because we are using 
             # min(MSE) to compute the weights, we need to start by removing feature-map 
             # channels from the input.  Then we perform the MSE regression to generate

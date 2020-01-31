@@ -18,7 +18,8 @@ Here we implement the greedy search algorithm for automatic quantization.
 """
 import torch
 import torch.nn as nn
-from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, LinearQuantMode
+from distiller.quantization import LinearQuantMode
+from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode
 from distiller.summary_graph import SummaryGraph
 from distiller.model_transforms import fold_batch_norms
 import distiller.modules

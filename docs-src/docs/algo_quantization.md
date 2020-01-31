@@ -52,9 +52,19 @@ Notes:
 
 In **symmetric** mode, instead of mapping the exact min/max of the float range to the quantized range, we choose the maximum absolute value between min/max. In addition, we don't use a zero-point. So, the floating-point range we're effectively quantizing is symmetric with respect to zero, and so is the quantized range.
 
-Using the same notations as above, we get:
+There's a nuance in the symmetric case with regards to the quantized range. Assuming \(N_{bins}=2^n-1\), we can use either a "full" or "restricted" quantized range:
 
-\[x_q = round\left (x_f \underbrace{\frac{2^{n-1} - 1}{\max|x_f|}}_{q_x} \right) = round(q_x x_f)\]
+| | Full Range | Restricted Range|
+|-|------|----------|
+| Quantized Range | \(\left[-\frac{N_{bins}}{2}, \frac{N_{bins}}{2} - 1\right]\) | \(\left[-\left(\frac{N_{bins}}{2} - 1\right), \frac{N_{bins}}{2} - 1\right]\) |
+| 8-bit example   | \([-128, 127]\) <br> (As shown in image above)               | \([-127,127]\) |
+| Scale Factor    | \(q_x = \frac{(2^n-1)/2}{\max(abs(x_f))}\)                  | \( q_x = \frac{2^{n-1}-1}{\max(abs(x_f))}\) |
+
+The restricted range is less accurate on-paper, and is usually used when specific HW considerations require it. Implementations of quantization "in the wild" that use a full range include PyTorch's native quantization (from v1.3 onwards) and ONNX. Implementations that use a restricted range include TensorFlow, NVIDIA TensorRT and Intel DNNL (aka MKL-DNN). Distiller can emulate both modes.
+
+Using the same notations as above, we get (regardless of full/restricted range):
+
+\[x_q = round(q_x x_f)\]
 
 Again, let's see how a **convolution** or **fully-connected (FC)** layer is quantized, this time in symmetric mode:
 
@@ -80,8 +90,10 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
    </p>
   Currently, Distiller supports clipping of activations during post-training quantization using the following methods:
   
-     - Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.
-     - Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.
+    - Averaging: Global min/max values are replaced with an average of the min/max values of each sample in the batch.
+    - Mean +/- N*Std: Take N standard deviations for the tensor's mean, and in any case don't exceed the tensor's actual min/max. N is user configurable.
+    - ACIQ - Analytical calculation of clipping values assuming either a Gaussian or Laplace distribution. As proposed in [Post training 4-bit quantization of convolutional
+networks for rapid-deployment](https://arxiv.org/abs/1810.05723).
 
 - **Scale factor approximation (post-training only):** This can be enabled optionally, to simulate an execution pipeline with no floating-point operations. Instead of multiplying with a floating-point scale factor, we multiply with an integer and then do a bit-wise shift: \(Q \approx {A}/{2^n}\), where \(Q\) denotes the FP32 scale factor, \(A\) denotes the integer multiplier and \(n\) denotes the number of bits by which we shift after multiplication. The number of bits assigned to \(A\) is usually a parameter of the HW, and in Distiller it is configured by the user. Let us denote that with \(m\). Given \(Q\) and \(m\), we determine \(A\) and \(n\) as follows:
 
@@ -95,17 +107,19 @@ The main trade-off between these two modes is simplicity vs. utilization of the 
 
 For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in [`range_linear.py`](https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py).
 
-- The operations currently supported are:
-    - Convolution
-    - Fully connected
-    - Element-wise addition
-    - Element-wise multiplication
-    - Concatenation
-    - Embedding
-- All other layers are unaffected and are executed using their original FP32 implementation.
+- The following operations have dedicated implementations which consider quantization:
+    - `torch.nn.Conv2d/Conv3d`
+    - `torch.nn.Linear`
+    - `torch.nn.Embedding`
+    - `distiller.modules.Concat`
+    - `distiller.modules.EltwiseAdd`
+    - `distiller.modules.EltwiseMult`
+    - `distiller.modules.Matmul`
+    - `distiller.modules.BatchMatmul`
+- Any existing module will likely need to be modified to use the `distiller.modules.*` modules. See [here](prepare_model_quant.md) for details on how to prepare a model for quantization.
 - To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For details on ways to invoke the quantizer see [here](schedule.md#post-training-quantization).
-- The transform performed by the Quantizer only works on sub-classes of `torch.nn.Module`. But operations such as element-wise addition / multiplication and concatenation do not have associated Modules in PyTorch. They are either overloaded operators, or simple functions in the `torch` namespace. To be able to quantize these operations, we've implemented very simple modules that wrap these operations [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/modules). It is necessary to manually modify your model and replace any existing operator with a corresponding module. For an example, see our slightly modified [ResNet implementation](https://github.com/NervanaSystems/distiller/blob/master/distiller/models/imagenet/resnet.py).
-- For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantizaton of activations requires that statistics be collected beforehand. See details on how to do that [here](schedule.md#collecting-statistics-for-quantization).
+- When using `PostTrainLinearQuantizer`, by default, any operation not in the list above is "fake"-quantized, meaning it is executed in FP32 and its output is quantized. Quantization for specific layers (or groups of layers) can be disabled using Distiller's override mechanism (see example [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)).
+- For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantization of activations requires that statistics be collected beforehand. See details on how to do that [here](schedule.md#collecting-statistics-for-quantization).
 - The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.
 
 #### Quantization-Aware Training
@@ -139,7 +153,7 @@ Now we can use \(quantize_k\) to get quantized weight values, as follows:
 
 This method requires training the model with quantization-aware training, as discussed [here](quantization.md#quantization-aware-training). Use the `DorefaQuantizer` class to transform an existing model to a model suitable for training with quantization using DoReFa.
 
-### Notes:
+### Notes
 
 - Gradients quantization as proposed in the paper is not supported yet.
 - The paper defines special handling for binary weights which isn't supported in Distiller yet.
@@ -168,7 +182,7 @@ Note that \(k-1\) bits are used to quantize weights, leaving one bit for sign.
 
 This method requires training the model with quantization-aware training, as discussed [here](quantization.md#quantization-aware-training). Use the `WRPNQuantizer` class to transform an existing model to a model suitable for training with quantization using WRPN.
 
-### Notes:
+### Notes
 
 - The paper proposed widening of layers as a means to reduce accuracy loss. This isn't implemented as part of `WRPNQuantizer` at the moment. To experiment with this, modify your model implementation to have wider layers.
 - The paper defines special handling for binary weights which isn't supported in Distiller yet.
