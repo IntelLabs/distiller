@@ -178,13 +178,13 @@ def linear_bias():
     "mode, clip_acts, per_channel_wts, expected_output",
     [
         (LinearQuantMode.ASYMMETRIC_UNSIGNED, ClipMode.NONE, False,
-         torch.tensor([[7.686200692, 0.241135708, 0.783691051]], dtype=torch.float32)),
+         torch.tensor([[7.687381776, 0.241172762, 0.783811475]], dtype=torch.float32)),
         (LinearQuantMode.ASYMMETRIC_UNSIGNED, ClipMode.NONE, True,
-         torch.tensor([[7.698823529, 0.241531719, 0.784978085]], dtype=torch.float32)),
+         torch.tensor([[7.699930796, 0.241566456, 0.785090983]], dtype=torch.float32)),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE, False,
-         torch.tensor([[7.718753843, 0.243110357, 0.790108661]], dtype=torch.float32)),
+         torch.tensor([[7.716609268, 0.243042812, 0.789889138]], dtype=torch.float32)),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE, True,
-         torch.tensor([[7.718753843, 0.243110357, 0.790108661]], dtype=torch.float32))
+         torch.tensor([[7.716609268, 0.243042812, 0.789889138]], dtype=torch.float32))
     ]
 )
 def test_linear_layer_wrapper(linear_input, linear_weights, linear_bias,
@@ -740,10 +740,10 @@ class DummyWordLangModel(nn.Module):
 @pytest.mark.filterwarnings('ignore:Iterating over a tensor might cause the trace to be incorrect')
 @pytest.mark.filterwarnings('ignore:Converting a tensor to a Python index might cause the trace to be incorrect')
 def test_acts_quant_params_rnn(rnn_model):
-    model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model).cuda()
+    model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model)
     stats = gen_stats_for_model(model)
     quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
-    dummy_input = torch.randint(0, 41, size=(79, 23))
+    dummy_input = torch.randint(0, 41, size=(10, 1))
     quantizer.prepare_model(dummy_input)
     new_config = {
         'rnn.rnn.cells.0.act_o.output_scale': 4,
@@ -752,8 +752,8 @@ def test_acts_quant_params_rnn(rnn_model):
     quantizer.update_linear_quant_params(new_config)
     assert model.rnn.rnn.cells[0].act_o.output_scale == 4
     assert model.embedding.w_scale == 59.0
-    assert model.rnn.rnn.cells[0].act_o.force_readjust == True
-    assert model.rnn.rnn.cells[0].act_f.force_readjust == True
+    assert model.rnn.rnn.cells[0].act_o.force_readjust.item() is True
+    assert model.rnn.rnn.cells[0].act_f.force_readjust.item() is True
 
 
 ###############################################################################
@@ -777,20 +777,21 @@ def _fake_quant_tensor(tensor, n_bits, mode, per_channel):
     q_utils.linear_dequantize(tensor, scale, zp, inplace=True)
 
 
-def _test_wts_only_quant(layer, x, per_channel, bias, num_bits):
+def _test_wts_only_quant(layer, x, per_channel, bias, num_bits_wts, num_bits_accum):
     layer.weight.data = torch.rand_like(layer.weight)
     if bias:
         layer.bias.data = torch.rand_like(layer.bias)
     mode = LinearQuantMode.ASYMMETRIC_UNSIGNED
 
-    layer_ptq = RangeLinearQuantParamLayerWrapper(deepcopy(layer), None, num_bits, mode=mode, per_channel_wts=per_channel)
+    layer_ptq = RangeLinearQuantParamLayerWrapper(deepcopy(layer), None, num_bits_wts, num_bits_accum=num_bits_accum,
+                                                  mode=mode, per_channel_wts=per_channel)
     layer_ptq.eval()
 
     layer_manual_q = deepcopy(layer)
-    _fake_quant_tensor(layer_manual_q.weight.data, num_bits, mode, per_channel)
+    _fake_quant_tensor(layer_manual_q.weight.data, num_bits_wts, mode, per_channel)
     assert torch.equal(layer_ptq.wrapped_module.weight, layer_manual_q.weight)
     if bias:
-        _fake_quant_tensor(layer_manual_q.bias.data, num_bits, mode, False)
+        _fake_quant_tensor(layer_manual_q.bias.data, num_bits_accum, mode, False)
         assert torch.equal(layer_ptq.wrapped_module.bias, layer_manual_q.bias)
 
     y_ptq = layer_ptq(x)
@@ -805,7 +806,7 @@ def test_conv_layer_wrapper_params_only(per_channel, bias):
     layer = torch.nn.Conv2d(in_ch, 10, 3, bias=bias)
     x = torch.rand(5, in_ch, 5, 5)
 
-    _test_wts_only_quant(layer, x, per_channel, bias, 8)
+    _test_wts_only_quant(layer, x, per_channel, bias, 8, 32)
 
 
 def test_linear_layer_wrapper_params_only(per_channel, bias):
@@ -815,4 +816,4 @@ def test_linear_layer_wrapper_params_only(per_channel, bias):
 
     x = torch.rand(5, in_features)
 
-    _test_wts_only_quant(layer, x, per_channel, bias, 8)
+    _test_wts_only_quant(layer, x, per_channel, bias, 8, 32)

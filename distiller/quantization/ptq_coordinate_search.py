@@ -13,6 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+#
+# Implementation of "Loss Aware Post-Training Quantization" (Nahshan et al., 2019)
+#
+# Paper: https://arxiv.org/abs/1911.07190
+# Reference implementation: https://github.com/ynahshan/nn-quantization-pytorch/tree/master/lapq
+#
+
 import torch
 import torch.nn as nn
 from distiller.quantization.range_linear import PostTrainLinearQuantizer, ClipMode, \
@@ -108,6 +116,18 @@ def optimize_for_layer(layer, quantized_layer, loss_fn, input, method=None, sear
     """
     Searches for optimal linear quantization parameters (scale, zero_point) for a layer
     with respect to the loss function. Assumes loss_fn is of the signature `loss_fn(y, y_q)->float`
+
+    We perform the initialization a bit differently compared to the paper/reference implementation:
+    * In the reference:
+      * Weights and activations are initialized based on quantization loss of their respective tensors.
+      * Activations are initialized "online", meaning the input to the layer N being initialized is the
+        output of the already quantized layer N-1.
+    * In this implementation:
+      * For a given layer, we initialize both activations and weights together (as applicable) based on the
+        LP loss between the quantized layer output and the FP32 layer output.
+      * But, we don't do "online" initialization. That is, each layer is initialized independently from the
+        quantization parameters obtained for earlier layers.
+
     Args:
         layer (nn.Module): the original, pre-quantized, layer.
         quantized_layer (RangeLinearQuantWrapper or RangeLinearEmbeddingWrapper): the post-quantized layer.

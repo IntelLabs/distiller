@@ -836,23 +836,23 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
         else:
             super().set_linear_quant_param(name, val)
 
-    def _check_requirements_weights_clipping(self):
+    def _check_requirements_weights_clipping(self, setter=False):
         if not self.wts_quant_settings.num_bits:
             raise UnsatisfiedRequirements('Cannot retrieve clipping values because the weights aren\'t quantized.')
-        if not self.save_fp_weights:
+        if setter and not self.save_fp_weights:
             warnings.warn('Without saving fp32 version of weights, re-quantization is disabled. To enable, '
                           'please set \'save_fp_weights\' while constructing the wrapper.')
 
     @property
     def weight_clipping(self):
-        self._check_requirements_weights_clipping()
+        self._check_requirements_weights_clipping(setter=False)
         bits, mode = self.wts_quant_settings.num_bits, self.wts_quant_settings.quant_mode
         scale, zp = self.w_scale, self.w_zero_point
         return _get_clipping_values(scale, zp, bits, mode)
 
     @weight_clipping.setter
     def weight_clipping(self, val):
-        self._check_requirements_weights_clipping()
+        self._check_requirements_weights_clipping(setter=True)
         bits = self.wts_quant_settings.num_bits
         val_min, val_max = _check_clipping_val(val, self.wts_quant_settings.quant_mode, False)
         if is_linear_quant_mode_symmetric(self.wts_quant_settings.quant_mode):
@@ -1193,9 +1193,13 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         mode = verify_quant_mode(mode)
         self.mode = mode
 
-        self.min_q_val, self.max_q_val = get_quantized_range(
-            num_bits, signed=mode.weights != LinearQuantMode.ASYMMETRIC_UNSIGNED,
-            signed_restrict_qrange=mode.weights == LinearQuantMode.SYMMETRIC_RESTRICTED)
+        self.wts_quant_settings = QuantSettings(num_bits, self.mode.weights, ClipMode.NONE, None, False, False)
+
+        self.params_min_q_val, self.params_max_q_val = get_quantized_range(
+            self.wts_quant_settings.num_bits,
+            self.wts_quant_settings.quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED,
+            self.wts_quant_settings.quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED
+        )
         self.save_fp_weights = save_fp_weights
         if save_fp_weights:
             wrapped_module.register_buffer('float_weight', wrapped_module.weight.clone().detach())
@@ -1208,9 +1212,10 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         device = wrapped_module.weight.device
         self.register_buffer('w_scale', w_scale.to(device))
         self.register_buffer('w_zero_point', w_zero_point.to(device))
-        linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point, self.min_q_val,
-                              self.max_q_val, inplace=True)
-        self.quant_metadata = TensorQuantMetadata(self.w_scale, self.w_zero_point, self.min_q_val, self.max_q_val)
+        linear_quantize_clamp(wrapped_module.weight.data, self.w_scale, self.w_zero_point,
+                              self.params_min_q_val, self.params_max_q_val, inplace=True)
+        self.quant_metadata = TensorQuantMetadata(self.w_scale, self.w_zero_point,
+                                                  self.params_min_q_val, self.params_max_q_val)
         self.wrapped_module = wrapped_module
 
     def named_linear_quant_params(self, filter=False):
@@ -1242,23 +1247,23 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         for name, val in new_config.items():
             self.set_linear_quant_param(name, val)
 
-    def _check_requirements_weights_clipping(self):
+    def _check_requirements_weights_clipping(self, setter=False):
         if not self.wts_quant_settings.num_bits:
             raise UnsatisfiedRequirements('Cannot retrieve clipping values because the weights aren\'t quantized.')
-        if not self.save_fp_weights:
+        if setter and not self.save_fp_weights:
             warnings.warn('Without saving fp32 version of weights, re-quantization is disabled. To enable, '
                           'please set \'save_fp_weights\' while constructing the wrapper.')
 
     @property
     def weight_clipping(self):
-        self._check_requirements_weights_clipping()
+        self._check_requirements_weights_clipping(setter=False)
         bits, mode = self.wts_quant_settings.num_bits, self.wts_quant_settings.quant_mode
         scale, zp = self.w_scale, self.w_zero_point
         return _get_clipping_values(scale, zp, bits, mode)
 
     @weight_clipping.setter
     def weight_clipping(self, val):
-        self._check_requirements_weights_clipping()
+        self._check_requirements_weights_clipping(setter=True)
         bits = self.wts_quant_settings.num_bits
         val_min, val_max = _check_clipping_val(val, self.wts_quant_settings.quant_mode, False)
         if is_linear_quant_mode_symmetric(self.wts_quant_settings.quant_mode):
