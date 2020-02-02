@@ -887,7 +887,7 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
     quantizer.prepare_model(dummy_input)
 
     if args.qe_convert_pytorch:
-        qe_model = _convert_ptq_to_pytorch(qe_model, args)
+        qe_model = _convert_ptq_to_pytorch(qe_model, args_qe)
 
     test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 
