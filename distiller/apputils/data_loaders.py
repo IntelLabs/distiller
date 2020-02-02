@@ -66,7 +66,7 @@ def __dataset_factory(dataset):
 
 def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
               effective_train_size=1., effective_valid_size=1., effective_test_size=1.,
-              fixed_subset=False, sequential=False):
+              fixed_subset=False, sequential=False, test_only=False):
     """Load a dataset.
 
     Args:
@@ -94,29 +94,34 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
                             effective_valid_size=effective_valid_size, 
                             effective_test_size=effective_test_size,
                             fixed_subset=fixed_subset,
-                            sequential=sequential)
+                            sequential=sequential,
+                            test_only=test_only)
 
 
-def mnist_get_datasets(data_dir):
+def mnist_get_datasets(data_dir, load_train=True, load_test=True):
     """Load the MNIST dataset."""
-    train_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
-    train_dataset = datasets.MNIST(root=data_dir, train=True,
-                                   download=True, transform=train_transform)
+    train_dataset = None
+    if load_train:
+        train_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        train_dataset = datasets.MNIST(root=data_dir, train=True,
+                                       download=True, transform=train_transform)
 
-    test_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
-    test_dataset = datasets.MNIST(root=data_dir, train=False,
-                                  transform=test_transform)
+    test_dataset = None
+    if load_test:
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        test_dataset = datasets.MNIST(root=data_dir, train=False,
+                                      transform=test_transform)
 
     return train_dataset, test_dataset
 
 
-def cifar10_get_datasets(data_dir):
+def cifar10_get_datasets(data_dir, load_train=True, load_test=True):
     """Load the CIFAR10 dataset.
 
     The original training dataset is split into training and validation sets (code is
@@ -134,28 +139,32 @@ def cifar10_get_datasets(data_dir):
     [1] C.-Y. Lee, S. Xie, P. Gallagher, Z. Zhang, and Z. Tu. Deeply Supervised Nets.
     arXiv:1409.5185, 2014
     """
-    train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    train_dataset = None
+    if load_train:
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
 
-    train_dataset = datasets.CIFAR10(root=data_dir, train=True,
-                                     download=True, transform=train_transform)
+        train_dataset = datasets.CIFAR10(root=data_dir, train=True,
+                                         download=True, transform=train_transform)
 
-    test_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    test_dataset = None
+    if load_test:
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
 
-    test_dataset = datasets.CIFAR10(root=data_dir, train=False,
-                                    download=True, transform=test_transform)
+        test_dataset = datasets.CIFAR10(root=data_dir, train=False,
+                                        download=True, transform=test_transform)
 
     return train_dataset, test_dataset
 
 
-def imagenet_get_datasets(data_dir):
+def imagenet_get_datasets(data_dir, load_train=True, load_test=True):
     """
     Load the ImageNet dataset.
     """
@@ -164,23 +173,27 @@ def imagenet_get_datasets(data_dir):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    train_dataset = None
+    if load_train:
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
 
-    train_dataset = datasets.ImageFolder(train_dir, train_transform)
+        train_dataset = datasets.ImageFolder(train_dir, train_transform)
 
-    test_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    test_dataset = None
+    if load_test:
+        test_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])
 
-    test_dataset = datasets.ImageFolder(test_dir, test_transform)
+        test_dataset = datasets.ImageFolder(test_dir, test_transform)
 
     return train_dataset, test_dataset
 
@@ -263,13 +276,24 @@ def _get_sampler(data_source, effective_size, fixed_subset=False, sequential=Fal
 
 def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_split=0.1, deterministic=False,
                      effective_train_size=1., effective_valid_size=1., effective_test_size=1., fixed_subset=False,
-                     sequential=False):
-    train_dataset, test_dataset = datasets_fn(data_dir)
+                     sequential=False, test_only=False):
+    train_dataset, test_dataset = datasets_fn(data_dir, load_train=not test_only, load_test=True)
 
     worker_init_fn = None
     if deterministic:
         distiller.set_deterministic()
         worker_init_fn = __deterministic_worker_init_fn
+
+    test_indices = list(range(len(test_dataset)))
+    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset, sequential)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+                                              batch_size=batch_size, sampler=test_sampler,
+                                              num_workers=num_workers, pin_memory=True)
+
+    input_shape = __image_size(test_dataset)
+
+    if test_only:
+        return None, None, test_loader, input_shape
 
     num_train = len(train_dataset)
     indices = list(range(num_train))
@@ -295,14 +319,6 @@ def get_data_loaders(datasets_fn, data_dir, batch_size, num_workers, validation_
                                                    batch_size=batch_size, sampler=valid_sampler,
                                                    num_workers=num_workers, pin_memory=True,
                                                    worker_init_fn=worker_init_fn)
-
-    test_indices = list(range(len(test_dataset)))
-    test_sampler = _get_sampler(test_indices, effective_test_size, fixed_subset, sequential)
-    test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=batch_size, sampler=test_sampler,
-                                              num_workers=num_workers, pin_memory=True)
-
-    input_shape = __image_size(train_dataset)
 
     # If validation split was 0 we use the test set as the validation set
     return train_loader, valid_loader or test_loader, test_loader, input_shape
