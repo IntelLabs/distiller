@@ -48,7 +48,7 @@ quantizers:
 # Example invocations:
 #   * Preliminaries:
 #       cd <distiller_root>/distiller/quantization
-#       CONFIG_FILE="<distiller_root>/examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml"
+#       CONFIG_FILE="../../examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml"
 #
 #   * Using L3 initialization:
 #     Command:
