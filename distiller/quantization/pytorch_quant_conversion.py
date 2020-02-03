@@ -52,6 +52,9 @@ def distiller_qparams_to_pytorch(scale, zp, num_bits, distiller_mode, dest_dtype
         reduce_range (bool): Reduces the range of the quantized data type by 1 bit. This should mainly be used for
           quantized activations with the "fbgemm" PyTorch backend - it prevents overflows. See:
           https://github.com/pytorch/pytorch/blob/fde94e75568b527b424b108c272793e096e8e471/torch/quantization/observer.py#L294
+
+    Returns:
+        Tuple of (scale, zero_point) which are compatible with PyTorch quantization API
     """
     assert dest_dtype in (torch.qint8, torch.quint8), 'Must specify one of the quantized PyTorch dtypes'
 
@@ -121,6 +124,9 @@ def distiller_quantized_tensor_to_pytorch(tensor: torch.Tensor, scale, zp, num_b
         dest_dtype (torch.dtype): PyTorch quantized dtype to convert to. Must be one of: torch.quint8, torch.qint8
         per_channel (bool): Flag in indicating if tensor was quantized per-channel
         channel_dim (int): If per_channel is set, this indicates the dimension of the channel in the tensor
+
+    Returns:
+        PyTorch quantized tensor (dtype one of torch.quint8 / torch.qint8 / torch.qint32)
     """
     assert (tensor == tensor.int()).all(), 'Tensor does not appear to be quantized'
     converted_scale, converted_zp = distiller_qparams_to_pytorch(scale, zp, num_bits, distiller_mode, dest_dtype,
@@ -235,7 +241,7 @@ def _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input):
     return model
 
 
-def convert_distiller_ptq_model_to_pytorch(model, dequant_output=True, dummy_input=None):
+def convert_distiller_ptq_model_to_pytorch(model, dummy_input, dequant_output=True, backend='fbgemm'):
     """
     Convert a model quantized using distiller.quantization.PostTrainLinearQuantizer to model comprised solely of
     native PyTorch static post-training quantization modules and operators.
@@ -250,14 +256,17 @@ def convert_distiller_ptq_model_to_pytorch(model, dequant_output=True, dummy_inp
 
     Args:
         model (torch.nn.Module): The model to be converted
+        dummy_input (torch.nn.Tensor): A tensor in the shape expected by the model, required to remove redundant
+          dequant-quant operations that are generated in the conversion process.
         dequant_output (bool): Flag indicating whether to de-quantize the output of the model. If set, the converted
           model will be a torch.nn.Sequential containing the actual model followed by a
           torch.nn.quantization.DeQuantize module.
           NOTE:
               This assumes the model produces a single output. In other cases the results are unexpected.
-        dummy_input (torch.nn.Tensor): A tensor in the shape expected by the model, required to remove redundant
-          dequant-quant operations that are generated in the conversion process.
+        backend (str): The PyTorch quantization backend to use. Currently supported values: 'fbgemm', 'qnnpack'
 
+    Returns:
+        The converted model
     """
     # Hacky deferred import for now to workaround circular dependency
     # TODO: Proper fix
@@ -265,6 +274,11 @@ def convert_distiller_ptq_model_to_pytorch(model, dequant_output=True, dummy_inp
     if not hasattr(model, 'quantizer_metadata') or model.quantizer_metadata['type'] != PostTrainLinearQuantizer:
         raise ValueError('Conversion to PyTorch native quantization supported only for models quantized '
                          'using distiller.quantization.PostTrainLinearQuantizer')
+
+    backends = ('fbgemm', 'qnnpack')
+    if backend not in backends:
+        raise ValueError('{} is not a supported PyTorch quantization backend. Supported: {}'.format(backend, backends))
+    torch.backends.quantized.engine = backend
 
     # TODO: Add in-place option. Not totally straight-forward because of the output dequantization
     #       Can monkey-patch instead of creating a Sequential, then it can really be in-place

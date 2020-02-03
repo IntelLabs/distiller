@@ -121,3 +121,6 @@ def test_quantized_tensor_conversion(tensor, num_bits, distiller_mode, torch_dty
 
     # Compare
     torch.testing.assert_allclose(pytorch_q_dq_t, distiller_q_dq_t)
+
+
+#TODO: Add tests of full model conversion

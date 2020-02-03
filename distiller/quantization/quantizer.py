@@ -190,6 +190,8 @@ class Quantizer(object):
         self.modules_processed = OrderedDict()
         self.modules_processed_args = OrderedDict()
 
+        self.prepared = False
+
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Conv3d, nn.Linear, nn.Embedding]:
             # For now we support weights quantization only for Conv, FC and Embedding layers (so, for example, we don't
@@ -261,6 +263,8 @@ class Quantizer(object):
         self.model.to(model_device)
 
         distiller.assign_layer_fq_names(self.model)
+
+        self.prepared = True
 
         msglogger.debug('Quantized model:\n\n{0}\n'.format(self.model))
 

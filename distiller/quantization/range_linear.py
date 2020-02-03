@@ -2116,6 +2116,20 @@ class PostTrainLinearQuantizer(Quantizer):
             buffer.data = buffer.data.to(device)
         self.linear_quant_params = OrderedDict(self.named_linear_quant_params())
 
+    def convert_to_pytorch(self, dummy_input, dequant_output=True, backend='fbgemm'):
+        """
+        Convert a model quantized using distiller.quantization.PostTrainLinearQuantizer to model comprised solely of
+        native PyTorch static post-training quantization modules and operators.
+
+        This is a convenience wrapper around distiller.quantization.convert_distiller_ptq_model_to_pytorch.
+        See that function's documentation for more details.
+        """
+        if not self.prepared:
+            raise RuntimeError("Must call prepare_model before attempting to convert to PyTorch")
+
+        return pytqc.convert_distiller_ptq_model_to_pytorch(self.model, dummy_input, dequant_output=dequant_output,
+                                                            backend=backend)
+
 
 ###############################################################################
 # Quantization-aware training
