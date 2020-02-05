@@ -444,8 +444,8 @@ def create_activation_stats_collectors(model, *phases):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
     genCollectors = lambda: missingdict({
-        "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
-                                                         lambda t: 100 * distiller.utils.sparsity(t)),
+        "sparsity_ofm":      SummaryActivationStatsCollector(model, "sparsity_ofm",
+            lambda t: 100 * distiller.utils.sparsity(t)),
         "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
@@ -471,13 +471,18 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
+    test_only = not load_train and not load_val
+
+    train_loader, val_loader, test_loader, _ = apputils.load_data(args.dataset,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset, sequential)
-    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+                              fixed_subset, sequential, test_only)
+    if test_only:
+        msglogger.info('Dataset sizes:\n\ttest=%d', len(test_loader.sampler))
+    else:
+        msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
+                       len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
     loaders = (train_loader, val_loader, test_loader)
     flags = (load_train, load_val, load_test)
@@ -885,6 +890,10 @@ def acts_quant_stats_collection(model, criterion, loggers, args, test_loader=Non
     if test_loader is None:
         tmp_args = copy.deepcopy(args)
         tmp_args.effective_test_size = tmp_args.qe_calibration
+        # Batch size 256 causes out-of-memory errors on some models (due to extra space taken by
+        # stats calculations). Limiting to 128 for now.
+        # TODO: Come up with "smarter" limitation?
+        tmp_args.batch_size = min(128, tmp_args.batch_size)
         test_loader = load_data(tmp_args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
