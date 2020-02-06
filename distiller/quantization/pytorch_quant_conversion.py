@@ -181,6 +181,18 @@ def _ptq_convert_pass_replace_range_linear_wrappers(module):
     return module
 
 
+def patch_model_output_dequant(model):
+    def patched_forward(self, input):
+        out = self._original_forward(input)
+        out = self.output_dequant(out)
+        return out
+
+    model.add_module('output_dequant', nnq.DeQuantize())
+    model._original_forward = model.forward
+    # https://stackoverflow.com/questions/972/adding-a-method-to-an-existing-object-instance#comment66379065_2982
+    model.forward = patched_forward.__get__(model)
+
+
 def _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input):
     def quantize_wrapper_check_hook(module, inputs):
         if not isinstance(module, ConditionalQuantize):
@@ -213,7 +225,8 @@ def _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input):
             new_m = m
             if isinstance(m, ConditionalQuantizeWrapper):
                 for idx in m.quant.already_quantized:
-                    m.quant.quantizers.pop(str(idx))
+                    if str(idx) in m.quant.quantizers:
+                        m.quant.quantizers.pop(str(idx))
                 if len(m.quant.quantizers) == 0:
                     new_m = m.wrapped
             elif isinstance(m, ConditionalDeQuantizeWrapper):
@@ -233,36 +246,41 @@ def _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input):
             handles.append(m.register_forward_pre_hook(quantize_wrapper_check_hook))
         elif isinstance(m, ConditionalDeQuantize):
             handles.append(m.register_forward_pre_hook(dequant_wrapper_check_hook))
-    model(dummy_input)
+    out = model(dummy_input)
     for h in handles:
         h.remove()
 
     model = cleanup(model)
+
+    if out.is_quantized:
+        patch_model_output_dequant(model)
+
     return model
 
 
-def convert_distiller_ptq_model_to_pytorch(model, dummy_input, dequant_output=True, backend='fbgemm'):
+def convert_distiller_ptq_model_to_pytorch(model, dummy_input, backend='fbgemm'):
     """
     Convert a model quantized using distiller.quantization.PostTrainLinearQuantizer to model comprised solely of
     native PyTorch static post-training quantization modules and operators.
 
     In the current implementation this conversion CANNOT be done in-place.
 
-    By default the converted model performs dequantization and quantization between each operation. Passing a dummy
-    input tensor enables an additional "pass" over the converted model which removes redundant dequant-quant
-    operations.
+    Conversion is done in 2 passes:
+      * First pass: Replace all RangeLinearQuantWrapper modules with a quantize operation followed by the respective
+        native PyTorch module. Modules that weren't quantized by Distiller are wrapped with a de-quantize operation.
+      * Second pass: Perform dummy forward pass over the model and remove redundant de-quant --> quant sequences.
 
-    NOTE: The converted model will on the CPU, and non-parallel (that is - without nn.DataParallel modules)
+    The converted model returns a de-quantized output. If the last layer of the model is quantized, then an extra
+    dequantize module will be added to the model. This extra module is named 'output_dequant', and the model's
+    forward method is patched to execute this module after the main model.
+    NOTE: This assumes the model produces a single output tensor. In other cases the results are unexpected.
+
+    NOTE: The converted model will be on the CPU, and non-parallel (that is - without nn.DataParallel modules)
 
     Args:
         model (torch.nn.Module): The model to be converted
-        dummy_input (torch.nn.Tensor): A tensor in the shape expected by the model, required to remove redundant
-          dequant-quant operations that are generated in the conversion process.
-        dequant_output (bool): Flag indicating whether to de-quantize the output of the model. If set, the converted
-          model will be a torch.nn.Sequential containing the actual model followed by a
-          torch.nn.quantization.DeQuantize module.
-          NOTE:
-              This assumes the model produces a single output. In other cases the results are unexpected.
+        dummy_input (torch.nn.Tensor): A tensor in the shape expected by the model, required for the second pass
+          of the conversion
         backend (str): The PyTorch quantization backend to use. Currently supported values: 'fbgemm', 'qnnpack'
 
     Returns:
@@ -275,6 +293,9 @@ def convert_distiller_ptq_model_to_pytorch(model, dummy_input, dequant_output=Tr
         raise ValueError('Conversion to PyTorch native quantization supported only for models quantized '
                          'using distiller.quantization.PostTrainLinearQuantizer')
 
+    if dummy_input is None or not isinstance(dummy_input, torch.Tensor):
+        raise ValueError('Valid dummy input tensor required for converting PTQ model to PyTorch')
+
     backends = ('fbgemm', 'qnnpack')
     if backend not in backends:
         raise ValueError('{} is not a supported PyTorch quantization backend. Supported: {}'.format(backend, backends))
@@ -282,22 +303,19 @@ def convert_distiller_ptq_model_to_pytorch(model, dummy_input, dequant_output=Tr
 
     # TODO: Add in-place option. Not totally straight-forward because of the output dequantization
     #       Can monkey-patch instead of creating a Sequential, then it can really be in-place
-    if dummy_input is None:
-        warnings.warn('No dummy_input passed, returned model will contain dequant-quant operations between each '
-                      'internal module')
 
     # Save quantizer metadata so we can re-attach it to the model after conversion, which enables loading the
     # converted model from a checkpoint
-    quantizer_metadata = model.quantizer_metadata
+    quantizer_metadata = deepcopy(model.quantizer_metadata)
     model = distiller.make_non_parallel_copy(model).cpu()
 
-    _ptq_convert_pass_replace_range_linear_wrappers(model)
-    if dummy_input is not None:
-        _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input)
+    # First pass
+    model = _ptq_convert_pass_replace_range_linear_wrappers(model)
 
-    if dequant_output:
-        model = nn.Sequential(OrderedDict([('model', model), ('dequant', nnq.DeQuantize())]))
+    # Second pass
+    model = _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input)
 
+    # This is used when loading the model from a checkpoint, to indicate that conversion needs to be applied
     quantizer_metadata['pytorch_convert'] = True
     model.quantizer_metadata = quantizer_metadata
 
