@@ -146,14 +146,15 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
                 model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
             else:
                 model = torch.nn.DataParallel(model, device_ids=device_ids)
+        model.is_parallel = parallel
     else:
         device = 'cpu'
+        model.is_parallel = False
 
     # Cache some attributes which describe the model
     _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene)
     model.arch = arch
     model.dataset = dataset
-    model.is_parallel = parallel
     return model.to(device)
 
 

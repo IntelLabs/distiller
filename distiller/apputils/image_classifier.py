@@ -405,7 +405,7 @@ def _init_learner(args):
             optimizer = None
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
-    if optimizer is None:
+    if optimizer is None and not args.evaluate:
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
                                     momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.debug('Optimizer Type: %s', type(optimizer))
@@ -470,13 +470,18 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, args.arch,
+    test_only = not load_train and not load_val
+
+    train_loader, val_loader, test_loader, _ = apputils.load_data(args.dataset, args.arch,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset, sequential)
-    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+                              fixed_subset, sequential, test_only)
+    if test_only:
+        msglogger.info('Dataset sizes:\n\ttest=%d', len(test_loader.sampler))
+    else:
+        msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
+                       len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
     loaders = (train_loader, val_loader, test_loader)
     flags = (load_train, load_val, load_test)
@@ -865,6 +870,15 @@ def earlyexit_validate_stats(args):
     return total_top1, total_top5, losses_exits_stats
 
 
+def _convert_ptq_to_pytorch(model, args):
+    msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
+    dummy_input = distiller.get_dummy_input(input_shape=model.input_shape)
+    model = quantization.convert_distiller_ptq_model_to_pytorch(model, dummy_input, backend=args.qe_pytorch_backend)
+    msglogger.debug('\nModel after conversion:\n{}'.format(model))
+    args.device = 'cpu'
+    return model
+
+
 def evaluate_model(test_loader, model, criterion, loggers, activations_collectors=None, args=None, scheduler=None):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
@@ -876,6 +890,9 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
         loggers = [loggers]
 
     if not args.quantize_eval:
+        # Handle case where a post-train quantized model was loaded, and user wants to convert it to PyTorch
+        if args.qe_convert_pytorch:
+            model = _convert_ptq_to_pytorch(model, args)
         return test(test_loader, model, criterion, loggers, activations_collectors, args=args)
     else:
         return quantize_and_test_model(test_loader, model, criterion, args, loggers,
@@ -892,6 +909,11 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
     scheduler - pass scheduler to store it in checkpoint
     save_flag - defaults to save both quantization statistics and checkpoint.
     """
+    if hasattr(model, 'quantizer_metadata') and \
+            model.quantizer_metadata['type'] == distiller.quantization.PostTrainLinearQuantizer:
+        raise RuntimeError('Trying to invoke post-training quantization on a model that has already been post-'
+                           'train quantized. Model was likely loaded from a checkpoint. Please run again without '
+                           'passing the --quantize-eval flag')
     if not (args.qe_dynamic or args.qe_stats_file or args.qe_config_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
@@ -908,7 +930,11 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
         qe_model = copy.deepcopy(model).to(args.device)
 
     quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args_qe)
-    quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
+    dummy_input = distiller.get_dummy_input(input_shape=model.input_shape)
+    quantizer.prepare_model(dummy_input)
+
+    if args.qe_convert_pytorch:
+        qe_model = _convert_ptq_to_pytorch(qe_model, args_qe)
 
     test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 
