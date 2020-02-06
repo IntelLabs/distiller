@@ -24,13 +24,25 @@ Post-training quantization can either be configured straight from the command-li
 | `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std", "gauss", "laplace"    | "none"  |
 | `--qe-clip-n-stds`       | N/A       | When qe-clip-acts is set to 'n_std', this is the number of standard deviations to use | None    |
 | `--qe-no-clip-layers`    | `--qencl` | List of layer names (space-separated) for which not to clip activations               |       |
+| `--qe-no-quant-layers`   | `--qenql` | List of layer names (space-separated) for which not to skip quantization              |       |
 | `--qe-per-channel`       | `--qepc`  | Enable per-channel quantization of weights (per output channel)                       | Off     |
 | `--qe-scale-approx-bits` | `--qesab` | Enables scale factor approximation using integer multiply + bit shift, using this number of bits the integer multiplier | None |
 | `--qe-stats-file`        | N/A       | Use stats file for static quantization of activations. See details below              | None    |
 | `--qe-dynamic`           | N/A       | Perform dynamic quantization. See details below                                       | None    |
 | `--qe-config-file`       | N/A       | Path to YAML config file. See section above. (ignores all other --qe* arguments)      | None    |
+| `--qe-convert-pytorch`   | `--qept`  | Convert the model to PyTorch native post-train quantization modules                   | Off     |
+| `--qe-pytorch-backend`   | N/A       | When --qe-convert-pytorch is set, specifies the PyTorch quantization backend to use. Choices: "fbgemm", "qnnpack"   | Off     |
 
-(Note that these arguments can be added to any `argparse.ArgumentParser` by calling `distiller.quantization.add_post_train_quant_args()` and passing an existing parser)
+### Notes
+
+1. These arguments can be added to any `argparse.ArgumentParser` by calling `distiller.quantization.add_post_train_quant_args()` and passing an existing parser. This is provided as a convenience only. If you are writing a script and adding these arguments, it is up to you to implement the actual functionality implied by them.
+2. The `--qe-convert-pytorch` works in two settings:
+    * `--quantize-eval` is also set, in which case an FP32 model is first quantized using Distiller's post-training quantization flow, and then converted to a PyTorch native quantization model.
+    * `--quantize-eval` is not set, but a previously post-train quantized model is loaded via `--resume`. In this case, the loaded model is converted to PyTorch native quantization.
+
+### Conversion to PyTorch Built-in Quantization Model
+
+PyTorch released built-in support for quantization in version 1.3. Currently Distiller's quantization functionality is still completely separate from PyTorch's. We provide the ability to take a model which was post-train quantized with Distiller, and is comprised of `RangeLinearQuantWrapper`
 
 ## "Net-Aware" Quantization
 

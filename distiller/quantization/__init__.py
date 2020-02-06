@@ -21,6 +21,8 @@ from .range_linear import RangeLinearQuantWrapper, RangeLinearQuantParamLayerWra
     RangeLinearEmbeddingWrapper, RangeLinearFakeQuantWrapper, RangeLinearQuantMatmulWrapper
 from .clipped_linear import LinearQuantizeSTE, ClippedLinearQuantization, WRPNQuantizer, DorefaQuantizer, PACTQuantizer
 from .q_utils import *
+from .pytorch_quant_conversion import convert_distiller_ptq_model_to_pytorch, distiller_qparams_to_pytorch, \
+    distiller_quantized_tensor_to_pytorch
 
 del quantizer
 del range_linear

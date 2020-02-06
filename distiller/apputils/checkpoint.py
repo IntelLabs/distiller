@@ -29,6 +29,7 @@ from tabulate import tabulate
 import torch
 import distiller
 from distiller.utils import normalize_module_name
+import distiller.quantization as quantization
 msglogger = logging.getLogger()
 
 
@@ -223,6 +224,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
         qmd = checkpoint['quantizer_metadata']
         quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model(qmd['dummy_input'])
+
+        if qmd.get('pytorch_convert', False):
+            msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
+            model = quantization.convert_distiller_ptq_model_to_pytorch(model, dummy_input=qmd['dummy_input'])
 
     if normalize_dataparallel_keys:
         checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
