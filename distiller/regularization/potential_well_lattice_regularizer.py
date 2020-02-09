@@ -288,6 +288,9 @@ class PotentialWellLatticeRegularizer(_Regularizer):
         losses_config = {name: conf for name, (loss_weight, conf) in self.reg_regims.items()}
         default_loss_config = losses_config.get('all', {})
         for param_name, param in model.named_parameters():
+            # only take parameters named .weight
+            if '.weight' not in param_name:
+                continue
             # get local configuration
             _lattice_config, _loss_config = lattices_config.get(param_name, {}), losses_config.get(param_name, {})
             lattice_config, loss_config = deepcopy(default_lattice_config), deepcopy(default_loss_config)
