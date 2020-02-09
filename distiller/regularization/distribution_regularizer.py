@@ -54,14 +54,14 @@ class DistributionRegularizer(_Regularizer):
         if isinstance(target_distribution_fn, str):
             target_distribution_fn = _STR_TO_F[target_distribution_fn]
         self.target_distribution_fn = target_distribution_fn
-        self.distribution_args_sched = distribution_kwargs_sched
+        self.distribution_kwargs_sched = distribution_kwargs_sched
         self.n_bins = n_bins
 
         self.target_distributions = {}  # type: dict[str, ProbDist]
 
     def on_epoch_begin(self, epoch):
         weights_dict = OrderedDict(self.model.named_parameters())
-        kwargs = self.distribution_args_sched.get(epoch, None)
+        kwargs = self.distribution_kwargs_sched.get(epoch, None)
         if kwargs is None:
             return  # keep the previous distributions
         self.target_distributions = {p_name: self.target_distribution_fn(weights_dict[p_name], self.n_bins, **kwargs)

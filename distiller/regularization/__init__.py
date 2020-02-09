@@ -18,8 +18,10 @@ from .l1_regularizer import L1Regularizer
 from .group_regularizer import GroupLassoRegularizer, GroupVarianceRegularizer
 from .regularizer import _Regularizer
 from .distribution_regularizer import DistributionRegularizer
+from .potential_well_lattice_regularizer import PotentialWellLatticeRegularizer
 
 del l1_regularizer
 del group_regularizer
 del regularizer
 del distribution_regularizer
+del potential_well_lattice_regularizer
