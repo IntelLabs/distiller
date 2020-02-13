@@ -317,6 +317,7 @@ def convert_distiller_ptq_model_to_pytorch(model, dummy_input, backend='fbgemm')
 
     # This is used when loading the model from a checkpoint, to indicate that conversion needs to be applied
     quantizer_metadata['pytorch_convert'] = True
+    quantizer_metadata['pytorch_convert_backend'] = backend
     model.quantizer_metadata = quantizer_metadata
 
     return model
