@@ -223,6 +223,9 @@ class Quantizer(object):
             with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
             will be ignored. A warning message will be shown.
         """
+        if self.prepared:
+            raise RuntimeError('prepare_model can be called only once')
+
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
 
         self.model.quantizer_metadata["dummy_input"] = dummy_input
