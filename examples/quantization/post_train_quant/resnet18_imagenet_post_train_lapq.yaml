@@ -21,7 +21,7 @@ quantizers:
     mode:
       activations: ASYMMETRIC_UNSIGNED
       weights: SYMMETRIC
-    model_activation_stats: ../../examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml
+    # model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: False
     inputs_quant_auto_fallback: True
 
@@ -47,12 +47,13 @@ quantizers:
 
 # Example invocations:
 #   * Preliminaries:
-#       cd <distiller_root>/distiller/quantization
-#       CONFIG_FILE="../../examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml"
+#       cd <distiller_root>/examples/classifier_compression
+#       CONFIG_FILE="../quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml"
+#       IMAGENET_PATH=<path_to_imagenet>
 #
 #   * Using L3 initialization:
 #     Command:
-#       python ptq_coordinate_search.py -a resnet18 --pretrained <path_to_imagenet> --opt-val-size 0.01 --opt-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --opt-init-mode L3 --opt-init-method powell --opt-eval-memoize-dataloader --det --opt-search-clipping
+#       python compress_classifier.py --eval --qe --qe-lapq -a resnet18 --pretrained $IMAGENET_PATH --lapq-eval-size 0.01 --lapq-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --lapq-init-mode L3 --lapq-init-method powell --lapq-eval-memoize-dataloader --det --lapq-search-clipping
 #
 #     Excerpts from output:
 #       ...
@@ -77,7 +78,7 @@ quantizers:
 #
 #   * Using LAPLACE initialization:
 #     Command:
-#       python ptq_coordinate_search.py -a resnet18 --pretrained <path_to_imagenet> --opt-val-size 0.01 --opt-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --opt-init-mode LAPLACE --opt-init-method powell --opt-eval-memoize-dataloader --det --opt-search-clipping
+#       python compress_classifier.py --eval --qe --qe-lapq -a resnet18 --pretrained $IMAGENET_PATH --lapq-eval-size 0.01 --lapq-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --lapq-init-mode LAPLACE --lapq-init-method powell --lapq-eval-memoize-dataloader --det --lapq-search-clipping
 #
 #     Excerpts from output:
 #       ...
