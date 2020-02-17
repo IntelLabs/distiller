@@ -268,7 +268,7 @@ def linear_dequantize_with_metadata(t, inplace=False):
     return t
 
 
-def add_post_train_quant_args(argparser):
+def add_post_train_quant_args(argparser, add_lapq_args=False):
     str_to_quant_mode_map = OrderedDict([
         ('sym', LinearQuantMode.SYMMETRIC),
         ('sym_restr', LinearQuantMode.SYMMETRIC_RESTRICTED),
@@ -293,8 +293,7 @@ def add_post_train_quant_args(argparser):
     linear_quant_mode_str_optional = partial(from_dict, d=str_to_quant_mode_map, optional=True)
     clip_mode_str = partial(from_dict, d=str_to_clip_mode_map, optional=False)
 
-    group = argparser.add_argument_group('Arguments controlling quantization at evaluation time '
-                                         '("post-training quantization")')
+    group = argparser.add_argument_group('Post-Training Quantization Arguments')
     group.add_argument('--quantize-eval', '--qe', action='store_true',
                        help='Apply linear quantization to model before evaluation. Applicable only if '
                             '--evaluate is also set')
@@ -338,15 +337,21 @@ def add_post_train_quant_args(argparser):
 
     stats_group = group.add_mutually_exclusive_group()
     stats_group.add_argument('--qe-stats-file', type=str, metavar='PATH',
-                       help='Path to YAML file with pre-made calibration stats')
+                             help='Path to YAML file with pre-made calibration stats')
     stats_group.add_argument('--qe-dynamic', action='store_true', help='Apply dynamic quantization')
     stats_group.add_argument('--qe-calibration', type=distiller.utils.float_range_argparse_checker(exc_min=True),
-                       metavar='PORTION_OF_TEST_SET', default=None,
-                       help='Run the model in evaluation mode on the specified portion of the test dataset and '
-                            'collect statistics')
+                             metavar='PORTION_OF_TEST_SET', default=None,
+                             help='Run the model in evaluation mode on the specified portion of the test dataset and '
+                                  'collect statistics')
     stats_group.add_argument('--qe-config-file', type=str, metavar='PATH',
-                       help='Path to YAML file containing configuration for PostTrainLinearQuantizer (if present, '
-                            'all other --qe* arguments are ignored)')
+                             help='Path to YAML file containing configuration for PostTrainRLinearQuantizer '
+                                  '(if present, all other --qe* arguments are ignored)')
+
+    if add_lapq_args:
+        from .ptq_coordinate_search import add_coordinate_search_args
+        group.add_argument('--qe-lapq', '--qe-coordinate-search', action='store_true',
+                           help='Optimize post-training quantization parameters using LAPQ method')
+        add_coordinate_search_args(argparser)
 
 
 class UnsatisfiedRequirements(Exception):
@@ -1597,15 +1602,6 @@ class PostTrainLinearQuantizer(Quantizer):
                     model_activation_stats = distiller.utils.yaml_ordered_load(stream)
             elif not isinstance(model_activation_stats, (dict, OrderedDict)):
                 raise TypeError('model_activation_stats must either be a string, a dict / OrderedDict or None')
-        else:
-            msglogger.warning("\nWARNING:\nNo stats file passed - Dynamic quantization will be used\n"
-                              "At the moment, this mode isn't as fully featured as stats-based quantization, and "
-                              "the accuracy results obtained are likely not as representative of real-world results."
-                              "\nSpecifically:\n"
-                              "  * Not all modules types are supported in this mode. Unsupported modules will remain "
-                              "in FP32.\n"
-                              "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
-                              "supported when statistics are used.\nEND WARNING\n")
 
         mode_dict = {'activations': _enum_to_str(mode.activations), 'weights': _enum_to_str(mode.weights)}
         self.model.quantizer_metadata = {'type': type(self),
@@ -1928,6 +1924,16 @@ class PostTrainLinearQuantizer(Quantizer):
         msglogger.info('Per-layer quantization parameters saved to ' + save_path)
 
     def prepare_model(self, dummy_input=None):
+        if not self.model_activation_stats:
+            msglogger.warning("\nWARNING:\nNo stats file passed - Dynamic quantization will be used\n"
+                              "At the moment, this mode isn't as fully featured as stats-based quantization, and "
+                              "the accuracy results obtained are likely not as representative of real-world results."
+                              "\nSpecifically:\n"
+                              "  * Not all modules types are supported in this mode. Unsupported modules will remain "
+                              "in FP32.\n"
+                              "  * Optimizations for quantization of layers followed by Relu/Tanh/Sigmoid are only "
+                              "supported when statistics are used.\nEND WARNING\n")
+
         self.has_bidi_distiller_lstm = any(isinstance(m, distiller.modules.DistillerLSTM) and m.bidirectional for
                                            _, m in self.model.named_modules())
         if self.has_bidi_distiller_lstm:
