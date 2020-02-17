@@ -21,7 +21,7 @@ quantizers:
     mode:
       activations: ASYMMETRIC_UNSIGNED
       weights: SYMMETRIC
-    # model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
+    model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: False
     inputs_quant_auto_fallback: True
 
