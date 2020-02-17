@@ -140,7 +140,7 @@ def distiller_quantized_tensor_to_pytorch(tensor: torch.Tensor, scale, zp, num_b
     else:  # dest_dtype == torch.qint32:
         temp_dtype = torch.int32
     tensor = (tensor - zp_diff).to(temp_dtype)
-    if per_channel:
+    if per_channel and scale.shape[channel_dim] > 1:
         return torch._make_per_channel_quantized_tensor(tensor, converted_scale, converted_zp, channel_dim)
     return torch._make_per_tensor_quantized_tensor(tensor, converted_scale, converted_zp)
 
@@ -168,6 +168,8 @@ def _ptq_convert_pass_replace_range_linear_wrappers(module):
                                                              need_reduce_range(qset.quant_mode, torch.quint8))
                     d[idx] = (scale, zp, torch.quint8)
                 new_m = ConditionalQuantizeWrapper(new_m, d)
+        elif isinstance(m, distiller.quantization.RangeLinearEmbeddingWrapper):
+            new_m = m.to_pytorch_quant(need_reduce_range(m.wts_quant_settings.quant_mode, torch.quint8))
         elif distiller.has_children(m):
             new_m = _ptq_convert_pass_replace_range_linear_wrappers(m)
         elif not isinstance(m, nn.Identity):
@@ -246,7 +248,10 @@ def _ptq_convert_pass_remove_redundant_quant_dequant(model, dummy_input):
             handles.append(m.register_forward_pre_hook(quantize_wrapper_check_hook))
         elif isinstance(m, ConditionalDeQuantize):
             handles.append(m.register_forward_pre_hook(dequant_wrapper_check_hook))
-    out = model(dummy_input)
+    if isinstance(dummy_input, torch.Tensor):
+        out = model(dummy_input)
+    else:
+        out = model(*dummy_input)
     for h in handles:
         h.remove()
 
@@ -293,8 +298,8 @@ def convert_distiller_ptq_model_to_pytorch(model, dummy_input, backend='fbgemm')
         raise ValueError('Conversion to PyTorch native quantization supported only for models quantized '
                          'using distiller.quantization.PostTrainLinearQuantizer')
 
-    if dummy_input is None or not isinstance(dummy_input, torch.Tensor):
-        raise ValueError('Valid dummy input tensor required for converting PTQ model to PyTorch')
+    if dummy_input is None:
+        raise ValueError('Valid dummy input required for converting PTQ model to PyTorch')
 
     backends = ('fbgemm', 'qnnpack')
     if backend not in backends:

@@ -1166,7 +1166,7 @@ class RangeLinearQuantConcatWrapper(RangeLinearQuantWrapper):
                                                        reduce_range)
         m = pytqc.QFunctionalCat(self.wrapped_module.dim)
         m.qfunc.scale = float(scale)
-        m.qfunc.zp = int(zp)
+        m.qfunc.zero_point = int(zp)
         if self.clip_half_range:
             # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
             # ReLU after quantization
@@ -1217,7 +1217,7 @@ class RangeLinearQuantEltwiseAddWrapper(RangeLinearQuantWrapper):
                                                        reduce_range)
         m = pytqc.QFunctionalAddRelu() if self.clip_half_range else pytqc.QFunctionalAdd()
         m.qfunc.scale = float(scale)
-        m.qfunc.zp = int(zp)
+        m.qfunc.zero_point = int(zp)
         return m
 
 
@@ -1269,7 +1269,7 @@ class RangeLinearQuantEltwiseMultWrapper(RangeLinearQuantWrapper):
                                                        reduce_range)
         m = pytqc.QFunctionalMul()
         m.qfunc.scale = float(scale)
-        m.qfunc.zp = int(zp)
+        m.qfunc.zero_point = int(zp)
         if self.clip_half_range:
             # The scale factor calculated in Distiller already considers the ReLU, so it's OK to apply the
             # ReLU after quantization
@@ -1420,6 +1420,24 @@ class RangeLinearEmbeddingWrapper(nn.Module):
         out_f = linear_dequantize(out_q, self.w_scale, self.w_zero_point, inplace=True)
         out_f.quant_metadata = self.quant_metadata
         return out_f
+
+    def to_pytorch_quant(self, reduce_range):
+        # No quantized embedding in PyTorch, so use FP32 embedding followed by quantize
+        emb = deepcopy(self.wrapped_module)
+        with torch.no_grad():
+            if self.save_fp_weights:
+                w_dq = nn.Parameter(self.float_weight, requires_grad=False)
+            else:
+                w_dq = nn.Parameter(linear_dequantize(emb.weight, self.w_scale, self.w_zero_point),
+                                    requires_grad=False)
+        emb.weight = w_dq
+
+        scale, zp = pytqc.distiller_qparams_to_pytorch(self.w_scale, self.w_zero_point,
+                                                       self.wts_quant_settings.num_bits,
+                                                       self.wts_quant_settings.quant_mode, torch.quint8,
+                                                       reduce_range)
+
+        return nn.Sequential(emb, nnq.Quantize(scale, zp, torch.quint8))
 
 
 class RangeLinearFakeQuantWrapper(RangeLinearQuantWrapper):
@@ -1917,7 +1935,8 @@ class PostTrainLinearQuantizer(Quantizer):
         if self.linear_quant_params:
             out['linear_quant_params'] = lqp_dict = OrderedDict()
             for k, v in self.linear_quant_params.items():  # type: str, torch.Tensor
-                lqp_dict[k] = v.item()
+                if v.numel() == 1:
+                    lqp_dict[k] = v.item()
 
         save_path = os.path.join(save_dir, 'layer_quant_params.yaml')
         distiller.yaml_ordered_save(save_path, out)
