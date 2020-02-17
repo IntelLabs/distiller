@@ -34,6 +34,7 @@ A non-exhaustive list of the methods implemented:
 ### Quantization
 
 - [Post-training quantization](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/post_train_quant/command_line.md) based on the TensorFlow quantization scheme (originally GEMMLOWP) with additional capabilities.
+  - Optimizing post-training quantization parameters with the [LAPQ](https://arxiv.org/abs/1911.07190) method - see [example YAML](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml) file for details.
 - [Quantization-aware training](https://github.com/NervanaSystems/distiller/tree/master/examples/quantization/quant_aware_train): TensorFlow scheme, DoReFa, PACT
 
 ### Knowledge Distillation

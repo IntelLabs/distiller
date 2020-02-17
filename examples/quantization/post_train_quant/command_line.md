@@ -30,8 +30,9 @@ Post-training quantization can either be configured straight from the command-li
 | `--qe-stats-file`        | N/A       | Use stats file for static quantization of activations. See details below              | None    |
 | `--qe-dynamic`           | N/A       | Perform dynamic quantization. See details below                                       | None    |
 | `--qe-config-file`       | N/A       | Path to YAML config file. See section above. (ignores all other --qe* arguments)      | None    |
-| `--qe-convert-pytorch`   | `--qept`  | Convert the model to PyTorch native post-train quantization modules                   | Off     |
+| `--qe-convert-pytorch`   | `--qept`  | Convert the model to PyTorch native post-train quantization modules. See [tutorial](https://github.com/NervanaSystems/distiller/blob/master/jupyter/post_train_quant_convert_pytorch.ipynb) for more details | Off     |
 | `--qe-pytorch-backend`   | N/A       | When --qe-convert-pytorch is set, specifies the PyTorch quantization backend to use. Choices: "fbgemm", "qnnpack"   | Off     |
+| `--qe-lapq`              | N/A       | Optimize post-training quantization parameters using [LAPQ](https://arxiv.org/abs/1911.07190) method. Beyond the scope of this document. See [example YAML](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml) file for details   | Off     |
 
 ### Notes
 
@@ -39,10 +40,6 @@ Post-training quantization can either be configured straight from the command-li
 2. The `--qe-convert-pytorch` works in two settings:
     * `--quantize-eval` is also set, in which case an FP32 model is first quantized using Distiller's post-training quantization flow, and then converted to a PyTorch native quantization model.
     * `--quantize-eval` is not set, but a previously post-train quantized model is loaded via `--resume`. In this case, the loaded model is converted to PyTorch native quantization.
-
-### Conversion to PyTorch Built-in Quantization Model
-
-PyTorch released built-in support for quantization in version 1.3. Currently Distiller's quantization functionality is still completely separate from PyTorch's. We provide the ability to take a model which was post-train quantized with Distiller, and is comprised of `RangeLinearQuantWrapper`
 
 ## "Net-Aware" Quantization
 

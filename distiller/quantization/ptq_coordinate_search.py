@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 Intel Corporation
+# Copyright (c) 2020 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,11 +36,12 @@ from collections import OrderedDict
 from itertools import count
 import logging
 from copy import deepcopy
-import distiller.apputils.image_classifier as classifier
-import os
-import distiller.apputils as apputils
 import scipy.optimize as opt
 import numpy as np
+import argparse
+
+
+msglogger = logging.getLogger()
 
 
 def quant_params_dict2vec(p_dict, search_clipping=False):
@@ -172,8 +173,8 @@ def get_input_for_layer(model, layer_name, eval_fn):
     return layer_inputs[0]
 
 
-def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_mode,
-                                   init_mode_method='Powell', eval_fn=None, search_clipping=False):
+def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_mode=ClipMode.NONE,
+                                   init_method='Powell', eval_fn=None, search_clipping=False):
     """
     Initializes a layer's linear quant parameters.
     This is done to set the scipy.optimize.minimize initial guess.
@@ -190,7 +191,7 @@ def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_m
           If str - the mode will be chosen from a list of options. The options are:
             [NONE, AVG, LAPLACE, GAUSS, L1, L2 ,L3].
           Defaults to ClipMode.NONE
-        init_mode_method (str or callable): applicable only in the case of init_mode = 'L1/2/3' or callable.
+        init_method (str or callable): applicable only in the case of init_mode = 'L1/2/3' or callable.
           chooses the minimization method for finding the local argmin_{s, zp}.
           Defaults to 'Powell'
         eval_fn: evaluation function for the model. Assumed it has a signature of the form
@@ -214,7 +215,7 @@ def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_m
 
     if callable(init_mode):
         input_for_layer = get_input_for_layer(original_model, layer_name, eval_fn)
-        quantized_layer = optimize_for_layer(layer, quantized_layer, init_mode, input_for_layer, init_mode_method,
+        quantized_layer = optimize_for_layer(layer, quantized_layer, init_mode, input_for_layer, init_method,
                                              search_clipping=search_clipping)
 
     distiller.model_setattr(quantizer.model, denorm_layer_name, quantized_layer)
@@ -222,7 +223,7 @@ def init_layer_linear_quant_params(quantizer, original_model, layer_name, init_m
 
 
 def init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, init_mode,
-                             init_mode_method=None, search_clipping=False):
+                             init_method='Powell', search_clipping=False):
     """
     Initializes all linear quantization parameters of the model.
     Args:
@@ -235,7 +236,7 @@ def init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, in
           `eval_fn(model)->float`. this is the function to be minimized by the optimization algorithm.
           Note - unlike in `init_layer_linear_quant_params`, this argument is required here.
         dummy_input: dummy sample input to the model
-        init_mode_method: See `init_layer_linear_qaunt_params`.
+        init_method: See `init_layer_linear_qaunt_params`.
         search_clipping (bool): if set, optimize clipping values, otherwise optimize scale factor
     """
     original_model = distiller.make_non_parallel_copy(original_model)
@@ -249,7 +250,7 @@ def init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, in
         module_init_mode = init_mode[module_name] if isinstance(init_mode, dict) else init_mode
         msglogger.debug('Initializing layer \'%s\' using %s mode' % (module_name, module_init_mode))
         init_layer_linear_quant_params(quantizer, original_model, module_name, module_init_mode,
-                                       init_mode_method=init_mode_method,
+                                       init_method=init_method,
                                        eval_fn=eval_fn,
                                        search_clipping=search_clipping)
     del original_model
@@ -258,37 +259,55 @@ def init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, in
     quantizer.model.eval()
 
 
-def get_default_args():
-    parser = classifier.init_classifier_compression_arg_parser()
-    parser.add_argument('--opt-maxiter', dest='maxiter', default=None, type=int,
-                        help='Max iteration for minimization method.')
-    parser.add_argument('--opt-maxfev', dest='maxfev', default=None, type=int,
-                        help='Max iteration for minimization method.')
-    parser.add_argument('--opt-method', dest='method', default='Powell',
-                        help='Minimization method used by scip.optimize.minimize.')
-    parser.add_argument('--opt-bh', dest='basinhopping', action='store_true', default=False,
-                        help='Use scipy.optimize.basinhopping stochastic global minimum search.')
-    parser.add_argument('--opt-bh-niter', dest='niter', default=100,
-                        help='Number of iterations for the basinhopping algorithm.')
-    parser.add_argument('--opt-init-mode', dest='init_mode', default='NONE',
-                        choices=list(_INIT_MODES),
-                        help='The mode of quant initalization. Choices: ' + '|'.join(list(_INIT_MODES)))
-    parser.add_argument('--opt-init-method', dest='init_mode_method',
-                        help='If --opt-init-mode was specified as L1/L2/L3, this specifies the method of '
-                             'minimization.')
-    parser.add_argument('--opt-val-size', type=float, default=1,
-                        help='Use portion of the test size.')
-    parser.add_argument('--opt-eval-memoize-dataloader', dest='memoize_dataloader', action='store_true', default=False,
-                        help='Stores the input batch in memory to optimize performance.')
-    parser.add_argument('--base-score', type=float, default=None)
-    parser.add_argument('--opt-search-clipping', dest='search_clipping', action='store_true',
-                        help='Search on clipping values instead of scale/zero_point.')
-    args = parser.parse_args()
-    return args
+def add_coordinate_search_args(parser: argparse.ArgumentParser):
+    group = parser.add_argument_group('Post-Training Quantization Auto-Optimization (LAPQ) Arguments')
+    group.add_argument('--lapq-maxiter', default=None, type=int,
+                       help='Max iteration for minimization method.')
+    group.add_argument('--lapq-maxfev', default=None, type=int,
+                       help='Max iteration for minimization method.')
+    group.add_argument('--lapq-method', default='Powell',
+                       help='Minimization method used by scip.optimize.minimize.')
+    group.add_argument('--lapq-basinhopping', '--lapq-bh', action='store_true', default=False,
+                       help='Use scipy.optimize.basinhopping stochastic global minimum search.')
+    group.add_argument('--lapq-basinhopping-niter', '--lapq-bh-niter', default=100,
+                       help='Number of iterations for the basinhopping algorithm.')
+    group.add_argument('--lapq-init-mode', default='NONE', choices=list(_INIT_MODES),
+                       help='The mode of quant initalization. Choices: ' + '|'.join(list(_INIT_MODES)))
+    group.add_argument('--lapq-init-method', default='Powell',
+                       help='If --lapq-init-mode was specified as L1/L2/L3, this specifies the method of '
+                            'minimization.')
+    group.add_argument('--lapq-eval-size', type=float, default=1,
+                       help='Portion of test dataset to use for evaluation function.')
+    group.add_argument('--lapq-eval-memoize-dataloader', action='store_true', default=False,
+                       help='Stores the input batch in memory to optimize performance.')
+    group.add_argument('--lapq-search-clipping', action='store_true',
+                       help='Search on clipping values instead of scale/zero_point.')
 
 
-def validate_quantization_settings(args, quantized_model):
-    if args.search_clipping:
+def cmdline_args_to_dict(args):
+    """
+    Convenience function converting command line arguments obtained from add_coordinate_search_args
+    to a dictionary that can be passed as-is to ptq_coordinate_search.
+
+    Example:
+        # Assume pre-existing parser
+        add_coordinate_search_args(parser)
+        args = parser.parse_args()
+
+        # Assume quantizer, dummy_input, eval_fn, and test_fn have been set up
+        lapq_args_dict = cmdline_args_to_dict(args)
+        ptq_coordinate_search(quantizer, dummy_input, eval_fn, test_fn=test_fn, **lapq_args_dict)
+    """
+    prefix = 'lapq_'
+    len_prefix = len(prefix)
+    lapq_args = {k[len_prefix:]: v for k, v in vars(args).items() if k.startswith(prefix)}
+    lapq_args.pop('eval_size')
+    lapq_args.pop('eval_memoize_dataloader')
+    return lapq_args
+
+
+def validate_quantization_settings(quantized_model, search_clipping):
+    if search_clipping:
         return
     for n, m in quantized_model.named_modules():
         if not is_post_train_quant_wrapper(m, False):
@@ -306,55 +325,54 @@ def validate_quantization_settings(args, quantized_model):
                 raise ValueError(err_msg.format('weights'))
 
 
-def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=None,
-                          act_stats=None, args=None, fold_sequences=True, basinhopping=False,
-                          init_args=None, minimizer_kwargs=None,
-                          test_fn=None):
+def ptq_coordinate_search(quantizer, dummy_input, eval_fn, test_fn=None, method='Powell',
+                          maxiter=None, maxfev=None, basinhopping=False, basinhopping_niter=100,
+                          init_mode=ClipMode.NONE, init_method=None, search_clipping=False,
+                          minimizer_kwargs=None):
     """
     Searches for the optimal post-train quantization configuration (scale/zero_points)
     for a model using numerical methods, as described by scipy.optimize.minimize.
     Args:
-        model (nn.Module): model to quantize
+        quantizer (distiller.quantization.PostTrainLinearQuantizer): A configured PostTrainLinearQuantizer object
+          containing the model being quantized
         dummy_input: an sample expected input to the model
         eval_fn (callable): evaluation function for the model. Assumed it has a signature of the form
           `eval_fn(model)->float`. this is the function to be minimized by the optimization algorithm.
-        method (str or callable): minimization method as accepted by scipy.optimize.minimize.
-        options (dict or None): options for the scipy optimizer
-        act_stats (OrderedDict): dictionary of statistics per layer, including inputs and outputs.
-          for more context refer to collect_quant_stats.
-        args: arguments from command-line.
-        fold_sequences (bool): flag, indicates to fold sequences before performing the search.
+        test_fn (callable): a function to test the current performance of the model. Assumed it has a signature of
+          the form `test_fn(model)->dict`, where the returned dict contains relevant results to be logged.
+          For example: {'top-1': VAL, 'top-5': VAL, 'loss': VAL}
+        method (str or callable): Minimization method as accepted by scipy.optimize.minimize.
+        maxiter (int): Maximum number of iterations to perform during minimization
+        maxfev (int): Maximum number of total function evaluations to perform during minimization
         basinhopping (bool): flag, indicates to use basinhopping as a global-minimization method,
           will pass the `method` argument to `scipy.optimize.basinhopping`.
-        init_args (tuple): arguments for initializing the linear quantization parameters.
-          Refer to `init_linear_quant_params` for more details.
-        minimizer_kwargs (dict): the kwargs for scipy.optimize.minimize procedure.
-        test_fn (callable): a function to test the current performance of the model.
+        basinhopping_niter (int): Number of iterations to perform if basinhopping is set
+        init_mode (ClipMode or callable or str or dict): See 'init_linear_quant_params'
+        init_method (str or callable): See 'init_layer_linear_quant_params'
+        search_clipping (bool): Search on clipping values instead of directly on scale/zero-point (scale and zero-
+          point are inferred from the clipping values)
+        minimizer_kwargs (dict): Optional additional arguments for scipy.optimize.minimize
     """
-    if fold_sequences:
-        model = fold_batch_norms(model, dummy_input)
-    if args is None:
-        args = get_default_args()
-    elif isinstance(args, dict):
-        updated_args = get_default_args()
-        updated_args.__dict__.update(args)
-        args = updated_args
-    original_model = deepcopy(model)
+    if not isinstance(quantizer, PostTrainLinearQuantizer):
+        raise ValueError('Only PostTrainLinearQuantizer supported, but got a {}'.format(quantizer.__class__.__name__))
+    if quantizer.prepared:
+        raise ValueError('Expecting a quantizer for which prepare_model has not been called')
 
-    if not act_stats and not args.qe_config_file:
+    original_model = deepcopy(quantizer.model)
+    original_model = fold_batch_norms(original_model, dummy_input)
+
+    if not quantizer.model_activation_stats:
         msglogger.info('Collecting stats for model...')
-        model_temp = distiller.utils.make_non_parallel_copy(model)
-        act_stats = collect_quant_stats(model_temp, eval_fn)
+        model_temp = distiller.utils.make_non_parallel_copy(original_model)
+        act_stats = collect_quant_stats(model_temp, eval_fn,
+                                        inplace_runtime_check=True, disable_inplace_attrs=True,
+                                        save_dir=getattr(msglogger, 'logdir', '.'))
         del model_temp
-        if args:
-            act_stats_path = '%s_act_stats.yaml' % args.arch
-            msglogger.info('Done. Saving act stats into %s' % act_stats_path)
-            distiller.yaml_ordered_save(act_stats_path, act_stats)
-            args.qe_stats_file = act_stats_path
+        quantizer.model_activation_stats = act_stats
+        quantizer.model.quantizer_metadata['params']['model_activation_stats'] = act_stats
 
     # Preparing model and init conditions:
     msglogger.info("Initializing quantizer...")
-    quantizer = PostTrainLinearQuantizer.from_args(model, args)
 
     # Make sure weights are re-quantizable and clip-able
     quantizer.save_fp_weights = True
@@ -368,26 +386,26 @@ def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=
     quantizer.prepare_model(dummy_input)
     quantizer.model.eval()
 
-    validate_quantization_settings(args, quantizer.model)
+    validate_quantization_settings(quantizer.model, search_clipping)
 
     msglogger.info("Initializing quantization parameters...")
-    init_args = init_args or (args.init_mode, args.init_mode_method)
-    init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, *init_args,
-                             search_clipping=args.search_clipping)
+    init_linear_quant_params(quantizer, original_model, eval_fn, dummy_input, init_mode, init_method,
+                             search_clipping=search_clipping)
 
     msglogger.info("Evaluating initial quantization score...")
     best_data = {
-        'score': eval_fn(model),
+        'score': eval_fn(quantizer.model),
         'qp_dict': deepcopy(quantizer.linear_quant_params)
     }
     msglogger.info("Evaluation set loss after initialization %.3f" % best_data['score'])
     if test_fn:
         msglogger.info('Evaluating on full test set...')
-        l_top1, l_top5, l_loss = test_fn(quantizer.model)
-        msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+        results = test_fn(quantizer.model)
+        s = ', '.join(['{} = {:.3f}'.format(k, v) for k, v in results.items()])
+        msglogger.info('Test: ' + s)
 
-    init_qp_dict = OrderedDict(quantizer.named_linear_quant_params(args.search_clipping, filter=True))
-    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict, args.search_clipping)
+    init_qp_dict = OrderedDict(quantizer.named_linear_quant_params(search_clipping, filter=True))
+    keys, init_qp_vec = quant_params_dict2vec(init_qp_dict, search_clipping)
 
     iter_counter = count(1)
     eval_counter = count(1)
@@ -395,7 +413,7 @@ def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=
     def feed_forward_fn(qp_vec):
         # if not _check_qp_vec(keys, qp_vec, quant_mode, args.search_clipping):
         #     return 1e6
-        qp_dict = quant_params_vec2dict(keys, qp_vec, args.search_clipping)
+        qp_dict = quant_params_vec2dict(keys, qp_vec, search_clipping)
         quantizer.update_linear_quant_params(qp_dict)
         loss = eval_fn(quantizer.model)
 
@@ -411,105 +429,31 @@ def ptq_coordinate_search(model, dummy_input, eval_fn, method='Powell', options=
         msglogger.info("Iteration %d: \t Score=%.3f" % (i, score))
         if score < best_data['score']:
             best_data['score'] = score
-            best_data['qp_dict'] = quant_params_vec2dict(keys, qp_vec, args.search_clipping)
+            best_data['qp_dict'] = quant_params_vec2dict(keys, qp_vec, search_clipping)
             msglogger.info("Saving current best quantization parameters.")
         if test_fn:
             msglogger.info('Evaluating on full test set...')
-            l_top1, l_top5, l_loss = test_fn(quantizer.model)
-            msglogger.info('Test: \tloss=%.3f, top1=%.3f, top5=%.3f ' % (l_loss, l_top1, l_top5))
+            results = test_fn(quantizer.model)
+            s = ', '.join(['{} = {:.3f}'.format(k, v) for k, v in results.items()])
+            msglogger.info('Test: ' + s)
 
-    options = options or OrderedDict()
-    if args.maxiter is not None:
-        options['maxiter'] = args.maxiter
-    if args.maxfev is not None:
-        options['maxfev'] = args.maxfev
+    options = OrderedDict()
+    options['maxiter'] = maxiter
+    options['maxfev'] = maxfev
+
     minimizer_kwargs = minimizer_kwargs or OrderedDict()
     minimizer_kwargs.update({
         'method': method, 'options': options
     })
-    basinhopping = basinhopping or args.basinhopping
     if basinhopping:
-        msglogger.info('Using basinhopping global minimum search with "%s" local minimization method'%
-                       method)
-        res = opt.basinhopping(feed_forward_fn, init_qp_vec, args.niter, callback=callback,
+        msglogger.info('Using basinhopping global minimum search with "%s" local minimization method' % method)
+        res = opt.basinhopping(feed_forward_fn, init_qp_vec, basinhopping_niter, callback=callback,
                                minimizer_kwargs=minimizer_kwargs)
     else:
         msglogger.info('Using "%s" minimization algorithm.' % method)
         res = opt.minimize(feed_forward_fn, init_qp_vec, callback=callback, **minimizer_kwargs)
 
-    msglogger.info("Optimization done. Best configuration: %s" % best_data['qp_dict'])
-    return model, best_data['qp_dict']
-
-
-if __name__ == "__main__":
-    args = get_default_args()
-    args.epochs = float('inf')  # hack for args parsing so there's no error in epochs
-    cc = classifier.ClassifierCompressor(args, script_dir=os.path.dirname(__file__))
-
-    args = deepcopy(cc.args)
-
-    effective_test_size_bak = args.effective_test_size
-    args.effective_test_size = args.opt_val_size
-    eval_data_loader = classifier.load_data(args, load_train=False, load_val=False, load_test=True, fixed_subset=True)
-
-    args.effective_test_size = effective_test_size_bak
-    test_data_loader = classifier.load_data(args, load_train=False, load_val=False, load_test=True)
-
-    # logging
-    logging.getLogger().setLevel(logging.WARNING)
-    msglogger = logging.getLogger(__name__)
-    msglogger.setLevel(logging.INFO)
-
-    model = cc.model.eval()
-    device = next(model.parameters()).device
-
-    if args.memoize_dataloader:
-        memoized_data_loader = []
-        for images, targets in eval_data_loader:
-            batch = images.to(device), targets.to(device)
-            memoized_data_loader.append(batch)
-    else:
-        memoized_data_loader = None
-
-    def eval_fn(model):
-        if args.memoize_dataloader:
-            loss = 0
-            for images, targets in memoized_data_loader:
-                outputs = model(images)
-                loss += cc.criterion(outputs, targets).item()
-            loss = loss / len(memoized_data_loader)
-        else:
-            _, _, loss = classifier.test(eval_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger],
-                                           None, args)
-        return loss
-
-    def test_fn(model):
-        return classifier.test(test_data_loader, model, cc.criterion, [cc.tflogger, cc.pylogger], None, args)
-
-    args.device = device
-    if args.resumed_checkpoint_path:
-        args.load_model_path = args.resumed_checkpoint_path
-    if args.load_model_path:
-        msglogger.info("Loading checkpoint from %s" % args.load_model_path)
-        model = apputils.load_lean_checkpoint(model, args.load_model_path,
-                                              model_device=args.device)
-
-    if args.qe_stats_file:
-        msglogger.info("Loading stats from %s" % args.qe_stats_file)
-        with open(args.qe_stats_file, 'r') as f:
-            act_stats = distiller.yaml_ordered_load(f)
-    else:
-        act_stats = None
-
-    dummy_input = torch.rand(*model.input_shape, device=args.device)
-    model, qp_dict = ptq_coordinate_search(model, dummy_input, eval_fn, args.method,
-                                           args=args, act_stats=act_stats, test_fn=test_fn)
-
-    top1, top5, loss = test_fn(model)
-
-    msglogger.info("Arch: %s \tTest: \t top1 = %.3f \t top5 = %.3f \t loss = %.3f" %
-                   (args.arch, top1, top5, loss))
-    distiller.yaml_ordered_save('%s.quant_params_dict.yaml' % args.arch, qp_dict)
-
-    distiller.apputils.save_checkpoint(0, args.arch, model, extras={'top1': top1, 'qp_dict': qp_dict}, name=args.name,
-                                       dir=cc.logdir)
+    msglogger.info('Optimization done')
+    msglogger.info('Best score: {}'.format(best_data['score']))
+    msglogger.info('Best Configuration: {}'.format(best_data['qp_dict']))
+    return quantizer.model, best_data['qp_dict']

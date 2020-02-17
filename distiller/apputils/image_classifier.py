@@ -204,13 +204,13 @@ class ClassifierCompressor(object):
                     self.pylogger, self.activations_collectors, args=self.args)
 
 
-def init_classifier_compression_arg_parser():
+def init_classifier_compression_arg_parser(include_ptq_lapq_args=False):
     '''Common classifier-compression application command-line arguments.
     '''
     SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
-    parser.add_argument('data', metavar='DIR', help='path to dataset')
+    parser.add_argument('data', metavar='DATASET_DIR', help='path to dataset')
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
                         choices=models.ALL_MODEL_NAMES,
                         help='model architecture: ' +
@@ -312,7 +312,7 @@ def init_classifier_compression_arg_parser():
                         help='Load a model without DataParallel wrapping it')
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
-    distiller.quantization.add_post_train_quant_args(parser)
+    distiller.quantization.add_post_train_quant_args(parser, add_lapq_args=include_ptq_lapq_args)
     return parser
 
 
