@@ -33,15 +33,17 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
 from distiller.quantization.range_linear import is_post_train_quant_wrapper
+from distiller.quantization.pytorch_quant_conversion import QFunctionalWrapper
 import numpy as np
+import concurrent.futures
 
 msglogger = logging.getLogger()
 
-__all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
-           'QuantCalibrationStatsCollector', 'ActivationHistogramsCollector',
-           'CollectorDirection',
-           'collect_quant_stats', 'collect_histograms',
+__all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector', 'QuantCalibrationStatsCollector',
+           'ActivationHistogramsCollector', 'RawActivationsCollector', 'CollectorDirection',
+           'collect_quant_stats', 'collect_histograms', 'collect_raw_outputs',
            'collector_context', 'collectors_context']
+
 
 class CollectorDirection(enum.Enum):
     OUT = 0
@@ -169,7 +171,8 @@ class ActivationStatsCollector(object):
         # We make an exception for models that were quantized with 'PostTrainLinearQuantizer'. In these
         # models, the quantized modules are actually wrappers of the original FP32 modules, so they are
         # NOT leaf modules - but we still want to track them.
-        if distiller.has_children(module) and not is_post_train_quant_wrapper(module):
+        if distiller.has_children(module) and not (is_post_train_quant_wrapper(module) or
+                                                   isinstance(module, QFunctionalWrapper)):
             return False
         if isinstance(module, torch.nn.Identity):
             return False
@@ -216,7 +219,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
     def __init__(self, model, stat_name, summary_fn,
-                 classes=[torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU],
+                 classes=(torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU),
                  collector_direction=CollectorDirection.OUT,
                  inputs_consolidate_func=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
@@ -302,9 +305,9 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
 
     For obvious reasons, this is slower than SummaryActivationStatsCollector.
     """
-    def __init__(self, model, classes=[torch.nn.ReLU,
+    def __init__(self, model, classes=(torch.nn.ReLU,
                                        torch.nn.ReLU6,
-                                       torch.nn.LeakyReLU]):
+                                       torch.nn.LeakyReLU)):
         super(RecordsActivationStatsCollector, self).__init__(model, "statistics_records", classes)
 
     def _activation_stats_cb(self, module, inputs, output):
@@ -798,6 +801,47 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
         return fname
 
 
+class RawActivationsCollector(ActivationStatsCollector):
+    def __init__(self, model, classes=None):
+        super(RawActivationsCollector, self).__init__(model, "raw_acts", classes)
+
+        _verify_no_dataparallel(model)
+
+    def _activation_stats_cb(self, module, inputs, output):
+        if isinstance(output, torch.Tensor):
+            if output.is_quantized:
+                module.raw_outputs.append(output.dequantize())
+            else:
+                module.raw_outputs.append(output.cpu())
+
+    def _start_counter(self, module):
+        module.raw_outputs = []
+
+    def _reset_counter(self, module):
+        if hasattr(module, 'raw_outputs'):
+            module.raw_outputs = []
+
+    def _collect_activations_stats(self, module, activation_stats, name=):
+        if not hasattr(module, 'raw_outputs'):
+            return
+
+        if isinstance(module.raw_outputs, list) and len(module.raw_outputs) > 0:
+            module.raw_outputs = torch.stack(module.raw_outputs)
+        activation_stats[module.distiller_name] = module.raw_outputs
+
+    def save(self, dir_name):
+        if not os.path.isdir(dir_name):
+            os.mkdir(dir_name)
+
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for idx, (layer_name, raw_outputs) in enumerate(self.value().items()):
+                idx_str = '{:03d}'.format(idx + 1)
+                executor.submit(torch.save, raw_outputs, os.path.join(dir_name,
+                                                                      '-'.join((idx_str, layer_name)) + '.pt'))
+
+        return dir_name
+
+
 def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_runtime_check=False,
                         disable_inplace_attrs=False, inplace_attr_names=('inplace',),
                         modules_to_collect=None):
@@ -891,6 +935,20 @@ def collect_histograms(model, test_fn, save_dir=None, activation_stats=None,
             msglogger.info('Histogram images saved in ' + os.path.join(save_dir, 'histogram_imgs'))
 
     return histogram_collector.value()
+
+
+def collect_raw_outputs(model, test_fn, save_dir=None, classes=None):
+    msglogger.info('Collecting raw layer outputs for model')
+    collector = RawActivationsCollector(model, classes=classes)
+    with collector_context(collector):
+        test_fn(model=model)
+    msglogger.info('Outputs collection complete')
+    if save_dir is not None:
+        msglogger.info('Saving outputs to disk...')
+        save_path = os.path.join(save_dir, 'raw_outputs')
+        collector.save(save_path)
+        msglogger.info('Outputs saved to ' + save_path)
+    return collector.value()
 
 
 @contextmanager
