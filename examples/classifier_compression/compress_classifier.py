@@ -61,6 +61,7 @@ import distiller.apputils as apputils
 import parser
 import os
 import numpy as np
+from ptq_lapq import image_classifier_ptq_lapq
 
 
 # Logger handle
@@ -69,7 +70,7 @@ msglogger = logging.getLogger()
 
 def main():
     # Parse arguments
-    args = parser.add_cmdline_args(classifier.init_classifier_compression_arg_parser()).parse_args()
+    args = parser.add_cmdline_args(classifier.init_classifier_compression_arg_parser(True)).parse_args()
     app = ClassifierCompressorSampleApp(args, script_dir=os.path.dirname(__file__))
     if app.handle_subapps():
         return
@@ -110,10 +111,13 @@ def handle_subapps(model, criterion, optimizer, compression_scheduler, pylogger,
         sensitivity_analysis(model, criterion, test_loader, pylogger, args, sensitivities)
         do_exit = True
     elif args.evaluate:
-        test_loader = load_test_data(args)
-        classifier.evaluate_model(test_loader, model, criterion, pylogger,
-            classifier.create_activation_stats_collectors(model, *args.activation_stats),
-            args, scheduler=compression_scheduler)
+        if args.quantize_eval and args.qe_lapq:
+            image_classifier_ptq_lapq(model, criterion, pylogger, args)
+        else:
+            test_loader = load_test_data(args)
+            classifier.evaluate_model(test_loader, model, criterion, pylogger,
+                classifier.create_activation_stats_collectors(model, *args.activation_stats),
+                args, scheduler=compression_scheduler)
         do_exit = True
     elif args.thinnify:
         assert args.resumed_checkpoint_path is not None, \
