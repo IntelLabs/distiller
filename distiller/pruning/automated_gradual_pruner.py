@@ -14,11 +14,15 @@
 # limitations under the License.
 #
 
+import logging
+
 from .pruner import _ParameterPruner
 from .level_pruner import SparsityLevelParameterPruner
 from .ranked_structures_pruner import *
 from distiller.utils import *
-from functools import partial
+
+
+msglogger = logging.getLogger()
 
 
 class AutomatedGradualPrunerBase(_ParameterPruner):
@@ -45,8 +49,18 @@ class AutomatedGradualPrunerBase(_ParameterPruner):
         current_epoch = meta['current_epoch']
         ending_epoch = meta['ending_epoch']
         freq = meta['frequency']
-        span = ((ending_epoch - starting_epoch - 1) // freq) * freq
-        assert span > 0
+
+        try:
+            span = ((ending_epoch - starting_epoch - 1) // freq) * freq
+        except ZeroDivisionError:
+            raise ValueError('pruner frequency must be greater than zero')
+
+        if current_epoch >= ending_epoch:
+            return self.final_sparsity
+        elif span <= 0:
+            msglogger.warning(
+                'Policy span has got illegal value of {}.'.format(span))
+            return 0
 
         target_sparsity = (self.final_sparsity +
                            (self.initial_sparsity-self.final_sparsity) *
