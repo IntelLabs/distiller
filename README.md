@@ -312,11 +312,36 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
 ### Research papers citing Distiller:
+- Pascal BacchusRobert StewartEmail authorEkaterina Komendantskaya.<br>
+*[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
+In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
+
+- Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit, Kaushik Roy.<br>
+*[GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks](https://arxiv.org/abs/2003.06902)*,<br>
+arXiv:2003.06902, 2020.
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Fatemehsadat Mireshghallah, Tarek Elgindi, Charles-Alban Deledalle, Hadi Esmaeilzadeh.<br>
+*[Gradient-Based Deep Quantization of Neural Networks through Sinusoidal
+Adaptive Regularization](https://arxiv.org/abs/2003.00146)*,<br>
+arXiv:2003.00146, 2020.
+
+- Moran Shkolnik, Brian Chmiel, Ron Banner, Gil Shomron, Yuri Nahshan, Alex Bronstein, Uri Weiser.<br>
+*[Robust Quantization: One Model to Rule Them All](https://arxiv.org/abs/2002.07686)*,<br>
+arXiv:2002.07686, 2020.
+
+- Meiqi Wang, Jianqiao Mo, Jun Lin, Zhongfeng Wang, Li Du.<br>
+*[DynExit: A Dynamic Early-Exit Strategy for Deep Residual Networks](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9020551)*,<br>
+In IEEE International Workshop on Signal Processing Systems (SiPS), 2019.
+
 - Hui Guan, Lin Ning, Zhen Lin, Xipeng Shen, Huiyang Zhou, Seung-Hwan Lim.<br>
 *[In-Place Zero-Space Memory Protection for CNN](https://arxiv.org/abs/1910.14479)*,<br>
 In Conference on Neural Information Processing Systems (NeurIPS), 2019.<br>
 arXiv:1910.14479, 2019<br>
 [code](https://github.com/guanh01/wot)
+
+- Hossein Baktash, Emanuele Natale, Laurent Viennot.<br>
+*[A Comparative Study of Neural Network Compression](https://arxiv.org/abs/1910.11144)*,<br>
+arXiv:1910.11144, 2019.
 
 - Maxim Zemlyanikin, Alexander Smorkalov, Tatiana Khanova, Anna Petrovicheva, Grigory Serebryakov.<br>
 *[512KiB RAM Is Enough! Live Camera Face Recognition DNN on MCU](http://openaccess.thecvf.com/content_ICCVW_2019/html/LPCV/Zemlyanikin_512KiB_RAM_Is_Enough_Live_Camera_Face_Recognition_DNN_on_ICCVW_2019_paper.html)*,<br>
