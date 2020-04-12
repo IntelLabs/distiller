@@ -376,17 +376,16 @@ In Japanese Journal of Radiology, February 2019, Volume 37, Issue 2, pp 103–10
 If you used Distiller for your work, please use the following citation:
 
 ```
-@misc{neta_zmora_2018_1297430,
+@article{nzmora2019distiller,
   author       = {Neta Zmora and
                   Guy Jacob and
                   Lev Zlotnik and
                   Bar Elharar and
                   Gal Novik},
-  title        = {Neural Network Distiller},
-  month        = jun,
-  year         = 2018,
-  doi          = {10.5281/zenodo.1297430},
-  url          = {https://doi.org/10.5281/zenodo.1297430}
+  title        = {Neural Network Distiller: A Python Package For DNN Compression Research},
+  month        = {October},
+  year         = {2019},
+  url          = {https://arxiv.org/abs/1910.12232}
 }
 ```
 
