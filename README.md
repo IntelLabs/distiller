@@ -56,12 +56,9 @@ Network compression can reduce the memory footprint of a neural network, increas
   - [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
 - [Running the tests](#running-the-tests)
 - [Generating the HTML documentation site](#generating-the-html-documentation-site)
-- [Built With](#built-with)
 - [Versioning](#versioning)
 - [License](#license)
 - [Community](#community)
-  - [Github projects using Distiller](#github-projects-using-distiller)
-  - [Research papers citing Distiller](#research-papers-citing-distiller)
 - [Acknowledgments](#acknowledgments)
 - [Disclaimer](#disclaimer)
 
@@ -291,13 +288,6 @@ $ mkdocs build --clean
 This will create a folder named 'site' which contains the documentation website.
 Open distiller/docs/site/index.html to view the documentation home page.
 
-## Built With
-
-* [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
-* [Jupyter](http://jupyter.org/) - Notebook serving.
-* [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
-* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
-
 ## Versioning
 
 We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/NervanaSystems/distiller/tags).
@@ -317,7 +307,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 <details><summary><b>Research papers citing Distiller</b></summary>	
 <p>
 
-- Pascal BacchusRobert StewartEmail authorEkaterina Komendantskaya.<br>
+- Pascal Bacchus, Robert Stewart, Ekaterina Komendantskaya.<br>
 *[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
 In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
 
@@ -427,7 +417,12 @@ Any published work is built on top of the work of many other people, and the cre
 * The Python and PyTorch developer communities have shared many invaluable insights, examples and ideas on the Web.
 * The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
 
+### Built With
 
+* [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
+* [Jupyter](http://jupyter.org/) - Notebook serving.
+* [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
+* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
 
 ## Disclaimer
 Distiller is released as a reference code for research purposes. It is not an official Intel product, and the level of quality and support may not be as expected from an official product. Additional algorithms and features are planned to be added to the library. Feedback and contributions from the open source and research communities are more than welcome.
