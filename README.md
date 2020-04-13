@@ -320,13 +320,31 @@ arXiv:2003.06902, 2020.
 Adaptive Regularization](https://arxiv.org/abs/2003.00146)*,<br>
 arXiv:2003.00146, 2020.
 
+- Ziqing Yang, Yiming Cui, Zhipeng Chen, Wanxiang Che, Ting Liu, Shijin Wang, Guoping Hu.<br>
+*[TextBrewer: An Open-Source Knowledge Distillation Toolkit for Natural Language Processing](https://arxiv.org/abs/2002.12620)*,<br>
+arXiv:2002.12620, 2020.
+
+- Alexander Kozlov, Ivan Lazarevich, Vasily Shamporov, Nikolay Lyalyushkin, Yury Gorbachev.<br>
+*[Neural Network Compression Framework for fast model inference](https://arxiv.org/abs/2002.08679)*,<br>
+arXiv:2002.08679, 2020.
+
 - Moran Shkolnik, Brian Chmiel, Ron Banner, Gil Shomron, Yuri Nahshan, Alex Bronstein, Uri Weiser.<br>
 *[Robust Quantization: One Model to Rule Them All](https://arxiv.org/abs/2002.07686)*,<br>
 arXiv:2002.07686, 2020.
 
+- Muhammad Abdullah Hanif, Muhammad Shafique.<br>
+*[SalvageDNN: salvaging deep neural network accelerators with permanent faults through saliency-driven fault-aware mapping](https://royalsocietypublishing.org/doi/10.1098/rsta.2019.0164)*,<br>
+In Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering SciencesVolume 378, Issue 2164, 2019.<br>
+https://doi.org/10.1098/rsta.2019.0164
+
 - Meiqi Wang, Jianqiao Mo, Jun Lin, Zhongfeng Wang, Li Du.<br>
 *[DynExit: A Dynamic Early-Exit Strategy for Deep Residual Networks](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9020551)*,<br>
 In IEEE International Workshop on Signal Processing Systems (SiPS), 2019.
+
+- Vinu Joseph, Saurav Muralidharan, Animesh Garg, Michael Garland, Ganesh Gopalakrishnan.<br>
+*[A Programmable Approach to Model Compression](https://arxiv.org/abs/1911.02497),*<br>
+arXiv:1911.02497, 2019<br>
+[code](https://github.com/NVlabs/condensa)
 
 - Hui Guan, Lin Ning, Zhen Lin, Xipeng Shen, Huiyang Zhou, Seung-Hwan Lim.<br>
 *[In-Place Zero-Space Memory Protection for CNN](https://arxiv.org/abs/1910.14479)*,<br>
@@ -372,8 +390,8 @@ In IEEE Computer Architecture Letters (CAL), 2019.
 In: Rojas I., Joya G., Catala A. (eds) Advances in Computational Intelligence Lecture Notes in Computer Science, vol 11507. Springer, Cham.  International Work-Conference on Artificial Neural Networks (IWANN 2019).
 
 - Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
-  *[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*
-  arXiv:1906.06033, 2019
+*[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*<br>
+arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
   *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
