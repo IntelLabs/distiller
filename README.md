@@ -306,12 +306,13 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
-## Community
-
-### Github projects using Distiller:
+<details><summary><h2>Community</h2></summary>	
+<p>
+  
+### Github projects using Distiller
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
-### Research papers citing Distiller:
+### Research papers citing Distiller
 - Pascal BacchusRobert StewartEmail authorEkaterina Komendantskaya.<br>
 *[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
 In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
@@ -413,6 +414,8 @@ If you used Distiller for your work, please use the following citation:
   url          = {https://arxiv.org/abs/1910.12232}
 }
 ```
+</p>	
+</details>
 
 ## Acknowledgments
 
