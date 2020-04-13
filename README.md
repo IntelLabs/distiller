@@ -60,8 +60,8 @@ Network compression can reduce the memory footprint of a neural network, increas
 - [Versioning](#versioning)
 - [License](#license)
 - [Community](#community)
-  - [Github projects using Distiller:](#github-projects-using-distiller)
-  - [Research papers citing Distiller:](#research-papers-citing-distiller)
+  - [Github projects using Distiller](#github-projects-using-distiller)
+  - [Research papers citing Distiller](#research-papers-citing-distiller)
 - [Acknowledgments](#acknowledgments)
 - [Disclaimer](#disclaimer)
 
@@ -306,13 +306,17 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
-<details><summary><h2>Community</h2></summary>	
+## Community
+<details><summary><b>Github projects using Distiller</b></summary>	
 <p>
   
-### Github projects using Distiller
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
+</p>	
+</details>
 
-### Research papers citing Distiller
+<details><summary><b>Research papers citing Distiller</b></summary>	
+<p>
+
 - Pascal BacchusRobert StewartEmail authorEkaterina Komendantskaya.<br>
 *[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
 In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
@@ -397,7 +401,8 @@ In Japanese Journal of Radiology, February 2019, Volume 37, Issue 2, pp 103–10
 -  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
    *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872)*,<br>
    arXiv:1812.07872, 2018
-
+</p>	
+</details>
 
 If you used Distiller for your work, please use the following citation:
 
@@ -414,8 +419,7 @@ If you used Distiller for your work, please use the following citation:
   url          = {https://arxiv.org/abs/1910.12232}
 }
 ```
-</p>	
-</details>
+
 
 ## Acknowledgments
 
