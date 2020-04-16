@@ -19,8 +19,8 @@ import torch.nn as nn
 
 class EltwiseAdd(nn.Module):
     def __init__(self, inplace=False):
-        super(EltwiseAdd, self).__init__()
-
+        """Element-wise addition"""
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, *input):
@@ -34,9 +34,27 @@ class EltwiseAdd(nn.Module):
         return res
 
 
+class EltwiseSub(nn.Module):
+    def __init__(self, inplace=False):
+        """Element-wise subtraction"""
+        super().__init__()
+        self.inplace = inplace
+
+    def forward(self, *input):
+        res = input[0]
+        if self.inplace:
+            for t in input[1:]:
+                res -= t
+        else:
+            for t in input[1:]:
+                res = res - t
+        return res
+
+
 class EltwiseMult(nn.Module):
     def __init__(self, inplace=False):
-        super(EltwiseMult, self).__init__()
+        """Element-wise multiplication"""
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, *input):
@@ -52,7 +70,8 @@ class EltwiseMult(nn.Module):
 
 class EltwiseDiv(nn.Module):
     def __init__(self, inplace=False):
-        super(EltwiseDiv, self).__init__()
+        """Element-wise division"""
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x: torch.Tensor, y):
