@@ -14,14 +14,12 @@
 # limitations under the License.
 #
 
-
-from .pruner import _ParameterPruner
 import torch
 import logging
 msglogger = logging.getLogger()
 
 
-class SplicingPruner(_ParameterPruner):
+class SplicingPruner(object):
     """A pruner that both prunes and splices connections.
 
     The idea of pruning and splicing working in tandem was first proposed in the following
@@ -37,7 +35,7 @@ class SplicingPruner(_ParameterPruner):
     def __init__(self, name, sensitivities, low_thresh_mult, hi_thresh_mult, sensitivity_multiplier=0):
         """Arguments:
         """
-        super(SplicingPruner, self).__init__(name)
+        self.name = name
         self.sensitivities = sensitivities
         self.low_thresh_mult = low_thresh_mult
         self.hi_thresh_mult = hi_thresh_mult

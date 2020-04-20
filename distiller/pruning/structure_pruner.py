@@ -15,12 +15,11 @@
 #
 
 import logging
-from .pruner import _ParameterPruner
 import distiller
 msglogger = logging.getLogger()
 
 
-class StructureParameterPruner(distiller.GroupThresholdMixin, _ParameterPruner):
+class StructureParameterPruner(distiller.GroupThresholdMixin):
     """Prune parameter structures.
 
     Pruning criterion: average L1-norm.  If the average L1-norm (absolute value) of the eleements
@@ -30,7 +29,6 @@ class StructureParameterPruner(distiller.GroupThresholdMixin, _ParameterPruner):
     the structure size.
     """
     def __init__(self, name, model, reg_regims, threshold_criteria):
-        super(StructureParameterPruner, self).__init__(name)
         self.name = name
         self.model = model
         self.reg_regims = reg_regims

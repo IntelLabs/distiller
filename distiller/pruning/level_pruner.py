@@ -14,11 +14,10 @@
 # limitations under the License.
 #
 
-import torch
-from .pruner import _ParameterPruner
 import distiller
 
-class SparsityLevelParameterPruner(_ParameterPruner):
+
+class SparsityLevelParameterPruner(object):
     """Prune to an exact pruning level specification.
 
     This pruner is very similar to MagnitudeParameterPruner, but instead of
@@ -30,7 +29,7 @@ class SparsityLevelParameterPruner(_ParameterPruner):
     """
 
     def __init__(self, name, levels, **kwargs):
-        super(SparsityLevelParameterPruner, self).__init__(name)
+        self.name = name
         self.levels = levels
         assert self.levels
 
@@ -40,13 +39,4 @@ class SparsityLevelParameterPruner(_ParameterPruner):
         desired_sparsity = self.levels.get(param_name, self.levels.get('*', 0))
         if desired_sparsity == 0:
             return
-
-        zeros_mask_dict[param_name].mask = SparsityLevelParameterPruner.create_mask(param, desired_sparsity)
-
-    @staticmethod
-    def create_mask(param, desired_sparsity):
-        with torch.no_grad():
-            bottomk, _ = torch.topk(param.abs().view(-1), int(desired_sparsity * param.numel()), largest=False, sorted=True)
-            threshold = bottomk.data[-1]  # This is the largest element from the group of elements that we prune away
-            mask = distiller.threshold_mask(param.data, threshold)
-            return mask
+        zeros_mask_dict[param_name].mask = distiller.create_mask_level_criterion(param, desired_sparsity)
