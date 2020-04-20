@@ -16,9 +16,7 @@
 
 """L1-norm regularization"""
 
-import torch
-import math
-import numpy as np
+
 import distiller
 from .regularizer import _Regularizer, EPSILON
 
@@ -39,7 +37,7 @@ class L1Regularizer(_Regularizer):
             return
 
         strength = self.reg_regims[param_name]
-        zeros_mask_dict[param_name].mask = distiller.threshold_mask(param.data, threshold=strength)
+        zeros_mask_dict[param_name].mask = distiller.pruning.create_mask_threshold_criterion(param, threshold=strength)
         zeros_mask_dict[param_name].is_regularization_mask = True
 
     @staticmethod

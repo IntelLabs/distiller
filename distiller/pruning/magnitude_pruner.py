@@ -14,12 +14,11 @@
 # limitations under the License.
 #
 
-from .pruner import _ParameterPruner
 import distiller
 import torch
 
 
-class MagnitudeParameterPruner(_ParameterPruner):
+class MagnitudeParameterPruner(object):
     """This is the most basic magnitude-based pruner.
 
     This pruner supports configuring a scalar threshold for each layer.
@@ -43,7 +42,7 @@ class MagnitudeParameterPruner(_ParameterPruner):
                value is used.
                Currently it is mandatory to include a '*' key in 'thresholds'.
         """
-        super(MagnitudeParameterPruner, self).__init__(name)
+        self.name = name
         assert thresholds is not None
         # Make sure there is a default threshold to use
         assert '*' in thresholds
@@ -51,13 +50,8 @@ class MagnitudeParameterPruner(_ParameterPruner):
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
         threshold = self.thresholds.get(param_name, self.thresholds['*'])
-        zeros_mask_dict[param_name].mask = self.create_mask(param.data, threshold)
+        zeros_mask_dict[param_name].mask = distiller.create_mask_threshold_criterion(param, threshold)
 
-    @staticmethod
-    def create_mask(param, threshold):
-        with torch.no_grad():
-            mask = distiller.threshold_mask(param.data, threshold)
-            return mask
 
 
 

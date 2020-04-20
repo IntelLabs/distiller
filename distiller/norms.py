@@ -33,6 +33,7 @@ see: https://www.kaggle.com/residentmario/l1-norms-versus-l2-norms)
 import torch
 import numpy as np
 from functools import partial
+from random import uniform
 
 
 __all__ = ["kernels_lp_norm", "channels_lp_norm", "filters_lp_norm",
