@@ -263,7 +263,7 @@ class ParameterMasker(object):
 
     def revert_weights(self, parameter):
         if not self.use_double_copies or self.unmasked_copy is None:
-            msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
+            # This parameter does not maintain double copies (this is OK)
             return
         parameter.data.copy_(self.unmasked_copy)
         self.unmasked_copy = None

@@ -77,10 +77,30 @@ def test_threshold_mask():
     # Change one element
     a[1, 4, 17, 31] = 0.2
     # Create and apply a mask
-    mask = distiller.threshold_mask(a, threshold=0.3)
+    mask = distiller.create_mask_threshold_criterion(a, threshold=0.3)
     assert np.sum(distiller.to_np(mask)) == (distiller.volume(a) - 1)
     assert mask[1, 4, 17, 31] == 0
     assert common.almost_equal(distiller.sparsity(mask), 1/distiller.volume(a))
+
+
+def test_level_mask():
+    # Create a 4-D tensor of 1s
+    a = torch.rand(3, 64, 32, 32)
+
+    # Create and apply a mask
+    mask = distiller.create_mask_level_criterion(a, desired_sparsity=0.3)
+    assert common.almost_equal(distiller.sparsity(mask), 0.3, max_diff=0.0001)
+
+
+def test_sensitivity_mask():
+    # Create a 4-D tensor of normally-distributed coefficients
+    a = torch.randn(3, 64, 32, 32)
+
+    # Create and apply a mask
+    mask = distiller.create_mask_sensitivity_criterion(a, sensitivity=1)
+    # The width of 1-std on ~N(0,1) is about 68.27%.  In other words:
+    # Pr(mean - std <= X <= mean + std) is about 68.27%
+    assert common.almost_equal(distiller.sparsity(mask), 0.6827, max_diff=0.005)
 
 
 def test_kernel_thresholding():
@@ -240,6 +260,8 @@ def test_row_thresholding():
                                         [ 0.,  0.,  0.],
                                         [ 1.,  1.,  1.],
                                         [ 1.,  1.,  1.]], device=mask.device)).all()
+    masked_tensor = distiller.mask_tensor(p, mask)
+    assert distiller.sparsity(masked_tensor) == distiller.sparsity(mask)
     return mask
 
 

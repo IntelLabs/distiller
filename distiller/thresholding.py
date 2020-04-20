@@ -23,21 +23,8 @@ import numpy as np
 from distiller.norms import *
 
 
-__all__ = ["threshold_mask", "GroupThresholdMixin",
+__all__ = ["GroupThresholdMixin",
            "group_threshold_binary_map", "group_threshold_mask"]
-
-
-def threshold_mask(param, threshold):
-    """Create a threshold mask for the provided parameter tensor using
-    magnitude thresholding.
-
-    Arguments:
-        param: a parameter tensor which should be pruned.
-        threshold: the pruning threshold.
-    Returns:
-        prune_mask: The pruning mask.
-    """
-    return torch.gt(torch.abs(param), threshold).type(param.type())
 
 
 class GroupThresholdMixin(object):
