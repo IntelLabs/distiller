@@ -14,14 +14,30 @@
 # limitations under the License.
 #
 
-from .pruner import _ParameterPruner
-from .level_pruner import SparsityLevelParameterPruner
 from .ranked_structures_pruner import *
-from distiller.utils import *
-from functools import partial
+import distiller
 
 
-class AutomatedGradualPrunerBase(_ParameterPruner):
+class AgpPruningRate(object):
+    """A pruning-rate scheduler per https://arxiv.org/pdf/1710.01878.pdf.
+    """
+    def __init__(self, initial_sparsity, final_sparsity):
+        self.initial_sparsity = initial_sparsity
+        self.final_sparsity = final_sparsity
+        assert final_sparsity > initial_sparsity
+
+    def step(self, current_epoch, starting_epoch, ending_epoch, freq):
+        span = ((ending_epoch - starting_epoch - 1) // freq) * freq
+        assert span > 0
+
+        target_sparsity = (self.final_sparsity +
+                           (self.initial_sparsity-self.final_sparsity) *
+                           (1.0 - ((current_epoch-starting_epoch)/span))**3)
+
+        return target_sparsity
+
+
+class AutomatedGradualPrunerBase(object):
     """Prune to an exact sparsity level specification using a prescribed sparsity
     level schedule formula.
 
@@ -34,28 +50,18 @@ class AutomatedGradualPrunerBase(_ParameterPruner):
     (https://arxiv.org/pdf/1710.01878.pdf)
     """
 
-    def __init__(self, name, initial_sparsity, final_sparsity):
-        super().__init__(name)
-        self.initial_sparsity = initial_sparsity
-        self.final_sparsity = final_sparsity
-        assert final_sparsity > initial_sparsity
-
-    def compute_target_sparsity(self, meta):
-        starting_epoch = meta['starting_epoch']
-        current_epoch = meta['current_epoch']
-        ending_epoch = meta['ending_epoch']
-        freq = meta['frequency']
-        span = ((ending_epoch - starting_epoch - 1) // freq) * freq
-        assert span > 0
-
-        target_sparsity = (self.final_sparsity +
-                           (self.initial_sparsity-self.final_sparsity) *
-                           (1.0 - ((current_epoch-starting_epoch)/span))**3)
-
-        return target_sparsity
+    def __init__(self, name, rate_scheduler):
+        """
+        Args:
+            rate_scheduler - schedules the pruning rate.  You can plug in any
+            rate scheduler.  We implemented AGP paper's rate control in AgpPruningRate.
+        """
+        self.name = name
+        self.agp_pr = rate_scheduler
 
     def set_param_mask(self, param, param_name, zeros_mask_dict, meta):
-        target_sparsity = self.compute_target_sparsity(meta)
+        target_sparsity = self.agp_pr.step(meta['current_epoch'], meta['starting_epoch'],
+                                           meta['ending_epoch'], meta['frequency'])
         self._set_param_mask_by_sparsity_target(param, param_name, zeros_mask_dict, target_sparsity, meta['model'])
 
     def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
@@ -69,8 +75,8 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
     An automated gradual pruning algorithm that prunes the smallest magnitude
     weights to achieve a preset level of network sparsity.
     """
-    def __init__(self, name, initial_sparsity, final_sparsity, weights):
-        super().__init__(name, initial_sparsity, final_sparsity)
+    def __init__(self, name, initial_sparsity, final_sparsity, weights, rate_scheduler_factory=AgpPruningRate):
+        super().__init__(name, rate_scheduler=rate_scheduler_factory(initial_sparsity, final_sparsity))
         self.params_names = weights
         assert self.params_names
 
@@ -80,7 +86,7 @@ class AutomatedGradualPruner(AutomatedGradualPrunerBase):
         super().set_param_mask(param, param_name, zeros_mask_dict, meta)
 
     def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model=None):
-        zeros_mask_dict[param_name].mask = SparsityLevelParameterPruner.create_mask(param, target_sparsity)
+        zeros_mask_dict[param_name].mask = distiller.create_mask_level_criterion(param, target_sparsity)
 
 
 class StructuredAGP(AutomatedGradualPrunerBase):
@@ -89,8 +95,8 @@ class StructuredAGP(AutomatedGradualPrunerBase):
     This is a base-class for structured pruning with an AGP schedule.  It is an
     extension of the AGP concept introduced by Zhu et. al.
     """
-    def __init__(self, name, initial_sparsity, final_sparsity):
-        super().__init__(name, initial_sparsity, final_sparsity)
+    def __init__(self, name, initial_sparsity, final_sparsity, rate_scheduler_factory=AgpPruningRate):
+        super().__init__(name, rate_scheduler=rate_scheduler_factory(initial_sparsity, final_sparsity))
         self.pruner = None
 
     def _set_param_mask_by_sparsity_target(self, param, param_name, zeros_mask_dict, target_sparsity, model):
