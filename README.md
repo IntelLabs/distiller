@@ -303,6 +303,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
 - [TorchFI](https://github.com/bfgoldstein/torchfi) - TorchFI is a fault injection framework build on top of PyTorch for research purposes.
+
+- [hsi-toolbox](https://github.com/daniel-rychlewski/hsi-toolbox) - Hyperspectral CNN compression and band selection
+
 </p>	
 </details>
 
