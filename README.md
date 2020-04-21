@@ -301,12 +301,18 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LIC
 <p>
   
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
+
+- [TorchFI](https://github.com/bfgoldstein/torchfi) - TorchFI is a fault injection framework build on top of PyTorch for research purposes.
 </p>	
 </details>
 
 <details><summary><b>Research papers citing Distiller</b></summary>	
 <p>
-
+  
+- Brunno F. Goldstein, Sudarshan Srinivasan, Dipankar Das, Kunal Banerjee, Leandro Santiago, Victor C. Ferreira, Alexandre S. Nery, Sandip Kundu, Felipe M. G. Franca.<br>
+*[Reliability Evaluation of Compressed Deep Learning Models](https://ieeexplore.ieee.org/document/9069026)*,<br>
+In IEEE 11th Latin American Symposium on Circuits & Systems (LASCAS), San Jose, Costa Rica, 2020, pp. 1-5.
+  
 - Pascal Bacchus, Robert Stewart, Ekaterina Komendantskaya.<br>
 *[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
 In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
