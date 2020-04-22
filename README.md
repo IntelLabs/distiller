@@ -41,13 +41,6 @@ Network compression can reduce the memory footprint of a neural network, increas
 - [Table of Contents](#table-of-contents)
 - [Highlighted features](#highlighted-features)
 - [Installation](#installation)
-  - [Clone Distiller](#clone-distiller)
-  - [Create a Python virtual environment](#create-a-python-virtual-environment)
-    - [Using virtualenv](#using-virtualenv)
-    - [Using venv](#using-venv)
-    - [Activate the environment](#activate-the-environment)
-  - [Install the package](#install-the-package)
-  - [Required PyTorch Version](#required-pytorch-version)
 - [Getting Started](#getting-started)
   - [Basic Usage Examples](#basic-usage-examples)
     - [Training-only](#training-only)
@@ -109,22 +102,21 @@ Network compression can reduce the memory footprint of a neural network, increas
 ## Installation
 
 These instructions will help get Distiller up and running on your local machine.
-1. [Clone Distiller](#clone-distiller)
-2. [Create a Python virtual environment](#create-a-python-virtual-environment)
-3. [Install the package](#install-the-package)
 
-Notes:
-- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
-- If you are not using a GPU, you might need to make small adjustments to the code.
-
-### Clone Distiller
+<details><summary><b>1. Clone Distiller</b></summary>	
+<p>
+  
 Clone the Distiller code repository from github:
 ```
 $ git clone https://github.com/NervanaSystems/distiller.git
 ```
 The rest of the documentation that follows, assumes that you have cloned your repository to a directory called ```distiller```. <br>
+</p>
+</details>
+  
+<details><summary><b>2. Create a Python virtual environment</b></summary>	
+<p>
 
-### Create a Python virtual environment
 We recommend using a [Python virtual environment](https://docs.python.org/3/library/venv.html#venv-def), but that of course, is up to you.
 There's nothing special about using Distiller in a virtual environment, but we provide some instructions, for completeness.<br>
 Before creating the virtual environment, make sure you are located in directory ```distiller```.  After creating the environment, you should see a directory called ```distiller/env```.
@@ -155,15 +147,25 @@ The environment activation and deactivation commands for ```venv``` and ```virtu
 ```
 $ source env/bin/activate
 ```
+</p>
+</details>
 
-### Install the package
-
+<details><summary><b>3. Install the Distiller package</b></summary>	
+<p>
+  
 Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
 $ cd distiller
 $ pip3 install -e .
 ```
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
+
+Notes:
+- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
+- If you are not using a GPU, you might need to make small adjustments to the code.
+
+</p>
+</details>
 
 ### Required PyTorch Version
 
@@ -201,7 +203,9 @@ The following are simple examples using Distiller's image classifcation sample, 
 + [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
 + [Post-training quantization](#post-training-quantization)
 
-#### Training-only
+<details><summary><b>Example: Simple training-only session (no compression)</b></summary>	
+<p>
+
 The following will invoke training-only (no compression) of a network named 'simplenet' on the CIFAR10 dataset.  This is roughly based on TorchVision's sample Imagenet training application, so it should look familiar if you've used that application.  In  this example we don't invoke any compression mechanisms: we just train because for fine-tuning after pruning, training is an essential part.<br>  
 Note that the first time you execute this command, the CIFAR10 code will be downloaded to your machine, which may take a bit of time - please let the download process proceed to completion.
 
@@ -216,7 +220,12 @@ $ python3 compress_classifier.py --arch simplenet_cifar ../../../data.cifar10 -p
 You can use a TensorBoard backend to view the training progress (in the diagram below we show a couple of training sessions with different LR values).  For compression sessions, we've added tracing of activation and parameter sparsity levels, and regularization loss.
 <center> <img src="imgs/simplenet_training.png"></center>
 
-#### Getting parameter statistics of a sparsified model
+</p>
+</details>
+
+<details><summary><b>Example: Getting parameter statistics of a sparsified model</b></summary>	
+<p>
+
 We've included in the git repository a few checkpoints of a ResNet20 model that we've trained with 32-bit floats.  Let's load the checkpoint of a model that we've trained with channel-wise Group Lasso regularization.<br>
 With the following command-line arguments, the sample application loads the model (```--resume```)  and prints statistics about the model weights (```--summary=sparsity```).  This is useful if you want to load a previously pruned model, to examine the weights sparsity statistics, for example.  Note that when you *resume* a stored checkpoint, you still need to tell the application which network architecture the checkpoint uses (```-a=resnet20_cifar```):
 ```
@@ -238,8 +247,12 @@ Although the memory footprint compression is very low, this model actually saves
 $ python3 compress_classifier.py --resume=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20_finetuned.pth.tar -a=resnet20_cifar ../../../data.cifar10 --summary=compute
 ```
 <center> <img src="imgs/ch_compute_stats.png"></center>
+</p>
+</details>
 
-#### Post-training quantization
+<details><summary><b>Example: Post-training quantization</b></summary>	
+<p>
+
 This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've included in the git repository the checkpoint of a ResNet20 model that we've trained with 32-bit floats, so we'll take this model and quantize it:
 
 ```
@@ -247,6 +260,8 @@ $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resum
 ```
 
 The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
+</p>
+</details>
 
 ### Explore the sample Jupyter notebooks
 The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
