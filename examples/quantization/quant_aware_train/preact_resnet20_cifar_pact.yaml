@@ -22,6 +22,7 @@ quantizers:
     act_clip_init_val: 8.0
     bits_activations: 4
     bits_weights: 3
+    act_clip_decay : 0.001
     overrides:
     # Don't quantize first and last layers
       conv1:
