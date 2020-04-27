@@ -42,15 +42,29 @@ class CompressionScheduler(object):
         # Create the masker objects and place them in a dictionary indexed by the parameter name
         self.zeros_mask_dict = zeros_mask_dict or create_model_masks_dict(model)
 
-    def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
+    def add_policy(self, policy, epochs=None, starting_epoch=None, ending_epoch=None, frequency=1):
         """Add a new policy to the schedule.
 
         Args:
-            epochs (list): A list, or range, of epochs in which to apply the policy
+            epochs (list): A list, or range, of epochs in which to apply the policy.
+            starting_epoch (integer): An integer number specifying at which epoch to start.
+            ending_epoch (integer): An integer number specifying at which epoch to end.
+            frequency (integer): An integer number specifying how often to invoke the policy.
+
+            You may only provide a list of `epochs` or a range of epochs using `starting_epoch`
+            and `ending_epoch` (i.e. these are mutually-exclusive)
         """
+        assert (epochs is None and None not in (starting_epoch, ending_epoch, frequency)) or\
+               (epochs is not None and all (c is None for c in (starting_epoch, ending_epoch)))
 
         if epochs is None:
+            assert 0 <= starting_epoch < ending_epoch
+            assert 0 < frequency <= (ending_epoch - starting_epoch)
             epochs = list(range(starting_epoch, ending_epoch, frequency))
+        else:
+            starting_epoch = epochs[0]
+            ending_epoch = epochs[-1] + 1
+            frequency = None
 
         for epoch in epochs:
             if epoch not in self.policies:
