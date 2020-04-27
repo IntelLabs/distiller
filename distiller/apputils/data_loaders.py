@@ -24,6 +24,7 @@ import torch
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data.sampler import Sampler
+from functools import partial
 import numpy as np
 import distiller
 
@@ -58,19 +59,21 @@ def classification_get_input_shape(dataset):
         raise ValueError("dataset %s is not supported" % dataset)
 
 
-def __dataset_factory(dataset):
+def __dataset_factory(dataset, arch):
     return {'cifar10': cifar10_get_datasets,
             'mnist': mnist_get_datasets,
-            'imagenet': imagenet_get_datasets}.get(dataset, None)
+            'imagenet': partial(imagenet_get_datasets, arch=arch)}.get(dataset, None)
 
 
-def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, deterministic=False,
+def load_data(dataset, arch, data_dir,
+              batch_size, workers, validation_split=0.1, deterministic=False,
               effective_train_size=1., effective_valid_size=1., effective_test_size=1.,
               fixed_subset=False, sequential=False, test_only=False):
     """Load a dataset.
 
     Args:
         dataset: a string with the name of the dataset to load (cifar10/imagenet)
+        arch: a string with the name of the model architecture
         data_dir: the directory where the dataset resides
         batch_size: the batch size
         workers: the number of worker threads to use for loading the data
@@ -86,12 +89,12 @@ def load_data(dataset, data_dir, batch_size, workers, validation_split=0.1, dete
     """
     if dataset not in DATASETS_NAMES:
         raise ValueError('load_data does not support dataset %s" % dataset')
-    datasets_fn = __dataset_factory(dataset)
-    return get_data_loaders(datasets_fn, data_dir, batch_size, workers, 
+    datasets_fn = __dataset_factory(dataset, arch)
+    return get_data_loaders(datasets_fn, data_dir, batch_size, workers,
                             validation_split=validation_split,
-                            deterministic=deterministic, 
+                            deterministic=deterministic,
                             effective_train_size=effective_train_size,
-                            effective_valid_size=effective_valid_size, 
+                            effective_valid_size=effective_valid_size,
                             effective_test_size=effective_test_size,
                             fixed_subset=fixed_subset,
                             sequential=sequential,
@@ -163,20 +166,29 @@ def cifar10_get_datasets(data_dir, load_train=True, load_test=True):
 
     return train_dataset, test_dataset
 
-
-def imagenet_get_datasets(data_dir, load_train=True, load_test=True):
+  
+def imagenet_get_datasets(data_dir, arch, load_train=True, load_test=True):
     """
     Load the ImageNet dataset.
     """
+    # Inception Network accepts image of size 3, 299, 299
+    if distiller.models.is_inception(arch):
+        resize, crop = 336, 299
+    else:
+        resize, crop = 256, 224
+    if arch == 'googlenet':
+        normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                         std=[0.5, 0.5, 0.5])
+    else:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
     train_dir = os.path.join(data_dir, 'train')
     test_dir = os.path.join(data_dir, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
 
     train_dataset = None
     if load_train:
         train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(224),
+            transforms.RandomResizedCrop(crop),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -187,8 +199,8 @@ def imagenet_get_datasets(data_dir, load_train=True, load_test=True):
     test_dataset = None
     if load_test:
         test_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(resize),
+            transforms.CenterCrop(crop),
             transforms.ToTensor(),
             normalize,
         ])
@@ -196,7 +208,6 @@ def imagenet_get_datasets(data_dir, load_train=True, load_test=True):
         test_dataset = datasets.ImageFolder(test_dir, test_transform)
 
     return train_dataset, test_dataset
-
 
 def __image_size(dataset):
     # un-squeeze is used here to add the batch dimension (value=1), which is missing
