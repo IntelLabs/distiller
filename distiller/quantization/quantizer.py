@@ -232,6 +232,7 @@ class Quantizer(object):
         if dummy_input is not None:
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+            del summary_graph
 
         model_device = distiller.model_device(self.model)
 

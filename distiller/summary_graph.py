@@ -195,6 +195,8 @@ class SummaryGraph(object):
         self.add_macs_attr()
         self.add_footprint_attr()
         self.add_arithmetic_intensity_attr()
+        del trace
+        del graph
         del model_clone
 
     def __merge_pad_avgpool(self):

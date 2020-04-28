@@ -2023,6 +2023,7 @@ class PostTrainLinearQuantizer(Quantizer):
         # After BN folding model need to re-generate the adjacency map
         summary_graph = distiller.SummaryGraph(self.model, dummy_input)
         self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+        del summary_graph
 
         if not self.model_activation_stats:
             return
