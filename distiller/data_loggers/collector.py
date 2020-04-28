@@ -14,9 +14,11 @@
 # limitations under the License.
 #
 
+import contextlib
 from functools import partial, reduce
 import operator
 import xlsxwriter
+import enum
 import yaml
 import os
 from sys import float_info
@@ -31,14 +33,24 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import distiller
 from distiller.quantization.range_linear import is_post_train_quant_wrapper
+from distiller.quantization.pytorch_quant_conversion import QFunctionalWrapper
 import numpy as np
+import concurrent.futures
 
 msglogger = logging.getLogger()
 
-__all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector',
-           'QuantCalibrationStatsCollector', 'ActivationHistogramsCollector',
-           'collect_quant_stats', 'collect_histograms',
+__all__ = ['SummaryActivationStatsCollector', 'RecordsActivationStatsCollector', 'QuantCalibrationStatsCollector',
+           'ActivationHistogramsCollector', 'RawActivationsCollector', 'CollectorDirection',
+           'collect_quant_stats', 'collect_histograms', 'collect_raw_outputs',
            'collector_context', 'collectors_context']
+
+
+class CollectorDirection(enum.Enum):
+    OUT = 0
+    OFM = 0
+    IN = 1
+    IFM = 1
+    IFMS = 1
 
 
 class ActivationStatsCollector(object):
@@ -133,7 +145,7 @@ class ActivationStatsCollector(object):
     def save(self, fname):
         raise NotImplementedError
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Handle new activations ('output' argument).
 
         This is invoked from the forward-pass callback of module 'module'.
@@ -159,7 +171,8 @@ class ActivationStatsCollector(object):
         # We make an exception for models that were quantized with 'PostTrainLinearQuantizer'. In these
         # models, the quantized modules are actually wrappers of the original FP32 modules, so they are
         # NOT leaf modules - but we still want to track them.
-        if distiller.has_children(module) and not is_post_train_quant_wrapper(module):
+        if distiller.has_children(module) and not (is_post_train_quant_wrapper(module) or
+                                                   isinstance(module, QFunctionalWrapper)):
             return False
         if isinstance(module, torch.nn.Identity):
             return False
@@ -201,20 +214,27 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
     This Collector computes the mean of some statistic of the activation.  It is rather
     light-weight and quicker than collecting a record per activation.
     The statistic function is configured in the constructor.
+
+    collector_direction - enum type: IN for IFMs, OUT for OFM
+    inputs_consolidate_func is called on tuple of tensors, and returns a tensor.
     """
-    def __init__(self, model, stat_name, summary_fn, classes=[torch.nn.ReLU,
-                                                              torch.nn.ReLU6,
-                                                              torch.nn.LeakyReLU]):
+    def __init__(self, model, stat_name, summary_fn,
+                 classes=(torch.nn.ReLU, torch.nn.ReLU6, torch.nn.LeakyReLU),
+                 collector_direction=CollectorDirection.OUT,
+                 inputs_consolidate_func=torch.cat):
         super(SummaryActivationStatsCollector, self).__init__(model, stat_name, classes)
         self.summary_fn = summary_fn
+        self.collector_direction = collector_direction
+        self.inputs_func = inputs_consolidate_func
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Record the activation sparsity of 'module'
 
         This is a callback from the forward() of 'module'.
         """
+        feature_map = output if self.collector_direction == CollectorDirection.OUT else self.inputs_func(inputs)
         try:
-            getattr(module, self.stat_name).add(self.summary_fn(output.data), output.data.numel())
+            getattr(module, self.stat_name).add(self.summary_fn(feature_map.data), feature_map.data.numel())
         except RuntimeError as e:
             if "The expanded size of the tensor" in e.args[0]:
                 raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
@@ -233,11 +253,10 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
             setattr(module, self.stat_name, WeightedAverageValueMeter())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
+                getattr(module, self.stat_name).name = module.distiller_name
             else:
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name,
-                                                                 module.__class__.__name__,
-                                                                 str(id(module))))
+                getattr(module, self.stat_name).name = '_'.join((
+                    module.__class__.__name__, str(id(module))))
 
     def _reset_counter(self, module):
         if hasattr(module, self.stat_name):
@@ -251,28 +270,29 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
             activation_stats[getattr(module, self.stat_name).name] = mean
 
     def save(self, fname):
-        """Save the records to an Excel workbook, with one worksheet per layer.
-        """
-        fname = ".".join([fname, 'xlsx'])
-        try:
+        """Save the stats to an Excel workbook"""
+        if not fname.endswith('.xlsx'):
+            fname = '.'.join([fname, 'xlsx'])
+        with contextlib.suppress(OSError):
             os.remove(fname)
-        except OSError:
-            pass
 
-        records_dict = self.value()
-        with xlsxwriter.Workbook(fname) as workbook:
+        def _add_worksheet(workbook, tab_name, record):
             try:
-                worksheet = workbook.add_worksheet(self.stat_name)
+                worksheet = workbook.add_worksheet(tab_name)
             except xlsxwriter.exceptions.InvalidWorksheetName:
                 worksheet = workbook.add_worksheet()
 
             col_names = []
-            for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
+            for col, (module_name, module_summary_data) in enumerate(record.items()):
                 if not isinstance(module_summary_data, list):
                     module_summary_data = [module_summary_data]
                 worksheet.write_column(1, col, module_summary_data)
                 col_names.append(module_name)
             worksheet.write_row(0, 0, col_names)
+
+        with xlsxwriter.Workbook(fname) as workbook:
+            _add_worksheet(workbook, self.stat_name, self.value())
+
         return fname
 
 
@@ -285,12 +305,12 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
 
     For obvious reasons, this is slower than SummaryActivationStatsCollector.
     """
-    def __init__(self, model, classes=[torch.nn.ReLU,
+    def __init__(self, model, classes=(torch.nn.ReLU,
                                        torch.nn.ReLU6,
-                                       torch.nn.LeakyReLU]):
+                                       torch.nn.LeakyReLU)):
         super(RecordsActivationStatsCollector, self).__init__(model, "statistics_records", classes)
 
-    def _activation_stats_cb(self, module, input, output):
+    def _activation_stats_cb(self, module, inputs, output):
         """Record the activation sparsity of 'module'
 
         This is a callback from the forward() of 'module'.
@@ -527,7 +547,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             """
             Updates the 'b' parameter of Laplace Distribution.
             """
-            curr_abs_dists = (values - mean).abs()
+            curr_abs_dists = (values - mean).abs_()
             return update_running_mean(curr_abs_dists, previous_b, total_values_so_far)
 
         def update_record(record, tensor):
@@ -566,9 +586,10 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
                 record['shape'] = distiller.size2str(tensor)
 
         if self.inplace_runtime_check and any([id(input) == id(output) for input in inputs]):
-            raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
-                               'You can either disable this check or make sure no in-place operations occur. '
-                               'See QuantCalibrationStatsCollector class documentation for more info.')
+            if not isinstance(module, torch.nn.modules.dropout._DropoutNd):
+                raise RuntimeError('Inplace operation detected, meaning inputs stats are overridden by output stats. '
+                                   'You can either disable this check or make sure no in-place operations occur. '
+                                   'See QuantCalibrationStatsCollector class documentation for more info.')
 
         module.batch_idx += 1
 
@@ -780,6 +801,47 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
         return fname
 
 
+class RawActivationsCollector(ActivationStatsCollector):
+    def __init__(self, model, classes=None):
+        super(RawActivationsCollector, self).__init__(model, "raw_acts", classes)
+
+        _verify_no_dataparallel(model)
+
+    def _activation_stats_cb(self, module, inputs, output):
+        if isinstance(output, torch.Tensor):
+            if output.is_quantized:
+                module.raw_outputs.append(output.dequantize())
+            else:
+                module.raw_outputs.append(output.cpu())
+
+    def _start_counter(self, module):
+        module.raw_outputs = []
+
+    def _reset_counter(self, module):
+        if hasattr(module, 'raw_outputs'):
+            module.raw_outputs = []
+
+    def _collect_activations_stats(self, module, activation_stats, name=''):
+        if not hasattr(module, 'raw_outputs'):
+            return
+
+        if isinstance(module.raw_outputs, list) and len(module.raw_outputs) > 0:
+            module.raw_outputs = torch.stack(module.raw_outputs)
+        activation_stats[module.distiller_name] = module.raw_outputs
+
+    def save(self, dir_name):
+        if not os.path.isdir(dir_name):
+            os.mkdir(dir_name)
+
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for idx, (layer_name, raw_outputs) in enumerate(self.value().items()):
+                idx_str = '{:03d}'.format(idx + 1)
+                executor.submit(torch.save, raw_outputs, os.path.join(dir_name,
+                                                                      '-'.join((idx_str, layer_name)) + '.pt'))
+
+        return dir_name
+
+
 def collect_quant_stats(model, test_fn, save_dir=None, classes=None, inplace_runtime_check=False,
                         disable_inplace_attrs=False, inplace_attr_names=('inplace',),
                         modules_to_collect=None):
@@ -873,6 +935,20 @@ def collect_histograms(model, test_fn, save_dir=None, activation_stats=None,
             msglogger.info('Histogram images saved in ' + os.path.join(save_dir, 'histogram_imgs'))
 
     return histogram_collector.value()
+
+
+def collect_raw_outputs(model, test_fn, save_dir=None, classes=None):
+    msglogger.info('Collecting raw layer outputs for model')
+    collector = RawActivationsCollector(model, classes=classes)
+    with collector_context(collector):
+        test_fn(model=model)
+    msglogger.info('Outputs collection complete')
+    if save_dir is not None:
+        msglogger.info('Saving outputs to disk...')
+        save_path = os.path.join(save_dir, 'raw_outputs')
+        collector.save(save_path)
+        msglogger.info('Outputs saved to ' + save_path)
+    return collector.value()
 
 
 @contextmanager

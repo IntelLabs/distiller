@@ -55,3 +55,37 @@ memory errors.
 The default model is `torchvision.models.detection.maskrcnn_resnet50_fpn`, you can specify 
 any model that is part of `torchvision.models.detection` using
  the `--model` argument, e.g. `--model maskrcnn_resnet50_fpn`.
+ 
+## Results
+We present the results of pruning up to 85% sparsity using distiller.  
+**NOTE**- AP = Average Precision, AR = Average Recall  
+### Bounding Box:
+| Metric | IoU Thresholds | Area | Max Detections | Baseline | 85% Sparsity |
+| ------ | --- | ---- | -------------- | -------- | ------------ |
+| (AP) | 0.50:0.95 | all | 100 | 0.379 | 0.352 | 
+| (AP) | 0.50 | all | 100 | 0.592 | 0.558 | 
+| (AP) | 0.75 | all | 100 | 0.410 | 0.376 | 
+| (AP) | 0.50:0.95 | small | 100 | 0.215 | 0.188 | 
+| (AP) | 0.50:0.95 | medium | 100 | 0.414 | 0.389 | 
+| (AP) | 0.50:0.95 | large | 100 | 0.495 | 0.460 | 
+| (AR) | 0.50:0.95 | all | 1 | 0.312 | 0.302 | 
+| (AR) | 0.50:0.95 | all | 10 | 0.494 | 0.481 | 
+| (AR) | 0.50:0.95 | all | 100 | 0.518 | 0.504 | 
+| (AR) | 0.50:0.95 | small | 100 | 0.321 | 0.300 | 
+| (AR) | 0.50:0.95 | medium | 100 | 0.559 | 0.546 | 
+| (AR) | 0.50:0.95 | large | 100 | 0.660 | 0.646 | 
+### Segmentation:
+| Metric | IoU Thresholds| Area | Max Detections | Baseline | 85% Sparsity |
+| ------ | --- | ---- | -------------- | -------- | ------------ |
+| (AP) | 0.50:0.95 | all | 100 | 0.346 | 0.320 | 
+| (AP) | 0.50 | all | 100 | 0.561 | 0.525 | 
+| (AP) | 0.75 | all | 100 | 0.367 | 0.338 | 
+| (AP) | 0.50:0.95 | small | 100 | 0.156 | 0.134 | 
+| (AP) | 0.50:0.95 | medium | 100 | 0.373 | 0.346 | 
+| (AP) | 0.50:0.95 | large | 100 | 0.509 | 0.482 | 
+| (AR) | 0.50:0.95 | all | 1 | 0.294 | 0.284 | 
+| (AR) | 0.50:0.95 | all | 10 | 0.454 | 0.439 | 
+| (AR) | 0.50:0.95 | all | 100 | 0.474 | 0.459 | 
+| (AR) | 0.50:0.95 | small | 100 | 0.269 | 0.250 | 
+| (AR) | 0.50:0.95 | medium | 100 | 0.515 | 0.499 | 
+| (AR) | 0.50:0.95 | large | 100 | 0.631 | 0.618 | 

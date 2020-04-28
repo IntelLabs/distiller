@@ -131,7 +131,9 @@ def fold_batch_norms(model, dummy_input=None, adjacency_map=None, inference=True
 
     foldables = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
     batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, FrozenBatchNorm2d)
-    return fuse_modules(model, (foldables, batchnorms), fold_bn, dummy_input, adjacency_map)
+    if any([isinstance(m, batchnorms) for m in model.modules()]):
+        return fuse_modules(model, (foldables, batchnorms), fold_bn, dummy_input, adjacency_map)
+    return model
 
 
 def _fuse_sequence(sequence, named_modules, fuse_fn):

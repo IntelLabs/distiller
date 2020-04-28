@@ -207,13 +207,13 @@ class ClassifierCompressor(object):
                     self.pylogger, self.activations_collectors, args=self.args)
 
 
-def init_classifier_compression_arg_parser():
+def init_classifier_compression_arg_parser(include_ptq_lapq_args=False):
     '''Common classifier-compression application command-line arguments.
     '''
     SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
-    parser.add_argument('data', metavar='DIR', help='path to dataset')
+    parser.add_argument('data', metavar='DATASET_DIR', help='path to dataset')
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18', type=lambda s: s.lower(),
                         choices=models.ALL_MODEL_NAMES,
                         help='model architecture: ' +
@@ -315,7 +315,7 @@ def init_classifier_compression_arg_parser():
                         help='Load a model without DataParallel wrapping it')
     parser.add_argument('--thinnify', dest='thinnify', action='store_true', default=False,
                         help='physically remove zero-filters and create a smaller model')
-    distiller.quantization.add_post_train_quant_args(parser)
+    distiller.quantization.add_post_train_quant_args(parser, add_lapq_args=include_ptq_lapq_args)
     return parser
 
 
@@ -426,7 +426,7 @@ def _init_learner(args):
             optimizer = None
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
-    if optimizer is None:
+    if optimizer is None and not args.evaluate:
         optimizer = default_optimizer(model, args)
         msglogger.debug('Optimizer Type: %s', type(optimizer))
         msglogger.debug('Optimizer Args: %s', optimizer.defaults)
@@ -453,8 +453,8 @@ def create_activation_stats_collectors(model, *phases):
             return None  # note, does *not* set self[key] - we don't want defaultdict's behavior
 
     genCollectors = lambda: missingdict({
-        "sparsity":      SummaryActivationStatsCollector(model, "sparsity",
-                                                         lambda t: 100 * distiller.utils.sparsity(t)),
+        "sparsity_ofm":      SummaryActivationStatsCollector(model, "sparsity_ofm",
+            lambda t: 100 * distiller.utils.sparsity(t)),
         "l1_channels":   SummaryActivationStatsCollector(model, "l1_channels",
                                                          distiller.utils.activation_channels_l1),
         "apoz_channels": SummaryActivationStatsCollector(model, "apoz_channels",
@@ -480,13 +480,18 @@ def save_collectors_data(collectors, directory):
 
 
 def load_data(args, fixed_subset=False, sequential=False, load_train=True, load_val=True, load_test=True):
-    train_loader, val_loader, test_loader, _ =  apputils.load_data(args.dataset, 
+    test_only = not load_train and not load_val
+
+    train_loader, val_loader, test_loader, _ = apputils.load_data(args.dataset, args.arch,
                               os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset, sequential)
-    msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
-                   len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
+                              fixed_subset, sequential, test_only)
+    if test_only:
+        msglogger.info('Dataset sizes:\n\ttest=%d', len(test_loader.sampler))
+    else:
+        msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
+                       len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
     loaders = (train_loader, val_loader, test_loader)
     flags = (load_train, load_val, load_test)
@@ -584,9 +589,19 @@ def train(train_loader, model, criterion, optimizer, epoch,
             output = args.kd_policy.forward(inputs)
 
         if not early_exit_mode(args):
-            loss = criterion(output, target)
+            # Handle loss calculation for inception models separately due to auxiliary outputs
+            # if user turned off auxiliary classifiers by hand, then loss should be calculated normally,
+            # so, we have this check to ensure we only call this function when output is a tuple
+            if models.is_inception(args.arch) and isinstance(output, tuple):
+                loss = inception_training_loss(output, target, criterion, args)
+            else:
+                loss = criterion(output, target)
             # Measure accuracy
-            classerr.add(output.detach(), target)
+            # For inception models, we only consider accuracy of main classifier
+            if isinstance(output, tuple):
+                classerr.add(output[0].detach(), target)
+            else:
+                classerr.add(output.detach(), target)
             acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
@@ -746,6 +761,44 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
         return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
 
 
+def inception_training_loss(output, target, criterion, args):
+    """Compute weighted loss for Inception networks as they have auxiliary classifiers
+
+    Auxiliary classifiers were added to inception networks to tackle the vanishing gradient problem
+    They apply softmax to outputs of one or more intermediate inception modules and compute auxiliary
+    loss over same labels.
+    Note that auxiliary loss is purely used for training purposes, as they are disabled during inference.
+
+    GoogleNet has 2 auxiliary classifiers, hence two 3 outputs in total, output[0] is main classifier output,
+    output[1] is aux2 classifier output and output[2] is aux1 classifier output and the weights of the
+    aux losses are weighted by 0.3 according to the paper (C. Szegedy et al., "Going deeper with convolutions,"
+    2015 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Boston, MA, 2015, pp. 1-9.)
+
+    All other versions of Inception networks have only one auxiliary classifier, and the auxiliary loss
+    is weighted by 0.4 according to PyTorch documentation
+    # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
+    """
+    weighted_loss = 0
+    if args.arch == 'googlenet':
+        # DEFAULT, aux classifiers are NOT included in PyTorch Pretrained googlenet model as they are NOT trained,
+        # they are only present if network is trained from scratch. If you need to fine tune googlenet (e.g. after
+        # pruning a pretrained model), then you have to explicitly enable aux classifiers when creating the model
+        # DEFAULT, in case of pretrained model, output length is 1, so loss will be calculated in main training loop
+        # instead of here, as we enter this function only if output is a tuple (len>1)
+        # TODO: Enable user to feed some input to add aux classifiers for pretrained googlenet model
+        outputs, aux2_outputs, aux1_outputs = output    # extract all 3 outputs
+        loss0 = criterion(outputs, target)
+        loss1 = criterion(aux1_outputs, target)
+        loss2 = criterion(aux2_outputs, target)
+        weighted_loss = loss0 + 0.3*loss1 + 0.3*loss2
+    else:
+        outputs, aux_outputs = output    # extract two outputs
+        loss0 = criterion(outputs, target)
+        loss1 = criterion(aux_outputs, target)
+        weighted_loss = loss0 + 0.4*loss1
+    return weighted_loss
+
+
 def earlyexit_loss(output, target, criterion, args):
     """Compute the weighted sum of the exits losses
 
@@ -827,6 +880,15 @@ def earlyexit_validate_stats(args):
     return total_top1, total_top5, losses_exits_stats
 
 
+def _convert_ptq_to_pytorch(model, args):
+    msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
+    dummy_input = distiller.get_dummy_input(input_shape=model.input_shape)
+    model = quantization.convert_distiller_ptq_model_to_pytorch(model, dummy_input, backend=args.qe_pytorch_backend)
+    msglogger.debug('\nModel after conversion:\n{}'.format(model))
+    args.device = 'cpu'
+    return model
+
+
 def evaluate_model(test_loader, model, criterion, loggers, activations_collectors=None, args=None, scheduler=None):
     # This sample application can be invoked to evaluate the accuracy of your model on
     # the test dataset.
@@ -838,6 +900,9 @@ def evaluate_model(test_loader, model, criterion, loggers, activations_collector
         loggers = [loggers]
 
     if not args.quantize_eval:
+        # Handle case where a post-train quantized model was loaded, and user wants to convert it to PyTorch
+        if args.qe_convert_pytorch:
+            model = _convert_ptq_to_pytorch(model, args)
         return test(test_loader, model, criterion, loggers, activations_collectors, args=args)
     else:
         return quantize_and_test_model(test_loader, model, criterion, args, loggers,
@@ -854,6 +919,11 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
     scheduler - pass scheduler to store it in checkpoint
     save_flag - defaults to save both quantization statistics and checkpoint.
     """
+    if hasattr(model, 'quantizer_metadata') and \
+            model.quantizer_metadata['type'] == distiller.quantization.PostTrainLinearQuantizer:
+        raise RuntimeError('Trying to invoke post-training quantization on a model that has already been post-'
+                           'train quantized. Model was likely loaded from a checkpoint. Please run again without '
+                           'passing the --quantize-eval flag')
     if not (args.qe_dynamic or args.qe_stats_file or args.qe_config_file):
         args_copy = copy.deepcopy(args)
         args_copy.qe_calibration = args.qe_calibration if args.qe_calibration is not None else 0.05
@@ -870,7 +940,11 @@ def quantize_and_test_model(test_loader, model, criterion, args, loggers=None, s
         qe_model = copy.deepcopy(model).to(args.device)
 
     quantizer = quantization.PostTrainLinearQuantizer.from_args(qe_model, args_qe)
-    quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
+    dummy_input = distiller.get_dummy_input(input_shape=model.input_shape)
+    quantizer.prepare_model(dummy_input)
+
+    if args.qe_convert_pytorch:
+        qe_model = _convert_ptq_to_pytorch(qe_model, args_qe)
 
     test_res = test(test_loader, qe_model, criterion, loggers, args=args_qe)
 
@@ -890,6 +964,10 @@ def acts_quant_stats_collection(model, criterion, loggers, args, test_loader=Non
     if test_loader is None:
         tmp_args = copy.deepcopy(args)
         tmp_args.effective_test_size = tmp_args.qe_calibration
+        # Batch size 256 causes out-of-memory errors on some models (due to extra space taken by
+        # stats calculations). Limiting to 128 for now.
+        # TODO: Come up with "smarter" limitation?
+        tmp_args.batch_size = min(128, tmp_args.batch_size)
         test_loader = load_data(tmp_args, fixed_subset=True, load_train=False, load_val=False)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)

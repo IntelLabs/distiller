@@ -39,7 +39,7 @@ SUPPORTED_DATASETS = ('imagenet', 'cifar10', 'mnist')
 # ResNet special treatment: we have our own version of ResNet, so we need to over-ride
 # TorchVision's version.
 RESNET_SYMS = ('ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
-               'resnext50_32x4d', 'resnext101_32x8d')
+               'resnext50_32x4d', 'resnext101_32x8d', 'wide_resnet50_2', 'wide_resnet101_2')
 
 TORCHVISION_MODEL_NAMES = sorted(
                             name for name in torch_models.__dict__
@@ -146,15 +146,23 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
                 model.features = torch.nn.DataParallel(model.features, device_ids=device_ids)
             else:
                 model = torch.nn.DataParallel(model, device_ids=device_ids)
+        model.is_parallel = parallel
     else:
         device = 'cpu'
+        model.is_parallel = False
 
     # Cache some attributes which describe the model
     _set_model_input_shape_attr(model, arch, dataset, pretrained, cadene)
     model.arch = arch
     model.dataset = dataset
-    model.is_parallel = parallel
     return model.to(device)
+
+
+def is_inception(arch):
+    return arch in [ # Torchvision architectures
+                    'inception_v3', 'googlenet',
+                    # Cadene architectures
+                    'inceptionv3', 'inceptionv4', 'inceptionresnetv2']
 
 
 def _create_imagenet_model(arch, pretrained):
@@ -165,9 +173,13 @@ def _create_imagenet_model(arch, pretrained):
         model = imagenet_extra_models.__dict__[arch](pretrained=pretrained)
     elif arch in TORCHVISION_MODEL_NAMES:
         try:
-            model = getattr(torch_models, arch)(pretrained=pretrained)
+            if is_inception(arch):
+                model = getattr(torch_models, arch)(pretrained=pretrained, transform_input=False)
+            else:
+                model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
                 patch_torchvision_mobilenet_v2(model)
+
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError

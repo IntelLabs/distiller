@@ -258,6 +258,10 @@ def load_checkpoint(model, chkpt_file, optimizer=None, model_device=None,
             quantizer = qmd['type'](model, **qmd['params'])
         quantizer.prepare_model(qmd['dummy_input'])
 
+        if qmd.get('pytorch_convert', False):
+            msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
+            model = quantizer.convert_to_pytorch(qmd['dummy_input'], backend=qmd.get('pytorch_convert_backend', None))
+
     if normalize_dataparallel_keys:
         checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
     anomalous_keys = model.load_state_dict(checkpoint['state_dict'], strict)

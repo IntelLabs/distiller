@@ -1,0 +1,102 @@
+# Post-training quantization settings for running in the same conditions as in:
+# Nahshan et al., "Loss Aware Post-training Quantization" (https://arxiv.org/abs/1911.07190), according to the
+# reference implementation found at: https://github.com/ynahshan/nn-quantization-pytorch/tree/master/lapq
+#
+# The settings are:
+#   * Only fake-quantization is done
+#   * Only weights of convolutions and outputs of ReLU are quantized. Pooling, element-wise addition and FC layers
+#     are not quantized
+#   * The first convolution + relu pair isn't quantized
+#   * The last convolution + relu pair ("layer4.1.conv2/relu2") isn't quantized
+#
+# See example invocations and results after the YAML definition
+
+quantizers:
+  post_train_quantizer:
+    class: PostTrainLinearQuantizer
+    # Don't quantize anything by default, override below for should be quantized
+    bits_activations: null
+    bits_parameters: null
+    bits_accum: 32
+    mode:
+      activations: ASYMMETRIC_UNSIGNED
+      weights: SYMMETRIC
+    model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
+    per_channel_wts: False
+    inputs_quant_auto_fallback: True
+
+    overrides:
+      # Conv layers inside the ResNet BasicBlock are quantized (except last one, see below)
+      layer.*conv.*:
+        bits_activations: null
+        bits_weights: 4
+      # ReLU layers inside the ResNet BasicBlock are quantized (except last one, see below)
+      layer.*relu.*:
+        bits_activations: 4
+        quantize_inputs: False
+      # Conv layers in downsampling residual connections are quantized
+      .*downsample\.0.*:
+        bits_activations: null
+        bits_weights: 4
+      # The last conv+relu layers are NOT quantized, we specify them directly
+      layer4.1.conv2:
+        bits_activations: null
+        bits_weights: null
+      layer4.1.relu2:
+        bits_activations: null
+
+# Example invocations:
+#   * Preliminaries:
+#       cd <distiller_root>/examples/classifier_compression
+#       CONFIG_FILE="../quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml"
+#       IMAGENET_PATH=<path_to_imagenet>
+#
+#   * Using L3 initialization:
+#     Command:
+#       python compress_classifier.py --eval --qe --qe-lapq -a resnet18 --pretrained $IMAGENET_PATH --lapq-eval-size 0.01 --lapq-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --lapq-init-mode L3 --lapq-init-method powell --lapq-eval-memoize-dataloader --det --lapq-search-clipping
+#
+#     Excerpts from output:
+#       ...
+#       Initializing quantizer...
+#       Initializing quantization parameters...
+#       ...
+#       Evaluating initial quantization score...
+#       Evaluation set loss after initialization 2.522
+#       Test:     loss=2.650, top1=43.816, top5=68.840
+#       Using "Powell" minimization algorithm.
+#       ...
+#       980 evaluations: loss=1.962
+#       Iteration 0:   Score=1.956
+#       Test:     loss=2.117, top1=51.662, top5=76.606
+#       ...
+#       2200 evaluations: loss=1.929
+#       Iteration 1:   Score=1.926
+#       Test:     loss=2.116, top1=51.784, top5=76.712
+#       Optimization Done.
+#       Arch: resnet18    Test:    top1 = 51.784   top5 = 76.712   loss = 2.116
+#
+#
+#   * Using LAPLACE initialization:
+#     Command:
+#       python compress_classifier.py --eval --qe --qe-lapq -a resnet18 --pretrained $IMAGENET_PATH --lapq-eval-size 0.01 --lapq-maxiter 2 --qe-config-file $CONFIG_FILE -b 500 --lapq-init-mode LAPLACE --lapq-init-method powell --lapq-eval-memoize-dataloader --det --lapq-search-clipping
+#
+#     Excerpts from output:
+#       ...
+#       Initializing quantizer...
+#       Initializing quantization parameters...
+#       ...
+#       Evaluating initial quantization score...
+#       Evaluation set loss after initialization 3.376
+#       Evaluating on full test set...
+#       Test:     loss=3.509, top1=29.492, top5=53.768
+#       Using "Powell" minimization algorithm.
+#       ...
+#       620 evaluations: loss=2.458
+#       Iteration 0:   Score=2.458
+#       Test:     loss=2.650, top1=42.700, top5=68.138
+#       ...
+#       1780 evaluations: loss=2.277
+#       Iteration 1:   Score=2.274
+#       Test:     loss=2.504, top1=45.164, top5=70.400
+#       Optimization Done.
+#       Arch: resnet18    Test:    top1 = 45.164   top5 = 70.400   loss = 2.504

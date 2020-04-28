@@ -37,7 +37,15 @@ quantizers:
     bits_activations: 8
     bits_parameters: 8
     bits_accum: 32
+
+    # Quantization mode can be defined either with a single value for both weights and activations, or with
+    # a nested dictionary specifying weights and activations separately
     mode: ASYMMETRIC_UNSIGNED
+    # Example of mixed definition
+    # mode:
+    #   activations: ASYMMETRIC_UNSIGNED
+    #   weights: SYMMETRIC
+
     # Path to stats file assuming this is being invoked from the 'classifier_compression' example directory
     model_activation_stats: ../quantization/post_train_quant/stats/resnet18_quant_stats.yaml
     per_channel_wts: True

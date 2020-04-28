@@ -42,6 +42,7 @@ def attach_quant_metadata(t, num_bits, quant_mode, stats=None, clip_mode=ClipMod
         scale, zp = _get_quant_params_from_stats_dict(stats, num_bits, quant_mode, clip_mode, num_stds,
                                                       scale_approx_mult_bits)
     signed = quant_mode != LinearQuantMode.ASYMMETRIC_UNSIGNED
+    restrict = quant_mode == LinearQuantMode.SYMMETRIC_RESTRICTED
     min_q_val, max_q_val = q_utils.get_quantized_range(num_bits, signed)
     t.quant_metadata = TensorQuantMetadata(scale, zp, min_q_val, max_q_val)
     return t
@@ -177,13 +178,13 @@ def linear_bias():
     "mode, clip_acts, per_channel_wts, expected_output",
     [
         (LinearQuantMode.ASYMMETRIC_UNSIGNED, ClipMode.NONE, False,
-         torch.tensor([[7.686200692, 0.241135708, 0.783691051]], dtype=torch.float32)),
+         torch.tensor([[7.687381776, 0.241172762, 0.783811475]], dtype=torch.float32)),
         (LinearQuantMode.ASYMMETRIC_UNSIGNED, ClipMode.NONE, True,
-         torch.tensor([[7.698823529, 0.241531719, 0.784978085]], dtype=torch.float32)),
+         torch.tensor([[7.699930796, 0.241566456, 0.785090983]], dtype=torch.float32)),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE, False,
-         torch.tensor([[7.728687457, 0.243423227, 0.791125488]], dtype=torch.float32)),
+         torch.tensor([[7.716609268, 0.243042812, 0.789889138]], dtype=torch.float32)),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE, True,
-         torch.tensor([[7.728687457, 0.243423227, 0.791125488]], dtype=torch.float32))
+         torch.tensor([[7.716609268, 0.243042812, 0.789889138]], dtype=torch.float32))
     ]
 )
 def test_linear_layer_wrapper(linear_input, linear_weights, linear_bias,
@@ -198,8 +199,8 @@ def test_linear_layer_wrapper(linear_input, linear_weights, linear_bias,
     linear_input = attach_quant_metadata(linear_input, 8, mode, stats=None, clip_mode=clip_acts,
                                          per_channel=False, num_stds=None, scale_approx_mult_bits=None)
 
-    with pytest.raises(RuntimeError):
-        model(linear_input)
+    # with pytest.raises(RuntimeError):
+    #     model(linear_input)
 
     model.eval()
 
@@ -258,23 +259,23 @@ def concat_stats():
                         [[-53.73333333, 44.63333333], [6.066666667, 12.13333333]],
                         [[44.63333333, -30.33333333], [-16.03333333, 3.033333333]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE,
-         torch.tensor([[[[-10.23622047, 30.70866142], [4.724409449, 10.23622047]],
-                        [[0.787401575, 7.874015748], [-3.149606299, 7.086614173]],
-                        [[-3.149606299, 6.299212598], [0, 7.874015748]],
-                        [[3.937007874, 10.23622047], [-7.086614173, 0.787401575]]],
-                       [[[-7.874015748, 15.7480315], [-14.96062992, -11.81102362]],
-                        [[-19.68503937, 12.5984252], [7.874015748, 0]],
-                        [[-100, 50.39370079], [6.299212598, 11.81102362]],
-                        [[80.31496063, -29.92125984], [-15.7480315, 3.149606299]]]])),
+         torch.tensor([[[[-10.19607843, 30.58823529], [5.490196078, 10.19607843]],
+                        [[0.784313725, 7.843137255], [-3.137254902, 7.058823529]],
+                        [[-3.137254902, 6.274509804], [0, 7.843137255]],
+                        [[3.921568627, 10.19607843], [-7.058823529, 0.784313725]]],
+                       [[[-7.843137255, 15.68627451], [-14.90196078, -11.76470588]],
+                        [[-19.60784314, 12.54901961], [7.843137255, 0]],
+                        [[-100.3921569, 50.19607843], [6.274509804, 11.76470588]],
+                        [[80, -29.80392157], [-15.68627451, 3.137254902]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.AVG,
-         torch.tensor([[[[-10.0511811, 23.5984252], [4.807086614, 10.0511811]],
-                        [[0.874015748, 7.866141732], [-3.059055118, 6.992125984]],
-                        [[-3.059055118, 5.681102362], [0, 7.866141732]],
-                        [[3.933070866, 10.0511811], [-6.992125984, 0.874015748]]],
-                       [[[-7.866141732, 15.73228346], [-14.85826772, -12.23622047]],
-                        [[-20.1023622, 13.11023622], [7.866141732, 0]],
-                        [[-53.7519685, 50.25590551], [5.681102362, 11.7992126]],
-                        [[53.31496063, -29.71653543], [-16.16929134, 3.059055118]]]]))
+         torch.tensor([[[[-10.01176471, 23.50588235], [4.788235294, 10.01176471]],
+                        [[0.870588235, 7.835294118], [-3.047058824, 6.964705882]],
+                        [[-3.047058824, 5.658823529], [0, 7.835294118]],
+                        [[4.352941176, 10.01176471], [-6.964705882, 0.870588235]]],
+                       [[[-7.835294118, 16.10588235], [-14.8, -12.18823529]],
+                        [[-20.02352941, 13.05882353], [7.835294118, 0]],
+                        [[-53.54117647, 50.05882353], [5.658823529, 12.18823529]],
+                        [[53.10588235, -29.6], [-16.10588235, 3.047058824]]]]))
     ]
 )
 def test_concat_layer_wrapper(inputs, concat_stats, mode, clip_acts, expected_output):
@@ -326,15 +327,15 @@ def eltwise_mult_stats():
                        [[[431, 491.8470588], [-91.27058824, -141.9764706]],
                         [[-669.3176471, -390.4352941], [-126.7647059, 0]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE,
-         torch.tensor([[[[37.79527559, 201.5748031], [0, 75.59055118]],
-                        [[0, 88.18897638], [25.19685039, 0]]],
-                       [[[806.2992126, 806.2992126], [-88.18897638, -138.5826772]],
-                        [[-1612.598425, -390.5511811], [-125.984252, 0]]]])),
+         torch.tensor([[[[25.09803922, 188.2352941], [0, 75.29411765]],
+                        [[0, 87.84313725], [25.09803922, 0]]],
+                       [[[803.1372549, 803.1372549], [-100.3921569, -138.0392157]],
+                        [[-1593.72549, -389.0196078], [-125.4901961, 0]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.AVG,
-         torch.tensor([[[[31.49606299, 138.5826772], [0, 81.88976378]],
-                        [[6.299212598, 81.88976378], [18.8976378, 6.299212598]]],
-                       [[[428.3464567, 800], [-88.18897638, -144.8818898]],
-                        [[-806.2992126, -390.5511811], [-125.984252, 0]]]]))
+         torch.tensor([[[[31.37254902, 138.0392157], [0, 81.56862745]],
+                        [[6.274509804, 81.56862745], [18.82352941, 6.274509804]]],
+                       [[[426.6666667, 796.8627451], [-87.84313725, -144.3137255]],
+                        [[-803.1372549, -389.0196078], [-125.4901961, 0]]]]))
     ]
 )
 def test_eltwise_mult_layer_wrapper(inputs, eltwise_mult_stats, mode, clip_acts, expected_output):
@@ -386,15 +387,15 @@ def eltwise_add_stats():
                        [[[-60.61176471, 51.38823529], [-8.784313725, 0]],
                         [[29.86666667, -17.12941176], [-7.905882353, 3.074509804]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.NONE,
-         torch.tensor([[[[-13.60629921, 36.56692913], [5.102362205, 17.85826772]],
-                        [[5.102362205, 17.85826772], [-9.354330709, 7.653543307]]],
-                       [[[-108, 66.33070866], [-9.354330709, 0]],
-                        [[59.52755906, -17.00787402], [-8.503937008, 3.401574803]]]])),
+         torch.tensor([[[[-13.55294118, 36.42352941], [5.082352941, 17.78823529]],
+                        [[5.082352941, 17.78823529], [-9.317647059, 7.623529412]]],
+                       [[[-108.4235294, 66.07058824], [-9.317647059, 0]],
+                        [[59.29411765, -16.94117647], [-8.470588235, 3.388235294]]]])),
         (LinearQuantMode.SYMMETRIC, ClipMode.AVG,
-         torch.tensor([[[[-12.86220472, 29.05905512], [4.763779528, 18.1023622]],
-                        [[4.763779528, 18.1023622], [-10.00393701, 8.098425197]]],
-                       [[[-60.97637795, 60.5], [-9.051181102, 0]],
-                        [[33.34645669, -17.1496063], [-8.098425197, 2.858267717]]]]))
+         torch.tensor([[[[-12.81176471, 28.94509804], [4.745098039, 18.03137255]],
+                        [[5.219607843, 18.03137255], [-9.964705882, 8.066666667]]],
+                       [[[-60.7372549, 60.2627451], [-9.015686275, 0.474509804]],
+                        [[33.21568627, -16.60784314], [-8.066666667, 2.847058824]]]]))
     ]
 )
 def test_eltwise_add_layer_wrapper(inputs, eltwise_add_stats, mode, clip_acts, expected_output):
@@ -687,34 +688,42 @@ def test_acts_quant_params_linear(act1_type, act2_type, bn_out_stats):
     model = LinearBNSplitAct(act1_type, act2_type)
     stats = gen_stats_for_model(model)
     stats['bn']['output'] = bn_out_stats
-    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
+    quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats), save_fp_weights=True)
     quantizer.prepare_model(torch.randn(10, 10))
     # get quant params:
     expected_quant_params_keys = {
         'linear.output_zero_point',
         'linear.output_scale',
+        'linear.w_scale',
+        'linear.w_zero_point',
         'act1.output_zero_point',
         'act1.output_scale',
         'act2.output_zero_point',
         'act2.output_scale'
     }
-    assert set(quantizer.acts_quant_params) == expected_quant_params_keys
-    quantizer.set_act_quant_param('linear.output_zero_point', 2.)
-    quantizer.set_act_quant_param('linear.output_scale', 30.)
+    assert set(quantizer.linear_quant_params) == expected_quant_params_keys
+    quantizer.set_linear_quant_param('linear.output_zero_point', 2.)
+    quantizer.set_linear_quant_param('linear.output_scale', 30.)
     assert model.linear.output_zero_point == 2.
     assert model.linear.output_scale == 30.
+    assert model.linear.force_readjust == True
+    assert model.act1.force_readjust == True
     expected_quant_param_linear_dict = {
         'output_zero_point': torch.tensor(2.),
-        'output_scale': 30.
+        'output_scale': 30.,
+        'w_scale': model.linear.w_scale.item(),
+        'w_zero_point': model.linear.w_zero_point.item()
     }
-    assert dict(model.linear.named_acts_quant_params()) == expected_quant_param_linear_dict
+    assert dict(model.linear.named_linear_quant_params()) == expected_quant_param_linear_dict
     new_config = {
         'linear.output_zero_point': 4.,
         'act2.output_scale': 50
     }
-    quantizer.update_acts_quant_params(new_config)
+    quantizer.update_linear_quant_params(new_config)
     assert model.linear.output_zero_point == 4
     assert model.act2.output_scale == 50
+    assert model.linear.force_readjust == True
+    assert model.act1.force_readjust == True
 
 
 class DummyWordLangModel(nn.Module):
@@ -731,15 +740,80 @@ class DummyWordLangModel(nn.Module):
 @pytest.mark.filterwarnings('ignore:Iterating over a tensor might cause the trace to be incorrect')
 @pytest.mark.filterwarnings('ignore:Converting a tensor to a Python index might cause the trace to be incorrect')
 def test_acts_quant_params_rnn(rnn_model):
-    model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model).cuda()
+    model = DummyWordLangModel(nn.Embedding(41, 20), rnn_model)
     stats = gen_stats_for_model(model)
     quantizer = PostTrainLinearQuantizer(model, model_activation_stats=deepcopy(stats))
-    dummy_input = torch.randint(0, 41, size=(79, 23))
+    dummy_input = torch.randint(0, 41, size=(10, 1))
     quantizer.prepare_model(dummy_input)
     new_config = {
         'rnn.rnn.cells.0.act_o.output_scale': 4,
         'embedding.w_scale': torch.tensor(59.0)
     }
-    quantizer.update_acts_quant_params(new_config)
+    quantizer.update_linear_quant_params(new_config)
     assert model.rnn.rnn.cells[0].act_o.output_scale == 4
     assert model.embedding.w_scale == 59.0
+    assert model.rnn.rnn.cells[0].act_o.force_readjust.item() is True
+    assert model.rnn.rnn.cells[0].act_f.force_readjust.item() is True
+
+
+###############################################################################
+# Test wrappers with weights-only quantization
+###############################################################################
+@pytest.fixture(params=[False, True], ids=['perch_off', 'perch_on'])
+def per_channel(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True], ids=['no_bias', 'with_bias'])
+def bias(request):
+    return request.param
+
+
+def _fake_quant_tensor(tensor, n_bits, mode, per_channel):
+    q_min, q_max = q_utils.get_quantized_range(n_bits, mode != LinearQuantMode.ASYMMETRIC_UNSIGNED,
+                                               mode == LinearQuantMode.SYMMETRIC_RESTRICTED)
+    scale, zp = _get_quant_params_from_tensor(tensor, n_bits, mode, per_channel=per_channel)
+    q_utils.linear_quantize_clamp(tensor, scale, zp, q_min, q_max, inplace=True)
+    q_utils.linear_dequantize(tensor, scale, zp, inplace=True)
+
+
+def _test_wts_only_quant(layer, x, per_channel, bias, num_bits_wts, num_bits_accum):
+    layer.weight.data = torch.rand_like(layer.weight)
+    if bias:
+        layer.bias.data = torch.rand_like(layer.bias)
+    mode = LinearQuantMode.ASYMMETRIC_UNSIGNED
+
+    layer_ptq = RangeLinearQuantParamLayerWrapper(deepcopy(layer), None, num_bits_wts, num_bits_accum=num_bits_accum,
+                                                  mode=mode, per_channel_wts=per_channel)
+    layer_ptq.eval()
+
+    layer_manual_q = deepcopy(layer)
+    _fake_quant_tensor(layer_manual_q.weight.data, num_bits_wts, mode, per_channel)
+    assert torch.equal(layer_ptq.wrapped_module.weight, layer_manual_q.weight)
+    if bias:
+        _fake_quant_tensor(layer_manual_q.bias.data, num_bits_accum, mode, False)
+        assert torch.equal(layer_ptq.wrapped_module.bias, layer_manual_q.bias)
+
+    y_ptq = layer_ptq(x)
+    y_manual_q = layer_manual_q(x)
+
+    assert torch.equal(y_ptq, y_manual_q)
+
+
+def test_conv_layer_wrapper_params_only(per_channel, bias):
+    distiller.set_deterministic()
+    in_ch = 3
+    layer = torch.nn.Conv2d(in_ch, 10, 3, bias=bias)
+    x = torch.rand(5, in_ch, 5, 5)
+
+    _test_wts_only_quant(layer, x, per_channel, bias, 8, 32)
+
+
+def test_linear_layer_wrapper_params_only(per_channel, bias):
+    distiller.set_deterministic()
+    in_features = 50
+    layer = torch.nn.Linear(in_features, 30, bias=bias)
+
+    x = torch.rand(5, in_features)
+
+    _test_wts_only_quant(layer, x, per_channel, bias, 8, 32)

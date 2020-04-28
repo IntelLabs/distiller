@@ -298,5 +298,29 @@ def test_load_checkpoint_without_model():
         os.remove(temp_checkpoint)
 
 
+def test_policy_scheduling():
+    model = create_model(False, 'cifar10', 'resnet20_cifar')
+    scheduler = distiller.CompressionScheduler(model)
+    policy = distiller.PruningPolicy(None, None)
+    with pytest.raises(AssertionError):
+        scheduler.add_policy(policy)
+    with pytest.raises(AssertionError):
+        # Test for mutual-exclusive configuration
+        scheduler.add_policy(policy, epochs=[1,2,3], starting_epoch=4, ending_epoch=5, frequency=1)
+
+    scheduler.add_policy(policy, epochs=None, starting_epoch=4, ending_epoch=5, frequency=1)
+    # Regression test for issue #176 - https://github.com/NervanaSystems/distiller/issues/176
+    scheduler.add_policy(policy, epochs=[1, 2, 3])
+    sched_metadata = scheduler.sched_metadata[policy]
+    assert sched_metadata['starting_epoch'] == 1
+    assert sched_metadata['ending_epoch'] == 4
+    assert sched_metadata['frequency'] is None
+
+    scheduler.add_policy(policy, epochs=[5])
+    sched_metadata = scheduler.sched_metadata[policy]
+    assert sched_metadata['starting_epoch'] == 5
+    assert sched_metadata['ending_epoch'] == 6
+    assert sched_metadata['frequency'] is None
+
 if __name__ == '__main__':
     test_load_gpu_model_on_cpu_with_thinning()

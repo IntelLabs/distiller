@@ -51,18 +51,33 @@ class CompressionScheduler(object):
                 return policy
         return None
 
-    def add_policy(self, policy, epochs=None, starting_epoch=0, ending_epoch=1, frequency=1):
+    def add_policy(self, policy, epochs=None, starting_epoch=None, ending_epoch=None, frequency=1):
         """Add a new policy to the schedule.
 
         Args:
-            epochs (list): A list, or range, of epochs in which to apply the policy
+            epochs (list): A list, or range, of epochs in which to apply the policy.
+            starting_epoch (integer): An integer number specifying at which epoch to start.
+            ending_epoch (integer): An integer number specifying at which epoch to end.
+            frequency (integer): An integer number specifying how often to invoke the policy.
+
+            You may only provide a list of `epochs` or a range of epochs using `starting_epoch`
+            and `ending_epoch` (i.e. these are mutually-exclusive)
         """
+        assert (epochs is None and None not in (starting_epoch, ending_epoch, frequency)) or\
+               (epochs is not None and all (c is None for c in (starting_epoch, ending_epoch)))
+
         if self.quantization_policy is not None \
                 and isinstance(policy, QuantizationPolicy):
             raise ValueError("Only a single quantization policy is allowed in a compression scheduler.")
 
         if epochs is None:
+            assert 0 <= starting_epoch < ending_epoch
+            assert 0 < frequency <= (ending_epoch - starting_epoch)
             epochs = list(range(starting_epoch, ending_epoch, frequency))
+        else:
+            starting_epoch = epochs[0]
+            ending_epoch = epochs[-1] + 1
+            frequency = None
 
         for epoch in epochs:
             if epoch not in self.policies:
@@ -275,7 +290,7 @@ class ParameterMasker(object):
 
     def revert_weights(self, parameter):
         if not self.use_double_copies or self.unmasked_copy is None:
-            msglogger.debug('Parameter {0} does not maintain double copies'.format(self.param_name))
+            # This parameter does not maintain double copies (this is OK)
             return
         parameter.data.copy_(self.unmasked_copy)
         self.unmasked_copy = None
