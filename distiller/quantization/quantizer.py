@@ -23,6 +23,7 @@ import torch.nn as nn
 import distiller
 import warnings
 from typing import Callable, Optional
+from copy import deepcopy
 
 msglogger = logging.getLogger()
 
@@ -187,6 +188,9 @@ class Quantizer(object):
 
         # A dictionary of replaced modules and their respective names.
         self.modules_processed = OrderedDict()
+        self.modules_processed_args = OrderedDict()
+
+        self.prepared = False
 
     def _add_qbits_entry(self, module_name, module_type, qbits):
         if module_type not in [nn.Conv2d, nn.Conv3d, nn.Linear, nn.Embedding]:
@@ -220,15 +224,19 @@ class Quantizer(object):
             with a reference to 'new_relu1'. Any override configuration made specifically for 'self.relu2'
             will be ignored. A warning message will be shown.
         """
-        if self.model.is_quantized:
-            msglogger.info('The model is already quantized, ignoring subsequent calls to prepare_model.')
-            return
+        # if self.model.is_quantized:
+        #     msglogger.info('The model is already quantized, ignoring subsequent calls to prepare_model.')
+        #     return
+        if self.prepared:
+            raise RuntimeError('prepare_model can be called only once')
+
         msglogger.info('Preparing model for quantization using {0}'.format(self.__class__.__name__))
 
         self.model.quantizer_metadata["dummy_input"] = dummy_input
         if dummy_input is not None:
             summary_graph = distiller.SummaryGraph(self.model, dummy_input)
             self.adjacency_map = summary_graph.adjacency_map(dedicated_modules_only=False)
+            del summary_graph
 
         model_device = distiller.model_device(self.model)
 
@@ -249,7 +257,7 @@ class Quantizer(object):
                 self.params_to_quantize.append(_ParamToQuant(module, module_name, fp_attr_name, param_name, n_bits))
 
                 param_full_name = '.'.join([module_name, param_name])
-                msglogger.info(
+                msglogger.debug(
                     "Parameter '{0}' will be quantized to {1} bits".format(param_full_name, n_bits))
 
         self._post_prepare_model()
@@ -260,7 +268,9 @@ class Quantizer(object):
 
         distiller.assign_layer_fq_names(self.model)
 
-        msglogger.info('Quantized model:\n\n{0}\n'.format(self.model))
+        self.prepared = True
+
+        msglogger.debug('Quantized model:\n\n{0}\n'.format(self.model))
 
     def _pre_prepare_model(self, dummy_input):
         pass
@@ -314,6 +324,9 @@ class Quantizer(object):
                         replace_msg(full_name, (module, new_module))
                         # Add to history of prepared submodules
                         self.modules_processed[module] = full_name, new_module
+                        # To allow recreating this wrapper later on
+                        valid_args = full_name, deepcopy(self.module_qbits_map)
+                        self.modules_processed_args[full_name] = valid_args, valid_kwargs
                         setattr(container, name, new_module)
 
                         # If a "leaf" module was replaced by a container, add the new layers to the QBits mapping

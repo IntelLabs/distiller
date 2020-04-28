@@ -35,33 +35,17 @@
 
 Network compression can reduce the memory footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low-precision arithmetic.
 
-#### Note on Release 0.3 - Possible BREAKING Changes
-
-As of release 0.3, we've moved some code around to enable proper packaging and installation of Distiller. In addition, we updated Distiller to support PyTorch 1.X, which might also cause older code to break due to some API changes.  
-If updating from an earlier revision of the code, please make sure to follow the instructions in the [install](#install-the-package) section to make sure proper installation of Distiller and all dependencies.
-
 
 ## Table of Contents
 
 - [Table of Contents](#table-of-contents)
 - [Highlighted features](#highlighted-features)
 - [Installation](#installation)
-  - [Clone Distiller](#clone-distiller)
-  - [Create a Python virtual environment](#create-a-python-virtual-environment)
-    - [Using virtualenv](#using-virtualenv)
-    - [Using venv](#using-venv)
-    - [Activate the environment](#activate-the-environment)
-  - [Install the package](#install-the-package)
 - [Getting Started](#getting-started)
-  - [Example invocations of the sample application](#example-invocations-of-the-sample-application)
-    - [Training-only](#training-only)
-    - [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
-    - [Post-training quantization](#post-training-quantization)
+  - [Basic Usage Examples](#basic-usage-examples)
   - [Explore the sample Jupyter notebooks](#explore-the-sample-jupyter-notebooks)
-- [Set up the classification datasets](#set-up-the-classification-datasets)
 - [Running the tests](#running-the-tests)
 - [Generating the HTML documentation site](#generating-the-html-documentation-site)
-- [Built With](#built-with)
 - [Versioning](#versioning)
 - [License](#license)
 - [Community](#community)
@@ -115,22 +99,21 @@ If updating from an earlier revision of the code, please make sure to follow the
 ## Installation
 
 These instructions will help get Distiller up and running on your local machine.
-1. [Clone Distiller](#clone-distiller)
-2. [Create a Python virtual environment](#create-a-python-virtual-environment)
-3. [Install the package](#install-the-package)
 
-Notes:
-- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
-- If you are not using a GPU, you might need to make small adjustments to the code.
-
-### Clone Distiller
+<details><summary><b>1. Clone Distiller</b></summary>	
+<p>
+  
 Clone the Distiller code repository from github:
 ```
 $ git clone https://github.com/NervanaSystems/distiller.git
 ```
 The rest of the documentation that follows, assumes that you have cloned your repository to a directory called ```distiller```. <br>
+</p>
+</details>
+  
+<details><summary><b>2. Create a Python virtual environment</b></summary>	
+<p>
 
-### Create a Python virtual environment
 We recommend using a [Python virtual environment](https://docs.python.org/3/library/venv.html#venv-def), but that of course, is up to you.
 There's nothing special about using Distiller in a virtual environment, but we provide some instructions, for completeness.<br>
 Before creating the virtual environment, make sure you are located in directory ```distiller```.  After creating the environment, you should see a directory called ```distiller/env```.
@@ -161,15 +144,25 @@ The environment activation and deactivation commands for ```venv``` and ```virtu
 ```
 $ source env/bin/activate
 ```
+</p>
+</details>
 
-### Install the package
-
+<details><summary><b>3. Install the Distiller package</b></summary>	
+<p>
+  
 Finally, install the Distiller package and its dependencies using ```pip3```:
 ```
 $ cd distiller
 $ pip3 install -e .
 ```
 This installs Distiller in "development mode", meaning any changes made in the code are reflected in the environment without re-running the install command (so no need to re-install after pulling changes from the Git repository).
+
+Notes:
+- Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
+- If you are not using a GPU, you might need to make small adjustments to the code.
+
+</p>
+</details>
 
 ### Required PyTorch Version
 
@@ -179,30 +172,37 @@ If you do not use CUDA 10.1 in your environment, please refer to [PyTorch websit
 
 ## Getting Started
 
-You can jump head-first into some limited examples of network compression, to get a feeling for the library without too much investment on your part.  
+Distiller comes with sample applications and tutorials covering a range of model types:
 
-Distiller comes with a sample application for compressing image classification DNNs, ```compress_classifier.py``` located at ```distiller/examples/classifier_compression```.
+| Model Type | Sparsity | Post-training quantization | Quantization-aware training | Auto Compression (AMC) |
+|------------|:--------:|:--------------------------:|:---------------------------:|:----------------------:|
+| [Image classification](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression) | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| [Word-level language model](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model)| :white_check_mark: | :white_check_mark: | | |
+| [Translation (GNMT)](https://github.com/NervanaSystems/distiller/tree/master/examples/GNMT) | | :white_check_mark: | | |
+| [Recommendation System (NCF)](https://github.com/NervanaSystems/distiller/tree/master/examples/ncf) | |  :white_check_mark: | | |
+| [Object Detection](https://github.com/NervanaSystems/distiller/tree/master/examples/object_detection_compression) |  :white_check_mark: | | | |
 
-We'll show you how to use it for some simple use-cases, and will point you to some ready-to-go Jupyter notebooks.
+Head to the [examples](https://github.com/NervanaSystems/distiller/tree/master/examples) directory for more details.
 
-For more details, there are some other resources you can refer to:
+Other resources to refer to, beyond the examples:
 + [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
 + [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
 + [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
 + [Usage](https://nervanasystems.github.io/distiller/usage.html)
 + [Preparing a model for quantization](https://nervanasystems.github.io/distiller/prepare_model_quant.html)
-+ [Tutorial: Using Distiller to prune a PyTorch language model](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
 + [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
-+ [Tutorial: Post-Training Quantization of a Language Model](https://nervanasystems.github.io/distiller/tutorial-lang_model_quant.html)
-+ [Tutorial: Post-Training Quantization of GNMT (translation model)](https://nervanasystems.github.io/distiller/tutorial-gnmt_quant.html)
-+ [Post-training quantization command line examples](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md)
 
-### Example invocations of the sample application
+### Basic Usage Examples
+
+The following are simple examples using Distiller's image classifcation sample, showing some of Distiller's capabilities.
+
 + [Training-only](#training-only)
 + [Getting parameter statistics of a sparsified model](#getting-parameter-statistics-of-a-sparsified-model)
 + [Post-training quantization](#post-training-quantization)
 
-#### Training-only
+<details><summary><b>Example: Simple training-only session (no compression)</b></summary>	
+<p>
+
 The following will invoke training-only (no compression) of a network named 'simplenet' on the CIFAR10 dataset.  This is roughly based on TorchVision's sample Imagenet training application, so it should look familiar if you've used that application.  In  this example we don't invoke any compression mechanisms: we just train because for fine-tuning after pruning, training is an essential part.<br>  
 Note that the first time you execute this command, the CIFAR10 code will be downloaded to your machine, which may take a bit of time - please let the download process proceed to completion.
 
@@ -217,8 +217,12 @@ $ python3 compress_classifier.py --arch simplenet_cifar ../../../data.cifar10 -p
 You can use a TensorBoard backend to view the training progress (in the diagram below we show a couple of training sessions with different LR values).  For compression sessions, we've added tracing of activation and parameter sparsity levels, and regularization loss.
 <center> <img src="imgs/simplenet_training.png"></center>
 
+</p>
+</details>
 
-#### Getting parameter statistics of a sparsified model
+<details><summary><b>Example: Getting parameter statistics of a sparsified model</b></summary>	
+<p>
+
 We've included in the git repository a few checkpoints of a ResNet20 model that we've trained with 32-bit floats.  Let's load the checkpoint of a model that we've trained with channel-wise Group Lasso regularization.<br>
 With the following command-line arguments, the sample application loads the model (```--resume```)  and prints statistics about the model weights (```--summary=sparsity```).  This is useful if you want to load a previously pruned model, to examine the weights sparsity statistics, for example.  Note that when you *resume* a stored checkpoint, you still need to tell the application which network architecture the checkpoint uses (```-a=resnet20_cifar```):
 ```
@@ -240,8 +244,12 @@ Although the memory footprint compression is very low, this model actually saves
 $ python3 compress_classifier.py --resume=../ssl/checkpoints/checkpoint_trained_channel_regularized_resnet20_finetuned.pth.tar -a=resnet20_cifar ../../../data.cifar10 --summary=compute
 ```
 <center> <img src="imgs/ch_compute_stats.png"></center>
+</p>
+</details>
 
-#### Post-training quantization
+<details><summary><b>Example: Post-training quantization</b></summary>	
+<p>
+
 This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've included in the git repository the checkpoint of a ResNet20 model that we've trained with 32-bit floats, so we'll take this model and quantize it:
 
 ```
@@ -249,6 +257,8 @@ $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resum
 ```
 
 The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
+</p>
+</details>
 
 ### Explore the sample Jupyter notebooks
 The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
@@ -256,34 +266,6 @@ After installing and running the server, take a look at the [notebook](https://g
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
 <center> <img src="imgs/resnet18-sensitivity.png"></center>
-
-## Set up the classification datasets
-The sample application for compressing image classification DNNs, ```compress_classifier.py``` located at ```distiller/examples/classifier_compression```, uses both [CIFAR10](https://www.cs.toronto.edu/~kriz/cifar.html) and [ImageNet](http://www.image-net.org/) image datasets.<br>
-
-The ```compress_classifier.py``` application will download the CIFAR10 automatically the first time you try to use it (thanks to TorchVision).  The example invocations used  throughout Distiller's documentation assume that you have downloaded the images to directory ```distiller/../data.cifar10```, but you can place the images anywhere you want (you tell ```compress_classifier.py``` where the dataset is located - or where you want the application to download the dataset to - using a command-line parameter).
-
-ImageNet needs to be [downloaded](http://image-net.org/download) manually, due to copyright issues.  Facebook has created a [set of scripts](https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset) to help download and extract the dataset.
-
-Again, the Distiller documentation assumes the following directory structure for the datasets, but this is just a suggestion:
-```
-distiller
-  examples
-    classifier_compression
-data.imagenet/
-    train/
-    val/
-data.cifar10/
-    cifar-10-batches-py/
-        batches.meta
-        data_batch_1
-        data_batch_2
-        data_batch_3
-        data_batch_4
-        data_batch_5
-        readme.html
-        test_batch
-```
-
 
 ## Running the tests
 We are currently light-weight on test and this is an area where contributions will be much appreciated.<br>
@@ -318,13 +300,6 @@ $ mkdocs build --clean
 This will create a folder named 'site' which contains the documentation website.
 Open distiller/docs/site/index.html to view the documentation home page.
 
-## Built With
-
-* [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
-* [Jupyter](http://jupyter.org/) - Notebook serving.
-* [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
-* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
-
 ## Versioning
 
 We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/NervanaSystems/distiller/tags).
@@ -334,16 +309,73 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details
 
 ## Community
-
-### Github projects using Distiller:
+<details><summary><b>Github projects using Distiller</b></summary>	
+<p>
+  
 - [DeGirum Pruned Models](https://github.com/DeGirum/pruned-models) - a repository containing pruned models and related information.
 
-### Research papers citing Distiller:
+- [TorchFI](https://github.com/bfgoldstein/torchfi) - TorchFI is a fault injection framework build on top of PyTorch for research purposes.
+
+- [hsi-toolbox](https://github.com/daniel-rychlewski/hsi-toolbox) - Hyperspectral CNN compression and band selection
+
+</p>	
+</details>
+
+<details><summary><b>Research papers citing Distiller</b></summary>	
+<p>
+  
+- Brunno F. Goldstein, Sudarshan Srinivasan, Dipankar Das, Kunal Banerjee, Leandro Santiago, Victor C. Ferreira, Alexandre S. Nery, Sandip Kundu, Felipe M. G. Franca.<br>
+*[Reliability Evaluation of Compressed Deep Learning Models](https://ieeexplore.ieee.org/document/9069026)*,<br>
+In IEEE 11th Latin American Symposium on Circuits & Systems (LASCAS), San Jose, Costa Rica, 2020, pp. 1-5.
+  
+- Pascal Bacchus, Robert Stewart, Ekaterina Komendantskaya.<br>
+*[Accuracy, Training Time and Hardware Efficiency Trade-Offs for Quantized Neural Networks on FPGAs](https://link.springer.com/chapter/10.1007/978-3-030-44534-8_10)*,<br>
+In Applied Reconfigurable Computing. Architectures, Tools, and Applications. ARC 2020. Lecture Notes in Computer Science, vol 12083. Springer, Cham
+
+- Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit, Kaushik Roy.<br>
+*[GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks](https://arxiv.org/abs/2003.06902)*,<br>
+arXiv:2003.06902, 2020.
+
+- Ahmed T. Elthakeb, Prannoy Pilligundla, Fatemehsadat Mireshghallah, Tarek Elgindi, Charles-Alban Deledalle, Hadi Esmaeilzadeh.<br>
+*[Gradient-Based Deep Quantization of Neural Networks through Sinusoidal
+Adaptive Regularization](https://arxiv.org/abs/2003.00146)*,<br>
+arXiv:2003.00146, 2020.
+
+- Ziqing Yang, Yiming Cui, Zhipeng Chen, Wanxiang Che, Ting Liu, Shijin Wang, Guoping Hu.<br>
+*[TextBrewer: An Open-Source Knowledge Distillation Toolkit for Natural Language Processing](https://arxiv.org/abs/2002.12620)*,<br>
+arXiv:2002.12620, 2020.
+
+- Alexander Kozlov, Ivan Lazarevich, Vasily Shamporov, Nikolay Lyalyushkin, Yury Gorbachev.<br>
+*[Neural Network Compression Framework for fast model inference](https://arxiv.org/abs/2002.08679)*,<br>
+arXiv:2002.08679, 2020.
+
+- Moran Shkolnik, Brian Chmiel, Ron Banner, Gil Shomron, Yuri Nahshan, Alex Bronstein, Uri Weiser.<br>
+*[Robust Quantization: One Model to Rule Them All](https://arxiv.org/abs/2002.07686)*,<br>
+arXiv:2002.07686, 2020.
+
+- Muhammad Abdullah Hanif, Muhammad Shafique.<br>
+*[SalvageDNN: salvaging deep neural network accelerators with permanent faults through saliency-driven fault-aware mapping](https://royalsocietypublishing.org/doi/10.1098/rsta.2019.0164)*,<br>
+In Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering SciencesVolume 378, Issue 2164, 2019.<br>
+https://doi.org/10.1098/rsta.2019.0164
+
+- Meiqi Wang, Jianqiao Mo, Jun Lin, Zhongfeng Wang, Li Du.<br>
+*[DynExit: A Dynamic Early-Exit Strategy for Deep Residual Networks](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9020551)*,<br>
+In IEEE International Workshop on Signal Processing Systems (SiPS), 2019.
+
+- Vinu Joseph, Saurav Muralidharan, Animesh Garg, Michael Garland, Ganesh Gopalakrishnan.<br>
+*[A Programmable Approach to Model Compression](https://arxiv.org/abs/1911.02497),*<br>
+arXiv:1911.02497, 2019<br>
+[code](https://github.com/NVlabs/condensa)
+
 - Hui Guan, Lin Ning, Zhen Lin, Xipeng Shen, Huiyang Zhou, Seung-Hwan Lim.<br>
 *[In-Place Zero-Space Memory Protection for CNN](https://arxiv.org/abs/1910.14479)*,<br>
 In Conference on Neural Information Processing Systems (NeurIPS), 2019.<br>
 arXiv:1910.14479, 2019<br>
 [code](https://github.com/guanh01/wot)
+
+- Hossein Baktash, Emanuele Natale, Laurent Viennot.<br>
+*[A Comparative Study of Neural Network Compression](https://arxiv.org/abs/1910.11144)*,<br>
+arXiv:1910.11144, 2019.
 
 - Maxim Zemlyanikin, Alexander Smorkalov, Tatiana Khanova, Anna Petrovicheva, Grigory Serebryakov.<br>
 *[512KiB RAM Is Enough! Live Camera Face Recognition DNN on MCU](http://openaccess.thecvf.com/content_ICCVW_2019/html/LPCV/Zemlyanikin_512KiB_RAM_Is_Enough_Live_Camera_Face_Recognition_DNN_on_ICCVW_2019_paper.html)*,<br>
@@ -379,8 +411,8 @@ In IEEE Computer Architecture Letters (CAL), 2019.
 In: Rojas I., Joya G., Catala A. (eds) Advances in Computational Intelligence Lecture Notes in Computer Science, vol 11507. Springer, Cham.  International Work-Conference on Artificial Neural Networks (IWANN 2019).
 
 - Ahmed T. Elthakeb, Prannoy Pilligundla, Hadi Esmaeilzadeh.<br>
-  *[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*
-  arXiv:1906.06033, 2019
+*[Divide and Conquer: Leveraging Intermediate Feature Representations for Quantized Training of Neural Networks](https://arxiv.org/abs/1906.06033),*<br>
+arXiv:1906.06033, 2019
 
 - Ritchie Zhao, Yuwei Hu, Jordan Dotzel, Christopher De Sa, Zhiru Zhang.<br>
   *[Improving Neural Network Quantization without Retraining using Outlier Channel Splitting](https://arxiv.org/abs/1901.09504),*<br>
@@ -398,24 +430,25 @@ In Japanese Journal of Radiology, February 2019, Volume 37, Issue 2, pp 103–10
 -  Alexander Goncharenko, Andrey Denisov, Sergey Alyamkin, Evgeny Terentev.<br>
    *[Fast Adjustable Threshold For Uniform Neural Network Quantization](https://arxiv.org/abs/1812.07872)*,<br>
    arXiv:1812.07872, 2018
-
+</p>	
+</details>
 
 If you used Distiller for your work, please use the following citation:
 
 ```
-@misc{neta_zmora_2018_1297430,
+@article{nzmora2019distiller,
   author       = {Neta Zmora and
                   Guy Jacob and
                   Lev Zlotnik and
                   Bar Elharar and
                   Gal Novik},
-  title        = {Neural Network Distiller},
-  month        = jun,
-  year         = 2018,
-  doi          = {10.5281/zenodo.1297430},
-  url          = {https://doi.org/10.5281/zenodo.1297430}
+  title        = {Neural Network Distiller: A Python Package For DNN Compression Research},
+  month        = {October},
+  year         = {2019},
+  url          = {https://arxiv.org/abs/1910.12232}
 }
 ```
+
 
 ## Acknowledgments
 
@@ -423,7 +456,12 @@ Any published work is built on top of the work of many other people, and the cre
 * The Python and PyTorch developer communities have shared many invaluable insights, examples and ideas on the Web.
 * The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
 
+### Built With
 
+* [PyTorch](http://pytorch.org/) - The tensor and neural network framework used by Distiller.
+* [Jupyter](http://jupyter.org/) - Notebook serving.
+* [TensorBoard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard) - Used to view training graphs.
+* [Cadene](https://github.com/Cadene/pretrained-models.pytorch) - Pretrained PyTorch models.
 
 ## Disclaimer
 Distiller is released as a reference code for research purposes. It is not an official Intel product, and the level of quality and support may not be as expected from an official product. Additional algorithms and features are planned to be added to the library. Feedback and contributions from the open source and research communities are more than welcome.
