@@ -104,7 +104,7 @@ class KnowledgeDistillationPolicy(ScheduledTrainingPolicy):
 
     def forward(self, *inputs):
         """
-        Performs forward propagation through both student and teached models and caches the logits.
+        Performs forward propagation through both student and teacher models and caches the logits.
         This function MUST be used instead of calling the student model directly.
 
         Returns:
@@ -120,7 +120,7 @@ class KnowledgeDistillationPolicy(ScheduledTrainingPolicy):
             self.last_teacher_logits = self.teacher(*inputs)
 
         out = self.student(*inputs)
-        self.last_students_logits = out.new_tensor(out, requires_grad=True)
+        self.last_students_logits = out.clone()
 
         return out
 
@@ -150,14 +150,20 @@ class KnowledgeDistillationPolicy(ScheduledTrainingPolicy):
         # soft_targets = F.softmax(self.cached_teacher_logits[minibatch_id] / self.temperature)
         soft_targets = F.softmax(self.last_teacher_logits / self.temperature, dim=1)
 
-        # The averaging used in PyTorch KL Div implementation is wrong, so we work around as suggested in
-        # https://pytorch.org/docs/stable/nn.html#kldivloss
-        # (Also see https://github.com/pytorch/pytorch/issues/6622, https://github.com/pytorch/pytorch/issues/2259)
-        distillation_loss = F.kl_div(soft_log_probs, soft_targets.detach(), size_average=False) / soft_targets.shape[0]
+        distillation_loss = F.kl_div(soft_log_probs, soft_targets.detach(), reduction='batchmean')
+
+        # According to [1]:
+        # "Since the magnitudes of the gradients produced by the soft targets scale as 1/(T^2) it is important
+        #  to multiply them by T^2 when using both hard and soft targets. This ensures that the relative contributions
+        #  of the hard and soft targets remain roughly unchanged if the temperature used for distillation is changed
+        #  while experimenting with meta-parameters."
+        distillation_loss_scaled = distillation_loss * self.temperature ** 2
 
         # The loss passed to the callback is the student's loss vs. the true labels, so we can use it directly, no
         # need to calculate again
+        overall_loss = self.loss_wts.student * loss + self.loss_wts.distill * distillation_loss_scaled
 
-        overall_loss = self.loss_wts.student * loss + self.loss_wts.distill * distillation_loss
+        # For logging purposes, we return the un-scaled distillation loss so it's comparable between runs with
+        # different temperatures
         return PolicyLoss(overall_loss,
                           [LossComponent('Distill Loss', distillation_loss)])
