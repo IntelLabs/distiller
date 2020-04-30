@@ -76,7 +76,7 @@ policies:
 #  * We don't change any of the other training hyper-parameters
 # 
 # The shell script used to generate these results is provided at:
-# <distiller_root>/examples/quantization/quant_aware_train/presnet_cifar_distill_tests.sh
+# <distiller_root>/examples/quantization/preact_resnet_cifar_quant_distill_tests.sh
 #
 # Some notable outcomes:
 #  * FP32 runs:
