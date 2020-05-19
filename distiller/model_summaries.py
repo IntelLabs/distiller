@@ -42,17 +42,18 @@ __all__ = ['model_summary',
            'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
-def model_summary(model, what, dataset=None, logdir=''):
+def model_summary(model, what, dataset=None, logdir='', input_shape=None):
     if what.startswith('png'):
         png_fname = os.path.join(logdir, 'model.png')
-        draw_img_classifier_to_file(model, png_fname, dataset, what == 'png_w_params')
+        draw_img_classifier_to_file(model, png_fname, dataset, what == 'png_w_params', input_shape=input_shape)
     elif what == 'sparsity':
         pylogger = PythonLogger(msglogger)
         csvlogger = CsvLogger(logdir=logdir)
         distiller.log_weights_sparsity(model, -1, loggers=[pylogger, csvlogger])
     elif what == 'compute':
         try:
-            dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+            device = distiller.model_device(model)
+            dummy_input = distiller.get_dummy_input(dataset, device, input_shape)
         except ValueError as e:
             print(e)
             return
@@ -456,14 +457,16 @@ def draw_img_classifier_to_file(model, png_fname, dataset=None, display_param_no
         del non_para_model
 
 
-def export_img_classifier_to_onnx(model, onnx_fname, dataset, add_softmax=True, **kwargs):
+def export_img_classifier_to_onnx(model, onnx_fname, dataset=None, add_softmax=True,
+                                  input_shape=None, **kwargs):
     """Export a PyTorch image classifier to ONNX.
 
     Args:
         add_softmax: when True, adds softmax layer to the output model.
         kwargs: arguments to be passed to torch.onnx.export
     """
-    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+    device = distiller.model_device(model)
+    dummy_input = distiller.get_dummy_input(dataset, device, input_shape)
     # Pytorch doesn't support exporting modules wrapped in DataParallel
     non_para_model = distiller.make_non_parallel_copy(model)
 
