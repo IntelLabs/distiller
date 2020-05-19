@@ -64,35 +64,36 @@ __all__ = ['ThinningRecipe', 'resnet_cifar_remove_layers',
            'execute_thinning_recipes_list', 'get_normalized_recipe']
 
 
-def contract_model(model, zeros_mask_dict, arch, dataset, optimizer):
+def contract_model(model, zeros_mask_dict, arch=None, dataset=None, optimizer=None, input_shape=None):
     """Contract a model by removing filters and channels
 
     The algorithm searches for weight filters and channels that have all
     zero-coefficients, and shrinks the model by removing these channels
     and filters from the model definition, along with any related parameters.
     """
-    remove_filters(model, zeros_mask_dict, arch, dataset, optimizer)
-    remove_channels(model, zeros_mask_dict, arch, dataset, optimizer)
+    remove_filters(model, zeros_mask_dict, arch, dataset, optimizer, input_shape)
+    remove_channels(model, zeros_mask_dict, arch, dataset, optimizer, input_shape)
 
 
-def remove_channels(model, zeros_mask_dict, arch, dataset, optimizer):
+def remove_channels(model, zeros_mask_dict, arch=None, dataset=None, optimizer=None, input_shape=None):
     """Contract a model by removing weight channels"""
-    sgraph = _create_graph(dataset, model)
+    sgraph = _create_graph(model, dataset, input_shape)
     thinning_recipe = create_thinning_recipe_channels(sgraph, model, zeros_mask_dict)
     apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe, optimizer)
     return model
 
 
-def remove_filters(model, zeros_mask_dict, arch, dataset, optimizer):
+def remove_filters(model, zeros_mask_dict, arch=None, dataset=None, optimizer=None, input_shape=None):
     """Contract a model by removing weight filters"""
-    sgraph = _create_graph(dataset, model)
+    sgraph = _create_graph(model, dataset, input_shape)
     thinning_recipe = create_thinning_recipe_filters(sgraph, model, zeros_mask_dict)
     apply_and_save_recipe(model, zeros_mask_dict, thinning_recipe, optimizer)
     return model
 
 
-def _create_graph(dataset, model):
-    dummy_input = distiller.get_dummy_input(dataset, distiller.model_device(model))
+def _create_graph(model, dataset=None, input_shape=None):
+    device = distiller.model_device(model)
+    dummy_input = distiller.get_dummy_input(dataset, device, input_shape)
     return SummaryGraph(model, dummy_input)
 
 
