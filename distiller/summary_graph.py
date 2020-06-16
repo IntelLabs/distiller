@@ -22,10 +22,50 @@ import torch
 import torch.nn as nn
 import torch.jit as jit
 import logging
+from pkg_resources import parse_version
 from collections import OrderedDict, defaultdict
 from collections.abc import MutableSequence, Iterable
 msglogger = logging.getLogger()
 
+# see: https://github.com/pytorch/pytorch/issues/33463#issuecomment-606399944
+class scope_name_workaround(object):
+    def __init__(self):
+        self.backup = None
+
+    def __enter__(self):
+        def _tracing_name(self_, tracing_state):
+            if not tracing_state._traced_module_stack:
+                return None
+            module = tracing_state._traced_module_stack[-1]
+            for name, child in module.named_children():
+                if child is self_:
+                    return name
+            return None
+
+        def _slow_forward(self_, *input, **kwargs):
+            tracing_state = torch._C._get_tracing_state()
+            if not tracing_state or isinstance(self_.forward, torch._C.ScriptMethod):
+                return self_.forward(*input, **kwargs)
+            if not hasattr(tracing_state, '_traced_module_stack'):
+                tracing_state._traced_module_stack = []
+            name = _tracing_name(self_, tracing_state)
+            if name:
+                tracing_state.push_scope('%s[%s]' % (self_._get_name(), name))
+            else:
+                tracing_state.push_scope(self_._get_name())
+            tracing_state._traced_module_stack.append(self_)
+            try:
+                result = self_.forward(*input, **kwargs)
+            finally:
+                tracing_state.pop_scope()
+                tracing_state._traced_module_stack.pop()
+            return result
+        
+        self.backup = torch.nn.Module._slow_forward
+        setattr(torch.nn.Module, '_slow_forward', _slow_forward)
+
+    def __exit__(self, type, value, tb):
+        setattr(torch.nn.Module, '_slow_forward', self.backup)
 
 def onnx_name_2_pytorch_name(name):
     # Convert a layer's name from an ONNX name, to a PyTorch name
@@ -37,6 +77,30 @@ def onnx_name_2_pytorch_name(name):
     name_parts = [part[1:-1] for part in name_parts]
 
     return '.'.join(name_parts)
+
+
+def dropout_workaround(graph):
+    # As of PyTorch 1.3.0, ONNX trace optimization has an issue that results in incorrect scope names
+    # of nodes in the trace graph.
+    # These can make it impossible, in some cases, to derive the connectivity of the model using the original
+    # module names. So we try to detect these cases and apply workarounds
+
+    # The issue is:
+    #   Dropout ops are removed by ONNX trace optimization. However, the op BEFORE the original dropout op
+    #   gets the scope name of the dropout op
+    prev_non_dropout_op = None
+    pre_dropout_nodes_scope_names = OrderedDict()
+    for node in graph.nodes():
+        kind = node.kind()
+        if 'aten' not in kind:
+            continue
+        if kind == 'aten::dropout':
+            if prev_non_dropout_op:
+                pre_dropout_nodes_scope_names[node.scopeName()] = prev_non_dropout_op.scopeName()
+        else:
+            prev_non_dropout_op = node
+    return pre_dropout_nodes_scope_names
+
 
 
 class SummaryGraph(object):
@@ -87,34 +151,28 @@ class SummaryGraph(object):
             device = distiller.model_device(model_clone)
             dummy_input = distiller.convert_tensors_recursively_to(dummy_input, device=device)
             self.dummy_input = dummy_input
-            trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
-
-            # As of PyTorch 1.3.0, ONNX trace optimization has an issue that results in incorrect scope names
-            # of nodes in the trace graph.
-            # These can make it impossible, in some cases, to derive the connectivity of the model using the original
-            # module names. So we try to detect these cases and apply workarounds
-
-            # The issue is:
-            #   Dropout ops are removed by ONNX trace optimization. However, the op BEFORE the original dropout op
-            #   gets the scope name of the dropout op
+            
             pre_dropout_nodes_scope_names = OrderedDict()
+            if parse_version(torch.__version__) < parse_version('1.4.0'):
+                trace, _ = jit.get_trace_graph(model_clone, dummy_input, _force_outplace=True)
 
-            prev_non_dropout_op = None
-            for node in trace.graph().nodes():
-                kind = node.kind()
-                if 'aten' not in kind:
-                    continue
-                if kind == 'aten::dropout':
-                    if prev_non_dropout_op:
-                        pre_dropout_nodes_scope_names[node.scopeName()] = prev_non_dropout_op.scopeName()
-                else:
-                    prev_non_dropout_op = node
+                pre_dropout_nodes_scope_names = dropout_workaround(trace.graph())
 
-            # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
-            # composing a GEMM operation; etc.
-            torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
+                # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
+                # composing a GEMM operation; etc.
+                torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
 
-            graph = trace.graph()
+                graph = trace.graph()
+            else:
+                with scope_name_workaround():
+                    # FIXME: this traces the model twice
+                    trace, _ = torch.jit._get_trace_graph(model_clone, dummy_input, _force_outplace=True)
+                    pre_dropout_nodes_scope_names = dropout_workaround(trace)
+                    graph, _, _  = torch.onnx.utils._model_to_graph(model_clone, dummy_input, 
+                                                                    do_constant_folding=False,
+                                                                    propagate=True, _retain_param_name=False)                    
+
+
             self.ops = OrderedDict()
             self.module_ops_map = defaultdict(list)
             self.params = OrderedDict()
