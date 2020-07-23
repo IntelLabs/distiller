@@ -219,7 +219,7 @@ def main(args):
             train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq, compression_scheduler)
             if utils.is_main_process():
                 distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-                distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
+                distiller.log_activation_statistics(epoch, "train", loggers=[tflogger],
                                                     collector=collectors["sparsity"])
             if args.masks_sparsity and utils.is_main_process():
                 msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
