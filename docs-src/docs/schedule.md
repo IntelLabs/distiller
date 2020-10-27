@@ -72,7 +72,7 @@ pruners:
       'classifier.6.weight': 0.6
 ```
 
-Next, we want to specify the learning-rate decay scheduling in the ```lr_schedulers``` section.  We assign a name to this instance: ```pruning_lr```.  As in the ```pruners``` section, you may use any name, as long as all LR-schedulers have a unique name.  At the moment, only one instance of LR-scheduler is allowed.  The LR-scheduler must be a subclass of PyTorch's [\_LRScheduler](http://pytorch.org/docs/master/_modules/torch/optim/lr_scheduler.html).  You can use any of the schedulers defined in ```torch.optim.lr_scheduler``` (see [here](https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate)).  In addition, we've implemented some additional schedulers in Distiller (see [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/learning_rate.py)). The keyword arguments (kwargs) are passed directly to the LR-scheduler's constructor, so that as new LR-schedulers are added to ```torch.optim.lr_scheduler```, they can be used without changing the application code.
+Next, we want to specify the learning-rate decay scheduling in the ```lr_schedulers``` section.  We assign a name to this instance: ```pruning_lr```.  As in the ```pruners``` section, you may use any name, as long as all LR-schedulers have a unique name.  At the moment, only one instance of LR-scheduler is allowed.  The LR-scheduler must be a subclass of PyTorch's [\_LRScheduler](http://pytorch.org/docs/master/_modules/torch/optim/lr_scheduler.html).  You can use any of the schedulers defined in ```torch.optim.lr_scheduler``` (see [here](https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate)).  In addition, we've implemented some additional schedulers in Distiller (see [here](https://github.com/IntelLabs/distiller/blob/master/distiller/learning_rate.py)). The keyword arguments (kwargs) are passed directly to the LR-scheduler's constructor, so that as new LR-schedulers are added to ```torch.optim.lr_scheduler```, they can be used without changing the application code.
 
 ```
 lr_schedulers:
@@ -322,7 +322,7 @@ quantizer.prepare_model()
 # Execute evaluation on model as usual
 ```
 
-See the documentation for `PostTrainLinearQuantizer` in [range_linear.py](https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py) for details on the available arguments.  
+See the documentation for `PostTrainLinearQuantizer` in [range_linear.py](https://github.com/IntelLabs/distiller/blob/master/distiller/quantization/range_linear.py) for details on the available arguments.  
 In addition to directly instantiating the quantizer with arguments, it can also be configured from a YAML file. The syntax for the YAML file is exactly the same as seen in the quantization-aware training section above. Not surprisingly, the `class` defined must be `PostTrainLinearQuantizer`, and any other components or policies defined in the YAML file are ignored. We'll see how to create the quantizer in this manner below.
 
 If more configurability is needed, a helper function can be used that will add a set of command-line arguments to configure the quantizer:
@@ -391,8 +391,8 @@ if args.quantize_eval:
 
 Note that the command-line arguments don't expose the `overrides` parameter of the quantizer, which allows fine-grained control over how each layer is quantized. To utilize this functionality, configure with a YAML file.
 
-To see integration of these command line arguments in use, see the [image classification example](https://github.com/NervanaSystems/distiller/blob/master/examples/classifier_compression/compress_classifier.py). 
-For examples invocations of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
+To see integration of these command line arguments in use, see the [image classification example](https://github.com/IntelLabs/distiller/blob/master/examples/classifier_compression/compress_classifier.py). 
+For examples invocations of post-training quantization see [here](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant).
 
 ### Collecting Statistics for Quantization
 
@@ -410,7 +410,7 @@ if args.qe_calibration:
     collector.save(yaml_path)
 ```
 
-The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml).
+The genreated YAML stats file can then be provided using the ``--qe-stats-file` argument. An example of a generated stats file can be found [here](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/stats/resnet18_quant_stats.yaml).
 
 ## Pruning Fine-Control
 

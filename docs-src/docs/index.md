@@ -1,7 +1,7 @@
 # Distiller Documentation
 ## What is Distiller
 
-**[Distiller](https://github.com/NervanaSystems/distiller/)** is an open-source Python package for neural network compression research.
+**[Distiller](https://github.com/IntelLabs/distiller/)** is an open-source Python package for neural network compression research.
 
 Network compression can reduce the footprint of a neural network, increase its inference speed and save energy. Distiller provides a [PyTorch](http://pytorch.org/) environment for prototyping and analyzing compression algorithms, such as sparsity-inducing methods and low precision arithmetic.
 

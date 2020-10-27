@@ -1,7 +1,7 @@
 # Scheduler for training AlexNet with Batch-Norm, quantized using the DoReFa scheme
 # Activations: 8-bits, Weights: 4-bits
 # See:
-#  https://nervanasystems.github.io/distiller/algo_quantization/index.html#dorefa
+#  https://intellabs.github.io/distiller/algo_quantization.html#dorefa
 #  https://arxiv.org/abs/1606.06160
 #
 # IMPORTANT NOTES:

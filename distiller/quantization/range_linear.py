@@ -1562,7 +1562,7 @@ class PostTrainLinearQuantizer(Quantizer):
       * distiller.modules.BatchMatmul
     An existing module will likely need to be modified to use the 'distiller.modules.*' modules. This needs to
     be done BEFORE creating the quantizer. See the docs for more details:
-    https://nervanasystems.github.io/distiller/prepare_model_quant.html
+    https://intellabs.github.io/distiller/prepare_model_quant.html
 
     Any leaf module not in the list above will be "fake-quantized". That is - the floating-point module will be
     executed (FP64/32/16 can be specified with the fpq_module argument), and its output will be quantized.

@@ -96,7 +96,7 @@ abundant and gradually reduce the number of weights being pruned each time as th
 
 <center>![Gradual Pruning](imgs/gradual_pruning.png)</center>
 
-You can play with the scheduling parameters in the [agp_schedule.ipynb notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/agp_schedule.ipynb).
+You can play with the scheduling parameters in the [agp_schedule.ipynb notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/agp_schedule.ipynb).
 
 The authors describe AGP:
 >

@@ -353,7 +353,7 @@ class ActivationRankedFilterPruner(_RankedStructureParameterPruner):
                              "\tThis error is an indication that these statistics "
                              "have not been collected yet.\n"
                              "\tMake sure to use SummaryActivationStatsCollector(\"%s\")\n"
-                             "\tFor more info see issue #444 (https://github.com/NervanaSystems/distiller/issues/444)"%
+                             "\tFor more info see issue #444 (https://github.com/IntelLabs/distiller/issues/444)"%
                              (self.activation_rank_criterion, fq_name, self.activation_rank_criterion))
 
         quality_criterion, std = getattr(module, self.activation_rank_criterion).value()

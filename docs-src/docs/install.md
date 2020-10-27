@@ -4,8 +4,8 @@ These instructions will help get Distiller up and running on your local machine.
 
 You may also want to refer to these resources:
 
-* [Dataset installation](https://github.com/NervanaSystems/distiller#set-up-the-classification-datasets) instructions.
-* [Jupyter installation](https://nervanasystems.github.io/distiller/jupyter/index.html#installation) instructions.
+* [Image classification dataset installation instructions](https://github.com/IntelLabs/distiller/tree/master/examples/classifier_compression#datasets-supported)
+* [Jupyter installation instructions](https://intellabs.github.io/distiller/jupyter.html#installation)
 
 Notes:
 - Distiller has only been tested on Ubuntu 16.04 LTS, and with Python 3.5.
@@ -14,7 +14,7 @@ Notes:
 ## Clone Distiller
 Clone the Distiller code repository from github:
 ```
-$ git clone https://github.com/NervanaSystems/distiller.git
+$ git clone https://github.com/IntelLabs/distiller.git
 ```
 The rest of the documentation that follows, assumes that you have cloned your repository to a directory called ```distiller```. <br>
 

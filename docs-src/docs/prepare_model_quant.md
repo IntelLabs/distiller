@@ -4,16 +4,16 @@
 
 *Note: If you just want a run-down of the required modifications to make sure a model is properly quantized in Distiller, you can skip this part and head right to the next section.*
 
-Distiller provides an automatic mechanism to convert a "vanilla" FP32 PyTorch model to a quantized counterpart (for [quantization-aware training](https://nervanasystems.github.io/distiller/schedule.html#quantization-aware-training) and [post-training quantization](https://nervanasystems.github.io/distiller/schedule.html#post-training-quantization)). This mechanism works at the PyTorch "Module" level. By "Module" we refer to any sub-class of the `torch.nn.Module` [class](https://pytorch.org/docs/stable/nn.html#module). The Distiller [Quantizer](https://nervanasystems.github.io/distiller/design.html#quantization) can detect modules, and replace them with other modules.
+Distiller provides an automatic mechanism to convert a "vanilla" FP32 PyTorch model to a quantized counterpart (for [quantization-aware training](https://intellabs.github.io/distiller/schedule.html#quantization-aware-training) and [post-training quantization](https://intellabs.github.io/distiller/schedule.html#post-training-quantization)). This mechanism works at the PyTorch "Module" level. By "Module" we refer to any sub-class of the `torch.nn.Module` [class](https://pytorch.org/docs/stable/nn.html#module). The Distiller [Quantizer](https://intellabs.github.io/distiller/design.html#quantization) can detect modules, and replace them with other modules.
 
-However, it is not a requirement in PyTorch that all operations be defined as modules. Operations are often executed via direct overloaded tensor operator (`+`, `-`, etc.) and functions under the `torch` namespace (e.g. `torch.cat()`). There is also the `torch.nn.functional` namespace, which provides functional equivalents to modules provided in `torch.nn`. When an operation does not maintain any state, even if it has a dedicated `nn.Module`, it'll often be invoked via its functional counterpart. For example - calling `nn.functional.relu()` instead of creating an instance of `nn.ReLU` and invoking that. Such non-module operations are called directly from the module's `forward` function. There are ways to **discover** these operations up-front, which are [used in Distiller](https://github.com/NervanaSystems/distiller/blob/master/distiller/summary_graph.py) for different purposes. Even so, we cannot **replace** these operations without resorting to rather "dirty" Python tricks, which we would rather not do for numerous reasons.
+However, it is not a requirement in PyTorch that all operations be defined as modules. Operations are often executed via direct overloaded tensor operator (`+`, `-`, etc.) and functions under the `torch` namespace (e.g. `torch.cat()`). There is also the `torch.nn.functional` namespace, which provides functional equivalents to modules provided in `torch.nn`. When an operation does not maintain any state, even if it has a dedicated `nn.Module`, it'll often be invoked via its functional counterpart. For example - calling `nn.functional.relu()` instead of creating an instance of `nn.ReLU` and invoking that. Such non-module operations are called directly from the module's `forward` function. There are ways to **discover** these operations up-front, which are [used in Distiller](https://github.com/IntelLabs/distiller/blob/master/distiller/summary_graph.py) for different purposes. Even so, we cannot **replace** these operations without resorting to rather "dirty" Python tricks, which we would rather not do for numerous reasons.
 
 In addition, there might be cases where the same module instance is re-used multiple times in the `forward` function. This is also a problem for Distiller. There are several flows that will not work as expected if each call to an operation is not "tied" to a dedicated module instance. For example:
 
 * When collecting statistics, each invocation of a re-used it will overwrite the statistics collected for the previous invocation. We end up with statistics missing for all invocations except the last one.
-* ["Net-aware" quantization](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md#net-aware-quantization) relies on a 1:1 mapping from each operation executed in the model to a module which invoked it. With re-used modules, this mapping is not 1:1 anymore.
+* ["Net-aware" quantization](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/command_line.md#net-aware-quantization) relies on a 1:1 mapping from each operation executed in the model to a module which invoked it. With re-used modules, this mapping is not 1:1 anymore.
 
-Hence, to make sure all supported operations in a model are properly quantized by Distiller, it might be necessary to modify the model code before passing it to the quantizer. Note that the exact set of supported operations might vary between the different [available quantizers](https://nervanasystems.github.io/distiller/algo_quantization.html).
+Hence, to make sure all supported operations in a model are properly quantized by Distiller, it might be necessary to modify the model code before passing it to the quantizer. Note that the exact set of supported operations might vary between the different [available quantizers](https://intellabs.github.io/distiller/algo_quantization.html).
 
 ## Model Preparation To-Do List
 
@@ -70,7 +70,7 @@ class BasicModule(nn.Module):
 
 ### Replace direct tensor operations with modules
 
-The addition (1) and concatenation (3) operations in the `forward` function are examples of direct tensor operations. These operations do not have equivalent modules defined in `torch.nn.Module`. Hence, if we want to quantize these operations, we must implement modules that will call them. In Distiller we've implemented a few simple wrapper modules for common operations. These are defined in the `distiller.modules` namespace. Specifically, the addition operation should be replaced with the `EltWiseAdd` module, and the concatenation operation with the `Concat` module. Check out the code [here](https://github.com/NervanaSystems/distiller/tree/master/distiller/modules) to see the available modules.
+The addition (1) and concatenation (3) operations in the `forward` function are examples of direct tensor operations. These operations do not have equivalent modules defined in `torch.nn.Module`. Hence, if we want to quantize these operations, we must implement modules that will call them. In Distiller we've implemented a few simple wrapper modules for common operations. These are defined in the `distiller.modules` namespace. Specifically, the addition operation should be replaced with the `EltWiseAdd` module, and the concatenation operation with the `Concat` module. Check out the code [here](https://github.com/IntelLabs/distiller/tree/master/distiller/modules) to see the available modules.
 
 ### Replace re-used modules with dedicated instances
 
@@ -133,7 +133,7 @@ LSTMs present a special case. An LSTM block is comprised of building blocks, suc
 
 ### What to do
 
-Distiller provides a "modular" implementation of LSTM, comprised entirely of operations defined at the Python level. We provide an implementation of `DistillerLSTM` and `DistillerLSTMCell`, paralleling `LSTM` and `LSTMCell` provided by PyTorch. See the implementation [here](https://github.com/NervanaSystems/distiller/blob/master/distiller/modules/rnn.py).
+Distiller provides a "modular" implementation of LSTM, comprised entirely of operations defined at the Python level. We provide an implementation of `DistillerLSTM` and `DistillerLSTMCell`, paralleling `LSTM` and `LSTMCell` provided by PyTorch. See the implementation [here](https://github.com/IntelLabs/distiller/blob/master/distiller/modules/rnn.py).
 
 A function to convert all LSTM instances in the model to the Distiller variant is also provided:
 
@@ -141,4 +141,4 @@ A function to convert all LSTM instances in the model to the Distiller variant i
 model = distiller.modules.convert_model_to_distiller_lstm(model)
 ```
 
-To see an example of this conversion, and of mixed-precision quantization within an LSTM block, check out our tutorial on word-language model quantization [here](https://github.com/NervanaSystems/distiller/blob/master/examples/word_language_model/quantize_lstm.ipynb).
+To see an example of this conversion, and of mixed-precision quantization within an LSTM block, check out our tutorial on word-language model quantization [here](https://github.com/IntelLabs/distiller/blob/master/examples/word_language_model/quantize_lstm.ipynb).
