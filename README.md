@@ -79,7 +79,7 @@ Network compression can reduce the memory footprint of a neural network, increas
   - Group Lasso an group variance regularization   
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
-  - [Post-training quantization](https://intellabs.github.io/distiller/usage/index.html##post-training-quantization) of trained full-precision models, dynamic and static (statistics-based)
+  - [Post-training quantization](https://intellabs.github.io/distiller/usage.html#post-training-quantization) of trained full-precision models, dynamic and static (statistics-based)
   - Support for [quantization-aware training](https://intellabs.github.io/distiller/algo_quantization.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
   - Training with [knowledge distillation](https://intellabs.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
@@ -89,7 +89,7 @@ Network compression can reduce the memory footprint of a neural network, increas
   - Sample implementation of [truncated SVD](https://github.com/IntelLabs/distiller/blob/master/jupyter/truncated_svd.ipynb)
 * Lottery Ticket Hypothesis training 
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
-* A set of [Jupyter notebooks](https://intellabs.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
+* A set of [Jupyter notebooks](https://intellabs.github.io/distiller/jupyter.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
   + Take a look at [this notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
   + [This notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
 * Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://intellabs.github.io/distiller/model_zoo.html).
