@@ -17,7 +17,7 @@
 """Truncated-SVD module.
 
 For an example of how truncated-SVD can be used, see this Jupyter notebook:
-https://github.com/NervanaSystems/distiller/blob/master/jupyter/truncated_svd.ipynb
+https://github.com/IntelLabs/distiller/blob/master/jupyter/truncated_svd.ipynb
 
 """
 

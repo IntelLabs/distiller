@@ -105,7 +105,7 @@ networks for rapid-deployment](https://arxiv.org/abs/1810.05723).
 
 #### Post-Training
 
-For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in [`range_linear.py`](https://github.com/NervanaSystems/distiller/blob/master/distiller/quantization/range_linear.py).
+For post-training quantization, this method is implemented by wrapping existing modules with quantization and de-quantization operations. The wrapper implementations are in [`range_linear.py`](https://github.com/IntelLabs/distiller/blob/master/distiller/quantization/range_linear.py).
 
 - The following operations have dedicated implementations which consider quantization:
     - `torch.nn.Conv2d/Conv3d`
@@ -118,7 +118,7 @@ For post-training quantization, this method is implemented by wrapping existing 
     - `distiller.modules.BatchMatmul`
 - Any existing module will likely need to be modified to use the `distiller.modules.*` modules. See [here](prepare_model_quant.md) for details on how to prepare a model for quantization.
 - To automatically transform an existing model to a quantized model using this method, use the `PostTrainLinearQuantizer` class. For details on ways to invoke the quantizer see [here](schedule.md#post-training-quantization).
-- When using `PostTrainLinearQuantizer`, by default, any operation not in the list above is "fake"-quantized, meaning it is executed in FP32 and its output is quantized. Quantization for specific layers (or groups of layers) can be disabled using Distiller's override mechanism (see example [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)).
+- When using `PostTrainLinearQuantizer`, by default, any operation not in the list above is "fake"-quantized, meaning it is executed in FP32 and its output is quantized. Quantization for specific layers (or groups of layers) can be disabled using Distiller's override mechanism (see example [here](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)).
 - For weights and bias the scale factor and zero-point are determined once at quantization setup ("offline" / "static"). For activations, both "static" and "dynamic" quantization is supported. Static quantization of activations requires that statistics be collected beforehand. See details on how to do that [here](schedule.md#collecting-statistics-for-quantization).
 - The calculated quantization parameters are stored as buffers within the module, so they are automatically serialized when the model checkpoint is saved.
 

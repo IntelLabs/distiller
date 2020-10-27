@@ -1,6 +1,6 @@
 # Scheduler for training pre-activation ResNet on CIFAR-10, quantized using the DoReFa scheme
 # See:
-#  https://nervanasystems.github.io/distiller/algo_quantization/index.html#dorefa
+#  https://intellabs.github.io/distiller/algo_quantization.html#dorefa
 #  https://arxiv.org/abs/1606.06160
 # 
 # Applicable to ResNet 20 / 32 / 44 / 56 / 110
@@ -22,7 +22,7 @@
 #  * Replace 'preact_resnet44_cifar' with the required teacher model
 #  * To train baseline FP32 that can be used as teacher models, see preact_resnet_cifar_base_fp32.yaml
 #  * More details on knowledge distillation at: 
-#    https://nervanasystems.github.io/distiller/schedule/index.html#knowledge-distillation
+#    https://intellabs.github.io/distiller/schedule.html#knowledge-distillation
 #
 # See some experimental results below after the YAML schedule
 

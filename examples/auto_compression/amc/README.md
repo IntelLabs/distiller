@@ -28,7 +28,7 @@ These notebooks will help visualize and review the results of recreating the res
 | Mobilenet v1 | 50% | 70.6 | 70.2 (-0.4)
 | Mobilenet v2 |  50% | 71.8 | 70.8 (-1.0)
 
-AMC [1] trains a Deep Deterministic Policy Gradient (DDPG) RL agent to compress DNNs. For the implementation of DDPG we're using [Coach](https://github.com/NervanaSystems/coach) or Prof. Han's team's [implementation](https://github.com/mit-han-lab/amc-compressed-models) . We wrap Distiller in an OpenAI [Gym environment API](https://github.com/openai/gym) so that it presents a standard RL environment to the agent. We execute Distiller's sample application [amc.py](https://github.com/NervanaSystems/distiller/blob/new_amc/examples/auto_compression/amc/amc.py) with special arguments telling it how to invoke AMC. This creates a DistillerWrapperEnvironment environment and a DDPG agent and starts the training cycle. For the exact technical details of doing this yourself, see the notebooks (better instructions will be added in the future).
+AMC [1] trains a Deep Deterministic Policy Gradient (DDPG) RL agent to compress DNNs. For the implementation of DDPG we're using [Coach](https://github.com/IntelLabs/coach) or Prof. Han's team's [implementation](https://github.com/mit-han-lab/amc-compressed-models) . We wrap Distiller in an OpenAI [Gym environment API](https://github.com/openai/gym) so that it presents a standard RL environment to the agent. We execute Distiller's sample application [amc.py](https://github.com/IntelLabs/distiller/blob/new_amc/examples/auto_compression/amc/amc.py) with special arguments telling it how to invoke AMC. This creates a DistillerWrapperEnvironment environment and a DDPG agent and starts the training cycle. For the exact technical details of doing this yourself, see the notebooks (better instructions will be added in the future).
 
 We thank Prof. Song Han and his team for their [help](https://github.com/mit-han-lab/amc-compressed-models) with certain critical parts of this implementation.  However, all bugs in interpretation and/or implementation are ours ;-).
 
@@ -37,8 +37,8 @@ Our AMC implementation is designed such that you can easily switch between RL li
 For `--amc-rllib=coach` you need to install coach in your Python virtual-env. The "hanlab" library, `--amc-rllib=hanlab`, refers to HAN Lab's DDPG agent implementation.
 
 ### Using Intel AI Lab's Coach
-Some of the features required for AMC are not yet in the official [Coach](https://github.com/NervanaSystems/coach) release, so you should use the `master` branch.
-Therefore, follow Coach's [installation instructions](https://github.com/NervanaSystems/coach#installation) for a development environment, and use the `master` branch.
+Some of the features required for AMC are not yet in the official [Coach](https://github.com/IntelLabs/coach) release, so you should use the `master` branch.
+Therefore, follow Coach's [installation instructions](https://github.com/IntelLabs/coach#installation) for a development environment, and use the `master` branch.
 <br>
 Coach uses TensorFlow and Distiller uses PyTorch, and the two frameworks do not share GPUs well.  The easiest work-around for this is to execute Coach code (the RL agent) on the CPU and Distiller code on the GPU(s).
 <br>

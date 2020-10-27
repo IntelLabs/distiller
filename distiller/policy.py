@@ -90,7 +90,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
         """
         Arguments:
             mask_on_forward_only: controls what we do after the weights are updated by the backward pass.
-            In issue #53 (https://github.com/NervanaSystems/distiller/issues/53) we explain why in some
+            In issue #53 (https://github.com/IntelLabs/distiller/issues/53) we explain why in some
             cases masked weights will be updated to a non-zero value, even if their gradients are masked
             (e.g. when using SGD with momentum). Therefore, to circumvent this weights-update performed by
             the backward pass, we usually mask the weights again - right after the backward pass.  To

@@ -19,7 +19,7 @@
 #  * Use the command line at the top to train teacher models, which can be used as checkpoints passed to '--kd-resume'
 #    (the shell script we point to below can be used to train baseline teacher models)
 #  * More details on knowledge distillation at: 
-#    https://nervanasystems.github.io/distiller/schedule/index.html#knowledge-distillation
+#    https://intellabs.github.io/distiller/schedule.html#knowledge-distillation
 #
 # See some experimental results below after the YAML schedule
 

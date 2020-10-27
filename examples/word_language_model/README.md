@@ -66,7 +66,7 @@ and are similar to [Using the Output Embedding to Improve Language Models (Press
 
 ## Compression: Pruning
 
-[**Tutorial: Using Distiller to prune a PyTorch language model**](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
+[**Tutorial: Using Distiller to prune a PyTorch language model**](https://intellabs.github.io/distiller/tutorial-lang_model.html)
 
 We modified the `main.py` script to allow pruning via Distiller's scheduling mechanism. The tutorial linked above provides a step-by-step description of how these modifications were done. It then shows how to use [AGP (automated gradual pruning)](https://arxiv.org/abs/1710.01878) to prune the model to various levels.
 
@@ -87,7 +87,7 @@ We can see that we are able to maintain the original perplexity using only ~20% 
 
 ## Compression: Post-Training Quantization
 
-[**Tutorial: Post-Training Quantization of a Language Model using Distiller** (Jupyter Notebook)](https://github.com/NervanaSystems/distiller/blob/master/examples/word_language_model/quantize_lstm.ipynb)
+[**Tutorial: Post-Training Quantization of a Language Model using Distiller** (Jupyter Notebook)](https://github.com/IntelLabs/distiller/blob/master/examples/word_language_model/quantize_lstm.ipynb)
 
 (Note that post-training quantization is NOT implemented in the `main.py` script - it is only shown in the notebook tutorial)
 

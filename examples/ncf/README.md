@@ -11,7 +11,7 @@ We've made several modifications to the code:
   * Added progress indication in training and evaluation flows
 * In `neumf.py`:
   * Added option to split final the FC layer (the `split_final` parameter). See [below](#side-note-splitting-the-final-fc-layer).
-  * Replaced all functional calls with modules so they can be detected by Distiller, as per this [guide](https://nervanasystems.github.io/distiller/prepare_model_quant.html) in the Distiller docs.
+  * Replaced all functional calls with modules so they can be detected by Distiller, as per this [guide](https://intellabs.github.io/distiller/prepare_model_quant.html) in the Distiller docs.
 * In `dataset.py`:
   * Speed up data loading - On first data will is loaded from CSVs and then pickled. On subsequent runs the pickle is loaded. This is much faster than the original implementation, but still very slow.
   * Added progress indication during data load process
