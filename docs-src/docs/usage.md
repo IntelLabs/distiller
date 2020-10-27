@@ -4,8 +4,8 @@ The Distiller repository contains a sample application, ```distiller/examples/cl
 
 You might also want to refer to the following resources:
 
-* An [explanation](https://nervanasystems.github.io/distiller/schedule.html) of the scheduler file format.
-* An in-depth [discussion](https://nervanasystems.github.io/distiller/model_zoo.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
+* An [explanation](https://intellabs.github.io/distiller/schedule.html) of the scheduler file format.
+* An in-depth [discussion](https://intellabs.github.io/distiller/model_zoo.html) of how we used these schedule files to implement several state-of-the-art DNN compression research papers.
 
 The sample application supports various features for compression of image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.
 
@@ -139,7 +139,7 @@ $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10/ -j=1 -
 
 The ```sense``` command-line argument can be set to either ```element``` or ```filter```, depending on the type of analysis you want done.<br>
 
-There is also a [Jupyter notebook](http://localhost:8888/notebooks/sensitivity_analysis.ipynb) with example invocations, outputs and explanations.
+There is also a [Jupyter notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) with example invocations, outputs and explanations.
 
 ## Post-Training Quantization
 
@@ -153,7 +153,7 @@ See [here](schedule.md#post-training-quantization) for more details on how to in
 
 A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.
 
-For more examples of post-training quantization see [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant).
+For more examples of post-training quantization see [here](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant).
 
 ## Summaries
 You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
@@ -311,7 +311,7 @@ class BasicBlock(nn.Module):
         out = self.relu(out)                    # <================
         return out
 ```  
-In Distiller we changed [ResNet](https://github.com/NervanaSystems/distiller/blob/master/models/imagenet/resnet.py) to use multiple instances of nn.ReLU, and each instance is used only once:  
+In Distiller we changed [ResNet](https://github.com/IntelLabs/distiller/blob/master/distiller/models/imagenet/resnet.py) to use multiple instances of nn.ReLU, and each instance is used only once:  
 ```  
 class BasicBlock(nn.Module):
     expansion = 1

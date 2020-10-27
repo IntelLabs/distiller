@@ -18,7 +18,7 @@ The authors describe AGP:
 ### Distiller 
 * The original AGP paper described the application of AGP for fine-grained pruning, and in Distiller we also implemented AGP for structured-pruning.
 * We also provide examples of applying AGP for pruning language models. The results and 
-methodology are discussed at length in the [documentation](https://nervanasystems.github.io/distiller/tutorial-lang_model.html)
+methodology are discussed at length in the [documentation](https://intellabs.github.io/distiller/tutorial-lang_model.html)
 
 ### Examples
 

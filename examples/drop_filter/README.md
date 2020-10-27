@@ -26,7 +26,7 @@ Dropping filters requires finer control over the scheduling process since we wan
 of filters every `n` training iterations/steps (i.e. mini-batches), whereas usually we make such decisions
 at the epoch boundary. 
 
-1. [plain20_cifar_dropfilter_training.yaml](https://github.com/NervanaSystems/distiller/blob/master/examples/drop_filter/plain20_cifar_dropfilter_training.yaml)
+1. [plain20_cifar_dropfilter_training.yaml](https://github.com/IntelLabs/distiller/blob/master/examples/drop_filter/plain20_cifar_dropfilter_training.yaml)
 
     In this example we train a Plain20 model with increasing levels of dropped filters, 
     starting at 5% drop and going as high as 50% drop.  Our aim is to make the network more robust to filter-pruning<br>
@@ -39,7 +39,7 @@ at the epoch boundary.
     | --- | :---: |    ---: |  ---: |
     | Plain-20 | 5-50%| 89.61 | 90.18
     
-2. [plain20_cifar_dropfilter_training_regularization.yaml](https://github.com/NervanaSystems/distiller/blob/master/examples/drop_filter/plain20_cifar_dropfilter_training_regularization.yaml)
+2. [plain20_cifar_dropfilter_training_regularization.yaml](https://github.com/IntelLabs/distiller/blob/master/examples/drop_filter/plain20_cifar_dropfilter_training_regularization.yaml)
     
    In this example we use DropFilter for regularization.  
    * The network is trained from scratch.
@@ -49,7 +49,7 @@ at the epoch boundary.
     | --- | :---: |    ---: |  ---: |
     | Plain-20 | 10%| 90.88 | 90.18
     
-3. [resnet20_cifar_randomlevel_training.yaml](https://github.com/NervanaSystems/distiller/blob/master/examples/drop_filter/resnet20_cifar_randomlevel_training.yaml)
+3. [resnet20_cifar_randomlevel_training.yaml](https://github.com/IntelLabs/distiller/blob/master/examples/drop_filter/resnet20_cifar_randomlevel_training.yaml)
     
     In this example we randomly choose a percentage of filters to prune (level), and then use L1-norm ranking to 
     choose which filters to drop.

@@ -50,7 +50,7 @@ Regularization can also be used to induce sparsity.  To induce element-wise spar
 
 \\(l_2\\)-norm regularization reduces overfitting and improves a model's accuracy by shrinking large parameters, but it does not force these parameters to absolute zero.  \\(l_1\\)-norm regularization sets some of the parameter elements to zero, therefore limiting the model's capacity while making the model simpler.  This is sometimes referred to as *feature selection* and gives us another interpretation of pruning.
 
-[One](https://github.com/NervanaSystems/distiller/blob/master/jupyter/L1-regularization.ipynb) of Distiller's Jupyter notebooks explains how the \\(l_1\\)-norm regularizer induces sparsity, and how it interacts with \\(l_2\\)-norm regularization.
+[One](https://github.com/IntelLabs/distiller/blob/master/jupyter/L1-regularization.ipynb) of Distiller's Jupyter notebooks explains how the \\(l_1\\)-norm regularizer induces sparsity, and how it interacts with \\(l_2\\)-norm regularization.
 
 
 If we configure ```weight_decay``` to zero and use \\(l_1\\)-norm regularization, then we have:

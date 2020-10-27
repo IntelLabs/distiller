@@ -1,15 +1,15 @@
 <center> <img src="imgs/banner1.png"></center>
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/NervanaSystems/distiller/blob/master/LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/IntelLabs/distiller/blob/master/LICENSE)
 [![DOI](https://zenodo.org/badge/130871393.svg)](https://zenodo.org/badge/latestdoi/130871393)
 
 <div align="center">
   <h3>
-    <a href="https://github.com/NervanaSystems/distiller/wiki">
+    <a href="https://github.com/IntelLabs/distiller/wiki">
       Wiki and tutorials
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/index.html">
+    <a href="https://intellabs.github.io/distiller/index.html">
       Documentation
     </a>
     <span> | </span>
@@ -17,15 +17,15 @@
       Getting Started
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/algo_pruning.html">
+    <a href="https://intellabs.github.io/distiller/algo_pruning.html">
       Algorithms
     </a>
     <span> | </span>
-    <a href="https://nervanasystems.github.io/distiller/design.html">
+    <a href="https://intellabs.github.io/distiller/design.html">
       Design
     </a>
     <span> | </span>
-    <a href="https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ)">
+    <a href="https://github.com/IntelLabs/distiller/wiki/Frequently-Asked-Questions-(FAQ)">
       FAQ
     </a>
   </h3>
@@ -54,7 +54,7 @@ Network compression can reduce the memory footprint of a neural network, increas
 
 ## Highlighted features
 * **Automatic Compression**
-  - [Automated Model Compression](https://github.com/NervanaSystems/distiller/blob/master/examples/auto_compression/amc) (AMC)
+  - [Automated Model Compression](https://github.com/IntelLabs/distiller/blob/master/examples/auto_compression/amc) (AMC)
 * **Weight pruning**
   - Element-wise pruning using magnitude thresholding, sensitivity thresholding, target sparsity level, and activation statistics 
 * **Structured pruning**
@@ -73,26 +73,26 @@ Network compression can reduce the memory footprint of a neural network, increas
   - Easily control what is performed each training step (e.g. greedy layer by layer pruning to full model pruning). 
   - Automatic gradual schedule (AGP) for pruning individual connections and complete structures.
   - The compression schedule is expressed in a YAML file so that a single file captures the details of experiments.  This [dependency injection](https://en.wikipedia.org/wiki/Dependency_injection) design decouples the Distiller scheduler and library from future extensions of algorithms.
-* Element-wise and filter-wise pruning **sensitivity analysis** (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb).
+* Element-wise and filter-wise pruning **sensitivity analysis** (using L1-norm thresholding). Examine the data from some of the networks we analyzed, using [this notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/sensitivity_analysis.ipynb).
 * **Regularization**
   - L1-norm element-wise regularization
   - Group Lasso an group variance regularization   
 * **Quantization**
   - Automatic mechanism to transform existing models to quantized versions, with customizable bit-width configuration for different layers. No need to re-write the model for different quantization methods.
-  - [Post-training quantization](https://nervanasystems.github.io/distiller/usage/index.html##post-training-quantization) of trained full-precision models, dynamic and static (statistics-based)
-  - Support for [quantization-aware training](https://nervanasystems.github.io/distiller/algo_quantization.html#quantization-aware-training) in the loop
+  - [Post-training quantization](https://intellabs.github.io/distiller/usage/index.html##post-training-quantization) of trained full-precision models, dynamic and static (statistics-based)
+  - Support for [quantization-aware training](https://intellabs.github.io/distiller/algo_quantization.html#quantization-aware-training) in the loop
 * **Knowledge distillation**
-  - Training with [knowledge distillation](https://nervanasystems.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
+  - Training with [knowledge distillation](https://intellabs.github.io/distiller/knowledge_distillation.html), in conjunction with the other available pruning / regularization / quantization methods.
 * **Conditional computation**
   - Sample implementation of Early Exit
 * **Low rank decomposition**
-  - Sample implementation of [truncated SVD](https://github.com/NervanaSystems/distiller/blob/master/jupyter/truncated_svd.ipynb)
+  - Sample implementation of [truncated SVD](https://github.com/IntelLabs/distiller/blob/master/jupyter/truncated_svd.ipynb)
 * Lottery Ticket Hypothesis training 
 * Export statistics summaries using Pandas dataframes, which makes it easy to slice, query, display and graph the data.
-* A set of [Jupyter notebooks](https://nervanasystems.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
-  + Take a look at [this notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
-  + [This notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
-* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html).
+* A set of [Jupyter notebooks](https://intellabs.github.io/distiller/jupyter/index.html) to plan experiments and analyze compression results.  The graphs and visualizations you see on this page originate from the included Jupyter notebooks.  
+  + Take a look at [this notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/alexnet_insights.ipynb), which compares visual aspects of dense and sparse Alexnet models.
+  + [This notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/model_summary.ipynb) creates performance indicator graphs from model data.
+* Sample implementations of published research papers, using library-provided building blocks.  See the  research papers discussions in our [model-zoo](https://intellabs.github.io/distiller/model_zoo.html).
 * Logging to the console, text file and TensorBoard-formatted file.
 * Export to **ONNX** (export of quantized models pending ONNX standardization)
 
@@ -105,7 +105,7 @@ These instructions will help get Distiller up and running on your local machine.
   
 Clone the Distiller code repository from github:
 ```
-$ git clone https://github.com/NervanaSystems/distiller.git
+$ git clone https://github.com/IntelLabs/distiller.git
 ```
 The rest of the documentation that follows, assumes that you have cloned your repository to a directory called ```distiller```. <br>
 </p>
@@ -176,21 +176,21 @@ Distiller comes with sample applications and tutorials covering a range of model
 
 | Model Type | Sparsity | Post-training quantization | Quantization-aware training | Auto Compression (AMC) | Knowledge Distillation |
 |------------|:--------:|:--------------------------:|:---------------------------:|:----------------------:|:--------:|
-| [Image classification](https://github.com/NervanaSystems/distiller/tree/master/examples/classifier_compression) | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| [Word-level language model](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model)| :white_check_mark: | :white_check_mark: | | |
-| [Translation (GNMT)](https://github.com/NervanaSystems/distiller/tree/master/examples/GNMT) | | :white_check_mark: | | |
-| [Recommendation System (NCF)](https://github.com/NervanaSystems/distiller/tree/master/examples/ncf) | |  :white_check_mark: | | |
-| [Object Detection](https://github.com/NervanaSystems/distiller/tree/master/examples/object_detection_compression) |  :white_check_mark: | | | |
+| [Image classification](https://github.com/IntelLabs/distiller/tree/master/examples/classifier_compression) | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| [Word-level language model](https://github.com/IntelLabs/distiller/tree/master/examples/word_language_model)| :white_check_mark: | :white_check_mark: | | |
+| [Translation (GNMT)](https://github.com/IntelLabs/distiller/tree/master/examples/GNMT) | | :white_check_mark: | | |
+| [Recommendation System (NCF)](https://github.com/IntelLabs/distiller/tree/master/examples/ncf) | |  :white_check_mark: | | |
+| [Object Detection](https://github.com/IntelLabs/distiller/tree/master/examples/object_detection_compression) |  :white_check_mark: | | | |
 
-Head to the [examples](https://github.com/NervanaSystems/distiller/tree/master/examples) directory for more details.
+Head to the [examples](https://github.com/IntelLabs/distiller/tree/master/examples) directory for more details.
 
 Other resources to refer to, beyond the examples:
-+ [Frequently-asked questions (FAQ)](https://github.com/NervanaSystems/distiller/wiki/Frequently-Asked-Questions-(FAQ))
-+ [Model zoo](https://nervanasystems.github.io/distiller/model_zoo.html)
-+ [Compression scheduling](https://nervanasystems.github.io/distiller/schedule.html)
-+ [Usage](https://nervanasystems.github.io/distiller/usage.html)
-+ [Preparing a model for quantization](https://nervanasystems.github.io/distiller/prepare_model_quant.html)
-+ [Tutorial: Pruning Filters & Channels](https://nervanasystems.github.io/distiller/tutorial-struct_pruning.html)
++ [Frequently-asked questions (FAQ)](https://github.com/IntelLabs/distiller/wiki/Frequently-Asked-Questions-(FAQ))
++ [Model zoo](https://intellabs.github.io/distiller/model_zoo.html)
++ [Compression scheduling](https://intellabs.github.io/distiller/schedule.html)
++ [Usage](https://intellabs.github.io/distiller/usage.html)
++ [Preparing a model for quantization](https://intellabs.github.io/distiller/prepare_model_quant.html)
++ [Tutorial: Pruning Filters & Channels](https://intellabs.github.io/distiller/tutorial-struct_pruning.html)
 
 ### Basic Usage Examples
 
@@ -234,7 +234,7 @@ You should see a text table detailing the various sparsities of the parameter te
 <br>
 Wrapping it up are the standard-deviation, mean, and mean of absolute values of the elements.
 
-In the [Compression Insights notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/compression_insights.ipynb) we use matplotlib to plot a bar chart of this summary, that indeed show non-impressive footprint compression.
+In the [Compression Insights notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/compression_insights.ipynb) we use matplotlib to plot a bar chart of this summary, that indeed show non-impressive footprint compression.
 
 <center> <img src="imgs/ch_sparsity_stats_barchart.png"></center>
 
@@ -256,13 +256,13 @@ This example performs 8-bit quantization of ResNet20 for CIFAR10.  We've include
 $ python3 compress_classifier.py -a resnet20_cifar ../../../data.cifar10 --resume ../ssl/checkpoints/checkpoint_trained_dense.pth.tar --quantize-eval --evaluate
 ```
 
-The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
+The command-line above will save a checkpoint named `quantized_checkpoint.pth.tar` containing the quantized model parameters. See more examples [here](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/command_line.md).
 </p>
 </details>
 
 ### Explore the sample Jupyter notebooks
-The set of notebooks that come with Distiller is described [here](https://nervanasystems.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
-After installing and running the server, take a look at the [notebook](https://github.com/NervanaSystems/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
+The set of notebooks that come with Distiller is described [here](https://intellabs.github.io/distiller/jupyter.html#using-the-distiller-notebooks), which also explains the steps to install the Jupyter notebook server.<br>
+After installing and running the server, take a look at the [notebook](https://github.com/IntelLabs/distiller/blob/master/jupyter/sensitivity_analysis.ipynb) covering pruning sensitivity analysis.
 
 Sensitivity analysis is a long process and this notebook loads CSV files that are the output of several sessions of sensitivity analysis.
 <center> <img src="imgs/resnet18-sensitivity.png"></center>
@@ -302,7 +302,7 @@ Open distiller/docs/site/index.html to view the documentation home page.
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/NervanaSystems/distiller/tags).
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/IntelLabs/distiller/tags).
 
 ## License
 
@@ -454,7 +454,7 @@ If you used Distiller for your work, please use the following citation:
 
 Any published work is built on top of the work of many other people, and the credit belongs to too many people to list here.
 * The Python and PyTorch developer communities have shared many invaluable insights, examples and ideas on the Web.
-* The authors of the research papers implemented in the [Distiller model-zoo](https://nervanasystems.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
+* The authors of the research papers implemented in the [Distiller model-zoo](https://intellabs.github.io/distiller/model_zoo.html) have shared their research ideas, theoretical background and results.
 
 ### Built With
 
