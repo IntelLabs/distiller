@@ -309,7 +309,7 @@ def test_policy_scheduling():
         scheduler.add_policy(policy, epochs=[1,2,3], starting_epoch=4, ending_epoch=5, frequency=1)
 
     scheduler.add_policy(policy, epochs=None, starting_epoch=4, ending_epoch=5, frequency=1)
-    # Regression test for issue #176 - https://github.com/NervanaSystems/distiller/issues/176
+    # Regression test for issue #176 - https://github.com/IntelLabs/distiller/issues/176
     scheduler.add_policy(policy, epochs=[1, 2, 3])
     sched_metadata = scheduler.sched_metadata[policy]
     assert sched_metadata['starting_epoch'] == 1

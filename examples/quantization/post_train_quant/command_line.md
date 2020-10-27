@@ -8,7 +8,7 @@ Post-training quantization can either be configured straight from the command-li
 
 **All the examples shown below are using command-line configuration.**  
 
-**For an example of how to use a YAML config file, please see `resnet18_imagenet_post_train.yaml` in this directory ([link to view in GitHub repo](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)). It shows how to override the configuration of specific layers in order to obtain better accuracy.**  
+**For an example of how to use a YAML config file, please see `resnet18_imagenet_post_train.yaml` in this directory ([link to view in GitHub repo](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train.yaml)). It shows how to override the configuration of specific layers in order to obtain better accuracy.**  
 
 ## Available Command Line Arguments
 
@@ -30,9 +30,9 @@ Post-training quantization can either be configured straight from the command-li
 | `--qe-stats-file`        | N/A       | Use stats file for static quantization of activations. See details below              | None    |
 | `--qe-dynamic`           | N/A       | Perform dynamic quantization. See details below                                       | None    |
 | `--qe-config-file`       | N/A       | Path to YAML config file. See section above. (ignores all other --qe* arguments)      | None    |
-| `--qe-convert-pytorch`   | `--qept`  | Convert the model to PyTorch native post-train quantization modules. See [tutorial](https://github.com/NervanaSystems/distiller/blob/master/jupyter/post_train_quant_convert_pytorch.ipynb) for more details | Off     |
+| `--qe-convert-pytorch`   | `--qept`  | Convert the model to PyTorch native post-train quantization modules. See [tutorial](https://github.com/IntelLabs/distiller/blob/master/jupyter/post_train_quant_convert_pytorch.ipynb) for more details | Off     |
 | `--qe-pytorch-backend`   | N/A       | When --qe-convert-pytorch is set, specifies the PyTorch quantization backend to use. Choices: "fbgemm", "qnnpack"   | Off     |
-| `--qe-lapq`              | N/A       | Optimize post-training quantization parameters using [LAPQ](https://arxiv.org/abs/1911.07190) method. Beyond the scope of this document. See [example YAML](https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml) file for details   | Off     |
+| `--qe-lapq`              | N/A       | Optimize post-training quantization parameters using [LAPQ](https://arxiv.org/abs/1911.07190) method. Beyond the scope of this document. See [example YAML](https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant/resnet18_imagenet_post_train_lapq.yaml) file for details   | Off     |
 
 ### Notes
 

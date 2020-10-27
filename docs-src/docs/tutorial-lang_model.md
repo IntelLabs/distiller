@@ -13,9 +13,9 @@
 * [Until next time](#until-next-time)
 
 ## Introduction
-In this tutorial I'll show you how to compress a word-level language model using [Distiller](https://github.com/NervanaSystems/distiller).  Specifically, we use PyTorch’s [word-level language model sample code](https://github.com/pytorch/examples/tree/master/word_language_model) as the code-base of our example, weave in some Distiller code, and show how we compress the model using two different element-wise pruning algorithms.  To make things manageable, I've divided the tutorial to two parts: in the first we will setup the sample application and prune using [AGP](https://arxiv.org/abs/1710.01878).  In the second part I'll show how I've added Baidu's RNN pruning algorithm and then use it to prune the same word-level language model.  The completed code is available [here](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model).
+In this tutorial I'll show you how to compress a word-level language model using [Distiller](https://github.com/IntelLabs/distiller).  Specifically, we use PyTorch’s [word-level language model sample code](https://github.com/pytorch/examples/tree/master/word_language_model) as the code-base of our example, weave in some Distiller code, and show how we compress the model using two different element-wise pruning algorithms.  To make things manageable, I've divided the tutorial to two parts: in the first we will setup the sample application and prune using [AGP](https://arxiv.org/abs/1710.01878).  In the second part I'll show how I've added Baidu's RNN pruning algorithm and then use it to prune the same word-level language model.  The completed code is available [here](https://github.com/IntelLabs/distiller/tree/master/examples/word_language_model).
 
-The results are displayed below and the code is available [here](https://github.com/NervanaSystems/distiller/tree/master/examples/word_language_model).
+The results are displayed below and the code is available [here](https://github.com/IntelLabs/distiller/tree/master/examples/word_language_model).
 Note that we can improve the results by training longer, since the loss curves are usually still decreasing at the end of epoch 40.  However, for demonstration purposes we don’t need to do this.
 
 | Type   | Sparsity |     NNZ     | Validation | Test  | Command line                                                                                                                                                            |
@@ -52,7 +52,7 @@ Essentially, this recreates the language model experiment in the AGP paper, and 
 ## Setup
 
 We start by cloning Pytorch’s example [repository](https://github.com/pytorch/examples/tree/master). I’ve copied the language model code to distiller’s examples/word_language_model directory, so I’ll use that for the rest of the tutorial.
-Next, let’s create and activate a virtual environment, as explained in Distiller's [README](https://github.com/NervanaSystems/distiller#create-a-python-virtual-environment) file.
+Next, let’s create and activate a virtual environment, as explained in Distiller's [README](https://github.com/IntelLabs/distiller#installation) file.
 Now we can turn our attention to [main.py](https://github.com/pytorch/examples/blob/master/word_language_model/main.py), which contains the training application.
 
 ### Preparing the code
@@ -127,7 +127,7 @@ Now we scroll down all the way to the train() function.  We'll change its signat
 ```python
 def train(epoch, optimizer, compression_scheduler=None)
 ```
-Function ```train()``` is responsible for training the network in batches for one epoch, and in its epoch loop we want to perform compression.   The [CompressionScheduler](https://github.com/NervanaSystems/distiller/blob/master/distiller/scheduler.py) invokes [ScheduledTrainingPolicy](https://github.com/NervanaSystems/distiller/blob/master/distiller/policy.py) instances per the scheduling specification that was programmed in the ```CompressionScheduler``` instance.  There are four main ```SchedulingPolicy``` types: ```PruningPolicy```, ```RegularizationPolicy```, ```LRPolicy```, and ```QuantizationPolicy```.  We'll be using ```PruningPolicy```, which is triggered ```on_epoch_begin``` (to invoke the [Pruners](https://github.com/NervanaSystems/distiller/blob/master/distiller/pruning/pruner.py), and ```on_minibatch_begin``` (to mask the weights).   Later we will create a YAML scheduling file, and specify the schedule of [AutomatedGradualPruner](https://github.com/NervanaSystems/distiller/blob/master/distiller/pruning/automated_gradual_pruner.py) instances.  
+Function ```train()``` is responsible for training the network in batches for one epoch, and in its epoch loop we want to perform compression.   The [CompressionScheduler](https://github.com/IntelLabs/distiller/blob/master/distiller/scheduler.py) invokes [ScheduledTrainingPolicy](https://github.com/IntelLabs/distiller/blob/master/distiller/policy.py) instances per the scheduling specification that was programmed in the ```CompressionScheduler``` instance.  There are four main ```SchedulingPolicy``` types: ```PruningPolicy```, ```RegularizationPolicy```, ```LRPolicy```, and ```QuantizationPolicy```.  We'll be using ```PruningPolicy```, which is triggered ```on_epoch_begin``` (to invoke the [Pruners](https://github.com/IntelLabs/distiller/blob/master/distiller/pruning), and ```on_minibatch_begin``` (to mask the weights).   Later we will create a YAML scheduling file, and specify the schedule of [AutomatedGradualPruner](https://github.com/IntelLabs/distiller/blob/master/distiller/pruning/automated_gradual_pruner.py) instances.  
 
 Because we are writing a single application, which can be used with various Policies in the future (e.g. group-lasso regularization), we should add code to invoke all of the ```CompressionScheduler```'s callbacks, not just the mandatory ```on_epoch_begin``` callback.    We invoke ```on_minibatch_begin``` before running the forward-pass, ```before_backward_pass``` after computing the loss, and ```on_minibatch_end``` after completing the backward-pass.
 
@@ -274,7 +274,7 @@ So what's going on here?
 We also have two pairs of RNN (LSTM really) parameters.  There is a pair because the model uses the command-line argument ```args.nlayers``` to decide how many instances of RNN (or LSTM or GRU) cells to use, and it defaults to 2.  The recurrent cells are LSTM cells, because this is the default of ```args.model```, which is used in the initialization of ```RNNModel```.  Let's look at the parameters of the first RNN: ```rnn.weight_ih_l0``` and ```rnn.weight_hh_l0```: what are these?  
 Recall the [LSTM equations](https://pytorch.org/docs/stable/nn.html#lstm) that PyTorch implements.  In the equations, there are 8 instances of vector-matrix multiplication (when batch=1).  These can be combined into a single matrix-matrix multiplication (GEMM), but PyTorch groups these into two GEMM operations: one GEMM multiplies the inputs (```rnn.weight_ih_l0```), and the other multiplies the hidden-state (```rnn.weight_hh_l0```).  
 ### How are we compressing?
-Let's turn to the configurations of the Large language model compression schedule to 70%, 80%, 90% and 95% sparsity. Using AGP it is easy to configure the pruning schedule to produce an exact sparsity of the compressed model.  I'll use the [70% schedule](https://github.com/NervanaSystems/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml) to show a concrete example.
+Let's turn to the configurations of the Large language model compression schedule to 70%, 80%, 90% and 95% sparsity. Using AGP it is easy to configure the pruning schedule to produce an exact sparsity of the compressed model.  I'll use the [70% schedule](https://github.com/IntelLabs/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml) to show a concrete example.
 
 The YAML file has two sections: ```pruners``` and ```policies```.  Section ```pruners``` defines instances of ```ParameterPruner``` - in our case we define three instances of ```AutomatedGradualPruner```: for the weights of the first RNN (```l0_rnn_pruner```), the second RNN (```l1_rnn_pruner```) and the embedding layer (```embedding_pruner```).  These names are arbitrary, and serve are name-handles which bind Policies to Pruners - so you can use whatever names you want.
 Each ```AutomatedGradualPruner``` is configured with an ```initial_sparsity``` and ```final_sparsity```.  For examples, the ```l0_rnn_pruner``` below is configured to prune 5% of the weights as soon as it starts working, and finish when 70% of the weights have been pruned.  The ```weights``` parameter tells the Pruner which weight tensors to prune.
@@ -301,7 +301,7 @@ pruners:
 ```
 ### When are we compressing?
 If the ```pruners``` section defines "what-to-do", the ```policies``` section defines "when-to-do".  This part is harder, because we define the pruning schedule, which requires us to try a few different schedules until we understand which schedule works best.
-Below we define three [PruningPolicy](https://github.com/NervanaSystems/distiller/blob/master/distiller/policy.py#L63:L87) instances.  The first two instances start operating at epoch 2 (```starting_epoch```), end at epoch 20 (```ending_epoch```), and operate once every epoch (```frequency```; as I explained above, Distiller's Pruning scheduling operates only at ```on_epoch_begin```).  In between pruning operations, the pruned model is fine-tuned.
+Below we define three [PruningPolicy](https://github.com/IntelLabs/distiller/blob/master/distiller/policy.py#L86) instances.  The first two instances start operating at epoch 2 (```starting_epoch```), end at epoch 20 (```ending_epoch```), and operate once every epoch (```frequency```; as I explained above, Distiller's Pruning scheduling operates only at ```on_epoch_begin```).  In between pruning operations, the pruned model is fine-tuned.
 
 ```YAML
 policies:
@@ -328,10 +328,10 @@ We invoke the compression as follows:
 ```
 $ time python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --tied --compress=../../examples/agp-pruning/word_lang_model.LARGE_70.schedule_agp.yaml
 ```
-[Table 1](https://github.com/NervanaSystems/distiller/wiki/Tutorial%3A-Pruning-a-PyTorch-language-model/_edit#table-1-agp-language-model-pruning-results) above shows that we can make a negligible improvement when adding L2 regularization.  I did some experimenting with the sparsity distribution between the layers, and the scheduling frequency and noticed that the embedding layers are much less sensitive to pruning than the RNN cells.  I didn't notice any difference between the RNN cells, but I also didn't invest in this exploration.
-A new [70% sparsity schedule](https://github.com/NervanaSystems/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70B.schedule_agp.yaml), prunes the RNNs only to 50% sparsity, but prunes the embedding to 85% sparsity, and achieves almost a 3 points improvement in the test perplexity results.
+[Table 1](https://github.com/IntelLabs/distiller/wiki/Tutorial%3A-Pruning-a-PyTorch-language-model/_edit#table-1-agp-language-model-pruning-results) above shows that we can make a negligible improvement when adding L2 regularization.  I did some experimenting with the sparsity distribution between the layers, and the scheduling frequency and noticed that the embedding layers are much less sensitive to pruning than the RNN cells.  I didn't notice any difference between the RNN cells, but I also didn't invest in this exploration.
+A new [70% sparsity schedule](https://github.com/IntelLabs/distiller/blob/master/examples/agp-pruning/word_lang_model.LARGE_70B.schedule_agp.yaml), prunes the RNNs only to 50% sparsity, but prunes the embedding to 85% sparsity, and achieves almost a 3 points improvement in the test perplexity results.
 
-We provide [similar pruning schedules](https://github.com/NervanaSystems/distiller/tree/master/examples/agp-pruning) for the other compression rates.
+We provide [similar pruning schedules](https://github.com/IntelLabs/distiller/tree/master/examples/agp-pruning) for the other compression rates.
 
 ## Until next time
 This concludes the first part of the tutorial on pruning a PyTorch language model.  

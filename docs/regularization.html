@@ -254,7 +254,7 @@ for input, target in dataset:
 \lVert W \rVert_1 = l_1(W) = \sum_{i=1}^{|W|} |w_i|
 \]</p>
 <p>\(l_2\)-norm regularization reduces overfitting and improves a model's accuracy by shrinking large parameters, but it does not force these parameters to absolute zero.  \(l_1\)-norm regularization sets some of the parameter elements to zero, therefore limiting the model's capacity while making the model simpler.  This is sometimes referred to as <em>feature selection</em> and gives us another interpretation of pruning.</p>
-<p><a href="https://github.com/NervanaSystems/distiller/blob/master/jupyter/L1-regularization.ipynb">One</a> of Distiller's Jupyter notebooks explains how the \(l_1\)-norm regularizer induces sparsity, and how it interacts with \(l_2\)-norm regularization.</p>
+<p><a href="https://github.com/IntelLabs/distiller/blob/master/jupyter/L1-regularization.ipynb">One</a> of Distiller's Jupyter notebooks explains how the \(l_1\)-norm regularizer induces sparsity, and how it interacts with \(l_2\)-norm regularization.</p>
 <p>If we configure <code>weight_decay</code> to zero and use \(l_1\)-norm regularization, then we have:
 \[
 loss(W;x;y) = loss_D(W;x;y) + \lambda_R \lVert W \rVert_1

@@ -226,8 +226,8 @@
 <p>The Distiller repository contains a sample application, <code>distiller/examples/classifier_compression/compress_classifier.py</code>, and a set of scheduling files which demonstrate Distiller's features.  Following is a brief discussion of how to use this application and the accompanying schedules.</p>
 <p>You might also want to refer to the following resources:</p>
 <ul>
-<li>An <a href="https://nervanasystems.github.io/distiller/schedule.html">explanation</a> of the scheduler file format.</li>
-<li>An in-depth <a href="https://nervanasystems.github.io/distiller/model_zoo.html">discussion</a> of how we used these schedule files to implement several state-of-the-art DNN compression research papers.</li>
+<li>An <a href="https://intellabs.github.io/distiller/schedule.html">explanation</a> of the scheduler file format.</li>
+<li>An in-depth <a href="https://intellabs.github.io/distiller/model_zoo.html">discussion</a> of how we used these schedule files to implement several state-of-the-art DNN compression research papers.</li>
 </ul>
 <p>The sample application supports various features for compression of image classification DNNs, and gives an example of how to integrate distiller in your own application.  The code is documented and should be considered the best source of documentation, but we provide some elaboration here.</p>
 <p>This diagram shows how where <code>compress_classifier.py</code> fits in the compression workflow, and how we integrate the Jupyter notebooks as part of our research work.
@@ -364,7 +364,7 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 </code></pre>
 
 <p>The <code>sense</code> command-line argument can be set to either <code>element</code> or <code>filter</code>, depending on the type of analysis you want done.<br></p>
-<p>There is also a <a href="http://localhost:8888/notebooks/sensitivity_analysis.ipynb">Jupyter notebook</a> with example invocations, outputs and explanations.</p>
+<p>There is also a <a href="https://github.com/IntelLabs/distiller/blob/master/jupyter/sensitivity_analysis.ipynb">Jupyter notebook</a> with example invocations, outputs and explanations.</p>
 <h2 id="post-training-quantization">Post-Training Quantization</h2>
 <p>The following example qunatizes ResNet18 for ImageNet:</p>
 <pre><code class="bash">$ python3 compress_classifier.py -a resnet18 ../../../data.imagenet  --pretrained --quantize-eval --evaluate
@@ -372,7 +372,7 @@ Results are output as a CSV file (<code>sensitivity.csv</code>) and PNG file (<c
 
 <p>See <a href="schedule.html#post-training-quantization">here</a> for more details on how to invoke post-training quantization from the command line.</p>
 <p>A checkpoint with the quantized model will be dumped in the run directory. It will contain the quantized model parameters (the data type will still be FP32, but the values will be integers). The calculated quantization parameters (scale and zero-point) are stored as well in each quantized layer.</p>
-<p>For more examples of post-training quantization see <a href="https://github.com/NervanaSystems/distiller/blob/master/examples/quantization/post_train_quant">here</a>.</p>
+<p>For more examples of post-training quantization see <a href="https://github.com/IntelLabs/distiller/blob/master/examples/quantization/post_train_quant">here</a>.</p>
 <h2 id="summaries">Summaries</h2>
 <p>You can use the sample compression application to generate model summary reports, such as the attributes and compute summary report (see screen capture below).
 You can log sparsity statistics (written to console and CSV file), performance, optimizer and model information, and also create a PNG image of the DNN.
@@ -520,7 +520,7 @@ TorchVision's <a href="https://github.com/pytorch/vision/blob/master/torchvision
         return out
 </code></pre>
 
-<p>In Distiller we changed <a href="https://github.com/NervanaSystems/distiller/blob/master/models/imagenet/resnet.py">ResNet</a> to use multiple instances of nn.ReLU, and each instance is used only once:  </p>
+<p>In Distiller we changed <a href="https://github.com/IntelLabs/distiller/blob/master/distiller/models/imagenet/resnet.py">ResNet</a> to use multiple instances of nn.ReLU, and each instance is used only once:  </p>
 <pre><code>class BasicBlock(nn.Module):
     expansion = 1
     def __init__(self, inplanes, planes, stride=1, downsample=None):
