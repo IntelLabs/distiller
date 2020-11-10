@@ -125,7 +125,10 @@ class ClassifierCompressor(object):
 
     def train_validate_with_scheduling(self, epoch, validate=True, verbose=True):
         if self.compression_scheduler:
-            self.compression_scheduler.on_epoch_begin(epoch)
+            self.compression_scheduler.on_epoch_begin(epoch,
+                                                      dummy_input=distiller.get_dummy_input(
+                                                          input_shape=self.model.input_shape),
+                                                      optimizer=self.optimizer)
 
         top1, top5, loss = self.train_one_epoch(epoch, verbose)
         if validate:
@@ -394,9 +397,27 @@ def _init_learner(args):
 
     optimizer = None
     start_epoch = 0
+
+    def default_optimizer(model, args):
+        return torch.optim.SGD(model.parameters(),
+            lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+
+    if args.compress:
+        optimizer = default_optimizer(model, args)
+        # The main use-case for this sample application is CNN compression. Compression
+        # requires a compression schedule configuration file in YAML.
+        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
+            (start_epoch-1) if args.resumed_checkpoint_path else None)
+        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
+        model.to(args.device)
+    else:
+        compression_scheduler = distiller.CompressionScheduler(model)
+
     if args.resumed_checkpoint_path:
         model, compression_scheduler, optimizer, start_epoch = apputils.load_checkpoint(
-            model, args.resumed_checkpoint_path, model_device=args.device)
+            model, args.resumed_checkpoint_path, model_device=args.device, compression_scheduler=compression_scheduler)
+        if compression_scheduler.quantization_policy is not None:
+            compression_scheduler.quantization_policy.quantizer.update_optimizer(optimizer)
     elif args.load_model_path:
         model = apputils.load_lean_checkpoint(model, args.load_model_path, model_device=args.device)
     if args.reset_optimizer:
@@ -406,20 +427,9 @@ def _init_learner(args):
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
     if optimizer is None and not args.evaluate:
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
-                                    momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = default_optimizer(model, args)
         msglogger.debug('Optimizer Type: %s', type(optimizer))
         msglogger.debug('Optimizer Args: %s', optimizer.defaults)
-
-    if args.compress:
-        # The main use-case for this sample application is CNN compression. Compression
-        # requires a compression schedule configuration file in YAML.
-        compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
-            (start_epoch-1) if args.resumed_checkpoint_path else None)
-        # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
-        model.to(args.device)
-    elif compression_scheduler is None:
-        compression_scheduler = distiller.CompressionScheduler(model)
 
     return model, compression_scheduler, optimizer, start_epoch, args.epochs
 

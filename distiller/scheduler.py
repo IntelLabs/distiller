@@ -22,7 +22,7 @@ import contextlib
 import logging
 import torch
 from .quantization.quantizer import FP_BKP_PREFIX
-from .policy import PolicyLoss, LossComponent
+from .policy import PolicyLoss, LossComponent, QuantizationPolicy
 from .utils import model_device, normalize_module_name
 
 
@@ -42,6 +42,15 @@ class CompressionScheduler(object):
         # Create the masker objects and place them in a dictionary indexed by the parameter name
         self.zeros_mask_dict = zeros_mask_dict or create_model_masks_dict(model)
 
+    @property
+    def quantization_policy(self):
+        for policy in self.sched_metadata:
+            # There can only be a single quantization policy, and we want direct access to it
+            # so we can expose the said quantizer outside for operations.
+            if isinstance(policy, QuantizationPolicy):
+                return policy
+        return None
+
     def add_policy(self, policy, epochs=None, starting_epoch=None, ending_epoch=None, frequency=1):
         """Add a new policy to the schedule.
 
@@ -56,6 +65,10 @@ class CompressionScheduler(object):
         """
         assert (epochs is None and None not in (starting_epoch, ending_epoch, frequency)) or\
                (epochs is not None and all (c is None for c in (starting_epoch, ending_epoch)))
+
+        if self.quantization_policy is not None \
+                and isinstance(policy, QuantizationPolicy):
+            raise ValueError("Only a single quantization policy is allowed in a compression scheduler.")
 
         if epochs is None:
             assert 0 <= starting_epoch < ending_epoch
@@ -81,7 +94,7 @@ class CompressionScheduler(object):
         for policy in self.policies.get(epoch, list()):
             meta = self.sched_metadata[policy]
             meta['current_epoch'] = epoch
-            policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta,
+            policy.on_epoch_begin(self.model, self.zeros_mask_dict, meta, optimizer=optimizer,
                                   **kwargs)
 
     def on_minibatch_begin(self, epoch, minibatch_id, minibatches_per_epoch, optimizer=None):
