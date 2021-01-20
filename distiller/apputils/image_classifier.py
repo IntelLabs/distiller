@@ -418,6 +418,15 @@ def _init_learner(args):
             (start_epoch-1) if args.resumed_checkpoint_path else None)
         # Model is re-transferred to GPU in case parameters were added (e.g. PACTQuantizer)
         model.to(args.device)
+        # don't use the quantizer parsed from config file when resume from ckpt, it fails to load all state_dicts, 
+        # instead just use the one created in <load_checkpoint> function.
+        if hasattr(model, "quantizer"):
+            from distiller.policy import QuantizationPolicy
+            for e in range(start_epoch, args.epochs):
+                for policy in compression_scheduler.policies[e]:
+                    if isinstance(policy, QuantizationPolicy):
+                        print(f"replacing {e}-th epoch's {policy.quantizer} with {model.quantizer}")
+                        policy.quantizer = model.quantizer
     elif compression_scheduler is None:
         compression_scheduler = distiller.CompressionScheduler(model)
 

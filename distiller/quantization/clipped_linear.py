@@ -36,8 +36,10 @@ class ClippedLinearQuantization(nn.Module):
         self.scale, self.zero_point = asymmetric_linear_quantization_params(num_bits, 0, clip_val, signed=False)
         self.dequantize = dequantize
         self.inplace = inplace
+        self.num_bits = num_bits
 
     def forward(self, input):
+        if self.num_bits == 32: return input
         input = clamp(input, 0, self.clip_val, self.inplace)
         input = LinearQuantizeSTE.apply(input, self.scale, self.zero_point, self.dequantize, self.inplace)
         return input
@@ -156,6 +158,56 @@ class DorefaQuantizer(Quantizer):
         self.param_quantization_fn = dorefa_quantize_param
 
         self.replacement_factory[nn.ReLU] = relu_replace_fn
+
+
+def doreFaGradientQuantizer(grad_input, nbits=32, inplace=False, grad_output=None, module=None):
+    """ 
+    @Author: Akimoto-Cris 
+    Gradient hook for DoreFa-Net modules
+    """
+    ng = float(2 ** nbits - 1)
+
+    def quantize(tensor):
+        if nbits == 32:
+            return tensor
+        rank = len(tensor.shape)
+        assert rank > 0
+        abs_gi = torch.abs(tensor)
+        # maxx = torch.cat([torch.max(abs_gi[i]).unsqueeze(0) for i in range(tensor.shape[0])], dim=0)
+        maxx = torch.flatten(abs_gi if rank > 1 else abs_gi.unsqueeze(1), 1).max(1)[0]
+        if 0 in maxx:
+            return tensor
+        maxx = maxx.reshape((-1,) + (1,) * (rank - 1))
+        tensor /= maxx
+        tensor = tensor * 0.5 + 0.5 + (torch.rand_like(tensor) - 0.5) / ng
+        # print(maxx.min().item(), tensor.max().item(), tensor.min().item())
+        tensor = tensor.clamp(0., 1.)
+        # tensor = LearnedClippedLinearQuantization(nbits, 1., zero_point=0., inplace=inplace)(tensor) - 0.5
+        tensor = torch.round(tensor * ng) / ng - 0.5
+        tensor *= maxx * 2
+        return tensor
+
+    if isinstance(grad_input, tuple):
+        grad_input = tuple(quantize(t) if t is not None else None for t in grad_input)
+    else:
+        grad_input = quantize(grad_input)
+
+    return grad_input
+
+
+class FullDoreFaQuantizer(DorefaQuantizer):
+    """
+    @Author: Akimoto-Cris
+    support gradients quantization
+    """
+    def __init__(self, model, optimizer, bits_activations=32, bits_weights=32, bits_bias=None, bits_gradients=32,
+                 overrides=None):
+        super(FullDoreFaQuantizer, self).__init__(model, optimizer, bits_activations, bits_weights, bits_bias, overrides)
+
+        for mod in model.modules():
+            if type(mod) in [nn.Conv2d, nn.Linear]:
+                mod.register_backward_hook(lambda m, gi, go: doreFaGradientQuantizer(gi, nbits=bits_gradients,
+                                                                                     grad_output=go, module=m))
 
 
 class PACTQuantizer(Quantizer):

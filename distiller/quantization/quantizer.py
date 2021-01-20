@@ -287,7 +287,7 @@ class Quantizer(object):
         # Iterate through model, insert quantization functions as appropriate
         for name, module in container.named_children():
             full_name = prefix + name
-            if isinstance(module, tuple(self.replacement_blacklist)):
+            if isinstance(module, tuple(self.replacement_blacklist)) or "wrapped_module" in name:   # When the model is loaded from checkpoint, the modules are already replaced so don't process it
                 replace_msg(full_name)
                 continue
             if module in self.modules_processed:
