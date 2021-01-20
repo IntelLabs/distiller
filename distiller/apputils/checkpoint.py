@@ -108,7 +108,6 @@ def get_contents_table(d):
 def load_checkpoint(model, chkpt_file, optimizer=None,
                     model_device=None, lean_checkpoint=False, strict=False):
     """Load a pytorch training checkpoint.
-
     Args:
         model: the pytorch model to which we will load the parameters.  You can
         specify model=None if the checkpoint contains enough metadata to infer
@@ -145,20 +144,16 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
                                                 compression_scheduler.zeros_mask_dict,
                                                 model.thinning_recipes)
 
-    def _load_optimizer():
-        """Initialize optimizer with model parameters and load src_state_dict"""
+    def _load_optimizer(dest_optimizer):
         try:
-            cls, src_state_dict = checkpoint['optimizer_type'], checkpoint['optimizer_state_dict']
-            # Initialize the dest_optimizer with a dummy learning rate,
-            # this is required to support SGD.__init__()
-            dest_optimizer = cls(model.parameters(), lr=1)
+            src_state_dict = checkpoint['optimizer_state_dict']
             dest_optimizer.load_state_dict(src_state_dict)
             msglogger.info('Optimizer of type {type} was loaded from checkpoint'.format(
-                            type=type(dest_optimizer)))
+                type=type(dest_optimizer)))
             optimizer_param_groups = dest_optimizer.state_dict()['param_groups']
             msglogger.info('Optimizer Args: {}'.format(
-                            dict((k, v) for k, v in optimizer_param_groups[0].items()
-                                 if k != 'params')))
+                dict((k, v) for k, v in optimizer_param_groups[0].items()
+                     if k != 'params')))
             return dest_optimizer
         except KeyError:
             # Older checkpoints do support optimizer loading: They either had an 'optimizer' field
@@ -185,8 +180,8 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
     chkpt_file = os.path.expanduser(chkpt_file)
     if not os.path.isfile(chkpt_file):
         raise IOError(ENOENT, 'Could not find a checkpoint file at', chkpt_file)
-    assert optimizer == None, "argument optimizer is deprecated and must be set to None"
-
+    # assert optimizer == None, "argument optimizer is deprecated and must be set to None"
+    import pdb; pdb.set_trace()
     msglogger.info("=> loading checkpoint %s", chkpt_file)
     checkpoint = torch.load(chkpt_file, map_location=lambda storage, loc: storage)
     msglogger.info('=> Checkpoint contents:\n%s\n' % get_contents_table(checkpoint))
@@ -218,15 +213,18 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
             compression_scheduler = distiller.CompressionScheduler(model)
         _load_and_execute_thinning_recipes()
 
+    optimizer = checkpoint['optimizer_type'](model.parameters(), lr=1) # dummy optimizer for quantizer
     if 'quantizer_metadata' in checkpoint:
         msglogger.info('Loaded quantizer metadata from the checkpoint')
         qmd = checkpoint['quantizer_metadata']
-        quantizer = qmd['type'](model, **qmd['params'])
+        quantizer = qmd['type'](model, optimizer, **qmd['params'])
         quantizer.prepare_model(qmd['dummy_input'])
 
         if qmd.get('pytorch_convert', False):
             msglogger.info('Converting Distiller PTQ model to PyTorch quantization API')
             model = quantizer.convert_to_pytorch(qmd['dummy_input'], backend=qmd.get('pytorch_convert_backend', None))
+
+        model.quantizer = quantizer
 
     if normalize_dataparallel_keys:
         checkpoint['state_dict'] = {normalize_module_name(k): v for k, v in checkpoint['state_dict'].items()}
@@ -248,7 +246,7 @@ def load_checkpoint(model, chkpt_file, optimizer=None,
         msglogger.info("=> loaded 'state_dict' from checkpoint '{}'".format(str(chkpt_file)))
         return model, None, None, 0
 
-    optimizer = _load_optimizer()
+    optimizer = _load_optimizer(optimizer)
     msglogger.info("=> loaded checkpoint '{f}' (epoch {e})".format(f=str(chkpt_file),
                                                                    e=checkpoint_epoch))
     _sanity_check()
