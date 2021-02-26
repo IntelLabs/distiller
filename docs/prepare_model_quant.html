@@ -307,7 +307,7 @@ class BasicModule(nn.Module):
         out = self.bn2(out)
 
         out = self.add(out, identity)
-        out = self.relu(out)
+        out = self.relu2(out)
         out = self.concat(identity, out)
         out = self.sigmoid(out)
 
