@@ -18,6 +18,9 @@ nav:
   - Usage: usage.md
   - Compression Scheduling: schedule.md
   - Preparing a Model for Quantization: prepare_model_quant.md
+  - Model Zoo: model_zoo.md
+  - Jupyter Notebooks: jupyter.md
+  - Design: design.md
   - Compressing Models:
     - Pruning: pruning.md
     - Regularization: regularization.md
@@ -28,9 +31,6 @@ nav:
     - Pruning: algo_pruning.md
     - Quantization: algo_quantization.md
     - Early Exit: algo_earlyexit.md
-  - Model Zoo: model_zoo.md
-  - Jupyter Notebooks: jupyter.md
-  - Design: design.md
   - Tutorials:
     - Pruning Filters and Channels: tutorial-struct_pruning.md
     - Pruning a Language Model: tutorial-lang_model.md

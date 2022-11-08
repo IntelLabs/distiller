@@ -16,13 +16,9 @@
 """ A TensorBoard backend.
 
 Writes logs to a file using a Google's TensorBoard protobuf format.
-See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
 """
 import os
-# Disable FutureWarning from TensorFlow
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-import tensorflow as tf
+import tensorboardX as tbx
 import numpy as np
 
 
@@ -30,14 +26,14 @@ class TBBackend(object):
     def __init__(self, log_dir):
         self.writers = []
         self.log_dir = log_dir
-        self.writers.append(tf.summary.FileWriter(log_dir))
+        self.writers.append(tbx.FileWriter(log_dir))
 
     def scalar_summary(self, tag, scalar, step):
         """From TF documentation:
             tag: name for the data. Used by TensorBoard plugins to organize data.
             value: value associated with the tag (a float).
         """
-        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=scalar)])
+        summary = tbx.summary.Summary(value=[tbx.summary.Summary.Value(tag=tag, simple_value=scalar)])
         self.writers[0].add_summary(summary, step)
 
     def list_summary(self, tag, list, step, multi_graphs):
@@ -55,8 +51,8 @@ class TBBackend(object):
         """
         for i, scalar in enumerate(list):
             if multi_graphs and (i+1 > len(self.writers)):
-                self.writers.append(tf.summary.FileWriter(os.path.join(self.log_dir, str(i))))
-            summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=scalar)])
+                self.writers.append(tbx.FileWriter(os.path.join(self.log_dir, str(i))))
+            summary = tbx.summary.Summary(value=[tbx.summary.Summary.Value(tag=tag, simple_value=scalar)])
             self.writers[0 if not multi_graphs else i].add_summary(summary, step)
 
     def histogram_summary(self, tag, tensor, step):
@@ -73,7 +69,7 @@ class TBBackend(object):
         https://www.tensorflow.org/programmers_guide/tensorboard_histograms
         """
         hist, edges = np.histogram(tensor, bins=200)
-        tfhist = tf.HistogramProto(
+        tfhist = tbx.summary.HistogramProto(
             min=np.min(tensor),
             max=np.max(tensor),
             num=int(np.prod(tensor.shape)),
@@ -88,7 +84,7 @@ class TBBackend(object):
         tfhist.bucket_limit.extend(edges[1:])
         tfhist.bucket.extend(hist)
 
-        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, histo=tfhist)])
+        summary = tbx.summary.Summary(value=[tbx.summary.Summary.Value(tag=tag, histo=tfhist)])
         self.writers[0].add_summary(summary, step)
 
     def sync_to_file(self):

@@ -1,10 +1,5 @@
 # Distiller Model Zoo
-## How to contribute models to the Model Zoo
-We encourage you to contribute new models to the Model Zoo.  We welcome implementations of published papers or of your own work.  To assure that models and algorithms shared with others are high-quality, please commit your models with the following:
-
-- Command-line arguments
-- Log files
-- PyTorch model
+**Note: Checkpoint files are no longer provided. We're still keeping this page for those who may find the discussions useful.**
 
 ## Contents
 The Distiller model zoo is not a "traditional" model-zoo, because it does not necessarily contain best-in-class compressed models.  Instead, the model-zoo contains a number of deep learning models that have been compressed using Distiller following some well-known research papers.  These are meant to serve as examples of how Distiller can be used.
@@ -68,7 +63,6 @@ Note that Distiller's implementation deviates slightly from the algorithm Song H
 
 * Distiller schedule: ```distiller/examples/sensitivity-pruning/alexnet.schedule_sensitivity.yaml```
 
-
 ### Results
 Our reference is TorchVision's pretrained Alexnet model which has a Top1 accuracy of 56.55 and Top5=79.09.  We prune away 88.44% of the parameters and achieve  Top1=56.61 and Top5=79.45.
 Song Han prunes 89% of the parameters, which is slightly better than our results.
@@ -113,11 +107,9 @@ ImageNet files:
 
 - Distiller schedule: ```distiller/examples/agp-pruning/mobilenet.imagenet.schedule_agp.yaml```
 
-
 ResNet18 files:
 
 -  Distiller schedule: ```distiller/examples/agp-pruning/resnet18.schedule_agp.yaml```
-
 
 ### Results
 As our baseline we used a [pretrained PyTorch MobileNet model](https://github.com/marvis/pytorch-mobilenet) (width=1) which has Top1=68.848 and Top5=88.740.  
@@ -251,7 +243,6 @@ After performing filter-pruning sensitivity analysis to assess which layers are 
 
 * Distiller schedule: ```distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml```
 
-
 The excerpt from the schedule, displayed below, shows how we declare the L1RankedStructureParameterPruner.  This class currently ranks filters only, but because in the future this class may support ranking of various structures, you need to specify for each parameter both the target sparsity level, and the structure type ('3D' is filter-wise pruning).
 
 ```
@@ -298,7 +289,6 @@ Our current implementation is specific to certain layers in ResNet and is a bit 
 We started by training the baseline ResNet56-Cifar dense network (180 epochs) since we didn't have a pre-trained model.
 
 * Distiller schedule: ```distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_baseline_training.yaml```
-
 
 ### Results
 We trained a ResNet56-Cifar10 network and achieve accuracy results which are on-par with published results:
