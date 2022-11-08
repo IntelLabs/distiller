@@ -196,13 +196,11 @@ Total MACs: 40,813,184
 
 
 ## Using TensorBoard
-Google's [TensorBoard](https://github.com/tensorflow/tensorboard) is an excellent tool for visualizing the progress of DNN training.  Distiller's logger supports writing performance indicators and parameter statistics in a file format that can be read by TensorBoard (Distiller uses TensorFlow's APIs in order to do this, which is why Distiller requires the installation of TensorFlow).<br>
+Google's [TensorBoard](https://github.com/tensorflow/tensorboard) is an excellent tool for visualizing the progress of DNN training.  Distiller's logger supports writing performance indicators and parameter statistics in a file format that can be read by TensorBoard.<br>
 To view the graphs, invoke the TensorBoard server.  For example:
 ```
 $ tensorboard --logdir=logs
 ```
-
-Distillers's setup (requirements.txt) installs TensorFlow for CPU. If you want a different installation, please follow the [TensorFlow installation instructions](https://www.tensorflow.org/install/install_linux).
 
 
 ## Collecting activations statistics

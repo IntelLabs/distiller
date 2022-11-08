@@ -7,14 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
+  
   <link rel="shortcut icon" href="img/favicon.ico">
   <title>Pruning - Neural Network Distiller</title>
-  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700" />
 
-  <link rel="stylesheet" href="css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
-  <link href="extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/theme_extra.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" />
+  <link href="extra.css" rel="stylesheet" />
   
   <script>
     // Current page data
@@ -25,7 +26,7 @@
   
   <script src="js/jquery-2.1.1.min.js" defer></script>
   <script src="js/modernizr-2.8.3.min.js" defer></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
   <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
@@ -36,8 +37,9 @@
 
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
       <div class="wy-side-nav-search">
-        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="." class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
   <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
@@ -46,143 +48,87 @@
       </div>
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-	<ul class="current">
-	  
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="index.html">Home</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="install.html">Installation</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="usage.html">Usage</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="schedule.html">Compression Scheduling</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Compressing Models</span>
-    <ul class="subnav">
-                <li class=" current">
-                    
-    <a class="current" href="pruning.html">Pruning</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l3"><a href="#pruning">Pruning</a></li>
-    
-        <ul>
-        
-            <li><a class="toctree-l4" href="#lets-define-sparsity">Let's define sparsity</a></li>
-        
-            <li><a class="toctree-l4" href="#what-is-weights-pruning">What is weights pruning?</a></li>
-        
-            <li><a class="toctree-l4" href="#pruning-schedule">Pruning schedule</a></li>
-        
-            <li><a class="toctree-l4" href="#pruning-granularity">Pruning granularity</a></li>
-        
-            <li><a class="toctree-l4" href="#sensitivity-analysis">Sensitivity analysis</a></li>
-        
-            <li><a class="toctree-l4" href="#references">References</a></li>
-        
-        </ul>
-    
-
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="index.html">Home</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="schedule.html">Compression Scheduling</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="model_zoo.html">Model Zoo</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="jupyter.html">Jupyter Notebooks</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="design.html">Design</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Compressing Models</span></p>
+                <ul class="current">
+                    <li class="toctree-l1 current"><a class="reference internal current" href="pruning.html">Pruning</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#lets-define-sparsity">Let's define sparsity</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#what-is-weights-pruning">What is weights pruning?</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#pruning-schedule">Pruning schedule</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#pruning-granularity">Pruning granularity</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#sensitivity-analysis">Sensitivity analysis</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#references">References</a>
+    </li>
     </ul>
-                </li>
-                <li class="">
-                    
-    <a class="" href="regularization.html">Regularization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="quantization.html">Quantization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="conditional_computation.html">Conditional Computation</a>
-                </li>
-    </ul>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Algorithms</span>
-    <ul class="subnav">
-                <li class="">
-                    
-    <a class="" href="algo_pruning.html">Pruning</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="algo_quantization.html">Quantization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="algo_earlyexit.html">Early Exit</a>
-                </li>
-    </ul>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="model_zoo.html">Model Zoo</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="jupyter.html">Jupyter Notebooks</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="design.html">Design</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Tutorials</span>
-    <ul class="subnav">
-                <li class="">
-                    
-    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
-                </li>
-    </ul>
-	    </li>
-          
-        </ul>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="regularization.html">Regularization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="quantization.html">Quantization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="knowledge_distillation.html">Knowledge Distillation</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="conditional_computation.html">Conditional Computation</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Algorithms</span></p>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_pruning.html">Pruning</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_quantization.html">Quantization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_earlyexit.html">Early Exit</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Tutorials</span></p>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                    </li>
+                </ul>
       </div>
-      &nbsp;
+    </div>
     </nav>
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
@@ -190,7 +136,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="index.html">Neural Network Distiller</a>
+        <a href=".">Neural Network Distiller</a>
       </nav>
 
       
@@ -198,7 +144,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="index.html">Docs</a> &raquo;</li>
+    <li><a href=".">Docs</a> &raquo;</li>
     
       
         
@@ -211,6 +157,7 @@
       
     </li>
   </ul>
+  
   <hr/>
 </div>
           <div role="main">
@@ -287,7 +234,7 @@ As reported by Song Han, and exhibited in the diagram, in Alexnet the feature de
         <a href="regularization.html" class="btn btn-neutral float-right" title="Regularization">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="prepare_model_quant.html" class="btn btn-neutral" title="Preparing a Model for Quantization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="design.html" class="btn btn-neutral" title="Design"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -299,7 +246,7 @@ As reported by Song Han, and exhibited in the diagram, in Alexnet the feature de
     
   </div>
 
-  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
 </footer>
       
         </div>
@@ -309,11 +256,11 @@ As reported by Song Han, and exhibited in the diagram, in Alexnet the feature de
 
   </div>
 
-  <div class="rst-versions" role="note" style="cursor: pointer">
+  <div class="rst-versions" role="note" aria-label="versions">
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="prepare_model_quant.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="design.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
         <span style="margin-left: 15px"><a href="regularization.html" style="color: #fcfcfc">Next &raquo;</a></span>
@@ -324,6 +271,11 @@ As reported by Song Han, and exhibited in the diagram, in Alexnet the feature de
     <script src="js/theme.js" defer></script>
       <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
       <script src="search/main.js" defer></script>
+    <script defer>
+        window.onload = function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        };
+    </script>
 
 </body>
 </html>

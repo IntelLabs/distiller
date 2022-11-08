@@ -7,14 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   
+  
   <link rel="shortcut icon" href="img/favicon.ico">
   <title>Model Zoo - Neural Network Distiller</title>
-  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700" />
 
-  <link rel="stylesheet" href="css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="css/theme_extra.css" type="text/css" />
-  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
-  <link href="extra.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/theme_extra.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" />
+  <link href="extra.css" rel="stylesheet" />
   
   <script>
     // Current page data
@@ -25,7 +26,7 @@
   
   <script src="js/jquery-2.1.1.min.js" defer></script>
   <script src="js/modernizr-2.8.3.min.js" defer></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
   <script>hljs.initHighlightingOnLoad();</script> 
   
 </head>
@@ -36,8 +37,9 @@
 
     
     <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
       <div class="wy-side-nav-search">
-        <a href="index.html" class="icon icon-home"> Neural Network Distiller</a>
+        <a href="." class="icon icon-home"> Neural Network Distiller</a>
         <div role="search">
   <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
@@ -46,143 +48,109 @@
       </div>
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-	<ul class="current">
-	  
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="index.html">Home</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="install.html">Installation</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="usage.html">Usage</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="schedule.html">Compression Scheduling</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Compressing Models</span>
-    <ul class="subnav">
-                <li class="">
-                    
-    <a class="" href="pruning.html">Pruning</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="regularization.html">Regularization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="quantization.html">Quantization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="knowledge_distillation.html">Knowledge Distillation</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="conditional_computation.html">Conditional Computation</a>
-                </li>
-    </ul>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Algorithms</span>
-    <ul class="subnav">
-                <li class="">
-                    
-    <a class="" href="algo_pruning.html">Pruning</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="algo_quantization.html">Quantization</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="algo_earlyexit.html">Early Exit</a>
-                </li>
-    </ul>
-	    </li>
-          
-            <li class="toctree-l1 current">
-		
-    <a class="current" href="model_zoo.html">Model Zoo</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l2"><a href="#distiller-model-zoo">Distiller Model Zoo</a></li>
-    
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="index.html">Home</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="schedule.html">Compression Scheduling</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="prepare_model_quant.html">Preparing a Model for Quantization</a>
+                    </li>
+                </ul>
+                <ul class="current">
+                    <li class="toctree-l1 current"><a class="reference internal current" href="model_zoo.html">Model Zoo</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#contents">Contents</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#learning-both-weights-and-connections-for-efficient-neural-networks">Learning both Weights and Connections for Efficient Neural Networks</a>
         <ul>
-        
-            <li><a class="toctree-l3" href="#how-to-contribute-models-to-the-model-zoo">How to contribute models to the Model Zoo</a></li>
-        
-            <li><a class="toctree-l3" href="#contents">Contents</a></li>
-        
-            <li><a class="toctree-l3" href="#learning-both-weights-and-connections-for-efficient-neural-networks">Learning both Weights and Connections for Efficient Neural Networks</a></li>
-        
-            <li><a class="toctree-l3" href="#to-prune-or-not-to-prune-exploring-the-efficacy-of-pruning-for-model-compression">To prune, or not to prune: exploring the efficacy of pruning for model compression</a></li>
-        
-            <li><a class="toctree-l3" href="#learning-structured-sparsity-in-deep-neural-networks">Learning Structured Sparsity in Deep Neural Networks</a></li>
-        
-            <li><a class="toctree-l3" href="#pruning-filters-for-efficient-convnets">Pruning Filters for Efficient ConvNets</a></li>
-        
+    <li class="toctree-l3"><a class="reference internal" href="#results">Results</a>
+    </li>
         </ul>
-    
-
-    </ul>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="jupyter.html">Jupyter Notebooks</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <a class="" href="design.html">Design</a>
-	    </li>
-          
-            <li class="toctree-l1">
-		
-    <span class="caption-text">Tutorials</span>
-    <ul class="subnav">
-                <li class="">
-                    
-    <a class="" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-lang_model.html">Pruning a Language Model</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
-                </li>
-                <li class="">
-                    
-    <a class="" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
-                </li>
-    </ul>
-	    </li>
-          
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#to-prune-or-not-to-prune-exploring-the-efficacy-of-pruning-for-model-compression">To prune, or not to prune: exploring the efficacy of pruning for model compression</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#results_1">Results</a>
+    </li>
         </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#learning-structured-sparsity-in-deep-neural-networks">Learning Structured Sparsity in Deep Neural Networks</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#baseline-training">Baseline training</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#regularization">Regularization</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#fine-tuning">Fine-tuning</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#results_2">Results</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#pruning-filters-for-efficient-convnets">Pruning Filters for Efficient ConvNets</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#baseline-training_1">Baseline training</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#results_3">Results</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="jupyter.html">Jupyter Notebooks</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="design.html">Design</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Compressing Models</span></p>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="pruning.html">Pruning</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="regularization.html">Regularization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="quantization.html">Quantization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="knowledge_distillation.html">Knowledge Distillation</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="conditional_computation.html">Conditional Computation</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Algorithms</span></p>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_pruning.html">Pruning</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_quantization.html">Quantization</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="algo_earlyexit.html">Early Exit</a>
+                    </li>
+                </ul>
+                <p class="caption"><span class="caption-text">Tutorials</span></p>
+                <ul>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-struct_pruning.html">Pruning Filters and Channels</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-lang_model.html">Pruning a Language Model</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-lang_model_quant.html">Quantizing a Language Model</a>
+                    </li>
+                    <li class="toctree-l1"><a class="reference internal" href="tutorial-gnmt_quant.html">Quantizing GNMT</a>
+                    </li>
+                </ul>
       </div>
-      &nbsp;
+    </div>
     </nav>
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
@@ -190,7 +158,7 @@
       
       <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
         <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-        <a href="index.html">Neural Network Distiller</a>
+        <a href=".">Neural Network Distiller</a>
       </nav>
 
       
@@ -198,7 +166,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
-    <li><a href="index.html">Docs</a> &raquo;</li>
+    <li><a href=".">Docs</a> &raquo;</li>
     
       
     
@@ -207,19 +175,14 @@
       
     </li>
   </ul>
+  
   <hr/>
 </div>
           <div role="main">
             <div class="section">
               
                 <h1 id="distiller-model-zoo">Distiller Model Zoo</h1>
-<h2 id="how-to-contribute-models-to-the-model-zoo">How to contribute models to the Model Zoo</h2>
-<p>We encourage you to contribute new models to the Model Zoo.  We welcome implementations of published papers or of your own work.  To assure that models and algorithms shared with others are high-quality, please commit your models with the following:</p>
-<ul>
-<li>Command-line arguments</li>
-<li>Log files</li>
-<li>PyTorch model</li>
-</ul>
+<p><strong>Note: Checkpoint files are no longer provided. We're still keeping this page for those who may find the discussions useful.</strong></p>
 <h2 id="contents">Contents</h2>
 <p>The Distiller model zoo is not a "traditional" model-zoo, because it does not necessarily contain best-in-class compressed models.  Instead, the model-zoo contains a number of deep learning models that have been compressed using Distiller following some well-known research papers.  These are meant to serve as examples of how Distiller can be used.</p>
 <p>Each model contains a Distiller schedule detailing how the model was compressed, a PyTorch checkpoint, text logs and TensorBoard logs.
@@ -277,7 +240,6 @@ is based on the values learned from performing sensitivity analysis.  Using a pa
 <p>Note that Distiller's implementation deviates slightly from the algorithm Song Han describes in his PhD dissertation, in that the threshold value is set only once.  In his PhD dissertation, Song Han describes a growing threshold, at each iteration.  This requires n+1 hyper-parameters (n being the number of pruning iterations we use): the threshold and the threshold increase (delta) at each pruning iteration.  Distiller's implementation takes advantage of the fact that as pruning progresses, more weights are pulled toward zero, and therefore the threshold "traps" more weights.  Thus, we can use less hyper-parameters and achieve the same results.</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/sensitivity-pruning/alexnet.schedule_sensitivity.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/sensitivity-pruning/alexnet.checkpoint.89.pth.tar">alexnet.checkpoint.89.pth.tar</a></li>
 </ul>
 <h3 id="results">Results</h3>
 <p>Our reference is TorchVision's pretrained Alexnet model which has a Top1 accuracy of 56.55 and Top5=79.09.  We prune away 88.44% of the parameters and achieve  Top1=56.61 and Top5=79.45.
@@ -316,12 +278,10 @@ minimal tuning."</p>
 <p>ImageNet files:</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/agp-pruning/mobilenet.imagenet.schedule_agp.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/mobilenet/checkpoint.pth.tar">checkpoint.pth.tar</a></li>
 </ul>
 <p>ResNet18 files:</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/agp-pruning/resnet18.schedule_agp.yaml</code></li>
-<li>Checkpoint file: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/agp-pruning/resnet18/checkpoint.pth.tar">checkpoint.pth.tar</a></li>
 </ul>
 <h3 id="results_1">Results</h3>
 <p>As our baseline we used a <a href="https://github.com/marvis/pytorch-mobilenet">pretrained PyTorch MobileNet model</a> (width=1) which has Top1=68.848 and Top5=88.740.<br />
@@ -441,7 +401,6 @@ In contrast to pruning weights, this approach does not result in sparse connecti
 <p>After performing filter-pruning sensitivity analysis to assess which layers are more sensitive to the pruning of filters, we execute distiller.L1RankedStructureParameterPruner once in order to rank the filters of each layer by their L1-norm values, and then we prune the schedule-prescribed sparsity level.  </p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_filter_rank.yaml</code></li>
-<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint_finetuned.pth.tar">checkpoint_finetuned.pth.tar</a></li>
 </ul>
 <p>The excerpt from the schedule, displayed below, shows how we declare the L1RankedStructureParameterPruner.  This class currently ranks filters only, but because in the future this class may support ranking of various structures, you need to specify for each parameter both the target sparsity level, and the structure type ('3D' is filter-wise pruning).</p>
 <pre><code>pruners:
@@ -482,7 +441,6 @@ Our current implementation is specific to certain layers in ResNet and is a bit 
 <p>We started by training the baseline ResNet56-Cifar dense network (180 epochs) since we didn't have a pre-trained model.</p>
 <ul>
 <li>Distiller schedule: <code>distiller/examples/pruning_filters_for_efficient_convnets/resnet56_cifar_baseline_training.yaml</code></li>
-<li>Checkpoint files: <a href="https://s3-us-west-1.amazonaws.com/nndistiller/pruning_filters_for_efficient_convnets/checkpoint.resnet56_cifar_baseline.pth.tar">checkpoint.resnet56_cifar_baseline.pth.tar</a></li>
 </ul>
 <h3 id="results_3">Results</h3>
 <p>We trained a ResNet56-Cifar10 network and achieve accuracy results which are on-par with published results:
@@ -499,7 +457,7 @@ Top1: 92.830 and Top5: 99.760</p>
         <a href="jupyter.html" class="btn btn-neutral float-right" title="Jupyter Notebooks">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="algo_earlyexit.html" class="btn btn-neutral" title="Early Exit"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="prepare_model_quant.html" class="btn btn-neutral" title="Preparing a Model for Quantization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -511,7 +469,7 @@ Top1: 92.830 and Top5: 99.760</p>
     
   </div>
 
-  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
 </footer>
       
         </div>
@@ -521,11 +479,11 @@ Top1: 92.830 and Top5: 99.760</p>
 
   </div>
 
-  <div class="rst-versions" role="note" style="cursor: pointer">
+  <div class="rst-versions" role="note" aria-label="versions">
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="algo_earlyexit.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="prepare_model_quant.html" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
         <span style="margin-left: 15px"><a href="jupyter.html" style="color: #fcfcfc">Next &raquo;</a></span>
@@ -536,6 +494,11 @@ Top1: 92.830 and Top5: 99.760</p>
     <script src="js/theme.js" defer></script>
       <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
       <script src="search/main.js" defer></script>
+    <script defer>
+        window.onload = function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        };
+    </script>
 
 </body>
 </html>

@@ -5,7 +5,7 @@ torchvision==0.4.2
 scipy>=1.3.0
 gitpython==3.1.0
 torchnet==0.0.4
-tensorflow~=1.14
+tensorboardx
 pydot==1.4.1
 tabulate==0.8.3
 pandas>=0.22.0
