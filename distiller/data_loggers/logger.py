@@ -227,7 +227,7 @@ class TensorBoardLogger(DataLogger):
 
 
 class CsvLogger(DataLogger):
-    def __init__(self, fname_prefix=, logdir=):
+    def __init__(self, fname_prefix='', logdir=''):
         super(CsvLogger, self).__init__()
         self.logdir = logdir
         self.fname_prefix = fname_prefix

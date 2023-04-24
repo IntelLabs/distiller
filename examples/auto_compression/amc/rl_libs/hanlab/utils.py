@@ -187,7 +187,7 @@ def progress_bar(current, total, msg=None):
         seconds = seconds - secondsf
         millis = int(seconds * 1000)
 
-        f = 
+        f = ''
         i = 1
         if days > 0:
             f += str(days) + 'D'
@@ -204,7 +204,7 @@ def progress_bar(current, total, msg=None):
         if millis > 0 and i <= 2:
             f += str(millis) + 'ms'
             i += 1
-        if f == :
+        if f == '':
             f = '0ms'
         return f
 
@@ -234,7 +234,7 @@ def progress_bar(current, total, msg=None):
     if msg:
         L.append(' | ' + msg)
 
-    msg = .join(L)
+    msg = ''.join(L)
     sys.stdout.write(msg)
     for i in range(term_width-int(TOTAL_BAR_LENGTH)-len(msg)-3):
         sys.stdout.write(' ')

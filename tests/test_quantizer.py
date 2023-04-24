@@ -157,10 +157,10 @@ def get_expected_qbits(model, qbits, expected_overrides):
     expected_qbits = OrderedDict()
     post_prepare_qbbits_changes = OrderedDict()
     post_prepare_expected_types = OrderedDict()
-    prefix = 'module.' if isinstance(model, torch.nn.DataParallel) else 
+    prefix = 'module.' if isinstance(model, torch.nn.DataParallel) else ''
     for orig_name, orig_module in model.named_modules():
         orig_module_type = type(orig_module)
-        bits_a, bits_w, bits_b = expected_overrides.get(orig_name.replace(prefix, , 1), qbits)
+        bits_a, bits_w, bits_b = expected_overrides.get(orig_name.replace(prefix, '', 1), qbits)
         if not params_quantizable(orig_module):
             bits_w = bits_b = None
         expected_qbits[orig_name] = QBits(bits_a, bits_w, bits_b)
@@ -378,7 +378,7 @@ def test_param_quantization(model, optimizer, qbits, overrides, explicit_expecte
                 post_quant_fp_copy = getattr(post_quant_module, param_name)
                 assert torch.equal(pre_quant_param, post_quant_fp_copy)
 
-                quant_param = getattr(post_quant_module, param_name.replace(FP_BKP_PREFIX, ))
+                quant_param = getattr(post_quant_module, param_name.replace(FP_BKP_PREFIX, ''))
 
                 # Check weights quantization properly recorded for autograd
                 gfn = quant_param.grad_fn

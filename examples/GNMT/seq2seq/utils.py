@@ -62,8 +62,8 @@ def setup_logging(log_file='log.log'):
     console.setLevel(logging.INFO)
     formatter = logging.Formatter('%(rank)s: %(message)s')
     console.setFormatter(formatter)
-    logging.getLogger().addHandler(console)
-    logging.getLogger().addFilter(rank_filter)
+    logging.getLogger('').addHandler(console)
+    logging.getLogger('').addFilter(rank_filter)
 
 
 class AverageMeter(object):

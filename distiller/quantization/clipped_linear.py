@@ -43,7 +43,7 @@ class ClippedLinearQuantization(nn.Module):
         return input
 
     def __repr__(self):
-        inplace_str = ', inplace' if self.inplace else 
+        inplace_str = ', inplace' if self.inplace else ''
         return '{0}(num_bits={1}, clip_val={2}{3})'.format(self.__class__.__name__, self.num_bits, self.clip_val,
                                                            inplace_str)
 
@@ -67,7 +67,7 @@ class LearnedClippedLinearQuantization(nn.Module):
         return input
 
     def __repr__(self):
-        inplace_str = ', inplace' if self.inplace else 
+        inplace_str = ', inplace' if self.inplace else ''
         return '{0}(num_bits={1}, clip_val={2}{3})'.format(self.__class__.__name__, self.num_bits, self.clip_val.item(),
                                                            inplace_str)
 

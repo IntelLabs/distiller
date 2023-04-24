@@ -128,7 +128,7 @@ def checkpoint_from_distributed(state_dict):
 def unwrap_distributed(state_dict):
     new_state_dict = {}
     for key, value in state_dict.items():
-        new_key = key.replace('module.', )
+        new_key = key.replace('module.', '')
         new_state_dict[new_key] = value
 
     return new_state_dict
@@ -287,7 +287,7 @@ def main():
             log += 'Time {:.3f} ({:.3f})\t'.format(batch_time.val, batch_time.avg)
             log += 'Decoder iters {:.1f} ({:.1f})\t'.format(iterations.val, iterations.avg)
             log += 'Tok/s {:.0f} ({:.0f})'.format(tot_tok_per_sec.val, tot_tok_per_sec.avg)
-            log = .join(log)
+            log = ''.join(log)
             print(log)
 
 
@@ -302,7 +302,7 @@ def main():
     log += 'Avg encoder seq len: {:.2f}\t'.format(enc_seq_len.avg)
     log += 'Avg decoder seq len: {:.2f}\t'.format(dec_seq_len.avg)
     log += 'Total decoder iterations: {}'.format(int(iterations.sum))
-    log = .join(log)
+    log = ''.join(log)
     print(log)
 
     # only write the output to file in accuracy mode

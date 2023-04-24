@@ -157,7 +157,7 @@ class Quantizer(object):
         for module_full_name, module in model.named_modules():
             # Need to account for scenario where model is parallelized with DataParallel, which wraps the original
             # module with a wrapper module called 'module' :)
-            name_to_match = module_full_name.replace('module.', , 1)
+            name_to_match = module_full_name.replace('module.', '', 1)
             qbits = self.default_qbits
             override_entry = self.overrides.get(name_to_match, OrderedDict())
             if regex_overrides:
@@ -275,7 +275,7 @@ class Quantizer(object):
     def _pre_prepare_model(self, dummy_input):
         pass
 
-    def _pre_process_container(self, container, prefix=):
+    def _pre_process_container(self, container, prefix=''):
         def replace_msg(module_name, modules=None):
             msglogger.debug('Module ' + module_name)
             if modules:

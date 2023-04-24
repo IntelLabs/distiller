@@ -42,7 +42,7 @@ __all__ = ['model_summary',
            'draw_model_to_file', 'draw_img_classifier_to_file', 'export_img_classifier_to_onnx']
 
 
-def model_summary(model, what, dataset=None, logdir=):
+def model_summary(model, what, dataset=None, logdir=''):
     if what.startswith('png'):
         png_fname = os.path.join(logdir, 'model.png')
         draw_img_classifier_to_file(model, png_fname, dataset, what == 'png_w_params')
@@ -193,7 +193,7 @@ def module_visitor(self, input, output, df, model, weights_vol, macs, attrs=None
 
     mod_name = distiller.model_find_module_name(model, self)
     df.loc[len(df.index)] = ([mod_name, self.__class__.__name__,
-                              attrs if attrs is not None else ,
+                              attrs if attrs is not None else '',
                               distiller.size_to_str(in_features_shape), distiller.volume(input[0]),
                               distiller.size_to_str(out_features_shape), distiller.volume(output),
                               int(weights_vol), int(macs)])
@@ -249,7 +249,7 @@ def attributes_summary(sgraph, ignore_attrs):
         return str(val)
 
     def pretty_attrs(attrs, ignore_attrs):
-        ret = 
+        ret = ''
         for key, val in attrs.items():
             if key in ignore_attrs:
                 continue
@@ -289,7 +289,7 @@ def connectivity_summary_verbose(sgraph):
         sgraph: a SummaryGraph instance
     """
     def format_list(l):
-        ret = 
+        ret = ''
         for i in l: ret += str(i) + '\n'
         return ret[:-1]
 
@@ -372,7 +372,7 @@ def create_png(sgraph, display_param_nodes=False, rankdir='TB', styles=None):
         if op['type'] == 'Conv':
             return ["sh={}".format(distiller.size2str(op['attrs']['kernel_shape'])),
                     "g={}".format(str(op['attrs']['group']))]
-        return    
+        return ''   
 
     op_nodes = [op['name'] for op in sgraph.ops.values()]
     data_nodes = []

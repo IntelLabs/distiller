@@ -28,10 +28,7 @@
 # parameter rnn.weight_ih_l1: q = 0.18
 # parameter rnn.weight_hh_l1: q = 0.15
 # parameter decoder.weight: q = 0.16
-#
-
-
-#
+##
 
 version: 1
 pruners:

@@ -66,7 +66,7 @@ def test_connectivity(parallel, denorm_names):
     g = create_graph('cifar10', 'resnet20_cifar', parallel)
     assert g is not None
 
-    prefix = 'module.' if parallel and denorm_names else 
+    prefix = 'module.' if parallel and denorm_names else ''
 
     op_names = [op['name'] for op in g.ops.values()]
     assert len(op_names) == 80
@@ -97,7 +97,7 @@ def test_layer_search(parallel, denorm_names):
     g = create_graph('cifar10', 'resnet20_cifar', parallel)
     assert g is not None
 
-    prefix = 'module.' if parallel and denorm_names else 
+    prefix = 'module.' if parallel and denorm_names else ''
 
     op = g.find_op('layer1.0.conv1')
     assert op is not None
@@ -168,7 +168,7 @@ def test_normalize_module_name():
     assert normalize_module_name("features.module.0") == "features.0"
     assert normalize_module_name("module.features.0") == "features.0"
     assert normalize_module_name("features.module") == "features"
-    assert normalize_module_name('module') == 
+    assert normalize_module_name('module') == ''
     assert normalize_module_name('no.parallel.modules') == 'no.parallel.modules'
     name_test('imagenet', 'vgg19')
     name_test('cifar10', 'resnet20_cifar')
@@ -190,7 +190,7 @@ def test_named_params_layers(dataset, arch, parallel):
 def test_onnx_name_2_pytorch_name():
     assert onnx_name_2_pytorch_name("ResNet/Sequential[layer3]/BasicBlock[0]/ReLU[relu]") == "layer3.0.relu"
     assert onnx_name_2_pytorch_name('VGG/[features]/Sequential/Conv2d[34]') == "features.34"
-    assert onnx_name_2_pytorch_name('NameWithNoModule') == 
+    assert onnx_name_2_pytorch_name('NameWithNoModule') == ''
 
 
 def test_connectivity_summary():
@@ -205,8 +205,8 @@ def test_connectivity_summary():
 
 
 def test_sg_macs():
-    'Compare the MACs of different modules as computed by a SummaryGraph
-    and model summary.'
+    '''Compare the MACs of different modules as computed by a SummaryGraph
+    and model summary.'''
     import common
     sg = create_graph('imagenet', 'mobilenet')
     assert sg
@@ -335,7 +335,7 @@ def test_adjacency_map(parallel, dedicated_modules):
         assert actual.predecessors == expected.predecessors
         assert actual.successors == expected.successors
 
-    prefix = 'module.' if parallel else 
+    prefix = 'module.' if parallel else ''
 
     m = TestModel()
     if parallel:

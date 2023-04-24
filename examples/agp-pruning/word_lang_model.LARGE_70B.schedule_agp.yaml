@@ -9,9 +9,6 @@
 # | End of training | test loss  4.43 | test ppl    84.23
 # =========================================================================================
 #
-
-
-#
 # With the same configuration, and the pruning schedule below, we get comparable perplexity results:
 #
 # python3 main.py --cuda --emsize 1500 --nhid 1500 --dropout 0.65 --epochs 40 --tied --compress=../../examples/agp-pruning/word_lang_model.schedule_agp.yaml

@@ -300,10 +300,10 @@ def loadRes(self, resFile):
 
 
 def evaluate(self):
-    '
+    '''
     Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
     :return: None
-    '
+    '''
     # tic = time.time()
     # print('Running per image evaluation...')
     p = self.params

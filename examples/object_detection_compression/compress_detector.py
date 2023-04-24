@@ -327,7 +327,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr-gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
     parser.add_argument('--print-freq', default=20, type=int, help='print frequency')
     parser.add_argument('--output-dir', default='.', help='path where to save')
-    parser.add_argument('--resume', default=, help='resume from checkpoint')
+    parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--aspect-ratio-group-factor', default=0, type=int)
     parser.add_argument(
         "--evaluate",

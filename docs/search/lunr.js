@@ -334,7 +334,7 @@ lunr.idf = function (posting, documentCount) {
  * as it is passed through the text processing pipeline.
  *
  * @constructor
- * @param {string} [str=] - The string token being wrapped.
+ * @param {string} [str=''] - The string token being wrapped.
  * @param {object} [metadata={}] - Metadata associated with this token.
  */
 lunr.Token = function (str, metadata) {
@@ -673,7 +673,7 @@ lunr.Pipeline.prototype.run = function (tokens) {
     for (var j = 0; j < tokens.length; j++) {
       var result = fn(tokens[j], j, tokens)
 
-      if (result === null || result === void 0 || result === ) continue
+      if (result === null || result === void 0 || result === '') continue
 
       if (Array.isArray(result)) {
         for (var k = 0; k < result.length; k++) {
@@ -1336,7 +1336,7 @@ lunr.Pipeline.registerFunction(lunr.stopWordFilter, 'stopWordFilter')
  */
 lunr.trimmer = function (token) {
   return token.update(function (s) {
-    return s.replace(/^\W+/, ).replace(/\W+$/, )
+    return s.replace(/^\W+/, '').replace(/\W+$/, '')
   })
 }
 
@@ -3011,7 +3011,7 @@ lunr.QueryLexer.prototype.sliceString = function () {
   subSlices.push(this.str.slice(sliceStart, this.pos))
   this.escapeCharPositions.length = 0
 
-  return subSlices.join()
+  return subSlices.join('')
 }
 
 lunr.QueryLexer.prototype.emit = function (type) {

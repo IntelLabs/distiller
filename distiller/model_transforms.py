@@ -155,7 +155,7 @@ def _fuse_sequence(sequence, named_modules, fuse_fn):
         if '.' in name:
             return name.rsplit('.', 1)
         else:
-            return , name
+            return '', name
     container_name, root_module = split_name(names[0])
     container = named_modules[container_name]
     setattr(container, root_module, fused_module)

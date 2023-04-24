@@ -9,8 +9,6 @@
 # | End of training | test loss  4.43 | test ppl    84.23
 # =========================================================================================
 #
-
-
 #
 # With the same configuration, and the pruning schedule below, we get comparable perplexity results:
 #

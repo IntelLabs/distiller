@@ -160,7 +160,7 @@ class ActivationStatsCollector(object):
         """Reset a specific statistic counter - this is subclass-specific code"""
         raise NotImplementedError
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         """Handle new activations - this is subclass-specific code"""
         raise NotImplementedError
 
@@ -262,7 +262,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         if hasattr(module, self.stat_name):
             getattr(module, self.stat_name).reset()
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         if hasattr(module, self.stat_name):
             mean = getattr(module, self.stat_name).mean
             if isinstance(mean, torch.Tensor):
@@ -348,7 +348,7 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         records = OrderedDict()
         for stat_name in ['min', 'max', 'mean', 'std', 'l2']:
             records[stat_name] = []
-        records['shape'] = 
+        records['shape'] = ''
         return records
 
     def save(self, fname):
@@ -386,7 +386,7 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
         if hasattr(module, "statistics_records"):
             module.statistics_records = self._create_records_dict()
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         if hasattr(module, "statistics_records"):
             activation_stats[module.distiller_name] = module.statistics_records
 
@@ -399,7 +399,7 @@ class _QuantStatsRecord(object):
         records['max'] = -float_info.max
         for stat_name in ['avg_min', 'avg_max', 'mean', 'std', 'b']:
             records[stat_name] = 0
-        records['shape'] = 
+        records['shape'] = ''
         records['total_numel'] = 0
         return records
 
@@ -614,7 +614,7 @@ class QuantCalibrationStatsCollector(ActivationStatsCollector):
             module.quant_stats = _QuantStatsRecord()
             module.batch_idx = 0
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         if not hasattr(module, 'quant_stats'):
             return
 
@@ -729,7 +729,7 @@ class ActivationHistogramsCollector(ActivationStatsCollector):
         if hasattr(module, 'output_hist'):
             self._reset(module)
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         if not hasattr(module, 'output_hist'):
             return
 
@@ -821,7 +821,7 @@ class RawActivationsCollector(ActivationStatsCollector):
         if hasattr(module, 'raw_outputs'):
             module.raw_outputs = []
 
-    def _collect_activations_stats(self, module, activation_stats, name=):
+    def _collect_activations_stats(self, module, activation_stats, name=''):
         if not hasattr(module, 'raw_outputs'):
             return
 

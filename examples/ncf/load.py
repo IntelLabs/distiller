@@ -53,7 +53,7 @@ def load_ml_20m(filename, sort=True):
     return process_movielens(ratings, sort=sort)
 
 
-DATASETS = [k.replace('load_', ) for k in locals().keys() if "load_" in k]
+DATASETS = [k.replace('load_', '') for k in locals().keys() if "load_" in k]
 
 
 def get_dataset_name(filename):

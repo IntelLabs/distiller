@@ -38,7 +38,7 @@ def add_distillation_args(argparser, arch_choices=None, enable_pretrained=False)
                        help='Model architecture for teacher model')
     if enable_pretrained:
         group.add_argument('--kd-pretrained', action='store_true', help='Use pre-trained model for teacher')
-    group.add_argument('--kd-resume', type=str, default=, metavar='PATH',
+    group.add_argument('--kd-resume', type=str, default='', metavar='PATH',
                        help='Path to checkpoint from which to load teacher weights')
     group.add_argument('--kd-temperature', '--kd-temp', dest='kd_temp', type=float, default=1.0, metavar='TEMP',
                        help='Knowledge distillation softmax temperature')

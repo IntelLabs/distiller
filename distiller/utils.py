@@ -666,12 +666,12 @@ def set_seed(seed):
 
 
 def set_deterministic(seed=0):
-    'Try to configure the system for reproducible results.
+    '''Try to configure the system for reproducible results.
 
     Experiment reproducibility is sometimes important.  Pete Warden expounded about this
     in his blog: https://petewarden.com/2018/03/19/the-machine-learning-reproducibility-crisis/
     For Pytorch specifics see: https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
-    '
+    '''
     msglogger.debug('set_deterministic was invoked')
     if seed is None:
         seed = 0
@@ -768,7 +768,7 @@ def model_setattr(model, attr_name, val, register=False):
         if '.' in name:
             return name.rsplit('.', 1)
         else:
-            return , name
+            return '', name
     modules_dict = OrderedDict(model.named_modules())
     lowest_depth_container_name, lowest_depth_attr_name = split_name(attr_name)
     while lowest_depth_container_name and lowest_depth_container_name not in modules_dict:

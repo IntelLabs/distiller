@@ -184,7 +184,7 @@ class MetricLogger(object):
     def log_every(self, iterable, print_freq, header=None):
         i = 0
         if not header:
-            header = 
+            header = ''
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')

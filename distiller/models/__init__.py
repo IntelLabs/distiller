@@ -137,7 +137,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         else:
             raise ValueError('Could not recognize dataset {} and arch {} pair'.format(dataset, arch))
 
-    msglogger.info("=> created a %s%s model with the %s dataset" % ('pretrained ' if pretrained else ,
+    msglogger.info("=> created a %s%s model with the %s dataset" % ('pretrained ' if pretrained else '',
                                                                      arch, dataset))
     if torch.cuda.is_available() and device_ids != -1:
         device = 'cuda'
@@ -193,7 +193,7 @@ def _create_imagenet_model(arch, pretrained):
             num_classes=1000,
             pretrained=(dataset if pretrained else None))
     if model is None:
-        error_message = 
+        error_message = ''
         if arch not in IMAGENET_MODEL_NAMES:
             error_message = "Model {} is not supported for dataset ImageNet".format(arch)
         elif pretrained:

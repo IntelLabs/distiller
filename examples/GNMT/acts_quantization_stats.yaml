@@ -577,7 +577,7 @@ encoder.rnn_layers.0.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 encoder.rnn_layers.1.cells.0.fc_gate_x:
   inputs:
     0:
@@ -872,7 +872,7 @@ encoder.rnn_layers.1.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 encoder.rnn_layers.2.cells.0.fc_gate_x:
   inputs:
     0:
@@ -1167,7 +1167,7 @@ encoder.rnn_layers.2.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 encoder.rnn_layers.3.cells.0.fc_gate_x:
   inputs:
     0:
@@ -1462,7 +1462,7 @@ encoder.rnn_layers.3.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 encoder.dropout:
   inputs:
     0:
@@ -1855,7 +1855,7 @@ decoder.att_rnn.rnn.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 decoder.att_rnn.attn.linear_q:
   inputs:
     0:
@@ -2415,7 +2415,7 @@ decoder.rnn_layers.0.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 decoder.rnn_layers.1.cells.0.fc_gate_x:
   inputs:
     0:
@@ -2710,7 +2710,7 @@ decoder.rnn_layers.1.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 decoder.rnn_layers.2.cells.0.fc_gate_x:
   inputs:
     0:
@@ -3005,7 +3005,7 @@ decoder.rnn_layers.2.dropout:
     mean: 0
     std: 0
     b: 0
-    shape: 
+    shape: ''
 decoder.classifier.classifier:
   inputs:
     0:

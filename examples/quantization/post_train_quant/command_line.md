@@ -23,8 +23,8 @@ Post-training quantization can either be configured straight from the command-li
 | `--qe-bits-accum`        | N/A       | # of bits for quantization of the accumulator                                         | 32      |
 | `--qe-clip-acts`         | `--qeca`  | Set activations clipping mode. Choices: "none", "avg", "n_std", "gauss", "laplace"    | "none"  |
 | `--qe-clip-n-stds`       | N/A       | When qe-clip-acts is set to 'n_std', this is the number of standard deviations to use | None    |
-| `--qe-no-clip-layers`    | `--qencl` | List of layer names (space-separated) for which not to clip activations               |       |
-| `--qe-no-quant-layers`   | `--qenql` | List of layer names (space-separated) for which not to skip quantization              |       |
+| `--qe-no-clip-layers`    | `--qencl` | List of layer names (space-separated) for which not to clip activations               | ''      |
+| `--qe-no-quant-layers`   | `--qenql` | List of layer names (space-separated) for which not to skip quantization              | ''      |
 | `--qe-per-channel`       | `--qepc`  | Enable per-channel quantization of weights (per output channel)                       | Off     |
 | `--qe-scale-approx-bits` | `--qesab` | Enables scale factor approximation using integer multiply + bit shift, using this number of bits the integer multiplier | None |
 | `--qe-stats-file`        | N/A       | Use stats file for static quantization of activations. See details below              | None    |

@@ -187,7 +187,7 @@ def apply_default_logger_cfg(log_filename):
             },
         },
         'loggers': {
-            : {  # root logger
+            '': {  # root logger
                 'level': 'DEBUG',
                 'handlers': ['console', 'file'],
                 'propagate': False

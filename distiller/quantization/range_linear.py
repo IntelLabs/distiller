@@ -175,7 +175,7 @@ def _get_quant_params_from_stats_dict(stats, num_bits, mode, clip=ClipMode.NONE,
         if num_stds <= 0:
             raise ValueError('n_stds must be > 0, got {}'.format(num_stds))
 
-    prefix = 'avg_' if clip == ClipMode.AVG else 
+    prefix = 'avg_' if clip == ClipMode.AVG else ''
     sat_min = torch.tensor(float(stats[prefix + 'min']))
     sat_max = torch.tensor(float(stats[prefix + 'max']))
     if clip == ClipMode.N_STD:
@@ -320,7 +320,7 @@ def add_post_train_quant_args(argparser, add_lapq_args=False):
                        help='When qe-clip-acts is set to \'n_std\', this is the number of standard deviations to use')
     group.add_argument('--qe-no-clip-layers', '--qencl', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                        help='List of layer names for which not to clip activations. Applicable '
-                            'only if --qe-clip-acts is not \'none\)
+                            'only if --qe-clip-acts is not \'none\'')
     group.add_argument('--qe-no-quant-layers', '--qenql', type=str, nargs='+', metavar='LAYER_NAME', default=[],
                         help='List of layer names for which to skip quantization.')
     group.add_argument('--qe-per-channel', '--qepc', action='store_true',
@@ -897,7 +897,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             val = val[1]
         yield 'weight_clipping', val
 
-    def state_dict(self, destination=None, prefix=, keep_vars=False):
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
         if not self.fake_quant_params and self.is_simulated_quant_weight_shifted:
             # We want to return the weights to their integer representation:
             self.wrapped_module.weight.data -= self.w_zero_point
@@ -1925,7 +1925,7 @@ class PostTrainLinearQuantizer(Quantizer):
                        inputs_quant_auto_fallback=True,
                        save_fp_weights=args.qe_save_fp_weights)
 
-    def save_per_layer_parameters(self, save_dir=):
+    def save_per_layer_parameters(self, save_dir=''):
         defaults = OrderedDict(self.model.quantizer_metadata['params'])
         defaults.pop('bits_activations')
         defaults.pop('bits_parameters')

@@ -220,7 +220,7 @@ def run_tests():
     total_configs = len(test_configs)
     failed_tests = []
     for idx, tc in enumerate(test_configs):
-        print()
+        print('')
         test_progress('-------------------------------------------------')
         test_progress('Running Test {0} / {1}'.format(idx + 1, total_configs))
         dataset_dir = datasets[tc.dataset]
@@ -242,7 +242,7 @@ def run_tests():
 
         log = p.stdout.read()
         log_path = re.match(r"Log file for this run: (.*)", log)
-        log_path = log_path.groups()[0] if log_path else 
+        log_path = log_path.groups()[0] if log_path else ''
 
         if p.returncode != 0:
             process_failure('Command returned with exit status {0}'.
@@ -255,23 +255,23 @@ def run_tests():
         success('TEST PASSED')
         test_progress('Test log file: {0}'.format(colorize(log_path, Colors.YELLOW)))
 
-    print()
+    print('')
     test_progress('-------------------------------------------------')
     test_progress('-------------------------------------------------')
     test_progress('All tests completed')
     test_progress('# Tests run: {0} ; # Tests passed {1} ; # Tests failed: {2}'.
                   format(total_configs, total_configs - len(failed_tests), len(failed_tests)))
     if failed_tests:
-        print()
+        print('')
         print(colorize('Failed tests summary:', Colors.RED))
         for idx, cmd, log_path in failed_tests:
             print(colorize('  Test Index:', Colors.YELLOW), idx + 1)
             print(colorize('    Command Line:', Colors.YELLOW), cmd)
             print(colorize('    Log File Path:', Colors.YELLOW), log_path)
         exit(1)
-    print()
+    print('')
     success('ALL TESTS PASSED')
-    print()
+    print('')
     exit(0)
 
 

@@ -202,7 +202,7 @@ def search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best
     best_performance, best_local_override = float("-inf"), OrderedDict()
     normalized_module_name = module_name
     if isinstance(model, nn.DataParallel):
-        normalized_module_name = re.sub(r'module\.', , normalized_module_name)
+        normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
     for local_override in override_gen_fn(module, module_name, sg, best_overrides_dict, **kwargs):
         if not overrides_dict.get(normalized_module_name, None):
             overrides_dict[normalized_module_name] = OrderedDict()
@@ -224,7 +224,7 @@ def search_best_local_settings(module, module_name, sg, act_stats, eval_fn, best
         if not isinstance(module, UNQUANTIZED_MODULES):
             clip_mode = local_override.get('clip_acts', None)
             msglogger.info('\t%s\t score = %.3f\tLayer overrides: %s' %
-                           (clip_mode or , current_performance, local_override))
+                           (clip_mode or '', current_performance, local_override))
         else:
             msglogger.info('\t Module is not quantized to int8. Not clipping activations.')
             msglogger.info('\t score = %.3f\tLayer overrides: %s' %
@@ -351,7 +351,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
 
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
-            normalized_module_name = re.sub(r'module\.', , normalized_module_name)
+            normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
         if normalized_module_name in best_overrides_dict and \
                 best_overrides_dict[normalized_module_name].get('input_overrides', None):
             # This means the loaded dict already has the module
@@ -383,7 +383,7 @@ def ptq_greedy_search(model, dummy_input, eval_fn, calib_eval_fn=None,
 
         normalized_module_name = module_name
         if isinstance(model, nn.DataParallel):
-            normalized_module_name = re.sub(r'module\.', , normalized_module_name)
+            normalized_module_name = re.sub(r'module\.', '', normalized_module_name)
 
         if normalized_module_name in best_overrides_dict and \
                 best_overrides_dict[normalized_module_name].get('bits_activations', None)\

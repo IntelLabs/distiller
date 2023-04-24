@@ -40,5 +40,5 @@ class Tokenizer:
     def detokenize(self, inputs, delim=' '):
         detok = delim.join([self.idx2tok[idx] for idx in inputs])
         detok = detok.replace(
-            self.separator+ ' ', ).replace(self.separator, )
+            self.separator+ ' ', '').replace(self.separator, '')
         return detok

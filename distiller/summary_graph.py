@@ -749,7 +749,7 @@ class _DistillerModuleList(object):
         for module in modules:
             self.append(module)
 
-    def named_modules(self, memo=None, prefix=):
+    def named_modules(self, memo=None, prefix=''):
         if memo is None:
             memo = set()
         if self not in memo:
@@ -758,7 +758,7 @@ class _DistillerModuleList(object):
             for idx, module in enumerate(self._modules):
                 if module is None:
                     continue
-                submodule_prefix = prefix + ('.' if prefix else ) + str(idx)
+                submodule_prefix = prefix + ('.' if prefix else '') + str(idx)
                 for m in module.named_modules(memo, submodule_prefix):
                     yield m
 
@@ -790,13 +790,13 @@ def _named_children_with_duplicates(module):
             yield name, module
 
 
-def _named_modules_with_duplicates(module, prefix=):
+def _named_modules_with_duplicates(module, prefix=''):
     """Version of torch.nn.Module.named_modules() that includes duplicate modules"""
     yield prefix, module
     for name, submodule in module._modules.items():
         if submodule is None:
             continue
-        submodule_prefix = prefix + ('.' if prefix else ) + name
+        submodule_prefix = prefix + ('.' if prefix else '') + name
         for m in _named_modules_with_duplicates(submodule, submodule_prefix):
             yield m
 

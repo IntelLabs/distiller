@@ -378,13 +378,13 @@ class DistillerLSTM(nn.Module):
         if self.bias:
             param_types.append('bias')
 
-        suffixes = []
+        suffixes = ['']
         if self.bidirectional:
             suffixes.append('_reverse')
 
         for i in range(self.num_layers):
             for ptype, pgate, psuffix in product(param_types, param_gates, suffixes):
-                cell = self.cells[i] if psuffix ==  else self.cells_reverse[i]
+                cell = self.cells[i] if psuffix == '' else self.cells_reverse[i]
                 lstm_pth_param_name = "%s_%sh_l%d%s" % (ptype, pgate, i, psuffix)  # e.g. `weight_ih_l0`
                 gate_name = "fc_gate_%s" % ('x' if pgate == 'i' else 'h')  # `fc_gate_x` or `fc_gate_h`
                 gate = getattr(cell, gate_name)  # e.g. `cell.fc_gate_x`
@@ -409,13 +409,13 @@ class DistillerLSTM(nn.Module):
         if lstm.bias:
             param_types.append('bias')
 
-        suffixes = []
+        suffixes = ['']
         if bidirectional:
             suffixes.append('_reverse')
 
         for i in range(lstm.num_layers):
             for ptype, pgate, psuffix in product(param_types, param_gates, suffixes):
-                cell = module.cells[i] if psuffix ==  else module.cells_reverse[i]
+                cell = module.cells[i] if psuffix == '' else module.cells_reverse[i]
                 lstm_pth_param_name = "%s_%sh_l%d%s" % (ptype, pgate, i, psuffix)  # e.g. `weight_ih_l0`
                 gate_name = "fc_gate_%s" % ('x' if pgate == 'i' else 'h')  # `fc_gate_x` or `fc_gate_h`
                 gate = getattr(cell, gate_name)  # e.g. `cell.fc_gate_x`

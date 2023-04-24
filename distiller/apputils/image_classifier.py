@@ -104,7 +104,7 @@ class ClassifierCompressor(object):
 
     @classmethod
     def mock_classifier(cls):
-        return cls(cls.mock_args(), )
+        return cls(cls.mock_args(), '')
 
     def train_one_epoch(self, epoch, verbose=True):
         """Train for one epoch"""
@@ -205,8 +205,8 @@ class ClassifierCompressor(object):
 
 
 def init_classifier_compression_arg_parser(include_ptq_lapq_args=False):
-    'Common classifier-compression application command-line arguments.
-    '
+    '''Common classifier-compression application command-line arguments.
+    '''
     SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params']
 
     parser = argparse.ArgumentParser(description='Distiller image classification model compression')
@@ -238,13 +238,13 @@ def init_classifier_compression_arg_parser(include_ptq_lapq_args=False):
     load_checkpoint_group = parser.add_argument_group('Resuming arguments')
     load_checkpoint_group_exc = load_checkpoint_group.add_mutually_exclusive_group()
     # TODO(barrh): args.deprecated_resume is deprecated since v0.3.1
-    load_checkpoint_group_exc.add_argument('--resume', dest='deprecated_resume', default=, type=str,
+    load_checkpoint_group_exc.add_argument('--resume', dest='deprecated_resume', default='', type=str,
                         metavar='PATH', help=argparse.SUPPRESS)
-    load_checkpoint_group_exc.add_argument('--resume-from', dest='resumed_checkpoint_path', default=,
+    load_checkpoint_group_exc.add_argument('--resume-from', dest='resumed_checkpoint_path', default='',
                         type=str, metavar='PATH',
                         help='path to latest checkpoint. Use to resume paused training session.')
     load_checkpoint_group_exc.add_argument('--exp-load-weights-from', dest='load_model_path',
-                        default=, type=str, metavar='PATH',
+                        default='', type=str, metavar='PATH',
                         help='path to checkpoint to load weights from (excluding other fields) (experimental)')
     load_checkpoint_group.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')

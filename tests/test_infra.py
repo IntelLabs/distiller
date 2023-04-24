@@ -193,28 +193,28 @@ def test_load_gpu_model_on_cpu_with_thinning():
 
 def test_validate_input_shape():
     with pytest.raises(ValueError):
-        distiller.utils._validate_input_shape(, None)
+        distiller.utils._validate_input_shape('', None)
     with pytest.raises(ValueError):
         distiller.utils._validate_input_shape('not_a_dataset', None)
     with pytest.raises(TypeError):
-        distiller.utils._validate_input_shape(, 'non_numeric_shape')
+        distiller.utils._validate_input_shape('', 'non_numeric_shape')
     with pytest.raises(TypeError):
-        distiller.utils._validate_input_shape(, ('blah', 2))
+        distiller.utils._validate_input_shape('', ('blah', 2))
     with pytest.raises(TypeError):
-        distiller.utils._validate_input_shape(, (1.5, 2))
+        distiller.utils._validate_input_shape('', (1.5, 2))
     with pytest.raises(TypeError):
         # Mix "flattened" shape and tuple
-        distiller.utils._validate_input_shape(, (1, 2, (3, 4)))
+        distiller.utils._validate_input_shape('', (1, 2, (3, 4)))
 
     s = distiller.utils._validate_input_shape('imagenet', None)
     assert s == (1, 3, 224, 224)
     s = distiller.utils._validate_input_shape('imagenet', (1, 2))
     assert s == (1, 3, 224, 224)
-    s = distiller.utils._validate_input_shape(, (1, 2))
+    s = distiller.utils._validate_input_shape('', (1, 2))
     assert s == (1, 2)
-    s = distiller.utils._validate_input_shape(, ((1, 2), (3, 4)))
+    s = distiller.utils._validate_input_shape('', ((1, 2), (3, 4)))
     assert s == ((1, 2), (3, 4))
-    s = distiller.utils._validate_input_shape(, ((1, 2), ((3, 4), (5, 6))))
+    s = distiller.utils._validate_input_shape('', ((1, 2), ((3, 4), (5, 6))))
     assert s == ((1, 2), ((3, 4), (5, 6)))
 
 
@@ -232,7 +232,7 @@ def test_get_dummy_input(device):
         expected_device = device
 
     with pytest.raises(ValueError):
-        distiller.utils.get_dummy_input(, None)
+        distiller.utils.get_dummy_input('', None)
     with pytest.raises(ValueError):
         distiller.utils.get_dummy_input(dataset='not_a_dataset')
     with pytest.raises(TypeError):
@@ -252,7 +252,7 @@ def test_get_dummy_input(device):
     check_shape_device(t, (1, 3, 224, 224), expected_device)
 
     shape = 1, 2
-    t = distiller.utils.get_dummy_input(dataset=, device=device, input_shape=shape)
+    t = distiller.utils.get_dummy_input(dataset='', device=device, input_shape=shape)
     check_shape_device(t, shape, expected_device)
 
     shape = ((1, 2), (3, 4))

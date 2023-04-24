@@ -199,5 +199,5 @@ if __name__ == '__main__':
         raise
     finally:
         if msglogger is not None and hasattr(msglogger, 'log_filename'):
-            msglogger.info()
+            msglogger.info('')
             msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))

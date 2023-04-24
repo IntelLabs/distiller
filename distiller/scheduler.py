@@ -165,7 +165,7 @@ class CompressionScheduler(object):
                 wrapped = name_parts[-2] == 'wrapped_module'
                 if prefixed or wrapped:
                     if prefixed:
-                        name_parts[-1] = name_parts[-1].replace(FP_BKP_PREFIX, , 1)
+                        name_parts[-1] = name_parts[-1].replace(FP_BKP_PREFIX, '', 1)
                     if wrapped:
                         name_parts.pop(-2)
                     name = '.'.join(name_parts)

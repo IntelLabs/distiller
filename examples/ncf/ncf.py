@@ -231,7 +231,7 @@ def main():
     config['local_timestamp'] = str(datetime.now())
     run_dir = msglogger.logdir
     msglogger.info("Saving config and results to {}".format(run_dir))
-    if not os.path.exists(run_dir) and run_dir != :
+    if not os.path.exists(run_dir) and run_dir != '':
         os.makedirs(run_dir)
     utils.save_config(config, run_dir)
 
@@ -363,7 +363,7 @@ def main():
     best_hit_rate = 0
     best_epoch = 0
     for epoch in range(start_epoch, args.epochs):
-        msglogger.info()
+        msglogger.info('')
         model.train()
         losses = utils.AverageMeter()
 
@@ -466,5 +466,5 @@ if __name__ == '__main__':
         print("\n-- KeyboardInterrupt --")
     finally:
         if msglogger is not None:
-            msglogger.info()
+            msglogger.info('')
             msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))

@@ -53,9 +53,9 @@ parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 parser.add_argument('--save', type=str, default='checkpoint.pth.tar',
                     help='path to save the final model')
-parser.add_argument('--resume', default=, type=str, metavar='PATH',
+parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
-parser.add_argument('--onnx-export', type=str, default=,
+parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
 
 # Distiller-related arguments
